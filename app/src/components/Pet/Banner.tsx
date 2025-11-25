@@ -6,7 +6,7 @@ const Banner = () => {
     return (
         <>
             <div className="banner-block">
-                <div className="container">
+                <div className="container md:py-10 py-5">
                     <div className="list-banner grid lg:grid-cols-3 md:grid-cols-2 gap-[20px]">
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500">
                             <div className="banner-img w-full h-full">
@@ -19,10 +19,10 @@ const Banner = () => {
                                 />
                             </div>
                             <div className="text-content xl:py-0 md:py-4 absolute top-1/2 left-8 -translate-y-1/2 text-white">
-                                <div className="button-upper-case">15 Products</div>
-                                <div className="heading3 mt-3">Dog Food</div>
-                                <div className="heading6 font-normal mt-1">Relax Bamboo Chair</div>
-                                <div className="button-main mt-5">Shop Now</div>
+                                <div className="button-upper-case">15 productos</div>
+                                <div className="heading3 mt-3">Comida para perros</div>
+                                <div className="heading6 font-normal mt-1">Sillón de bambú relajante</div>
+                                <div className="button-main mt-5">Compra ahora</div>
                             </div>
                         </Link>
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500">
@@ -36,10 +36,10 @@ const Banner = () => {
                                 />
                             </div>
                             <div className="text-content xl:py-0 md:py-4 absolute top-1/2 left-8 -translate-y-1/2 text-white">
-                                <div className="button-upper-case">15 Products</div>
-                                <div className="heading3 mt-3">Cat Food</div>
-                                <div className="heading6 font-normal mt-1">Relax Bamboo Chair</div>
-                                <div className="button-main mt-5">Shop Now</div>
+                                <div className="button-upper-case">15 productos</div>
+                                <div className="heading3 mt-3">Comida para gatos</div>
+                                <div className="heading6 font-normal mt-1">Sillón de bambú relajante</div>
+                                <div className="button-main mt-5">Compra ahora</div>
                             </div>
                         </Link>
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500 max-lg:hidden">
@@ -53,10 +53,10 @@ const Banner = () => {
                                 />
                             </div>
                             <div className="text-content xl:py-0 md:py-4 absolute top-1/2 left-8 -translate-y-1/2 text-white">
-                                <div className="button-upper-case">15 Products</div>
-                                <div className="heading3 mt-3">Sale Off 20%</div>
-                                <div className="heading6 font-normal mt-1">Relax Bamboo Chair</div>
-                                <div className="button-main mt-5">Shop Now</div>
+                                <div className="button-upper-case">15 productos</div>
+                                <div className="heading3 mt-3">20% de descuento</div>
+                                <div className="heading6 font-normal mt-1">Sillón de bambú relajante</div>
+                                <div className="button-main mt-5">Compra ahora</div>
                             </div>
                         </Link>
                     </div>

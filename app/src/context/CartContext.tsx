@@ -36,7 +36,19 @@ const CartContext = createContext<CartContextProps | undefined>(undefined);
 const cartReducer = (state: CartState, action: CartAction): CartState => {
     switch (action.type) {
         case 'ADD_TO_CART':
-            const newItem: CartItem = { ...action.payload, quantity: 1, selectedSize: '', selectedColor: '' };
+            const quantityToAdd = action.payload.quantityPurchase ?? 1;
+            const existed = state.cartArray.find(item => item.id === action.payload.id);
+            if (existed) {
+                return {
+                    ...state,
+                    cartArray: state.cartArray.map(item =>
+                        item.id === action.payload.id
+                            ? { ...item, quantity: item.quantity + quantityToAdd }
+                            : item
+                    ),
+                };
+            }
+            const newItem: CartItem = { ...action.payload, quantity: quantityToAdd, selectedSize: '', selectedColor: '' };
             return {
                 ...state,
                 cartArray: [...state.cartArray, newItem],
@@ -72,6 +84,33 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [cartState, dispatch] = useReducer(cartReducer, { cartArray: [] });
+    const [hydrated, setHydrated] = useState(false);
+
+    useEffect(() => {
+        try {
+            if (typeof window === 'undefined') return;
+            const stored = localStorage.getItem('cart');
+            if (stored) {
+                const parsed = JSON.parse(stored) as CartItem[];
+                dispatch({ type: 'LOAD_CART', payload: parsed });
+            }
+        } catch (error) {
+            console.error('Error al cargar carrito', error);
+        } finally {
+            setHydrated(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!hydrated) return;
+        try {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('cart', JSON.stringify(cartState.cartArray));
+            }
+        } catch (error) {
+            console.error('Error al guardar carrito', error);
+        }
+    }, [cartState.cartArray, hydrated]);
 
     const addToCart = (item: ProductType) => {
         dispatch({ type: 'ADD_TO_CART', payload: item });

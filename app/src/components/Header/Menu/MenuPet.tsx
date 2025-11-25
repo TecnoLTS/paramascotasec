@@ -83,30 +83,30 @@ const MenuPet = () => {
                             <div className="heading4">Anvogue</div>
                         </Link>
                         <div className="form-search w-[54%] pl-8 flex items-center h-[48px] max-lg:hidden">
-                            <div className='w-full flex items-center h-full'>
+                            <div className='w-full flex items-center h-full border border-[#2f4f4f] shadow-sm overflow-hidden'>
                                 <input
                                     type="text"
-                                    className="search-input h-full px-4 w-full border border-line rounded-l-2xl"
+                                    className="search-input h-full px-4 w-full border-none focus:outline-none focus:ring-2 focus:ring-[#2f4f4f]/60 placeholder:text-secondary"
                                     placeholder="¿Qué estás buscando hoy?"
                                     value={searchKeyword}
                                     onChange={(e) => setSearchKeyword(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
                                 />
                                 <button
-                                    className="search-button button-main bg-black h-full flex items-center px-3 rounded-l-none rounded-r-2xl"
+                                    className="search-button h-full px-4 flex items-center justify-center bg-[#2f4f4f] text-white duration-300 hover:bg-[#1f3b3b]"
                                     onClick={() => {
                                         handleSearch(searchKeyword)
                                     }}
                                 >
-                                    <Icon.MagnifyingGlass color='#fff' size={24} weight='bold' className='duration-300' />
+                                    <Icon.MagnifyingGlass size={22} weight='bold' className='duration-300' />
                                 </button>
                             </div>
                         </div>
                         <div className="right flex gap-12">
                             <div className="list-action flex items-center gap-6">
                                 <div className="user-icon flex items-center flex-col justify-center cursor-pointer">
-                                    <Icon.User size={24} color='black' onClick={handleLoginPopup} />
-                                    <div className="caption1" onClick={handleLoginPopup}>Cuenta</div>
+                                    <Icon.User size={26} color='black' onClick={handleLoginPopup} />
+                                    <div className="caption1" onClick={handleLoginPopup}>Mi cuenta</div>
                                     <div
                                         className={`login-popup absolute top-[74px] w-[320px] p-7 rounded-xl bg-white box-shadow-sm 
                                             ${openLoginPopup ? 'open' : ''}`}
@@ -120,14 +120,12 @@ const MenuPet = () => {
                                         <Link href={'#!'} className='body1 hover:underline'>Soporte</Link>
                                     </div>
                                 </div>
-                                <div className="max-md:hidden wishlist-icon flex flex-col items-center cursor-pointer" onClick={openModalWishlist}>
-                                    <Icon.Heart size={24} color='black' />
-                                    <div className="caption1">Lista de deseos</div>
-                                </div>
                                 <div className="cart-icon flex flex-col items-center relative cursor-pointer" onClick={openModalCart}>
-                                    <Icon.Handbag size={24} color='black' />
+                                    <Icon.ShoppingCartSimple size={26} color='black' />
                                     <div className="caption1">Carrito</div>
-                                    <span className="quantity cart-quantity absolute -right-1 -top-1.5 text-xs text-white bg-black w-4 h-4 flex items-center justify-center rounded-full">{cartState.cartArray.length}</span>
+                                    <span className="quantity cart-quantity absolute -right-3 -top-3 text-base text-[#2f4f4f] font-semibold">
+                                        {cartState.cartArray.reduce((sum, item) => sum + (item.quantity ?? 0), 0)}
+                                    </span>
                                 </div>
                             </div>
                         </div>

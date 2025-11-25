@@ -8,6 +8,7 @@ import TabFeatures from '@/components/Pet/TabFeatures'
 import ChooseUs from '@/components/Pet/ChooseUs'
 import Banner2 from '@/components/Pet/Banner2'
 import FeatureProduct from '@/components/Pet/FeatureProduct'
+import AllProducts from '@/components/Product/AllProducts'
 import Instagram from '@/components/Pet/Instagram'
 import Brand from '@/components/Home1/Brand'
 import Benefit from '@/components/Home1/Benefit'
@@ -19,13 +20,15 @@ export default function HomePet() {
             <div id="header" className='relative w-full style-pet'>
                 <MenuPet />
                 <SliderPet />
-                <Benefit props="md:pt-20 pt-10" />
+                <Benefit props="md:py-10 py-5" />
             </div>
-            <Banner />
+            <AllProducts data={productData} maxCategories={6} />
             <Collection />
-            <TabFeatures data={productData} start={0} limit={4} />
-            <ChooseUs />
+            <Banner />
             <Banner2 />
+            <ChooseUs />
+            {/*<TabFeatures data={productData} start={0} limit={1} />*/}
+            
             <FeatureProduct data={productData} start={0} limit={4} />
             <Instagram />
             <Brand />

@@ -16,9 +16,9 @@ const Footer = () => {
                                 </Link>
                                 <div className='flex gap-3 mt-3'>
                                     <div className="flex flex-col ">
-                                        <span className="text-button">Mail:</span>
-                                        <span className="text-button mt-3">Phone:</span>
-                                        <span className="text-button mt-3">Address:</span>
+                                        <span className="text-button">Correo:</span>
+                                        <span className="text-button mt-3">Teléfono:</span>
+                                        <span className="text-button mt-3">Dirección:</span>
                                     </div>
                                     <div className="flex flex-col ">
                                         <span className=''>hi.avitex@gmail.com</span>
@@ -30,35 +30,35 @@ const Footer = () => {
                             <div className="right-content flex flex-wrap gap-y-8 basis-3/4 max-lg:basis-full">
                                 <div className="list-nav flex justify-between basis-2/3 max-md:basis-full gap-4">
                                     <div className="item flex flex-col basis-1/3 ">
-                                        <div className="text-button-uppercase pb-3">Infomation</div>
-                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/pages/contact'}>Contact us</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'#!'}>Career</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/my-account'}>My Account</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/order-tracking'}>Order  & Returns</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>FAQs</Link>
+                                        <div className="text-button-uppercase pb-3">Información</div>
+                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/pages/contact'}>Contáctanos</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'#!'}>Carreras</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/my-account'}>Mi cuenta</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/order-tracking'}>Pedidos y devoluciones</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Preguntas frecuentes</Link>
                                     </div>
                                     <div className="item flex flex-col basis-1/3 ">
-                                        <div className="text-button-uppercase pb-3">Quick Shop</div>
-                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/shop/breadcrumb1'}>Women</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Men</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Clothes</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Accessories</Link>
+                                        <div className="text-button-uppercase pb-3">Compra rápida</div>
+                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/shop/breadcrumb1'}>Mujer</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Hombre</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Ropa</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/shop/breadcrumb1'}>Accesorios</Link>
                                         <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/blog'}>Blog</Link>
                                     </div>
                                     <div className="item flex flex-col basis-1/3 ">
-                                        <div className="text-button-uppercase pb-3">Customer Services</div>
-                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/pages/faqs'}>Orders FAQs</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Shipping</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Privacy Policy</Link>
-                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/order-tracking'}>Return & Refund</Link>
+                                        <div className="text-button-uppercase pb-3">Atención al cliente</div>
+                                        <Link className='caption1 has-line-before duration-300 w-fit' href={'/pages/faqs'}>Preguntas sobre pedidos</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Envíos</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/pages/faqs'}>Política de privacidad</Link>
+                                        <Link className='caption1 has-line-before duration-300 w-fit pt-2' href={'/order-tracking'}>Devoluciones y reembolsos</Link>
                                     </div>
                                 </div>
                                 <div className="newsletter basis-1/3 pl-7 max-md:basis-full max-md:pl-0">
-                                    <div className="text-button-uppercase">Newletter</div>
-                                    <div className="caption1 mt-3">Sign up for our newsletter and get 10% off your first purchase</div>
+                                    <div className="text-button-uppercase">Boletín</div>
+                                    <div className="caption1 mt-3">Suscríbete y obtén un 10% de descuento en tu primera compra</div>
                                     <div className="input-block w-full h-[52px] mt-4">
                                         <form className='w-full h-full relative' action="post">
-                                            <input type="email" placeholder='Enter your e-mail' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line' required />
+                                            <input type="email" placeholder='Ingresa tu correo' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line' required />
                                             <button className='w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1'>
                                                 <Icon.ArrowRight size={24} color='#fff' />
                                             </button>
@@ -86,13 +86,13 @@ const Footer = () => {
                         </div>
                         <div className="footer-bottom py-3 flex items-center justify-between gap-5 max-lg:justify-center max-lg:flex-col border-t border-line">
                             <div className="left flex items-center gap-8">
-                                <div className="copyright caption1 text-secondary">©2023 Anvogue. All Rights Reserved.</div>
+                                <div className="copyright caption1 text-secondary">©2023 Anvogue. Todos los derechos reservados.</div>
                                 <div className="select-block flex items-center gap-5 max-md:hidden">
                                     <div className="choose-language flex items-center gap-1.5">
                                         <select name="language" id="chooseLanguageFooter" className='caption2 bg-transparent'>
                                             <option value="English">English</option>
-                                            <option value="Espana">Espana</option>
-                                            <option value="France">France</option>
+                                            <option value="Espana">Español</option>
+                                            <option value="France">Français</option>
                                         </select>
                                         <Icon.CaretDown size={12} color='#1F1F1F' />
                                     </div>
@@ -107,7 +107,7 @@ const Footer = () => {
                                 </div>
                             </div>
                             <div className="right flex items-center gap-2">
-                                <div className="caption1 text-secondary">Payment:</div>
+                                <div className="caption1 text-secondary">Pago:</div>
                                 <div className="payment-img">
                                     <Image
                                         src={'/images/payment/Frame-0.png'}

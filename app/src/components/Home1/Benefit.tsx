@@ -12,23 +12,23 @@ const Benefit: React.FC<Props> = ({ props }) => {
                     <div className="list-benefit grid items-start lg:grid-cols-4 grid-cols-2 gap-[30px]">
                         <div className="benefit-item flex flex-col items-center justify-center">
                             <i className="icon-phone-call lg:text-7xl text-5xl"></i>
-                            <div className="heading6 text-center mt-5">24/7 Customer Service</div>
-                            <div className="caption1 text-secondary text-center mt-3">We&apos;re here to help you with any questions or concerns you have, 24/7.</div>
+                            <div className="heading6 text-center mt-5">Servicio al cliente 24/7</div>
+                            <div className="caption1 text-secondary text-center mt-3">Estamos aquí para ayudarte con cualquier duda o inquietud, las 24 horas del día.</div>
                         </div>
                         <div className="benefit-item flex flex-col items-center justify-center">
                             <i className="icon-return lg:text-7xl text-5xl"></i>
-                            <div className="heading6 text-center mt-5">14-Day Money Back</div>
-                            <div className="caption1 text-secondary text-center mt-3">If you&apos;re not satisfied with your purchase, simply return it within 14 days for a refund.</div>
+                            <div className="heading6 text-center mt-5">Devolución en 14 días</div>
+                            <div className="caption1 text-secondary text-center mt-3">Si no estás satisfecho con tu compra, devuélvela en 14 días para un reembolso.</div>
                         </div>
                         <div className="benefit-item flex flex-col items-center justify-center">
                             <i className="icon-guarantee lg:text-7xl text-5xl"></i>
-                            <div className="heading6 text-center mt-5">Our Guarantee</div>
-                            <div className="caption1 text-secondary text-center mt-3"> We stand behind our products and services and guarantee your satisfaction.</div>
+                            <div className="heading6 text-center mt-5">Nuestra garantía</div>
+                            <div className="caption1 text-secondary text-center mt-3">Respaldamos nuestros productos y servicios y garantizamos tu satisfacción.</div>
                         </div>
                         <div className="benefit-item flex flex-col items-center justify-center">
                             <i className="icon-delivery-truck lg:text-7xl text-5xl"></i>
-                            <div className="heading6 text-center mt-5">Shipping worldwide</div>
-                            <div className="caption1 text-secondary text-center mt-3">We ship our products worldwide, making them accessible to customers everywhere.</div>
+                            <div className="heading6 text-center mt-5">Envíos a todo el mundo</div>
+                            <div className="caption1 text-secondary text-center mt-3">Enviamos nuestros productos a nivel mundial, haciéndolos accesibles en cualquier lugar.</div>
                         </div>
                     </div>
                 </div>

@@ -44,11 +44,15 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
     }
 
     const handleAddToCart = () => {
-        if (!cartState.cartArray.find(item => item.id === data.id)) {
-            addToCart({ ...data });
-            updateCart(data.id, data.quantityPurchase, activeSize, activeColor)
+        const existingItem = cartState.cartArray.find(item => item.id === data.id)
+        const qtyToAdd = data.quantityPurchase ?? 1
+
+        if (existingItem) {
+            const nextQuantity = (existingItem.quantity ?? 0) + qtyToAdd
+            updateCart(data.id, nextQuantity, activeSize, activeColor)
         } else {
-            updateCart(data.id, data.quantityPurchase, activeSize, activeColor)
+            addToCart({ ...data });
+            updateCart(data.id, qtyToAdd, activeSize, activeColor)
         }
         openModalCart()
     };
@@ -100,12 +104,12 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                         <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
                             {data.new && (
                                 <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                                    New
+                                    Nuevo
                                 </div>
                             )}
                             {data.sale && (
                                 <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                                    Sale
+                                    Oferta
                                 </div>
                             )}
                             {style === 'style-1' || style === 'style-3' || style === 'style-4' ? (
@@ -118,7 +122,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleAddToCart()
                                             }}
                                         >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Add To Cart</div>
+                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar al carrito</div>
                                             <Icon.ShoppingBagOpen size={20} />
                                         </div>
                                     )}
@@ -129,7 +133,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                             handleAddToWishlist()
                                         }}
                                     >
-                                        <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Add To Wishlist</div>
+                                        <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar a favoritos</div>
                                         {wishlistState.wishlistArray.some(item => item.id === data.id) ? (
                                             <>
                                                 <Icon.Heart size={18} weight='fill' className='text-white' />
@@ -147,7 +151,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                             handleAddToCompare()
                                         }}
                                     >
-                                        <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Compare Product</div>
+                                        <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Comparar producto</div>
                                         <Icon.Repeat size={18} className='compare-icon' />
                                         <Icon.CheckCircle size={20} className='checked-icon' />
                                     </div>
@@ -159,7 +163,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleQuickviewOpen()
                                             }}
                                         >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Quick View</div>
+                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Vista rápida</div>
                                             <Icon.Eye size={20} />
                                         </div>
                                     ) : <></>}
@@ -200,15 +204,15 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                             {data.sale && (
                                 <>
                                     <Marquee className='banner-sale-auto bg-black absolute bottom-0 left-0 w-full py-1.5'>
-                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>Hot Sale {percentSale}% OFF</div>
+                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>SUPER OFERTA {percentSale}% DTO</div>
                                         <Icon.Lightning weight='fill' className='text-red' />
-                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>Hot Sale {percentSale}% OFF</div>
+                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>SUPER OFERTA {percentSale}% DTO</div>
                                         <Icon.Lightning weight='fill' className='text-red' />
-                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>Hot Sale {percentSale}% OFF</div>
+                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>SUPER OFERTA {percentSale}% DTO</div>
                                         <Icon.Lightning weight='fill' className='text-red' />
-                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>Hot Sale {percentSale}% OFF</div>
+                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>SUPER OFERTA {percentSale}% DTO</div>
                                         <Icon.Lightning weight='fill' className='text-red' />
-                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>Hot Sale {percentSale}% OFF</div>
+                                        <div className={`caption2 font-semibold uppercase text-white px-2.5`}>SUPER OFERTA {percentSale}% DTO</div>
                                         <Icon.Lightning weight='fill' className='text-red' />
                                     </Marquee>
                                 </>
@@ -230,7 +234,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleQuickviewOpen()
                                             }}
                                         >
-                                            Quick View
+                                            Vista rápida
                                         </div>
                                     )}
                                     {data.action === 'add to cart' ? (
@@ -241,7 +245,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleAddToCart()
                                             }}
                                         >
-                                            Add To Cart
+                                            Agregar al carrito
                                         </div>
                                     ) : (
                                         <>
@@ -252,7 +256,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                     setOpenQuickShop(!openQuickShop)
                                                 }}
                                             >
-                                                Quick Shop
+                                                Compra rápida
                                             </div>
                                             <div
                                                 className={`quick-shop-block absolute left-5 right-5 bg-white p-5 rounded-[20px] ${openQuickShop ? 'open' : ''}`}
@@ -278,7 +282,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         setOpenQuickShop(false)
                                                     }}
                                                 >
-                                                    Add To cart
+                                                    Agregar al carrito
                                                 </div>
                                             </div>
                                         </>
@@ -297,7 +301,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                     handleAddToCart()
                                                 }}
                                             >
-                                                <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Add To Cart</div>
+                                                <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar al carrito</div>
                                                 <Icon.ShoppingBagOpen size={20} />
                                             </div>
                                         )}
@@ -308,7 +312,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleAddToWishlist()
                                             }}
                                         >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Add To Wishlist</div>
+                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar a favoritos</div>
                                             {wishlistState.wishlistArray.some(item => item.id === data.id) ? (
                                                 <>
                                                     <Icon.Heart size={18} weight='fill' className='text-white' />
@@ -326,7 +330,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleAddToCompare()
                                             }}
                                         >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Compare Product</div>
+                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Comparar producto</div>
                                             <Icon.Repeat size={18} className='compare-icon' />
                                             <Icon.CheckCircle size={20} className='checked-icon' />
                                         </div>
@@ -337,7 +341,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleQuickviewOpen()
                                             }}
                                         >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Quick View</div>
+                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Vista rápida</div>
                                             <Icon.Eye size={20} />
                                         </div>
                                         {style === 'style-5' && data.action !== 'add to cart' && (
@@ -365,7 +369,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         setOpenQuickShop(false)
                                                     }}
                                                 >
-                                                    Add To cart
+                                                    Agregar al carrito
                                                 </div>
                                             </div>
                                         )}
@@ -405,11 +409,11 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                 </div>
                                 <div className="flex items-center justify-between gap-3 gap-y-1 flex-wrap mt-2">
                                     <div className="text-button-uppercase">
-                                        <span className='text-secondary2 max-sm:text-xs'>Sold: </span>
+                                        <span className='text-secondary2 max-sm:text-xs'>Vendidos: </span>
                                         <span className='max-sm:text-xs'>{data.sold}</span>
                                     </div>
                                     <div className="text-button-uppercase">
-                                        <span className='text-secondary2 max-sm:text-xs'>Available: </span>
+                                        <span className='text-secondary2 max-sm:text-xs'>Disponibles: </span>
                                         <span className='max-sm:text-xs'>{data.quantity - data.sold}</span>
                                     </div>
                                 </div>
@@ -477,7 +481,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 handleAddToCart()
                                             }}
                                         >
-                                            Add To Cart
+                                            Agregar al carrito
                                         </div>
                                     ) : (
                                         <div
@@ -487,7 +491,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                 setOpenQuickShop(!openQuickShop)
                                             }}
                                         >
-                                            Quick Shop
+                                            Compra rápida
                                         </div>
                                     )}
                                 </>
@@ -504,12 +508,12 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                     <div onClick={() => handleDetailProduct(data.id)} className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2">
                                         {data.new && (
                                             <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                                                New
+                                                Nuevo
                                             </div>
                                         )}
                                         {data.sale && (
                                             <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
-                                                Sale
+                                                Oferta
                                             </div>
                                         )}
                                         <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
@@ -550,7 +554,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         setOpenQuickShop(false)
                                                     }}
                                                 >
-                                                    Add To cart
+                                                    Agregar al carrito
                                                 </div>
                                             </div>
                                         </div>
@@ -623,7 +627,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                     setOpenQuickShop(!openQuickShop)
                                                 }}
                                             >
-                                                Quick Shop
+                                                Compra rápida
                                             </div>
                                             <div className="list-action-right flex items-center justify-center gap-3 mt-4">
                                                 <div
@@ -633,7 +637,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         handleAddToWishlist()
                                                     }}
                                                 >
-                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Add To Wishlist</div>
+                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar a favoritos</div>
                                                     {wishlistState.wishlistArray.some(item => item.id === data.id) ? (
                                                         <>
                                                             <Icon.Heart size={18} weight='fill' className='text-white' />
@@ -651,7 +655,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         handleAddToCompare()
                                                     }}
                                                 >
-                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Compare Product</div>
+                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Comparar producto</div>
                                                     <Icon.ArrowsCounterClockwise size={18} className='compare-icon' />
                                                     <Icon.CheckCircle size={20} className='checked-icon' />
                                                 </div>
@@ -662,7 +666,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                                         handleQuickviewOpen()
                                                     }}
                                                 >
-                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Quick View</div>
+                                                    <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Vista rápida</div>
                                                     <Icon.Eye size={18} />
                                                 </div>
                                             </div>

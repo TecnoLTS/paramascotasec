@@ -17,10 +17,9 @@ const Collection = () => {
 
     return (
         <>
-            <div className="trending-block style-six md:pt-20 pt-10">
+            <div className="trending-block style-six md:py-10 py-5">
                 <div className="container">
-                    <div className="heading3 text-center">Shop By Categories
-                    </div>
+                    <div className="heading3 text-center">Compra por categorías</div>
                     <div className="list-trending section-swiper-navigation style-small-border style-outline md:mt-10 mt-6">
                         <Swiper
                             spaceBetween={12}
@@ -61,7 +60,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Food</span>
+                                        <span className='heading6'>Comida</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -78,7 +77,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Outfits</span>
+                                        <span className='heading6'>Ropa</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -95,7 +94,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Beds</span>
+                                        <span className='heading6'>Camas</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -112,7 +111,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Toys</span>
+                                        <span className='heading6'>Juguetes</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -129,7 +128,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Supplements</span>
+                                        <span className='heading6'>Suplementos</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -146,7 +145,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Pharmacy</span>
+                                        <span className='heading6'>Farmacia</span>
                                     </div>
                                 </div>
                             </SwiperSlide>
@@ -163,7 +162,7 @@ const Collection = () => {
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">
-                                        <span className='heading6'>Ring</span>
+                                        <span className='heading6'>Aros</span>
                                     </div>
                                 </div>
                             </SwiperSlide>

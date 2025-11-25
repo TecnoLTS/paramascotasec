@@ -12,7 +12,7 @@ import 'swiper/css/effect-fade';
 const SliderPet = () => {
     return (
         <>
-            <div className="slider-block style-one 2xl:h-[780px] xl:h-[740px] lg:h-[680px] md:h-[580px] sm:h-[500px] h-[420px] w-full md:pb-20 pb-10">
+            <div className="slider-block style-one 2xl:h-[780px] xl:h-[740px] lg:h-[680px] md:h-[580px] sm:h-[500px] h-[420px] w-full md:pb-0 pb-0">
                 <div className="slider-main h-full w-full">
                     <Swiper
                         spaceBetween={0}
@@ -21,69 +21,73 @@ const SliderPet = () => {
                         pagination={{ clickable: true }}
                         modules={[Pagination, Autoplay]}
                         className='h-full relative'
+                        speed={900}
                         autoplay={{
-                            delay: 4000,
+                            delay: 7000,
                         }}
                     >
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative">
-                                <div className="container w-full h-full flex items-center">
-                                    <div className="text-content sm:w-1/2 w-2/3">
-                                        <div className="text-sub-display">Sale! Up To 50% Off!</div>
-                                        <div className="text-display md:mt-5 mt-2">Your pet{String.raw`'s`} Perfect Store</div>
-                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3">Shop Now</Link>
-                                    </div>
-                                    <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
-                                        <Image
-                                            src={'/images/slider/bg-pet1-1.png'}
-                                            width={2560}
-                                            height={1080}
-                                            alt='bg-pet1-1'
-                                            priority={true}
-                                            className='w-full h-full object-cover'
-                                        />
+                                <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
+                                    <Image
+                                        src={'/images/slider/slade1.jpg'}
+                                        width={2560}
+                                        height={1080}
+                                        alt='bg-pet1-1'
+                                        priority={true}
+                                        className='w-full h-full object-cover'
+                                    />
+                                </div>
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
+                                <div className="container w-full h-full flex items-center relative">
+                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display md:mt-5 mt-2 normal-case">La tienda perfecta para tu mascota</div>
+                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
                             </div>
                         </SwiperSlide>
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative">
-                                <div className="container w-full h-full flex items-center">
-                                    <div className="text-content sm:w-1/2 w-2/3">
-                                        <div className="text-sub-display">Sale! Up To 50% Off!</div>
-                                        <div className="text-display md:mt-5 mt-2">Unleash a Happy, Healthy Pet</div>
-                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3">Shop Now</Link>
-                                    </div>
-                                    <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
-                                        <Image
-                                            src={'/images/slider/bg-pet1-2.png'}
-                                            width={2560}
-                                            height={1080}
-                                            alt='bg-pet1-2'
-                                            priority={true}
-                                            className='w-full h-full object-cover'
-                                        />
+                                <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
+                                    <Image
+                                        src={'/images/slider/slade1.jpg'}
+                                        width={2560}
+                                        height={1080}
+                                        alt='bg-pet1-2'
+                                        priority={true}
+                                        className='w-full h-full object-cover'
+                                    />
+                                </div>
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
+                                <div className="container w-full h-full flex items-center relative">
+                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display md:mt-5 mt-2 normal-case">Libera una mascota feliz y saludable</div>
+                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
                             </div>
                         </SwiperSlide>
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative">
-                                <div className="container w-full h-full flex items-center">
-                                    <div className="text-content sm:w-1/2 w-2/3">
-                                        <div className="text-sub-display">Sale! Up To 50% Off!</div>
-                                        <div className="text-display md:mt-5 mt-2">Feed Your Pet{String.raw`'s`} Appetite</div>
-                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3">Shop Now</Link>
-                                    </div>
-                                    <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
-                                        <Image
-                                            src={'/images/slider/bg-pet1-3.png'}
-                                            width={2560}
-                                            height={1080}
-                                            alt='bg-pet1-3'
-                                            priority={true}
-                                            className='w-full h-full object-cover'
-                                        />
+                                <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
+                                    <Image
+                                        src={'/images/slider/slade1.jpg'}
+                                        width={2560}
+                                        height={1080}
+                                        alt='bg-pet1-3'
+                                        priority={true}
+                                        className='w-full h-full object-cover'
+                                    />
+                                </div>
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
+                                <div className="container w-full h-full flex items-center relative">
+                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
+                                        <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
                             </div>

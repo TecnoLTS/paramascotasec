@@ -13,6 +13,13 @@ interface Props {
 
 const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
     const [activeTab, setActiveTab] = useState<string>('food');
+    const tabLabels: Record<string, string> = {
+        pet: 'Mascotas',
+        food: 'Comida',
+        bed: 'Camas',
+        outfit: 'Ropa',
+        ring: 'Aros',
+    };
 
     const handleTabClick = (type: string) => {
         setActiveTab(type);
@@ -25,7 +32,7 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
             <div className="what-new-block md:pt-20 pt-10">
                 <div className="container">
                     <div className="heading flex flex-col items-center text-center">
-                        <div className="heading3">What{String.raw`'s`} new</div>
+                        <div className="heading3">Novedades</div>
                         <div className="menu-tab style-pet flex items-center gap-2 p-1 bg-surface rounded-2xl mt-6">
                             {['pet', 'food', 'bed', 'outfit', 'ring'].map((type) => (
                                 <div
@@ -37,7 +44,7 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                                         <motion.div layoutId='active-pill' className='absolute inset-0 rounded-2xl bg-black'></motion.div>
                                     )}
                                     <span className='relative text-button-uppercase z-[1]'>
-                                        {type}
+                                        {tabLabels[type] ?? type}
                                     </span>
                                 </div>
                             ))}

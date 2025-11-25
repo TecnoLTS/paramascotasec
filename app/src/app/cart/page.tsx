@@ -72,10 +72,10 @@ const Cart = () => {
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
+            <TopNavOne props="style-one bg-black" slogan="Los nuevos clientes ahorran 10% con el código GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Shopping cart' subHeading='Shopping cart' />
+                <Breadcrumb heading='Carrito de compras' subHeading='Carrito de compras' />
             </div>
             <div className="cart-block md:py-20 py-10">
                 <div className="container">
@@ -83,16 +83,16 @@ const Cart = () => {
                         <div className="xl:w-2/3 xl:pr-3 w-full">
                             <div className="time bg-green py-3 px-5 flex items-center rounded-lg">
                                 <div className="heding5">🔥</div>
-                                <div className="caption1 pl-2">Your cart will expire in
+                                <div className="caption1 pl-2">Tu carrito expirará en
                                     <span className="min text-red text-button fw-700"> {timeLeft.minutes}:{timeLeft.seconds < 10 ? `0${timeLeft.seconds}` : timeLeft.seconds}</span>
-                                    <span> minutes! Please checkout now before your items sell out!</span>
+                                    <span> minutos. ¡Finaliza la compra antes de que se agoten!</span>
                                 </div>
                             </div>
                             <div className="heading banner mt-5">
-                                <div className="text">Buy
+                                <div className="text">Compra
                                     <span className="text-button"> $<span className="more-price">{moneyForFreeship - totalCart > 0 ? (<>{moneyForFreeship - totalCart}</>) : (0)}</span>.00 </span>
-                                    <span>more to get </span>
-                                    <span className="text-button">freeship</span>
+                                    <span>más para obtener </span>
+                                    <span className="text-button">envío gratis</span>
                                 </div>
                                 <div className="tow-bar-block mt-4">
                                     <div
@@ -106,22 +106,22 @@ const Cart = () => {
                                     <div className="heading bg-surface bora-4 pt-4 pb-4">
                                         <div className="flex">
                                             <div className="w-1/2">
-                                                <div className="text-button text-center">Products</div>
+                                                <div className="text-button text-center">Productos</div>
                                             </div>
                                             <div className="w-1/12">
-                                                <div className="text-button text-center">Price</div>
+                                                <div className="text-button text-center">Precio</div>
                                             </div>
                                             <div className="w-1/6">
-                                                <div className="text-button text-center">Quantity</div>
+                                                <div className="text-button text-center">Cantidad</div>
                                             </div>
                                             <div className="w-1/6">
-                                                <div className="text-button text-center">Total Price</div>
+                                                <div className="text-button text-center">Total</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="list-product-main w-full mt-3">
                                         {cartState.cartArray.length < 1 ? (
-                                            <p className='text-button pt-3'>No product in cart</p>
+                                            <p className='text-button pt-3'>No hay productos en el carrito</p>
                                         ) : (
                                             cartState.cartArray.map((product) => (
                                                 <div className="item flex md:mt-7 md:pb-7 mt-5 pb-5 border-b border-line w-full" key={product.id}>
@@ -181,8 +181,8 @@ const Cart = () => {
                             </div>
                             <div className="input-block discount-code w-full h-12 sm:mt-7 mt-5">
                                 <form className='w-full h-full relative'>
-                                    <input type="text" placeholder='Add voucher discount' className='w-full h-full bg-surface pl-4 pr-14 rounded-lg border border-line' required />
-                                    <button className='button-main absolute top-1 bottom-1 right-1 px-5 rounded-lg flex items-center justify-center'>Apply Code
+                                    <input type="text" placeholder='Agregar cupón de descuento' className='w-full h-full bg-surface pl-4 pr-14 rounded-lg border border-line' required />
+                                    <button className='button-main absolute top-1 bottom-1 right-1 px-5 rounded-lg flex items-center justify-center'>Aplicar código
                                     </button>
                                 </form>
                             </div>
@@ -190,11 +190,11 @@ const Cart = () => {
                                 <div className={`item ${applyCode === 200 ? 'bg-green' : ''} border border-line rounded-lg py-2`}>
                                     <div className="top flex gap-10 justify-between px-3 pb-2 border-b border-dashed border-line">
                                         <div className="left">
-                                            <div className="caption1">Discount</div>
+                                            <div className="caption1">Descuento</div>
                                             <div className="caption1 font-bold">10% OFF</div>
                                         </div>
                                         <div className="right">
-                                            <div className="caption1">For all orders <br />from 200$</div>
+                                            <div className="caption1">En pedidos <br />desde 200$</div>
                                         </div>
                                     </div>
                                     <div className="bottom gap-6 items-center flex justify-between px-3 pt-2">
@@ -203,18 +203,18 @@ const Cart = () => {
                                             className="button-main py-1 px-2.5 capitalize text-xs"
                                             onClick={() => handleApplyCode(200, Math.floor((totalCart / 100) * 10))}
                                         >
-                                            {applyCode === 200 ? 'Applied' : 'Apply Code'}
+                                            {applyCode === 200 ? 'Aplicado' : 'Aplicar código'}
                                         </div>
                                     </div>
                                 </div>
                                 <div className={`item ${applyCode === 300 ? 'bg-green' : ''} border border-line rounded-lg py-2`}>
                                     <div className="top flex gap-10 justify-between px-3 pb-2 border-b border-dashed border-line">
                                         <div className="left">
-                                            <div className="caption1">Discount</div>
+                                            <div className="caption1">Descuento</div>
                                             <div className="caption1 font-bold">15% OFF</div>
                                         </div>
                                         <div className="right">
-                                            <div className="caption1">For all orders <br />from 300$</div>
+                                            <div className="caption1">En pedidos <br />desde 300$</div>
                                         </div>
                                     </div>
                                     <div className="bottom gap-6 items-center flex justify-between px-3 pt-2">
@@ -223,18 +223,18 @@ const Cart = () => {
                                             className="button-main py-1 px-2.5 capitalize text-xs"
                                             onClick={() => handleApplyCode(300, Math.floor((totalCart / 100) * 15))}
                                         >
-                                            {applyCode === 300 ? 'Applied' : 'Apply Code'}
+                                            {applyCode === 300 ? 'Aplicado' : 'Aplicar código'}
                                         </div>
                                     </div>
                                 </div>
                                 <div className={`item ${applyCode === 400 ? 'bg-green' : ''} border border-line rounded-lg py-2`}>
                                     <div className="top flex gap-10 justify-between px-3 pb-2 border-b border-dashed border-line">
                                         <div className="left">
-                                            <div className="caption1">Discount</div>
+                                            <div className="caption1">Descuento</div>
                                             <div className="caption1 font-bold">20% OFF</div>
                                         </div>
                                         <div className="right">
-                                            <div className="caption1">For all orders <br />from 400$</div>
+                                            <div className="caption1">En pedidos <br />desde 400$</div>
                                         </div>
                                     </div>
                                     <div className="bottom gap-6 items-center flex justify-between px-3 pt-2">
@@ -243,7 +243,7 @@ const Cart = () => {
                                             className="button-main py-1 px-2.5 capitalize text-xs"
                                             onClick={() => handleApplyCode(400, Math.floor((totalCart / 100) * 20))}
                                         >
-                                            {applyCode === 400 ? 'Applied' : 'Apply Code'}
+                                            {applyCode === 400 ? 'Aplicado' : 'Aplicar código'}
                                         </div>
                                     </div>
                                 </div>
@@ -251,17 +251,17 @@ const Cart = () => {
                         </div>
                         <div className="xl:w-1/3 xl:pl-12 w-full">
                             <div className="checkout-block bg-surface p-6 rounded-2xl">
-                                <div className="heading5">Order Summary</div>
+                                <div className="heading5">Resumen de compra</div>
                                 <div className="total-block py-5 flex justify-between border-b border-line">
                                     <div className="text-title">Subtotal</div>
                                     <div className="text-title">$<span className="total-product">{totalCart}</span><span>.00</span></div>
                                 </div>
                                 <div className="discount-block py-5 flex justify-between border-b border-line">
-                                    <div className="text-title">Discounts</div>
+                                    <div className="text-title">Descuentos</div>
                                     <div className="text-title"> <span>-$</span><span className="discount">{discountCart}</span><span>.00</span></div>
                                 </div>
                                 <div className="ship-block py-5 flex justify-between border-b border-line">
-                                    <div className="text-title">Shipping</div>
+                                    <div className="text-title">Envío</div>
                                     <div className="choose-type flex gap-12">
                                         <div className="left">
                                             <div className="type">
@@ -282,7 +282,7 @@ const Cart = () => {
                                                             onChange={() => setShipCart(0)}
                                                         />
                                                     )}
-                                                < label className="pl-1" htmlFor="shipping">Free Shipping:</label>
+                                                <label className="pl-1" htmlFor="shipping">Envío gratis:</label>
                                             </div>
                                             <div className="type mt-1">
                                                 <input
@@ -304,7 +304,7 @@ const Cart = () => {
                                                     checked={shipCart === 40}
                                                     onChange={() => setShipCart(40)}
                                                 />
-                                                <label className="text-on-surface-variant1 pl-1" htmlFor="flat">Flat Rate:</label>
+                                                <label className="text-on-surface-variant1 pl-1" htmlFor="flat">Tarifa plana:</label>
                                             </div>
                                         </div>
                                         <div className="right">
@@ -321,8 +321,8 @@ const Cart = () => {
                                         <span className='heading5'>.00</span></div>
                                 </div>
                                 <div className="block-button flex flex-col items-center gap-y-4 mt-5">
-                                    <div className="checkout-btn button-main text-center w-full" onClick={redirectToCheckout}>Process To Checkout</div>
-                                    <Link className="text-button hover-underline" href={"/shop/breadcrumb1"}>Continue shopping</Link>
+                                    <div className="checkout-btn button-main text-center w-full" onClick={redirectToCheckout}>Continuar al pago</div>
+                                    <Link className="text-button hover-underline" href={"/shop/breadcrumb1"}>Seguir comprando</Link>
                                 </div>
                             </div>
                         </div>
