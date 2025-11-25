@@ -1,0 +1,18 @@
+
+
+
+docker compose restart
+
+
+
+docker stop $(docker ps -aq)
+docker rm -f $(docker ps -aq)
+docker rmi -f $(docker images -q)
+docker volume prune -f
+docker builder prune -af
+docker system prune -af
+
+
+
+docker compose up -d --build
+
