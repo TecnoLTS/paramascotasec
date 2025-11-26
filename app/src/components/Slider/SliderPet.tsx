@@ -38,7 +38,6 @@ const SliderPet = () => {
                                         className='w-full h-full object-cover'
                                     />
                                 </div>
-                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
                                 <div className="container w-full h-full flex items-center relative">
                                     <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
                                         <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
@@ -52,7 +51,7 @@ const SliderPet = () => {
                             <div className="slider-item h-full w-full relative">
                                 <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
                                     <Image
-                                        src={'/images/slider/slade1.jpg'}
+                                        src={'/images/slider/slade2.jpg'}
                                         width={2560}
                                         height={1080}
                                         alt='bg-pet1-2'
@@ -60,11 +59,10 @@ const SliderPet = () => {
                                         className='w-full h-full object-cover'
                                     />
                                 </div>
-                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
                                 <div className="container w-full h-full flex items-center relative">
                                     <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
                                         <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
-                                        <div className="text-display md:mt-5 mt-2 normal-case">Libera una mascota feliz y saludable</div>
+                                        <div className="text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
                                         <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
@@ -74,7 +72,7 @@ const SliderPet = () => {
                             <div className="slider-item h-full w-full relative">
                                 <div className="sub-img absolute left-0 top-0 w-full h-full z-[-1]">
                                     <Image
-                                        src={'/images/slider/slade1.jpg'}
+                                        src={'/images/slider/slade3.jpg'}
                                         width={2560}
                                         height={1080}
                                         alt='bg-pet1-3'
@@ -82,7 +80,6 @@ const SliderPet = () => {
                                         className='w-full h-full object-cover'
                                     />
                                 </div>
-                                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/25 to-transparent" />
                                 <div className="container w-full h-full flex items-center relative">
                                     <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
                                         <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
