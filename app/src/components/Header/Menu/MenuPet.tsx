@@ -80,7 +80,13 @@ const MenuPet = () => {
                             <i className="icon-category text-2xl"></i>
                         </div>
                         <Link href={'/'} className='flex items-center'>
-                            <div className="heading4">Anvogue</div>
+                            <Image
+                                src="/images/brand/LogoVerde150.svg"
+                                width={184}
+                                height={80}
+                                className="h-[55px] w-auto md:h-[80px]"
+                                priority
+                            />
                         </Link>
                         <div className="form-search w-[54%] pl-8 flex items-center h-[48px] max-lg:hidden">
                             <div className='w-full flex items-center h-full border border-[#2f4f4f] shadow-sm overflow-hidden'>
@@ -1025,7 +1031,16 @@ const MenuPet = () => {
                                 >
                                     <Icon.X size={14} />
                                 </div>
-                                <Link href={'/'} className='logo text-3xl font-semibold text-center'>Anvogue</Link>
+                                <Link href={'/'} className='logo text-3xl font-semibold text-center'>
+                                    <Image
+                                        src="/images/brand/LogoVerde150.png"
+                                        alt="Anvogue logo"
+                                        width={345}
+                                        height={150}
+                                        className="mx-auto h-14 w-auto"
+                                        priority
+                                    />
+                                </Link>
                             </div>
                             <div className="form-search relative mt-2">
                                 <Icon.MagnifyingGlass size={20} className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer' />
