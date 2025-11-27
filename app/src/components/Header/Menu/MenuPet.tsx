@@ -1020,8 +1020,15 @@ const MenuPet = () => {
                 </div>
             </div>
 
-            <div id="menu-mobile" className={`${openMenuMobile ? 'open' : ''}`}>
-                <div className="menu-container bg-white h-full">
+            <div
+                id="menu-mobile"
+                className={`${openMenuMobile ? 'open' : ''}`}
+                onClick={handleMenuMobile}
+            >
+                <div
+                    className="menu-container bg-white h-full"
+                    onClick={(e) => e.stopPropagation()}
+                >
                     <div className="container h-full">
                         <div className="menu-main h-full overflow-hidden">
                             <div className="heading py-2 relative flex items-center justify-center">

@@ -16,6 +16,11 @@
     user-select: none;
 }
 
+/* Mantener cursor base en el hero slider */
+.slider-main .swiper {
+    cursor: default;
+}
+
 .swiper-slide {
     height: unset !important;
 }
