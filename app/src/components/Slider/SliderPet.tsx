@@ -18,10 +18,10 @@ const sliderLoader = ({ src, width }: ImageLoaderProps) => {
     const dir = parts.join('/');
 
     const suffix =
-        width >= 3840 ? '4k' :
-        width >= 2560 ? '2k' :
-        width >= 1920 ? '1920x620' :
-        width >= 1280 ? '720' :
+        width >= 3820 ? '4k' :
+        width >= 2540 ? '2k' :
+        width >= 1900 ? '1920x620' :
+        width >= 1260 ? '720' :
         'mobile';
 
     return `/${dir}/${baseName}-${suffix}${ext}`;
