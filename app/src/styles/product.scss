@@ -213,11 +213,17 @@
 
             .list-color,
             .list-color-image {
-                position: absolute;
-                top: 0;
-                left: 0;
-                opacity: 0;
+                position: relative;
+                top: unset;
+                left: unset;
+                opacity: 1;
                 z-index: 0;
+            }
+
+            .product-name,
+            .product-price-block {
+                transform: translateY(0);
+                transition: transform 0.25s ease, color 0.25s ease;
             }
         }
     }
@@ -239,17 +245,12 @@
                 .product-main {
                     .product-infor {
                         .product-name {
-                            opacity: 0;
-                            visibility: hidden;
-                        }
-
-                        .list-color,
-                        .list-color-image {
                             opacity: 1;
+                            visibility: visible;
+                            transform: translateY(-2px);
                         }
-
                         .product-price-block {
-                            transform: translateY(14px);
+                            transform: translateY(-2px);
                         }
                     }
                 }
@@ -345,6 +346,7 @@
         border: 2px solid transparent;
         cursor: pointer;
         transition: all ease 0.3s;
+        background-color: var(--line);
 
         &.border {
             border-width: 1px;
