@@ -113,6 +113,39 @@ input[type="file"] {
   background: linear-gradient(238deg, #FAF8F1 0%, #F6F3EF 99.66%);
 }
 
+/* Alturas del slider por rango: cambia solo al cruzar cada breakpoint */
+.slider-height {
+  height: 220px;
+}
+
+@media (min-width: 640px) { /* sm */
+  .slider-height { height: 300px; }
+}
+
+@media (min-width: 768px) { /* md */
+  .slider-height { height: 380px; }
+}
+
+@media (min-width: 1024px) { /* lg */
+  .slider-height { height: 480px; }
+}
+
+@media (min-width: 1280px) { /* xl */
+  .slider-height { height: 540px; }
+}
+
+@media (min-width: 1920px) { /* 1080p/2K compacto */
+  .slider-height { height: 620px; }
+}
+
+@media (min-width: 2560px) { /* 2K */
+  .slider-height { height: 700px; }
+}
+
+@media (min-width: 3840px) { /* 4K */
+  .slider-height { height: 840px; }
+}
+
 .box-shadow-xs {
   box-shadow: 0px 2px 2px 0px #1C24331A;
 }

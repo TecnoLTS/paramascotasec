@@ -20,7 +20,7 @@ const sliderLoader = ({ src, width }: ImageLoaderProps) => {
     const suffix =
         width >= 3840 ? '4k' :
         width >= 2560 ? '2k' :
-        width >= 1920 ? '1080' :
+        width >= 1920 ? '1920x620' :
         width >= 1280 ? '720' :
         'mobile';
 
@@ -31,7 +31,7 @@ const sliderLoader = ({ src, width }: ImageLoaderProps) => {
 const SliderPet = () => {
     return (
         <>
-            <div className="slider-block style-one 2xl:h-[780px] xl:h-[740px] lg:h-[680px] md:h-[580px] sm:h-[500px] h-[420px] w-full md:pb-0 pb-0 overflow-hidden">
+            <div className="slider-block style-one slider-height w-full md:pb-0 pb-0 overflow-hidden">
                 <div className="slider-main h-full w-full">
                     <Swiper
                         spaceBetween={0}

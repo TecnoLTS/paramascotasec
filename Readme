@@ -16,3 +16,5 @@ docker system prune -af
 
 docker compose up -d --build
 
+sudo chown -R $(whoami):$(whoami) /opt
+
