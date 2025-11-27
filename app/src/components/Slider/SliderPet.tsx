@@ -1,37 +1,44 @@
 'use client'
-
-import React from 'react'
-import Image, { ImageLoaderProps } from 'next/image'
+import React, { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
 import 'swiper/css/bundle';
 import 'swiper/css/effect-fade';
 
-const sliderLoader = ({ src, width }: ImageLoaderProps) => {
-    const cleanSrc = src.startsWith('/') ? src.slice(1) : src;
-    const parts = cleanSrc.split('/');
-    const file = parts.pop() || '';
-    const dotIndex = file.lastIndexOf('.');
-    const baseName = dotIndex !== -1 ? file.slice(0, dotIndex) : file;
-    const ext = dotIndex !== -1 ? file.slice(dotIndex) : '';
-    const dir = parts.join('/');
-
-    const suffix =
-        width >= 3820 ? '4k' :
-        width >= 2540 ? '2k' :
-        width >= 1900 ? '1920x620' :
-        width >= 1260 ? '720' :
-        'mobile';
-
-    return `/${dir}/${baseName}-${suffix}${ext}`;
+const getSuffixByHeight = (h: number) => {
+    // Bajamos umbrales para cubrir alturas intermedias (~480px) sin pixelado
+    if (h >= 840) return '4k'
+    if (h >= 700) return '2k'
+    if (h >= 620) return '1920'
+    if (h >= 580) return '1080'
+    if (h >= 453) return '720'
+    if (h >= 243) return '720'
+    return 'mobile'
 };
 
 
 const SliderPet = () => {
+    const [suffix, setSuffix] = useState<'4k' | '2k' | '1920' | '1080' | '720' | '243' | 'mobile'>('mobile')
+
+    useEffect(() => {
+        const update = () => {
+            const width = window.innerWidth || 1920
+            const height = Math.round(width * (620 / 1920))
+            setSuffix(getSuffixByHeight(height))
+        }
+        update()
+        window.addEventListener('resize', update)
+        return () => window.removeEventListener('resize', update)
+    }, [])
+
     return (
         <>
-            <div className="slider-block style-one slider-height w-full md:pb-0 pb-0 overflow-hidden">
+            <div
+                className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden"
+                style={{ aspectRatio: '1905 / 615' }}
+            >
                 <div className="slider-main h-full w-full">
                     <Swiper
                         spaceBetween={0}
@@ -48,12 +55,11 @@ const SliderPet = () => {
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative overflow-hidden">
                                 <Image
-                                    src="/images/slider/slade1.jpg"
+                                    src={`/images/slider/slade1-${suffix}.jpg`}
                                     alt="bg-pet1-1"
                                     fill
                                     priority
                                     sizes="100vw"
-                                    loader={sliderLoader}
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
@@ -68,11 +74,10 @@ const SliderPet = () => {
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative overflow-hidden">
                                 <Image
-                                    src="/images/slider/slade2.jpg"
+                                    src={`/images/slider/slade2-${suffix}.jpg`}
                                     alt="bg-pet1-2"
                                     fill
                                     sizes="100vw"
-                                    loader={sliderLoader}
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
@@ -87,11 +92,10 @@ const SliderPet = () => {
                         <SwiperSlide>
                             <div className="slider-item h-full w-full relative overflow-hidden">
                                 <Image
-                                    src="/images/slider/slade3.jpg"
+                                    src={`/images/slider/slade3-${suffix}.jpg`}
                                     alt="bg-pet1-3"
                                     fill
                                     sizes="100vw"
-                                    loader={sliderLoader}
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
