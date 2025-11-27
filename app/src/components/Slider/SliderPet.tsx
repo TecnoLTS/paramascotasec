@@ -63,9 +63,9 @@ const SliderPet = () => {
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
-                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
-                                        <div className="text-display md:mt-5 mt-2 normal-case">La tienda perfecta para tu mascota</div>
+                                    <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
+                                        <div className="text-sub-display slider-text-sub normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">La tienda perfecta para tu mascota</div>
                                         <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
@@ -81,9 +81,9 @@ const SliderPet = () => {
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
-                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
-                                        <div className="text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
+                                    <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
+                                        <div className="text-sub-display slider-text-sub normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
                                         <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>
@@ -99,9 +99,9 @@ const SliderPet = () => {
                                     className="absolute left-0 top-0 h-full w-full object-cover object-center"
                                 />
                                 <div className="container w-full h-full flex items-center relative">
-                                    <div className="text-content sm:w-1/2 w-2/3 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                                        <div className="text-sub-display normal-case">¡Oferta! Hasta 50% de descuento</div>
-                                        <div className="text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
+                                    <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
+                                        <div className="text-sub-display slider-text-sub normal-case">¡Oferta! Hasta 50% de descuento</div>
+                                        <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">Alimenta el apetito de tu mascota</div>
                                         <Link href='/shop/breadcrumb-img' className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white">Compra ahora</Link>
                                     </div>
                                 </div>

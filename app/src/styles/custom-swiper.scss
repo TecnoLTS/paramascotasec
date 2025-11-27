@@ -31,7 +31,7 @@
     position: relative;
     margin: 0 8px !important;
     background: transparent;
-    border: 1px solid var(--black);
+    border: 1px solid var(--doubleblack);
     opacity: 1 !important;
     transition: all ease 0.5s;
 }
@@ -55,11 +55,11 @@
 }
 
 .swiper-pagination .swiper-pagination-bullet.swiper-pagination-bullet-active::before {
-    border-color: var(--black);
+    border-color: var(--doubleblack);
 }
 
 .swiper-pagination .swiper-pagination-bullet-active {
-    background: var(--black);
+    background: var(--doubleblack);
 }
 
 .swiper.dots-white .swiper-pagination .swiper-pagination-bullet,
