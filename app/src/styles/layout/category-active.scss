@@ -30,9 +30,22 @@
     &.style-pet {
         .tab-item {
             &.active {
-                color: var(--white);
+                color: var(--white) !important;
                 background-color: var(--black);
                 box-shadow: 0px 2px 2px 0px rgba(28, 36, 51, 0.10);
+
+                span {
+                    color: var(--white) !important;
+                }
+            }
+
+            &:hover {
+                &.active {
+                    color: var(--white) !important;
+                    span {
+                        color: var(--white) !important;
+                    }
+                }
             }
         }
     }
