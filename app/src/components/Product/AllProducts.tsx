@@ -11,7 +11,7 @@ interface Props {
     maxCategories?: number;
 }
 
-const AllProducts: React.FC<Props> = ({ data, pageSize = 8, visibleCategories, maxCategories = 6 }) => {
+const AllProducts: React.FC<Props> = ({ data, pageSize = 15, visibleCategories, maxCategories = 6 }) => {
     const [page, setPage] = useState<number>(1)
     const [activeCategory, setActiveCategory] = useState<string>('todos')
 
@@ -81,7 +81,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 8, visibleCategories, m
                 ))}
             </div>
 
-            <div className="list-product hide-product-sold grid lg:grid-cols-4 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
+            <div className="list-product hide-product-sold grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
                 {paginatedProducts.map((product) => (
                     <Product data={product} type='grid' key={product.id} style='style-1' />
                 ))}
