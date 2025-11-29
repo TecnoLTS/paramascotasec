@@ -14,7 +14,6 @@ const Instagram: React.FC = () => {
     'https://www.instagram.com/reel/DRcLHtlEZJ4/',
     'https://www.instagram.com/reel/DRh5OZzEZ7o/',
     'https://www.instagram.com/reel/DRcLHtlEZJ4/',
-    'https://www.instagram.com/reel/DRh5OZzEZ7o/',
   ]
 
   useEffect(() => {
@@ -104,55 +103,7 @@ const Instagram: React.FC = () => {
     return () => clearTimeout(timer)
   }, [])
 
-  // Autoplay functionality
-  useEffect(() => {
-    autoplayRef.current = setInterval(() => {
-      handleNext()
-    }, 4000)
 
-    return () => {
-      if (autoplayRef.current) {
-        clearInterval(autoplayRef.current)
-      }
-    }
-  }, [currentIndex])
-
-  const handleNext = () => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current
-      const itemWidth = container.scrollWidth / instagramEmbeds.length
-      const newIndex = (currentIndex + 1) % instagramEmbeds.length
-      
-      container.scrollTo({
-        left: itemWidth * newIndex,
-        behavior: 'smooth'
-      })
-      setCurrentIndex(newIndex)
-    }
-  }
-
-  const handlePrev = () => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current
-      const itemWidth = container.scrollWidth / instagramEmbeds.length
-      const newIndex = currentIndex === 0 ? instagramEmbeds.length - 1 : currentIndex - 1
-      
-      container.scrollTo({
-        left: itemWidth * newIndex,
-        behavior: 'smooth'
-      })
-      setCurrentIndex(newIndex)
-    }
-  }
-
-  const resetAutoplay = () => {
-    if (autoplayRef.current) {
-      clearInterval(autoplayRef.current)
-    }
-    autoplayRef.current = setInterval(() => {
-      handleNext()
-    }, 4000)
-  }
 
   return (
     <div className="instagram-block md:pt-20 pt-10">
@@ -172,78 +123,26 @@ const Instagram: React.FC = () => {
         </div>
       </div>
 
-      <div className="relative px-4 md:px-8 mt-10">
-        {/* Navigation buttons */}
-        <button
-          onClick={() => { handlePrev(); resetAutoplay(); }}
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full w-10 h-10 flex items-center justify-center shadow-md"
-          aria-label="Previous"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <button
-          onClick={() => { handleNext(); resetAutoplay(); }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full w-10 h-10 flex items-center justify-center shadow-md"
-          aria-label="Next"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
-        {/* Scroll container */}
-        <div 
-          ref={scrollContainerRef}
-          className="overflow-x-auto scrollbar-hide"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          <div className="flex gap-5" style={{ width: 'max-content' }}>
-            {instagramEmbeds.map((url, idx) => (
-              <div key={idx} className="flex-shrink-0 w-80 sm:w-96">
-                <div className="instagram-wrapper">
-                  <div className="instagram-content">
-                    {!isLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-blue-600"></div>
-                      </div>
-                    )}
-                    <blockquote
-                      className="instagram-media"
-                      data-instgrm-permalink={url}
-                      data-instgrm-version="14"
-                    />
-                  </div>
+      <div className="px-4 md:px-8 mt-10">
+        {/* Static grid: 5 posts */}
+        <div className="flex flex-wrap justify-center gap-6">
+          {instagramEmbeds.map((url, idx) => (
+            <div key={idx} className="w-full sm:w-80 md:w-80">
+              <div className="instagram-wrapper">
+                <div className="instagram-content">
+                  {!isLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-blue-600"></div>
+                    </div>
+                  )}
+                  <blockquote
+                    className="instagram-media"
+                    data-instgrm-permalink={url}
+                    data-instgrm-version="14"
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Dots indicator */}
-        <div className="flex justify-center gap-2 mt-6">
-          {instagramEmbeds.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setCurrentIndex(idx)
-                if (scrollContainerRef.current) {
-                  const container = scrollContainerRef.current
-                  const itemWidth = container.scrollWidth / instagramEmbeds.length
-                  container.scrollTo({
-                    left: itemWidth * idx,
-                    behavior: 'smooth'
-                  })
-                }
-                resetAutoplay()
-              }}
-              className={`h-2 rounded-full transition-all ${
-                currentIndex === idx ? 'w-8 bg-black' : 'w-2 bg-gray-300'
-              }`}
-              aria-label={`Go to slide ${idx + 1}`}
-            />
+            </div>
           ))}
         </div>
       </div>
