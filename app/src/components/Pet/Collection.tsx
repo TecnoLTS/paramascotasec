@@ -51,7 +51,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/food.png'}
+                                            src={'/images/collection/1.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='outerwear'
@@ -68,7 +68,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/outfit.png'}
+                                            src={'/images/collection/2.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='swimwear'
@@ -85,7 +85,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/bed.png'}
+                                            src={'/images/collection/3.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='clothes'
@@ -102,7 +102,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/toys.png'}
+                                            src={'/images/collection/4.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='sets'
@@ -119,7 +119,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/supplements.png'}
+                                            src={'/images/collection/5.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='accessories'
@@ -136,7 +136,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/pharmacy.png'}
+                                            src={'/images/collection/6.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='lingerie'
@@ -153,7 +153,7 @@ const Collection = () => {
                                 <div className="trending-item block relative cursor-pointer" onClick={() => handleCategoryClick('pet')}>
                                     <div className="bg-img rounded-[32px] overflow-hidden">
                                         <Image
-                                            src={'/images/collection/ring.png'}
+                                            src={'/images/collection/7.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='lingerie'

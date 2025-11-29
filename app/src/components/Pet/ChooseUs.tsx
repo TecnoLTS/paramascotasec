@@ -8,7 +8,7 @@ const ChooseUs = () => {
                 <div className="container flex max-lg:flex-col max-lg:gap-y-8 items-center justify-between">
                     <div className="bg-img lg:w-7/12 lg:pr-[45px] md:w-1/2 w-5/6">
                         <Image
-                            src={'/images/banner/bg-choose-us-pet.png'}
+                            src={'/images/banner/5.jpg'}
                             width={1200}
                             height={1200}
                             alt='bg-img'

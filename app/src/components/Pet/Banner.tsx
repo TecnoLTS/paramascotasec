@@ -11,7 +11,7 @@ const Banner = () => {
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500">
                             <div className="banner-img w-full h-full">
                                 <Image
-                                    src={'/images/banner/24.png'}
+                                    src={'/images/banner/1.jpg'}
                                     width={1000}
                                     height={800}
                                     alt='bg-img'
@@ -28,7 +28,7 @@ const Banner = () => {
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500">
                             <div className="banner-img w-full h-full">
                                 <Image
-                                    src={'/images/banner/25.png'}
+                                    src={'/images/banner/2.jpg'}
                                     width={1000}
                                     height={800}
                                     alt='bg-img'
@@ -45,7 +45,7 @@ const Banner = () => {
                         <Link href={'/shop/breadcrumb1'} className="banner-item relative block rounded-[20px] overflow-hidden duration-500 max-lg:hidden">
                             <div className="banner-img w-full h-full">
                                 <Image
-                                    src={'/images/banner/26.png'}
+                                    src={'/images/banner/3.jpg'}
                                     width={1000}
                                     height={800}
                                     alt='bg-img'

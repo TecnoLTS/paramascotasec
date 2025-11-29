@@ -8,7 +8,7 @@ const Banner2 = () => {
             <div className="banner-block md:mt-20 mt-10 relative max-xl:h-[400px] max-lg:h-[280px] max-md:h-[240px]">
                 <div className="bg-img h-full w-full">
                     <Image
-                        src={'/images/banner/bg-banner-pet.png'}
+                        src={'/images/banner/4.jpg'}
                         width={3000}
                         height={2000}
                         alt='bg-img'

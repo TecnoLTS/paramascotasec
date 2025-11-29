@@ -12,20 +12,38 @@ interface Props {
 }
 
 const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
-    const [activeTab, setActiveTab] = useState<string>('food');
+    const [activeTab, setActiveTab] = useState<string>('juguetes');
     const tabLabels: Record<string, string> = {
-        pet: 'Mascotas',
-        food: 'Comida',
-        bed: 'Camas',
-        outfit: 'Ropa',
-        ring: 'Aros',
+        'juguetes': 'Juguetes',
+        'comida perro': 'Comida (Perros)',
+        'comida gato': 'Comida (Gatos)',
+        'camas': 'Camas',
+        'comederos': 'Comederos',
+        'accesorios': 'Accesorios',
+        'cuidado': 'Cuidado',
     };
+
+    // Orden preferido de pestañas. Usaremos este orden pero solo mostraremos
+    // las categorías que realmente tengan productos en `data`.
+    const tabOrder: string[] = ['juguetes', 'comida perro', 'comida gato', 'camas', 'comederos', 'accesorios', 'cuidado'];
+
+    // Computar pestañas disponibles dinámicamente (sin categorías vacías)
+    const availableTabs = tabOrder.filter((cat) => data.some((product: ProductType) => product.category === cat));
+
+    // Si la pestaña activa no está entre las disponibles, seleccionar la primera disponible
+    React.useEffect(() => {
+        if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
+            setActiveTab(availableTabs[0]);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [availableTabs.join(',')]);
 
     const handleTabClick = (type: string) => {
         setActiveTab(type);
     };
 
-    const filteredProducts = data.filter((product) => product.type === activeTab && (product.category === 'pet'));
+    // Filtrar por la categoría (ahora en español) que seleccionó el usuario
+    const filteredProducts = data.filter((product: ProductType) => product.category === activeTab);
 
     return (
         <>
@@ -34,7 +52,7 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                     <div className="heading flex flex-col items-center text-center">
                         <div className="heading3">Novedades</div>
                         <div className="menu-tab style-pet flex items-center gap-2 p-1 bg-surface rounded-2xl mt-6">
-                            {['pet', 'food', 'bed', 'outfit', 'ring'].map((type) => (
+                            {availableTabs.map((type: string) => (
                                 <div
                                     key={type}
                                     className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-500 ${activeTab === type ? 'active text-white' : 'hover:text-black'}`}
@@ -52,8 +70,8 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                     </div>
 
                     <div className="list-product hide-product-sold grid lg:grid-cols-4 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
-                        {filteredProducts.slice(start, limit).map((prd, index) => (
-                            <Product data={prd} type='grid' key={index} style='style-1' />
+                        {filteredProducts.slice(start, limit).map((prd: ProductType) => (
+                            <Product data={prd} type='grid' key={prd.id} style='style-1' />
                         ))}
                     </div>
                 </div>
