@@ -109,7 +109,7 @@ const Instagram: React.FC = () => {
     <div className="instagram-block md:pt-20 pt-10">
       <div className="container">
         <div className="heading">
-          <div className="heading3 text-center">Sígueme en Instagram</div>
+          <div className="heading3 text-center">Siguenos en Instagram</div>
           <div className="text-center mt-3">
             <a 
               href="https://www.instagram.com/petstation_ec/" 

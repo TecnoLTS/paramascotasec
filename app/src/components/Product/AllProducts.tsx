@@ -3,41 +3,30 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
+import { getCategoryLabel, visibleProductCategoryIds } from '@/data/petCategoryCards'
 
 interface Props {
     data: Array<ProductType>;
     pageSize?: number;
-    visibleCategories?: string[];
-    maxCategories?: number;
 }
 
-const AllProducts: React.FC<Props> = ({ data, pageSize = 15, visibleCategories, maxCategories = 6 }) => {
+const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const [page, setPage] = useState<number>(1)
     const [activeCategory, setActiveCategory] = useState<string>('todos')
 
-    const categoryCounts = useMemo(() => {
-        return data.reduce((acc, item) => {
-            acc[item.category] = (acc[item.category] ?? 0) + 1
-            return acc
-        }, {} as Record<string, number>)
+    const computedCategories = useMemo(() => {
+        const availableCategories = new Set(data.map((product) => product.category))
+        return visibleProductCategoryIds.filter((category) => availableCategories.has(category))
     }, [data])
 
-    const computedCategories = useMemo(() => {
-        const sortedByCount = Object.entries(categoryCounts)
-            .sort((a, b) => b[1] - a[1])
-            .map(([category]) => category)
-
-        if (visibleCategories?.length) {
-            return visibleCategories.filter(cat => sortedByCount.includes(cat))
-        }
-
-        return sortedByCount.slice(0, maxCategories)
-    }, [categoryCounts, maxCategories, visibleCategories])
-
-    const categories = useMemo(() => ['todos', ...computedCategories], [computedCategories])
+    const categories = useMemo(
+        () => ['todos', 'descuentos', ...computedCategories],
+        [computedCategories]
+    )
 
     const filteredData = useMemo(() => {
         if (activeCategory === 'todos') return data
+        if (activeCategory === 'descuentos') return data.filter(product => product.sale)
         return data.filter(product => product.category === activeCategory)
     }, [activeCategory, data])
 
@@ -46,7 +35,11 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15, visibleCategories, 
     }, [activeCategory])
 
     useEffect(() => {
-        if (activeCategory !== 'todos' && !computedCategories.includes(activeCategory)) {
+        if (
+            activeCategory !== 'todos' &&
+            activeCategory !== 'descuentos' &&
+            !computedCategories.includes(activeCategory)
+        ) {
             setActiveCategory('todos')
         }
     }, [activeCategory, computedCategories])
@@ -76,7 +69,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15, visibleCategories, 
                         className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-black text-white' : ''}`}
                         onClick={() => setActiveCategory(category)}
                     >
-                        {category}
+                        {getCategoryLabel(category)}
                     </button>
                 ))}
             </div>

@@ -167,7 +167,7 @@ input[type="file"] {
   font-size: 80px;
   font-weight: 500;
   line-height: 88px;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 /* Ajuste responsivo específico para textos del slider */
@@ -197,49 +197,54 @@ input[type="file"] {
   font-size: 56px;
   line-height: 68px;
   font-weight: 500;
-  text-transform: capitalize;
+  text-transform: none;
 }
-
+.heading6 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  text-transform: none;
+}
 .heading2 {
   font-size: 44px;
   line-height: 50px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .heading3 {
   font-size: 36px;
   line-height: 40px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .heading4 {
   font-size: 30px;
   line-height: 42px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .heading5 {
   font-size: 24px;
   line-height: 30px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .heading6 {
   font-size: 20px;
   line-height: 28px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .text-title {
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .body1 {
@@ -252,7 +257,20 @@ input[type="file"] {
   font-size: 16px;
   line-height: 26px;
   font-weight: 600;
-  text-transform: capitalize;
+  text-transform: none;
+}
+
+/* Make text sentence-case: only capitalize the very first letter of the element */
+.heading1::first-letter,
+.heading2::first-letter,
+.heading3::first-letter,
+.heading4::first-letter,
+.heading5::first-letter,
+.heading6::first-letter,
+.text-title::first-letter,
+.text-display::first-letter,
+.text-button::first-letter {
+  text-transform: uppercase;
 }
 
 .text-button-uppercase {

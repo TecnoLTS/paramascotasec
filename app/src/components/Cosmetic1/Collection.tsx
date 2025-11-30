@@ -21,7 +21,7 @@ const Collection = () => {
                             <div className="collection-item block h-full relative md:rounded-[20px] rounded-xl overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('cosmetic')}>
                                 <div className="bg-img h-full w-full aspect-square">
                                     <Image
-                                        src={'/images/collection/body.png'}
+                                        src={'/images/collection/body.jpg'}
                                         width={1000}
                                         height={1000}
                                         alt='body'
@@ -36,7 +36,7 @@ const Collection = () => {
                                 <div className="collection-item block relative md:rounded-[20px] rounded-xl overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('cosmetic')}>
                                     <div className="bg-img h-full">
                                         <Image
-                                            src={'/images/collection/skin.png'}
+                                            src={'/images/collection/skin.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='skin'
@@ -48,7 +48,7 @@ const Collection = () => {
                                 <div className="collection-item block relative md:rounded-[20px] rounded-xl overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('cosmetic')}>
                                     <div className="bg-img h-full">
                                         <Image
-                                            src={'/images/collection/hair.png'}
+                                            src={'/images/collection/hair.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='hair'
@@ -62,7 +62,7 @@ const Collection = () => {
                                 <div className="collection-item block relative md:rounded-[20px] rounded-xl overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('cosmetic')}>
                                     <div className="bg-img h-full">
                                         <Image
-                                            src={'/images/collection/accessories-cos.png'}
+                                            src={'/images/collection/accessories-cos.jpg'}
                                             width={1000}
                                             height={1000}
                                             alt='accessories-cos'
