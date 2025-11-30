@@ -40,24 +40,35 @@ const MenuPet = () => {
     }
 
     const [fixedHeader, setFixedHeader] = useState(false)
-    const lastScrollPosition = useRef(0);
+    const headerRef = useRef<HTMLDivElement>(null)
+    const [headerHeight, setHeaderHeight] = useState(0)
 
     useEffect(() => {
         const handleScroll = () => {
-            const scrollPosition = window.scrollY;
-            const shouldFix = scrollPosition > 0 && scrollPosition < lastScrollPosition.current;
-            setFixedHeader(shouldFix);
-            lastScrollPosition.current = scrollPosition;
+            setFixedHeader(window.scrollY > 0)
         };
 
-        // Gắn sự kiện cuộn khi component được mount
         window.addEventListener('scroll', handleScroll, { passive: true });
 
-        // Hủy sự kiện khi component bị unmount
         return () => {
             window.removeEventListener('scroll', handleScroll);
         };
     }, []);
+
+    useEffect(() => {
+        const updateHeaderHeight = () => {
+            if (headerRef.current) {
+                setHeaderHeight(headerRef.current.offsetHeight)
+            }
+        }
+
+        updateHeaderHeight()
+        window.addEventListener('resize', updateHeaderHeight)
+
+        return () => {
+            window.removeEventListener('resize', updateHeaderHeight)
+        }
+    }, [])
 
     const handleGenderClick = (gender: string) => {
         router.push(`/shop/breadcrumb1?gender=${gender}`);
@@ -73,7 +84,10 @@ const MenuPet = () => {
 
     return (
         <>
-            <div className={`header-menu style-eight ${fixedHeader ? ' fixed' : 'relative'} bg-surface w-full md:h-[90px] h-[64px]`}>
+            <div
+                ref={headerRef}
+                className={`header-menu style-eight ${fixedHeader ? ' fixed' : 'relative'} bg-surface w-full md:h-[90px] h-[64px]`}
+            >
                 <div className="container mx-auto h-full">
                     <div className="header-main flex items-center justify-between h-full">
                         <div className="menu-mobile-icon lg:hidden flex items-center" onClick={handleMenuMobile}>
@@ -139,7 +153,10 @@ const MenuPet = () => {
                 </div>
             </div>
 
-            <div className="top-nav-menu relative bg-white h-[44px] max-lg:hidden z-10">
+            <div
+                className={`top-nav-menu relative bg-white h-[44px] max-lg:hidden z-10 ${fixedHeader ? 'fixed' : ''}`}
+                style={fixedHeader ? { top: headerHeight } : undefined}
+            >
                 <div className="container h-full">
                     <div className="top-nav-menu-main flex items-center justify-between h-full">
                         <div className="left flex items-center h-full">
