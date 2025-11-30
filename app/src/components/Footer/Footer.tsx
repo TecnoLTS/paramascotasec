@@ -15,7 +15,7 @@ const Footer = () => {
                                     <div className="logo-image">
                                         <Image
                                             src={'/images/brand/LogoVerde150.png'}
-                                            alt={'Anvogue'}
+                                            alt={'ParaMascotasEC'}
                                             width={150}
                                             height={50}
                                             className="block"

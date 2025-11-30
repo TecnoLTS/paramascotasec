@@ -78,7 +78,7 @@ const MenuEleven = () => {
                                 <i className="icon-category text-2xl"></i>
                             </div>
                             <Link href={'/'} className='flex items-center'>
-                                <div className="heading4">Anvogue</div>
+                                <div className="heading4">ParaMascotasEC</div>
                             </Link>
                             <div className="form-search w-2/3 pl-8 flex items-center h-[44px] max-lg:hidden">
                                 <div className="category-block relative h-full">
@@ -1191,7 +1191,7 @@ const MenuEleven = () => {
                                 >
                                     <Icon.X size={14} />
                                 </div>
-                                <Link href={'/'} className='logo text-3xl font-semibold text-center'>Anvogue</Link>
+                                <Link href={'/'} className='logo text-3xl font-semibold text-center'>ParaMascotasEC</Link>
                             </div>
                             <div className="form-search relative mt-2">
                                 <Icon.MagnifyingGlass size={20} className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer' />

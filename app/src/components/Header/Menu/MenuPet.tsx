@@ -1041,7 +1041,7 @@ const MenuPet = () => {
                                 <Link href={'/'} className='logo text-3xl font-semibold text-center'>
                                     <Image
                                         src="/images/brand/LogoVerde150.png"
-                                        alt="Anvogue logo"
+                                        alt="ParaMascotasEC logo"
                                         width={345}
                                         height={150}
                                         className="mx-auto h-14 w-auto"

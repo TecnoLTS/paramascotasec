@@ -10,7 +10,7 @@ const Instagram = () => {
             <div className="instagram-block md:pt-20 pt-10">
                 <div className="container">
                     <div className="flex items-center justify-center">
-                        <div className="heading3">Instagram <span className='font-light underline ml-2'>Anvogue</span></div>
+                        <div className="heading3">Instagram <span className='font-light underline ml-2'>ParaMascotasEC</span></div>
                     </div>
                 </div>
                 <div className="list-instagram md:mt-10 mt-6 grid md:grid-cols-5 md:grid-rows-2 grid-cols-2">

@@ -19,7 +19,7 @@ const Checkout = () => {
                     <div className="container mx-auto h-full">
                         <div className="header-main flex items-center justify-between h-full">
                             <Link href={'/'} className='flex items-center'>
-                                <div className="heading4">Anvogue</div>
+                                <div className="heading4">ParaMascotasEC</div>
                             </Link>
                             <button className="max-md:hidden cart-icon flex items-center relative h-fit cursor-pointer" onClick={openModalCart}>
                                 <Icon.Handbag size={24} color='black' />
@@ -145,7 +145,7 @@ const Checkout = () => {
                                     </div>
                                 </div>
                             </form>
-                            <div className="copyright caption1 md:mt-20 mt-12 py-3 border-t border-line">©2024 Anvogue. All Rights Reserved.</div>
+                            <div className="copyright caption1 md:mt-20 mt-12 py-3 border-t border-line">©2024 ParaMascotasEC. All Rights Reserved.</div>
                         </div>
                     </div>
                     <div className="right justify-start flex-shrink-0 lg:w-[47%] bg-surface lg:py-20 py-12">

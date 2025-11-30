@@ -13,7 +13,7 @@ const Instagram = () => {
             <div className="instagram-block md:pt-20 pt-10">
                 <div className="container">
                     <div className="heading">
-                        <div className="heading3 text-center">Anvogue On Instagram</div>
+                        <div className="heading3 text-center">ParaMascotasEC On Instagram</div>
                         <div className="text-center mt-3">#Anvougetheme</div>
                     </div>
                     <div className="list-instagram md:mt-10 mt-6">
