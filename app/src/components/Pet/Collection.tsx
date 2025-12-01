@@ -4,7 +4,6 @@ import React from 'react'
 import Image from 'next/image'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Autoplay, Navigation } from 'swiper/modules'
-import 'swiper/css/bundle'
 import { useRouter } from 'next/navigation'
 import petCategoryCards, { PetCategoryCard } from '@/data/petCategoryCards'
 
@@ -56,14 +55,15 @@ const Collection: React.FC<CollectionProps> = ({ categories = petCategoryCards }
                                     className="trending-item block relative cursor-pointer"
                                     onClick={() => handleCategoryClick(category.id)}
                                 >
-                                    <div className="bg-img rounded-[32px] overflow-hidden">
+                                    <div className="bg-img rounded-[32px] overflow-hidden relative aspect-[4/5] max-h-[360px] sm:max-h-[320px] md:max-h-[280px]">
                                         <Image
                                             src={category.image}
-                                            width={1000}
-                                            height={1000}
                                             alt={category.label}
-                                            className="w-full"
+                                            fill
+                                            className="w-full h-full object-cover"
+                                            sizes="(min-width: 1290px) 14vw, (min-width: 992px) 18vw, (min-width: 768px) 22vw, (min-width: 576px) 28vw, 44vw"
                                             priority={category.id === 'todos'}
+                                            loading={category.id === 'todos' ? 'eager' : 'lazy'}
                                         />
                                     </div>
                                     <div className="trending-name text-center mt-5 duration-500">

@@ -24,6 +24,7 @@ const MenuPet = () => {
 
     const [searchKeyword, setSearchKeyword] = useState('');
     const router = useRouter()
+    const [hasMounted, setHasMounted] = useState(false)
 
     const handleSearch = (value: string) => {
         router.push(`/search-result?query=${value}`)
@@ -63,6 +64,10 @@ const MenuPet = () => {
         return () => {
             window.removeEventListener('resize', updateHeaderHeight)
         }
+    }, [])
+
+    useEffect(() => {
+        setHasMounted(true)
     }, [])
 
     const handleGenderClick = (gender: string) => {
@@ -382,7 +387,7 @@ const MenuPet = () => {
                                     <li className='h-full'>
                                         <Link
                                             href="/"
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${pathname === '/' ? 'active' : ''}`}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/' ? 'active' : ''}`}
                                         >
                                             Inicio
                                         </Link>
@@ -418,7 +423,7 @@ const MenuPet = () => {
                                     <li className='h-full'>
                                         <Link
                                             href="/pages/contact"
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${pathname === '/pages/contact' ? 'active' : ''}`}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${hasMounted && pathname === '/pages/contact' ? 'active' : ''}`}
                                         >
                                             Contacto
                                         </Link>
@@ -472,7 +477,7 @@ const MenuPet = () => {
                                     <li className="mt-5">
                                         <Link
                                             href="/"
-                                            className={`text-xl font-semibold flex items-center justify-between ${pathname === '/' ? 'active' : ''}`}
+                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/' ? 'active' : ''}`}
                                         >
                                             <span className="flex items-center gap-3">
                                                 <Icon.House size={20} />
@@ -538,16 +543,22 @@ const MenuPet = () => {
                                                 Atrás
                                             </div>
 
-                                            <div className="list-nav-item w-full pt-3 pb-6 space-y-4">
-                                                {serviceLinks.map((link) => (
-                                                    <li key={link.label}>
-                                                        <Link href={link.href} className="nav-item-mobile flex items-center gap-3">
-                                                            <Icon.ArrowRight size={16} />
-                                                            {link.label}
-                                                        </Link>
-                                                    </li>
-                                                ))}
+                                            <div className="list-nav-item w-full pt-3 pb-6">
+                                                <ul className="space-y-4">
+                                                    {serviceLinks.map((link) => (
+                                                        <li key={link.label}>
+                                                            <Link
+                                                                href={link.href}
+                                                                className="nav-item-mobile flex items-center gap-3"
+                                                            >
+                                                                <Icon.ArrowRight size={16} />
+                                                                {link.label}
+                                                            </Link>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
+
                                         </div>
                                     </li>
 
@@ -572,16 +583,22 @@ const MenuPet = () => {
                                                 <Icon.CaretLeft size={20} />
                                                 Atrás
                                             </div>
-                                            <div className="list-nav-item w-full pt-3 pb-6 space-y-4">
-                                                {companyLinks.map((link) => (
-                                                    <li key={link.label}>
-                                                        <Link href={link.href} className="nav-item-mobile flex items-center gap-3">
-                                                            <Icon.ArrowRight size={16} />
-                                                            {link.label}
-                                                        </Link>
-                                                    </li>
-                                                ))}
+                                            <div className="list-nav-item w-full pt-3 pb-6">
+                                                <ul className="space-y-4">
+                                                    {companyLinks.map((link) => (
+                                                        <li key={link.label}>
+                                                            <Link
+                                                                href={link.href}
+                                                                className="nav-item-mobile flex items-center gap-3"
+                                                            >
+                                                                <Icon.ArrowRight size={16} />
+                                                                {link.label}
+                                                            </Link>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
+
                                         </div>
                                     </li>
 
@@ -589,7 +606,7 @@ const MenuPet = () => {
                                     <li className="mt-5">
                                         <Link
                                             href="/pages/contact"
-                                            className={`text-xl font-semibold flex items-center justify-between ${pathname === '/pages/contact' ? 'active' : ''}`}
+                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/pages/contact' ? 'active' : ''}`}
                                         >
                                             <span className="flex items-center gap-3">
                                                 <Icon.EnvelopeSimple size={20} />
