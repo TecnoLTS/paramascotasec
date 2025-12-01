@@ -69,10 +69,12 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
 
     // Filter product
-    const categoryFilter = category ? getCategoryFilter(category) : undefined;
-    const categoryToMatch = categoryFilter?.category ?? category;
+    const normalizedCategoryInput = category?.toLowerCase();
+    const normalizedCategory = normalizedCategoryInput === 'ofertas' ? 'descuentos' : normalizedCategoryInput;
+    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory) : undefined;
+    const categoryToMatch = categoryFilter?.category;
     const genderToMatch = categoryFilter?.gender ?? gender;
-    const isDiscountCategory = category === 'descuentos';
+    const isDiscountCategory = normalizedCategory === 'descuentos';
 
     const categoryOptions = ['todos', 'descuentos', ...visibleProductCategoryIds];
     const categoryCounts = (categoryId: string) => {
@@ -266,18 +268,21 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                             <div className="filter-type pb-8 border-b border-line">
                                 <div className="heading6">Categorías</div>
                                 <div className="list-type mt-4">
-                                    {categoryOptions.map((item, index) => (
-                                        <Link
-                                            key={index}
-                                            href={getCategoryUrl(item)}
-                                            className={`item flex items-center justify-between cursor-pointer ${category === item ? 'active' : ''}`}
-                                        >
-                                            <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
-                                            <div className='text-secondary2'>
-                                                ({categoryCounts(item)})
-                                            </div>
-                                        </Link>
-                                    ))}
+                                    {categoryOptions.map((item, index) => {
+                                        const isActiveCategory = normalizedCategory ? normalizedCategory === item : item === 'todos';
+                                        return (
+                                            <Link
+                                                key={index}
+                                                href={getCategoryUrl(item)}
+                                                className={`item flex items-center justify-between cursor-pointer ${isActiveCategory ? 'active' : ''}`}
+                                            >
+                                                <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
+                                                <div className='text-secondary2'>
+                                                    ({categoryCounts(item)})
+                                                </div>
+                                            </Link>
+                                        )
+                                    })}
                                 </div>
                             </div>
                             <div className="filter-size pb-8 border-b border-line mt-8">

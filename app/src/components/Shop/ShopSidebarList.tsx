@@ -14,9 +14,11 @@ interface Props {
     data: Array<ProductType>;
     productPerPage: number
     dataType: string | null
+    category?: string | null
+    gender?: string | null
 }
 
-const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) => {
+const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, category, gender }) => {
     const [type, setType] = useState<string | null>(dataType)
     const [showOnlySale, setShowOnlySale] = useState(false)
     const [sortOption, setSortOption] = useState('');
@@ -27,6 +29,13 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = productPerPage;
     const offset = currentPage * productsPerPage;
+
+    const normalizedCategoryInput = category?.toLowerCase()
+    const normalizedCategory = normalizedCategoryInput === 'ofertas' ? 'descuentos' : normalizedCategoryInput
+    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory) : undefined
+    const categoryToMatch = categoryFilter?.category
+    const genderToMatch = categoryFilter?.gender ?? gender
+    const isDiscountCategory = normalizedCategory === 'descuentos'
 
     const categoryOptions = ['todos', 'descuentos', ...visibleProductCategoryIds]
     const categoryCounts = (categoryId: string) => {
@@ -126,7 +135,33 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
             isBrandMatched = product.brand === brand;
         }
 
-        return isShowOnlySaleMatched && isDataTypeMatched && isTypeMatched && isSizeMatched && isColorMatched && isBrandMatched && isPriceRangeMatched
+        let isCategoryMatched = true;
+        if (categoryToMatch) {
+            isCategoryMatched = product.category === categoryToMatch
+        }
+
+        let isGenderMatched = true;
+        if (genderToMatch) {
+            isGenderMatched = product.gender === genderToMatch
+        }
+
+        let isDiscountCategoryMatched = true;
+        if (isDiscountCategory) {
+            isDiscountCategoryMatched = product.sale;
+        }
+
+        return (
+            isShowOnlySaleMatched &&
+            isDataTypeMatched &&
+            isTypeMatched &&
+            isSizeMatched &&
+            isColorMatched &&
+            isBrandMatched &&
+            isPriceRangeMatched &&
+            isCategoryMatched &&
+            isGenderMatched &&
+            isDiscountCategoryMatched
+        )
     })
 
     // Create a copy array filtered to sort
@@ -255,18 +290,21 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                             <div className="filter-type pb-8 border-b border-line">
                                 <div className="heading6">Categorías</div>
                                 <div className="list-type mt-4">
-                                    {categoryOptions.map((item, index) => (
-                                        <Link
-                                            key={index}
-                                            href={getCategoryUrl(item)}
-                                            className={`item flex items-center justify-between cursor-pointer`}
-                                        >
-                                            <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
-                                            <div className='text-secondary2'>
-                                                ({categoryCounts(item)})
-                                            </div>
-                                        </Link>
-                                    ))}
+                                    {categoryOptions.map((item, index) => {
+                                        const isActiveCategory = category ? normalizedCategory === item : item === 'todos'
+                                        return (
+                                            <Link
+                                                key={index}
+                                                href={getCategoryUrl(item)}
+                                                className={`item flex items-center justify-between cursor-pointer ${isActiveCategory ? 'active' : ''}`}
+                                            >
+                                                <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
+                                                <div className='text-secondary2'>
+                                                    ({categoryCounts(item)})
+                                                </div>
+                                            </Link>
+                                        )
+                                    })}
                                 </div>
                             </div>
                             <div className="filter-size pb-8 border-b border-line mt-8">
