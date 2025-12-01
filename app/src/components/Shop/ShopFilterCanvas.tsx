@@ -455,7 +455,7 @@ const ShopFilterCanvas: React.FC<Props> = ({ data, productPerPage, dataType, pro
                                         className='border-line'
                                         onChange={handleShowOnlySale}
                                     />
-                                    <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Show only products on sale</label>
+                                    <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Ver solo productos en oferta</label>
                                 </div>
                             </div>
                             <div className="right flex items-center gap-3">

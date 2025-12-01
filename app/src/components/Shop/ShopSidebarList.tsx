@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { ProductType } from '@/type/ProductType'
@@ -8,6 +8,7 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
+import { getCategoryFilter, getCategoryLabel, getCategoryUrl, visibleProductCategoryIds } from '@/data/petCategoryCards';
 
 interface Props {
     data: Array<ProductType>;
@@ -26,6 +27,30 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = productPerPage;
     const offset = currentPage * productsPerPage;
+
+    const categoryOptions = ['todos', 'descuentos', ...visibleProductCategoryIds]
+    const categoryCounts = (categoryId: string) => {
+        const filter = getCategoryFilter(categoryId)
+        return data.filter(product => {
+            let matchesCategory = true
+            if (filter.category) {
+                matchesCategory = product.category === filter.category
+            }
+            let matchesGender = true
+            if (filter.gender) {
+                matchesGender = product.gender === filter.gender
+            }
+            if (categoryId === 'descuentos') {
+                matchesCategory = product.sale
+            }
+            return matchesCategory && matchesGender
+        }).length
+    }
+
+    const uniqueSizes = Array.from(new Set(data.flatMap(product => product.sizes))).sort()
+    const uniqueColors = Array.from(new Set(data.flatMap(product => product.variation.map(variation => variation.color)))).sort()
+    const uniqueBrands = Array.from(new Set(data.map(product => product.brand))).sort()
+    const brandCounts = (brandValue: string) => data.filter(product => product.brand === brandValue).length
 
     const handleType = (type: string) => {
         setType((prevType) => (prevType === type ? null : type))
@@ -65,7 +90,6 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
     }
 
 
-    // Filter product data by dataType
     let filteredData = data.filter(product => {
         let isShowOnlySaleMatched = true;
         if (showOnlySale) {
@@ -79,7 +103,6 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
 
         let isTypeMatched = true;
         if (type) {
-            dataType = type
             isTypeMatched = product.type === type;
         }
 
@@ -103,7 +126,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
             isBrandMatched = product.brand === brand;
         }
 
-        return isShowOnlySaleMatched && isDataTypeMatched && isTypeMatched && isSizeMatched && isColorMatched && isBrandMatched && isPriceRangeMatched && product.category === 'fashion'
+        return isShowOnlySaleMatched && isDataTypeMatched && isTypeMatched && isSizeMatched && isColorMatched && isBrandMatched && isPriceRangeMatched
     })
 
     // Create a copy array filtered to sort
@@ -230,42 +253,34 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                     <div className="flex max-md:flex-wrap max-md:flex-col-reverse gap-y-8">
                         <div className="sidebar lg:w-1/4 md:w-1/3 w-full md:pr-12">
                             <div className="filter-type pb-8 border-b border-line">
-                                <div className="heading6">Products Type</div>
+                                <div className="heading6">Categorías</div>
                                 <div className="list-type mt-4">
-                                    {['t-shirt', 'dress', 'top', 'swimwear', 'shirt', 'underwear', 'sets', 'accessories'].map((item, index) => (
-                                        <div
+                                    {categoryOptions.map((item, index) => (
+                                        <Link
                                             key={index}
-                                            className={`item flex items-center justify-between cursor-pointer ${dataType === item ? 'active' : ''}`}
-                                            onClick={() => handleType(item)}
+                                            href={getCategoryUrl(item)}
+                                            className={`item flex items-center justify-between cursor-pointer`}
                                         >
-                                            <div className='text-secondary has-line-before hover:text-black capitalize'>{item}</div>
+                                            <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
                                             <div className='text-secondary2'>
-                                                ({data.filter(dataItem => dataItem.type === item && dataItem.category === 'fashion').length})
+                                                ({categoryCounts(item)})
                                             </div>
-                                        </div>
+                                        </Link>
                                     ))}
                                 </div>
                             </div>
                             <div className="filter-size pb-8 border-b border-line mt-8">
-                                <div className="heading6">Size</div>
+                                <div className="heading6">Tamaños</div>
                                 <div className="list-size flex items-center flex-wrap gap-3 gap-y-4 mt-4">
-                                    {
-                                        ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'].map((item, index) => (
-                                            <div
-                                                key={index}
-                                                className={`size-item text-button w-[44px] h-[44px] flex items-center justify-center rounded-full border border-line ${size === item ? 'active' : ''}`}
-                                                onClick={() => handleSize(item)}
-                                            >
-                                                {item}
-                                            </div>
-                                        ))
-                                    }
-                                    <div
-                                        className={`size-item text-button px-4 py-2 flex items-center justify-center rounded-full border border-line ${size === 'freesize' ? 'active' : ''}`}
-                                        onClick={() => handleSize('freesize')}
-                                    >
-                                        Freesize
-                                    </div>
+                                    {uniqueSizes.map((item, index) => (
+                                        <div
+                                            key={index}
+                                            className={`size-item text-button h-[44px] px-4 flex items-center justify-center rounded-full border border-line ${size === item ? 'active' : ''}`}
+                                            onClick={() => handleSize(item)}
+                                        >
+                                            {item}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="filter-price pb-8 border-b border-line mt-8">
@@ -294,78 +309,39 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                                 </div>
                             </div>
                             <div className="filter-color pb-8 border-b border-line mt-8">
-                                <div className="heading6">colors</div>
+                                <div className="heading6">Colores</div>
                                 <div className="list-color flex items-center flex-wrap gap-3 gap-y-4 mt-4">
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'pink' ? 'active' : ''}`}
-                                        onClick={() => handleColor('pink')}
-                                    >
-                                        <div className="color bg-[#F4C5BF] w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">pink</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'red' ? 'active' : ''}`}
-                                        onClick={() => handleColor('red')}
-                                    >
-                                        <div className="color bg-red w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">red</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'green' ? 'active' : ''}`}
-                                        onClick={() => handleColor('green')}
-                                    >
-                                        <div className="color bg-green w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">green</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'yellow' ? 'active' : ''}`}
-                                        onClick={() => handleColor('yellow')}
-                                    >
-                                        <div className="color bg-yellow w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">yellow</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'purple' ? 'active' : ''}`}
-                                        onClick={() => handleColor('purple')}
-                                    >
-                                        <div className="color bg-purple w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">purple</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'black' ? 'active' : ''}`}
-                                        onClick={() => handleColor('black')}
-                                    >
-                                        <div className="color bg-black w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">black</div>
-                                    </div>
-                                    <div
-                                        className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === 'white' ? 'active' : ''}`}
-                                        onClick={() => handleColor('white')}
-                                    >
-                                        <div className="color bg-[#F6EFDD] w-5 h-5 rounded-full"></div>
-                                        <div className="caption1 capitalize">white</div>
-                                    </div>
+                                    {uniqueColors.map(item => (
+                                        <div
+                                            key={item}
+                                            className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === item ? 'active' : ''}`}
+                                            onClick={() => handleColor(item)}
+                                        >
+                                            <span className='color me-1 bg-[#d9d9d9] w-5 h-5 rounded-full'></span>
+                                            <div className="caption1 capitalize">{item}</div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="filter-brand mt-8">
-                                <div className="heading6">Brands</div>
+                                <div className="heading6">Marcas</div>
                                 <div className="list-brand mt-4">
-                                    {['adidas', 'hermes', 'zara', 'nike', 'gucci'].map((item, index) => (
+                                    {uniqueBrands.map((item, index) => (
                                         <div key={index} className="brand-item flex items-center justify-between">
-                                            <div className="left flex items-center cursor-pointer">
+                                            <div className="left flex items-center cursor-pointer" onClick={() => handleBrand(item)}>
                                                 <div className="block-input">
                                                     <input
                                                         type="checkbox"
                                                         name={item}
                                                         id={item}
                                                         checked={brand === item}
-                                                        onChange={() => handleBrand(item)} />
+                                                        readOnly />
                                                     <Icon.CheckSquare size={20} weight='fill' className='icon-checkbox' />
                                                 </div>
                                                 <label htmlFor={item} className="brand-name capitalize pl-2 cursor-pointer">{item}</label>
                                             </div>
                                             <div className='text-secondary2'>
-                                                ({data.filter(dataItem => dataItem.brand === item && dataItem.category === 'fashion').length})
+                                                ({brandCounts(item)})
                                             </div>
                                         </div>
                                     ))}
@@ -383,13 +359,6 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                                                 <span className='w-[3px] h-4 bg-secondary2 rounded-sm'></span>
                                             </div>
                                         </Link>
-                                        <div className="item row w-8 h-8 border border-line rounded flex items-center justify-center cursor-pointer active">
-                                            <div className='flex flex-col items-center gap-0.5'>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                            </div>
-                                        </div>
                                     </div>
                                     <div className="check-sale flex items-center gap-2">
                                         <input
@@ -399,7 +368,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                                             className='border-line'
                                             onChange={handleShowOnlySale}
                                         />
-                                        <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Show only products on sale</label>
+                                        <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Ver solo productos en oferta</label>
                                     </div>
                                 </div>
                                 <div className="right flex items-center gap-3">

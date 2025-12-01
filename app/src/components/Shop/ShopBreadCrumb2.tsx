@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { ProductType } from '@/type/ProductType'
@@ -26,6 +26,7 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = productPerPage;
     const offset = currentPage * productsPerPage;
+    const productsRef = useRef<HTMLDivElement>(null)
 
     const handleShowOnlySale = () => {
         setShowOnlySale(toggleSelect => !toggleSelect)
@@ -183,6 +184,17 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
         setCurrentPage(selected);
     };
 
+    const isInitialRender = useRef(true)
+
+    useEffect(() => {
+        if (isInitialRender.current) {
+            isInitialRender.current = false
+            return
+        }
+
+        productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, [currentPage])
+
     const handleClearAll = () => {
         setType(null);
         setSize(null);
@@ -208,27 +220,14 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                 </div>
             </div>
 
-            <div className="shop-product breadcrumb2 lg:py-20 md:py-14 py-10">
+            <div ref={productsRef} className="shop-product breadcrumb2 lg:py-20 md:py-14 py-10">
                 <div className="container">
                     <div className="flex max-md:flex-wrap gap-y-8">
-                        <div className="list-product-block lg:w-3/4 md:w-2/3 w-full md:pr-3">
+                        <div ref={productsRef} className="list-product-block lg:w-3/4 md:w-2/3 w-full md:pr-3">
                             <div className="filter-heading flex items-center justify-between gap-5 flex-wrap">
                                 <div className="left flex has-line items-center flex-wrap gap-5">
                                     <div className="choose-layout flex items-center gap-2">
-                                        <div className="item three-col w-8 h-8 border border-line rounded flex items-center justify-center cursor-pointer">
-                                            <div className='flex items-center gap-0.5'>
-                                                <span className='w-[3px] h-4 bg-secondary2 rounded-sm'></span>
-                                                <span className='w-[3px] h-4 bg-secondary2 rounded-sm'></span>
-                                                <span className='w-[3px] h-4 bg-secondary2 rounded-sm'></span>
-                                            </div>
-                                        </div>
-                                        <div className="item row w-8 h-8 border border-line rounded flex items-center justify-center cursor-pointer">
-                                            <div className='flex flex-col items-center gap-0.5'>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                                <span className='w-4 h-[3px] bg-secondary2 rounded-sm'></span>
-                                            </div>
-                                        </div>
+
                                     </div>
                                     <div className="check-sale flex items-center gap-2">
                                         <input
@@ -238,7 +237,7 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
                                             className='border-line'
                                             onChange={handleShowOnlySale}
                                         />
-                                        <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Show only products on sale</label>
+                                        <label htmlFor="filter-sale" className='cation1 cursor-pointer'>Ver solo productos en oferta</label>
                                     </div>
                                 </div>
                                 <div className="right flex items-center gap-3">

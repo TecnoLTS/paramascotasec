@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
+import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumb1 from '@/components/Shop/ShopBreadCrumb1'
 import productData from '@/data/Product.json'
 import Footer from '@/components/Footer/Footer'
@@ -22,7 +22,6 @@ export default function BreadCrumb1() {
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>

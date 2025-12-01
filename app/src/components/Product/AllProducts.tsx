@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
 import { getCategoryLabel, visibleProductCategoryIds } from '@/data/petCategoryCards'
@@ -13,6 +13,7 @@ interface Props {
 const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const [page, setPage] = useState<number>(1)
     const [activeCategory, setActiveCategory] = useState<string>('todos')
+    const productsRef = useRef<HTMLDivElement>(null)
 
     const computedCategories = useMemo(() => {
         const availableCategories = new Set(data.map((product) => product.category))
@@ -31,10 +32,6 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     }, [activeCategory, data])
 
     useEffect(() => {
-        setPage(1)
-    }, [activeCategory])
-
-    useEffect(() => {
         if (
             activeCategory !== 'todos' &&
             activeCategory !== 'descuentos' &&
@@ -51,27 +48,36 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         return filteredData.slice(start, start + pageSize)
     }, [filteredData, page, pageSize])
 
+    const handleCategoryChange = (category: string) => {
+        setActiveCategory(category)
+        setPage(1)
+        productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
     const handlePageChange = (nextPage: number) => {
-        setPage(Math.min(Math.max(nextPage, 1), totalPages))
+        const sanitized = Math.min(Math.max(nextPage, 1), totalPages)
+        if (sanitized === page) return
+        setPage(sanitized)
+        productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
 
     return (
-        <div className="container md:py-10 py-5">
+        <div ref={productsRef} className="container md:py-10 py-5">
             <div className="heading flex flex-col items-center text-center">
                 <div className="heading3">Todos los productos</div>
                 <div className="heading6 font-normal text-secondary mt-2">Explora nuestro catálogo completo</div>
             </div>
 
             <div className="menu-tab flex items-center justify-center gap-2 p-1 bg-surface rounded-2xl md:mt-8 mt-6 flex-wrap">
-                {categories.map((category) => (
-                    <button
-                        key={category}
-                        className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-black text-white' : ''}`}
-                        onClick={() => setActiveCategory(category)}
-                    >
-                        {getCategoryLabel(category)}
-                    </button>
-                ))}
+                        {categories.map((category) => (
+                            <button
+                                key={category}
+                                className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-black text-white' : ''}`}
+                                onClick={() => handleCategoryChange(category)}
+                            >
+                                {getCategoryLabel(category)}
+                            </button>
+                        ))}
             </div>
 
             <div className="list-product hide-product-sold grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">

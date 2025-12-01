@@ -15,6 +15,7 @@ import { useModalCartContext } from '@/context/ModalCartContext';
 import { useModalWishlistContext } from '@/context/ModalWishlistContext';
 import { useModalSearchContext } from '@/context/ModalSearchContext';
 import { useCart } from '@/context/CartContext';
+import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
 const MenuPet = () => {
     const pathname = usePathname()
@@ -74,13 +75,167 @@ const MenuPet = () => {
         router.push(`/shop/breadcrumb1?gender=${gender}`);
     };
 
-    const handleCategoryClick = (category: string) => {
-        router.push(`/shop/breadcrumb1?category=${category}`);
+    const handleCategoryClick = (category: string, gender?: string) => {
+        const options = gender ? { gender } : undefined
+        router.push(getCategoryUrl(category, options));
     };
 
     const handleTypeClick = (type: string) => {
         router.push(`/shop/breadcrumb1?type=${type}`);
     };
+
+    type CategoryLink = {
+        id: string
+        gender?: string
+        labelOverride?: string
+    }
+
+    type MegaNavLink = {
+        label: string
+        href: string
+    }
+
+    type MegaMenuLink = CategoryLink | MegaNavLink
+    type MegaMenuSection = {
+        title: string
+        links?: MegaMenuLink[]
+    }
+
+    const isCategoryLink = (link: MegaMenuLink): link is CategoryLink =>
+        (link as CategoryLink).id !== undefined
+
+    const categoriesSections: Array<{ title: string; links: CategoryLink[] }> = [
+        {
+            title: 'Ofertas y descuentos',
+            links: [{ id: 'descuentos' }, { id: 'todos' }],
+        },
+        {
+            title: 'Perros',
+            links: [
+                { id: 'juguetes' },
+                { id: 'comida para perros' },
+                { id: 'accesorios', gender: 'dog', labelOverride: 'Accesorios para perros' },
+            ],
+        },
+        {
+            title: 'Gatos',
+            links: [
+                { id: 'comida para gatos' },
+                { id: 'accesorios', gender: 'cat', labelOverride: 'Accesorios para gatos' },
+            ],
+        },
+        {
+            title: 'Más categorías',
+            links: [
+                { id: 'camas' },
+                { id: 'comederos' },
+                { id: 'cuidado' },
+            ],
+        },
+    ];
+
+    const serviceLinks: MegaNavLink[] = [
+        { label: 'Envíos & devoluciones', href: '/pages/faqs' },
+        { label: 'Centro de ayuda', href: '/pages/contact' },
+        { label: 'Garantía y soporte', href: '/pages/customer-feedbacks' },
+        { label: 'Contacto', href: '/pages/contact' },
+    ];
+
+    const companyLinks: MegaNavLink[] = [
+        { label: 'Nuestra historia', href: '/pages/about' },
+        { label: 'Carreras', href: '/pages/about' },
+        { label: 'Tiendas y stock', href: '/pages/store-list' },
+        { label: 'Blog corporativo', href: '/blog/default' },
+    ];
+
+    const renderMegaMenu = (
+        sections: MegaMenuSection[],
+        banner: { title: string; subtitle: string; image: string },
+        options?: { viewAllCategory?: string }
+    ) =>
+    (
+        <div className="mega-menu absolute top-[44px] left-0 bg-white w-screen">
+            <div className="container">
+                <div className="flex justify-between py-8 gap-8">
+                    <div className="nav-link basis-3/4 grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {sections.map((section) => (
+                            <div className="nav-item" key={section.title}>
+                                <div className="text-button-uppercase pb-2">{section.title}</div>
+                                <ul>
+                                    {section.links?.map((link) => (
+                                        <li key={isCategoryLink(link) ? `${link.id}-${link.gender ?? 'none'}` : link.label}>
+                                            {isCategoryLink(link) ? (
+                                                <div
+                                                    onClick={() => handleCategoryClick(link.id, link.gender)}
+                                                    className="link text-secondary duration-300 cursor-pointer"
+                                                >
+                                                    {link.labelOverride ?? getCategoryLabel(link.id)}
+                                                </div>
+                                            ) : (
+                                                <Link
+                                                    href={link.href}
+                                                    className="link text-secondary duration-300 hover:text-black"
+                                                >
+                                                    {link.label}
+                                                </Link>
+                                            )}
+                                        </li>
+                                    ))}
+                                    {options?.viewAllCategory && (
+                                        <li>
+                                            <div
+                                                onClick={() => handleCategoryClick(options.viewAllCategory as string)}
+                                                className="link text-secondary duration-300 cursor-pointer view-all-btn"
+                                            >
+                                                Ver todo
+                                            </div>
+                                        </li>
+                                    )}
+                                </ul>
+                            </div>
+                        ))}
+                        </div>
+                        <div className="banner-ads-block pl-2.5 basis-1/4 min-w-[220px]">
+                            <div className="banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('pet')}>
+                                <div className="text-content py-14 pl-8 relative z-[1]">
+                                    <div className="text-button-uppercase text-white bg-red px-2 py-0.5 inline-block rounded-sm">Ahorra $10</div>
+                                    <div className="heading6 mt-2">{banner.title}</div>
+                                    <div className="body1 mt-3 text-secondary">
+                                        {banner.subtitle}
+                                    </div>
+                                    <div className="button-main mt-5">Comprar ahora</div>
+                                </div>
+                                <Image
+                                    src={banner.image}
+                                    width={1000}
+                                    height={800}
+                                    alt='banner'
+                                    className='absolute left-0 top-0 w-full h-full object-cover'
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+
+    const categoryBanner = {
+        title: 'Colección para mascotas',
+        subtitle: 'Ofertas y novedades seleccionadas con amor',
+        image: '/images/collection/1.jpg',
+    }
+
+    const servicesBanner = {
+        title: 'Servicios premium',
+        subtitle: 'Soporte, garantías y envíos seguros',
+        image: '/images/other/bg-feature-pet.png',
+    }
+
+    const companyBanner = {
+        title: 'Nuestra historia',
+        subtitle: 'Con más de 10 años cuidando mascotas',
+        image: '/images/collection/2.jpg',
+    }
 
     return (
         <>
@@ -345,215 +500,43 @@ const MenuPet = () => {
                                     </li>
                                     <li className='h-full'>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
-                                            Características
+                                            Categorias
                                         </Link>
-                                        <div className="mega-menu absolute top-[44px] left-0 bg-white w-screen">
-                                            <div className="container">
-                                                <div className="flex justify-between py-8">
-                                                    <div className="nav-link basis-2/3 grid grid-cols-4 gap-y-8">
-                                                        <div className="nav-item">
-                                                            <div className="text-button-uppercase pb-2">Ofertas y descuentos</div>
-                                                            <ul>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleCategoryClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Desde 50% de descuento
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('bed')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Cama para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ofertas para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('food')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Comida para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleCategoryClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer view-all-btn`}
-                                                                    >
-                                                                        Ver todo
-                                                                    </div>
-                                                                </li>
-                                                            </ul>
-                                                        </div>
-                                                        <div className="nav-item">
-                                                            <div className="text-button-uppercase pb-2">Perros</div>
-                                                            <ul>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('food')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Comida para perros
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('outfit')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ropa para perros
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('bed')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Cama para perros
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ofertas para perros
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleCategoryClick('pet')}
-                                                                        className={`link text-secondary duration-300 view-all-btn`}
-                                                                    >
-                                                                        Ver todo
-                                                                    </div>
-                                                                </li>
-                                                            </ul>
-                                                        </div>
-                                                        <div className="nav-item">
-                                                            <div className="text-button-uppercase pb-2">Gatos</div>
-                                                            <ul>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('ring')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Anillo para gatos
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('food')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Comida para gatos
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('bed')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Cama para gatos
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ofertas para gatos
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                    onClick={() => handleCategoryClick('pet')}
-                                                                        className={`link text-secondary duration-300 view-all-btn`}
-                                                                    >
-                                                                        Ver todo
-                                                                    </div>
-                                                                </li>
-                                                            </ul>
-                                                        </div>
-                                                        <div className="nav-item">
-                                                            <div className="text-button-uppercase pb-2">Producto nuevo</div>
-                                                            <ul>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('pet')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ofertas para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('bed')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Cama para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('food')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Comida para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleTypeClick('outfit')}
-                                                                        className={`link text-secondary duration-300 cursor-pointer`}
-                                                                    >
-                                                                        Ropa para mascotas
-                                                                    </div>
-                                                                </li>
-                                                                <li>
-                                                                    <div
-                                                                        onClick={() => handleCategoryClick('cosmetic')}
-                                                                        className={`link text-secondary duration-300 view-all-btn`}
-                                                                    >
-                                                                        Ver todo
-                                                                    </div>
-                                                                </li>
-                                                            </ul>
-                                                        </div>
-                                                    </div>
-                                                    <div className="banner-ads-block pl-2.5 basis-1/3">
-                                                        <div className="banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('pet')}>
-                                                            <div className="text-content py-14 pl-8 relative z-[1]">
-                                                                <div className="text-button-uppercase text-white bg-red px-2 py-0.5 inline-block rounded-sm">Ahorra $10</div>
-                                                                <div className="heading6 mt-2">20% de descuento <br />Colección para mascotas</div>
-                                                                <div className="body1 mt-3 text-secondary">
-                                                                    Desde <span className='text-red'>$59.99</span>
-                                                                </div>
-                                                                <div className="button-main mt-5">Comprar ahora</div>
-                                                            </div>
-                                                            <Image
-                                                                src={'/images/other/bg-feature-pet.png'}
-                                                                width={1000}
-                                                                height={800}
-                                                                alt='bg-img'
-                                                                className='absolute left-0 top-0 w-full h-full object-cover'
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        {renderMegaMenu(
+                                            categoriesSections,
+                                            {
+                                                title: 'Colección para mascotas',
+                                                subtitle: 'Ofertas y novedades seleccionadas con amor',
+                                                image: '/images/collection/1.jpg',
+                                            },
+                                            { viewAllCategory: 'todos' }
+                                        )}
+                                    </li>
+                                    <li className='h-full'>
+                                        <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
+                                            Servicios
+                                        </Link>
+                                        {renderMegaMenu(
+                                            [{ title: 'Servicios', links: serviceLinks }],
+                                            {
+                                                title: 'Servicios premium',
+                                                subtitle: 'Soporte, garantías y envíos seguros',
+                                                image: '/images/other/bg-feature-pet.png',
+                                            }
+                                        )}
+                                    </li>
+                                    <li className='h-full'>
+                                        <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
+                                            Conócenos
+                                        </Link>
+                                        {renderMegaMenu(
+                                            [{ title: 'Conócenos', links: companyLinks }],
+                                            {
+                                                title: 'Nuestra historia',
+                                                subtitle: 'Con más de 10 años cuidando mascotas',
+                                                image: '/images/collection/2.jpg',
+                                            }
+                                        )}
                                     </li>
                                     <li className='h-full'>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
