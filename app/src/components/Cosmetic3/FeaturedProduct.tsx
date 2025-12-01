@@ -7,7 +7,6 @@ import Rate from '../Other/Rate'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
-import SwiperCore from 'swiper/core';
 
 interface Props {
     data: Array<ProductType>;

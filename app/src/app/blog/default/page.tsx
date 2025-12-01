@@ -3,8 +3,7 @@ import React, { useState } from 'react'
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
-import Breadcrumb from '@/components/Breadcrumb/Breadcrumb';
+import MenuOne from '@/components/Header/Menu/MenuPet'
 import blogData from '@/data/Blog.json'
 import BlogItem from '@/components/Blog/BlogItem';
 import Footer from '@/components/Footer/Footer'
@@ -78,7 +77,6 @@ const BlogDefault = () => {
             <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Blog Default' subHeading='Blog Default' />
             </div>
             <div className='blog default md:py-20 py-10'>
                 <div className="container">

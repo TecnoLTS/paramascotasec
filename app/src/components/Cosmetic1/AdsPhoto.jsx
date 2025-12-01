@@ -1,8 +1,6 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import Image from 'next/image'
-
 const AdsPhoto = () => {
     useEffect(() => {
         const imageComparisonSlider = document.querySelector('[data-component="image-comparison-slider"]');

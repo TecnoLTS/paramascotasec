@@ -2,9 +2,7 @@
 
 import React from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { BlogType } from '@/type/BlogType'
-import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from 'next/navigation'
 
 interface BlogProps {
