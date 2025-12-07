@@ -76,7 +76,7 @@ const SliderPet = () => {
                     </div>
                     <Link
                       href="/shop/breadcrumb-img"
-                      className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white"
+                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora
                     </Link>
@@ -104,7 +104,7 @@ const SliderPet = () => {
                     </div>
                     <Link
                       href="/shop/breadcrumb-img"
-                      className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white"
+                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora
                     </Link>
@@ -132,7 +132,7 @@ const SliderPet = () => {
                     </div>
                     <Link
                       href="/shop/breadcrumb-img"
-                      className="button-main md:mt-8 mt-3 normal-case bg-white text-black hover:bg-black hover:text-white"
+                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora
                     </Link>

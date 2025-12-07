@@ -14,7 +14,7 @@ const Footer = () => {
                                 <Link href={'/'} className="logo">
                                     <div className="logo-image">
                                         <Image
-                                            src={'/images/brand/LogoVerde150.png'}
+                                            src={'/images/brand/LogoVerde150.svg'}
                                             alt={'ParaMascotasEC'}
                                             width={150}
                                             height={50}
@@ -65,7 +65,7 @@ const Footer = () => {
                                     <div className="input-block w-full h-[52px] mt-4">
                                         <form className='w-full h-full relative' action="post">
                                             <input type="email" placeholder='Ingresa tu correo' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line' required />
-                                            <button className='w-[44px] h-[44px] bg-black flex items-center justify-center rounded-xl absolute top-1 right-1'>
+                                            <button className='w-[44px] h-[44px] bg-[var(--blue)] flex items-center justify-center rounded-xl absolute top-1 right-1'>
                                                 <Icon.ArrowRight size={24} color='#fff' />
                                             </button>
                                         </form>

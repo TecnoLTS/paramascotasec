@@ -72,7 +72,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                         {categories.map((category) => (
                             <button
                                 key={category}
-                                className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-black text-white' : ''}`}
+                                className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl  ${activeCategory === category ? 'bg-[var(--blue)] text-white' : ''}`}
                                 onClick={() => handleCategoryChange(category)}
                             >
                                 {getCategoryLabel(category)}

@@ -3,8 +3,7 @@ import React, { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
-import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
+import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType'
 import productData from '@/data/Product.json'
@@ -92,12 +91,11 @@ const SearchResult = () => {
             <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Search Result' subHeading='Search Result' />
             </div>
             <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
                 <div className="container">
                     <div className="heading flex flex-col items-center">
-                        <div className="heading4 text-center">Found {filteredData.length} results for {String.raw`"`}{query}{String.raw`"`}</div>
+                        <div className="heading4 text-center"> {filteredData.length} resultado para {String.raw`"`}{query}{String.raw`"`}</div>
                         <div className="input-block lg:w-1/2 sm:w-3/5 w-full md:h-[52px] h-[44px] sm:mt-8 mt-5">
                             <div className='w-full h-full relative'>
                                 <input

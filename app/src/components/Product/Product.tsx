@@ -103,7 +103,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                     <div onClick={() => handleDetailProduct(data.id)} className="product-main cursor-pointer block">
                         <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
                             {data.new && (
-                                <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
+                                <div className="product-tag text-button-uppercase text-white bg-[var(--green)] px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                                     Nuevo
                                 </div>
                             )}
@@ -318,7 +318,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                 {percentSale > 0 && (
                                     <>
                                         <div className="product-origin-price caption1 text-secondary2"><del>${data.originPrice}.00</del></div>
-                                        <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
+                                        <div className="product-sale caption1 font-medium bg-[var(--bluefor)] px-3 py-0.5 inline-block rounded-full">
                                             -{percentSale}%
                                         </div>
                                     </>

@@ -1,7 +1,10 @@
 /* Main color */
 :root {
   --green: #1f3b3b;
-  --black: #2e4d4d;
+  --blue: #0a7b8f;
+  --bluesecondary: #2ba1b6;
+  --bluefor: #97e3f3;
+  --black: #000000;
   --doubleblack: #000000;
   --secondary: #696C70;
   --secondary2: #A0A0A0;
@@ -13,6 +16,7 @@
   --yellow: #ECB018;
   --pink: #F4407D;
   --line: #E9E9E9;
+  --orange: #fc5a04;
   --outline: rgba(0, 0, 0, 0.15);
   --surface1: rgba(255, 255, 255, 0.1);
   --surface2: rgba(255, 255, 255, 0.2);
@@ -217,6 +221,7 @@ input[type="file"] {
   line-height: 40px;
   font-weight: 600;
   text-transform: none;
+  color: var(--blue);
 }
 
 .heading4 {
@@ -238,6 +243,7 @@ input[type="file"] {
   line-height: 28px;
   font-weight: 600;
   text-transform: none;
+  color: var(--blue);
 }
 
 .text-title {

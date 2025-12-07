@@ -274,7 +274,7 @@ const MenuPet = () => {
         <>
             <div
                 ref={headerRef}
-                className={`header-menu style-eight ${fixedHeader ? ' fixed' : 'relative'} bg-surface w-full md:h-[90px] h-[64px]`}
+                className={`header-menu style-eight ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
             >
                 <div className="container mx-auto h-full">
                     <div className="header-main flex items-center justify-between h-full">
@@ -301,7 +301,7 @@ const MenuPet = () => {
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
                                 />
                                 <button
-                                    className="search-button h-full px-4 flex items-center justify-center bg-[#2f4f4f] text-white duration-300 hover:bg-[#1f3b3b]"
+                                    className="search-button h-full px-4 flex items-center justify-center bg-[var(--blue)] text-white duration-300 hover:bg-[var(--bluesecondary)]"
                                     onClick={() => {
                                         handleSearch(searchKeyword)
                                     }}
@@ -393,7 +393,7 @@ const MenuPet = () => {
                                         </Link>
                                     </li>
                                     <li className='h-full'>
-                                        <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
+                                        <Link href="/shop/breadcrumb1" className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/shop/breadcrumb1' ? 'active' : ''}`}>
                                             Tienda
                                         </Link>
                                         {renderMegaMenu(
@@ -450,7 +450,7 @@ const MenuPet = () => {
                         <div className="menu-main h-full overflow-hidden relative">
                             <div className="heading py-2 relative flex items-center justify-center">
                                 <div
-                                    className="close-menu-mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-surface flex items-center justify-center"
+                                    className="close-menu-mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white flex items-center justify-center"
                                     onClick={handleMenuMobile}
                                 >
                                     <Icon.X size={14} />

@@ -27,7 +27,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const [brand, setBrand] = useState<string | null>()
     const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 100 });
     const [currentPage, setCurrentPage] = useState(0);
-    const productsPerPage = productPerPage;
+    const productsPerPage = 15;
     const offset = currentPage * productsPerPage;
     const productsRef = useRef<HTMLDivElement>(null)
 
@@ -274,7 +274,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                             <Link
                                                 key={index}
                                                 href={getCategoryUrl(item)}
-                                                className={`item flex items-center justify-between cursor-pointer ${isActiveCategory ? 'active' : ''}`}
+                                                className={`item flex items-center cursor-pointer ${isActiveCategory ? 'active' : ''}`}
                                             >
                                                 <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
                                                 <div className='text-secondary2'>
@@ -354,7 +354,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                             </div>
                         </div>
                         <div className="list-product-block lg:w-3/4 md:w-2/3 w-full md:pl-3">
-                            <div className="filter-heading flex items-center justify-between gap-5 flex-wrap">
+                            <div className="filter-heading flex items-center gap-5 flex-wrap">
                                 <div className="left flex has-line items-center flex-wrap gap-5">
                                     <div className="choose-layout flex items-center gap-2">
                      
