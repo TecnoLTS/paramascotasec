@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
-import { getCategoryLabel, visibleProductCategoryIds } from '@/data/petCategoryCards'
+import { getCategoryLabel } from '@/data/petCategoryCards'
 
 interface Props {
     data: Array<ProductType>;
@@ -15,31 +15,39 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const [activeCategory, setActiveCategory] = useState<string>('todos')
     const productsRef = useRef<HTMLDivElement>(null)
 
-    const computedCategories = useMemo(() => {
-        const availableCategories = new Set(data.map((product) => product.category))
-        return visibleProductCategoryIds.filter((category) => availableCategories.has(category))
-    }, [data])
+    const categories = useMemo(() => {
+        const order = ['todos', 'descuentos', 'perros', 'gatos', 'juguetes', 'camas', 'accesorios', 'comederos', 'cuidado']
 
-    const categories = useMemo(
-        () => ['todos', 'descuentos', ...computedCategories],
-        [computedCategories]
-    )
+        const hasProductsFor = (category: string) => {
+            if (category === 'descuentos') return data.some((product) => product.sale)
+            if (category === 'perros') return data.some((product) => product.gender === 'dog')
+            if (category === 'gatos') return data.some((product) => product.gender === 'cat')
+            return data.some((product) => product.category === category)
+        }
+
+        return order.filter((category) => {
+            if (category === 'todos') return true
+            return hasProductsFor(category)
+        })
+    }, [data])
 
     const filteredData = useMemo(() => {
         if (activeCategory === 'todos') return data
         if (activeCategory === 'descuentos') return data.filter(product => product.sale)
+        if (activeCategory === 'perros' || activeCategory === 'comida para perros') {
+            return data.filter(product => product.gender === 'dog')
+        }
+        if (activeCategory === 'gatos' || activeCategory === 'comida para gatos') {
+            return data.filter(product => product.gender === 'cat')
+        }
         return data.filter(product => product.category === activeCategory)
     }, [activeCategory, data])
 
     useEffect(() => {
-        if (
-            activeCategory !== 'todos' &&
-            activeCategory !== 'descuentos' &&
-            !computedCategories.includes(activeCategory)
-        ) {
+        if (!categories.includes(activeCategory)) {
             setActiveCategory('todos')
         }
-    }, [activeCategory, computedCategories])
+    }, [activeCategory, categories])
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize))
 

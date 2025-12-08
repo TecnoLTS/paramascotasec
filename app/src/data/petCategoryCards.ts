@@ -7,9 +7,9 @@ export interface PetCategoryCard {
 const petCategoryCards: PetCategoryCard[] = [
     { id: 'todos', label: 'Todas', image: '/images/collection/1.jpg' },
     { id: 'descuentos', label: 'Ofertas', image: '/images/collection/2.jpg' },
+    { id: 'perros', label: 'Perros', image: '/images/collection/4.jpg' },
+    { id: 'gatos', label: 'Gatos', image: '/images/collection/5.jpg' },
     { id: 'juguetes', label: 'Juguetes', image: '/images/collection/3.jpg' },
-    { id: 'comida para perros', label: 'Comida para perros', image: '/images/collection/4.jpg' },
-    { id: 'comida para gatos', label: 'Comida para gatos', image: '/images/collection/5.jpg' },
     { id: 'camas', label: 'Camas', image: '/images/collection/6.jpg' },
     { id: 'accesorios', label: 'Accesorios', image: '/images/collection/7.jpg' },
     { id: 'comederos', label: 'Comederos', image: '/images/collection/1.jpg' },
@@ -39,7 +39,12 @@ export const getCategoryLabel = (categoryId?: string) => {
 
 export const visibleProductCategoryIds = petCategoryCards
     .map((category) => category.id.toLowerCase())
-    .filter((categoryId) => categoryId !== 'todos' && categoryId !== 'descuentos')
+    .filter((categoryId) =>
+        categoryId !== 'todos' &&
+        categoryId !== 'descuentos' &&
+        categoryId !== 'comida para perros' &&
+        categoryId !== 'comida para gatos'
+    )
 
 export type CategoryFilter = {
     category?: string
@@ -47,8 +52,10 @@ export type CategoryFilter = {
 }
 
 const categoryFilters: Record<string, CategoryFilter> = {
-    'comida para perros': { category: 'comida para perros', gender: 'dog' },
-    'comida para gatos': { category: 'comida para gatos', gender: 'cat' },
+    'comida para perros': { gender: 'dog' },
+    'comida para gatos': { gender: 'cat' },
+    perros: { gender: 'dog' },
+    gatos: { gender: 'cat' },
     camas: { category: 'camas' },
     accesorios: { category: 'accesorios' },
     comederos: { category: 'comederos' },
@@ -66,9 +73,11 @@ export const getCategoryFilter = (categoryId: string): CategoryFilter => {
 const categoryRoutes: Record<string, string> = {
     todos: '/shop/breadcrumb1',
     descuentos: '/shop/breadcrumb1?category=descuentos',
+    perros: '/shop/breadcrumb1?category=perros&gender=dog',
+    gatos: '/shop/breadcrumb1?category=gatos&gender=cat',
     juguetes: '/shop/breadcrumb1?category=juguetes',
-    'comida para perros': '/shop/breadcrumb1?category=comida%20para%20perros&gender=dog',
-    'comida para gatos': '/shop/breadcrumb1?category=comida%20para%20gatos&gender=cat',
+    'comida para perros': '/shop/breadcrumb1?category=perros&gender=dog',
+    'comida para gatos': '/shop/breadcrumb1?category=gatos&gender=cat',
     camas: '/shop/breadcrumb1?category=camas',
     accesorios: '/shop/breadcrumb1?category=accesorios',
     comederos: '/shop/breadcrumb1?category=comederos',

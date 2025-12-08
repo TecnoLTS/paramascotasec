@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
-import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumbImg';
+import MenuOne from '@/components/Header/Menu/MenuPet'
+import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumb1';
 import productData from '@/data/Product.json'
 import Footer from '@/components/Footer/Footer'
 
@@ -15,7 +14,6 @@ export default function BreadcrumbImg() {
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>

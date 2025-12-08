@@ -23,12 +23,14 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
         'cuidado': 'Cuidado',
     };
 
+    const newProducts = data.filter((product) => product.new);
+
     // Orden preferido de pestañas. Usaremos este orden pero solo mostraremos
-    // las categorías que realmente tengan productos en `data`.
+    // las categorías que realmente tengan productos nuevos en `data`.
     const tabOrder: string[] = ['juguetes', 'comida perro', 'comida gato', 'camas', 'comederos', 'accesorios', 'cuidado'];
 
     // Computar pestañas disponibles dinámicamente (sin categorías vacías)
-    const availableTabs = tabOrder.filter((cat) => data.some((product: ProductType) => product.category === cat));
+    const availableTabs = tabOrder.filter((cat) => newProducts.some((product: ProductType) => product.category === cat));
 
     // Si la pestaña activa no está entre las disponibles, seleccionar la primera disponible
     React.useEffect(() => {
@@ -43,7 +45,7 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
     };
 
     // Filtrar por la categoría (ahora en español) que seleccionó el usuario
-    const filteredProducts = data.filter((product: ProductType) => product.category === activeTab);
+    const filteredProducts = newProducts.filter((product: ProductType) => product.category === activeTab);
 
     return (
         <>
