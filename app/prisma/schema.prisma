@@ -1,0 +1,78 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  legacyId    String?     @unique
+  category    String
+  name        String
+  gender      String?
+  new         Boolean     @default(false)
+  sale        Boolean     @default(false)
+  price       Decimal     @db.Decimal(10, 2)
+  originPrice Decimal     @db.Decimal(10, 2)
+  brand       String?
+  sold        Int         @default(0)
+  quantity    Int
+  description String
+  action      String?
+  slug        String      @unique
+  images      Image[]     @relation("ProductImages")
+  variations  Variation[]
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Variation {
+  id         String  @id @default(cuid())
+  color      String
+  colorCode  String?
+  colorImage String?
+  image      String?
+  product    Product @relation(fields: [productId], references: [id])
+  productId  String
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  url       String
+  product   Product? @relation("ProductImages", fields: [productId], references: [id])
+  productId String?
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  user      User?       @relation(fields: [userId], references: [id])
+  userId    String?
+  status    String      @default("pending")
+  total     Decimal     @db.Decimal(10, 2)
+  items     OrderItem[]
+  createdAt DateTime    @default(now())
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+}

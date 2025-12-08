@@ -93,6 +93,12 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
         router.push(`/product/default?id=${productId}`);
     };
 
+    const thumbImages = Array.isArray((data as any)?.thumbImage) && (data as any)?.thumbImage.length
+        ? (data as any).thumbImage
+        : (Array.isArray((data as any)?.images)
+            ? (data as any).images.map((img: any) => img?.url ?? img).filter(Boolean)
+            : [])
+
     let percentSale = Math.floor(100 - ((data.price / data.originPrice) * 100))
     let percentSold = Math.floor((data.sold / data.quantity) * 100)
 
@@ -130,7 +136,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                 ) : (
                                     <>
                                         {
-                                            data.thumbImage.map((img, index) => (
+                                            thumbImages.map((img, index) => (
                                                 <Image
                                                     key={index}
                                                     src={img}
@@ -371,7 +377,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                             </div>
                                         )}
                                         <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
-                                            {data.thumbImage.map((img, index) => (
+                                            {thumbImages.map((img, index) => (
                                                 <Image
                                                     key={index}
                                                     src={img}
@@ -539,7 +545,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
             {type === 'marketplace' ? (
                 <div className="product-item style-marketplace p-4 border border-line rounded-2xl" onClick={() => handleDetailProduct(data.id)}>
                     <div className="bg-img relative w-full">
-                        <Image className='w-full aspect-square' width={5000} height={5000} src={data.thumbImage[0]} alt="img" />
+                        <Image className='w-full aspect-square' width={5000} height={5000} src={thumbImages[0] ?? ''} alt="img" />
                         <div className="list-action flex flex-col gap-1 absolute top-0 right-0">
                             <span
                                 className={`add-wishlist-btn w-8 h-8 bg-white flex items-center justify-center rounded-full box-shadow-sm duration-300 ${wishlistState.wishlistArray.some(item => item.id === data.id) ? 'active' : ''}`}

@@ -2,9 +2,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Instala dependencias exactas según lockfile
+RUN apk add --no-cache openssl
+
+# Instala dependencias (permite actualizar lock en la imagen si hay cambios)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
+# Asegura prisma en la imagen aunque el lock local no esté actualizado
+RUN npm install --no-save prisma @prisma/client
 
 # Copia el código de la app
 COPY . .

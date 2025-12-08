@@ -12,6 +12,7 @@ services:
       - NEXT_PUBLIC_CONTAINER_NAME=next-test
       - CHOKIDAR_USEPOLLING=1
       - WATCHPACK_POLLING=true
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/paramascotasec?schema=public
     working_dir: /app
     volumes:
       - ./app:/app
@@ -44,6 +45,28 @@ services:
       - /usr/share/zoneinfo/America/Bogota:/etc/localtime:ro
     networks:
       - edge
+    ports:
+      - "80:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  db:
+    image: postgres:15-alpine
+    container_name: next-test-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=paramascotasec
+      - TZ=America/Bogota
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - edge
     logging:
       driver: json-file
       options:
@@ -51,6 +74,7 @@ services:
         max-file: "3"
 networks:
   edge:
-    external: true
+    driver: bridge
 volumes:
   app_node_modules:
+  postgres_data:

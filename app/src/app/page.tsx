@@ -3,7 +3,6 @@ import MenuPet from '@/components/Header/Menu/MenuPet'
 import SliderPet from '@/components/Slider/SliderPet'
 import Collection from '@/components/Pet/Collection'
 import Collection2 from '@/components/Cosmetic1/Collection'
-import productData from '@/data/Product.json'
 import ChooseUs from '@/components/Pet/ChooseUs'
 import Banner2 from '@/components/Pet/Banner2'
 import FeatureProduct from '@/components/Pet/FeatureProduct'
@@ -12,8 +11,11 @@ import Brand from '@/components/Home1/Brand'
 import Benefit from '@/components/Home1/Benefit'
 import Footer from '@/components/Footer/Footer'
 import petCategoryCards from '@/data/petCategoryCards'
+import { fetchProducts } from '@/lib/products'
 
-export default function HomePet() {
+export default async function HomePet() {
+    const products = await fetchProducts()
+
     return (
         <>
             <div id="header" className='relative w-full style-pet'>
@@ -21,11 +23,11 @@ export default function HomePet() {
             </div>
             <SliderPet />
             <Collection categories={petCategoryCards} />
-            <AllProducts data={productData} />
+            <AllProducts data={products} />
             <Benefit props="md:py-10 py-5" />
             <Banner2 />
             <ChooseUs />
-            <FeatureProduct data={productData} start={0} limit={4} />
+            <FeatureProduct data={products} start={0} limit={4} />
             <Collection2 />
             <Brand />
             <Footer />
