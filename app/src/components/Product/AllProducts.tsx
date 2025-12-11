@@ -13,7 +13,9 @@ interface Props {
 const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const [page, setPage] = useState<number>(1)
     const [activeCategory, setActiveCategory] = useState<string>('todos')
-    const productsRef = useRef<HTMLDivElement>(null)
+
+    // ⬇️ Ref apuntando al bloque donde dice "Todos los productos"
+    const productsRef = useRef<HTMLDivElement | null>(null)
 
     const categories = useMemo(() => {
         const order = ['todos', 'descuentos', 'perros', 'gatos', 'juguetes', 'camas', 'accesorios', 'comederos', 'cuidado']
@@ -56,36 +58,56 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         return filteredData.slice(start, start + pageSize)
     }, [filteredData, page, pageSize])
 
+    const scrollToProducts = () => {
+        setTimeout(() => {
+            if (!productsRef.current) return;
+
+            const rect = productsRef.current.getBoundingClientRect();
+            const scrollTop = rect.top + window.scrollY;
+
+            // mide el header sticky
+            const headerHeight = document.querySelector('.header')?.clientHeight ?? 120;
+
+            window.scrollTo({
+                top: scrollTop - headerHeight - 30, // extra margen
+                behavior: 'smooth'
+            });
+        }, 50);
+    };
+
     const handleCategoryChange = (category: string) => {
         setActiveCategory(category)
         setPage(1)
-        productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        scrollToProducts()
     }
 
     const handlePageChange = (nextPage: number) => {
         const sanitized = Math.min(Math.max(nextPage, 1), totalPages)
         if (sanitized === page) return
         setPage(sanitized)
-        productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        scrollToProducts()
     }
 
     return (
-        <div ref={productsRef} className="container md:py-10 py-5">
-            <div className="heading flex flex-col items-center text-center">
+        <div className="container md:py-10 py-5">
+            {/* ⬇️ El ref está justo en el bloque donde está el título */}
+            <div ref={productsRef} className="heading flex flex-col items-center text-center">
                 <div className="heading3">Todos los productos</div>
-                <div className="heading6 font-normal text-secondary mt-2">Explora nuestro catálogo completo</div>
+                <div className="heading6 font-normal text-secondary mt-2">
+                    Explora nuestro catálogo completo
+                </div>
             </div>
 
             <div className="menu-tab flex items-center justify-center gap-2 p-1 bg-surface rounded-2xl md:mt-8 mt-6 flex-wrap">
-                        {categories.map((category) => (
-                            <button
-                                key={category}
-                                className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl  ${activeCategory === category ? 'bg-[var(--blue)] text-white' : ''}`}
-                                onClick={() => handleCategoryChange(category)}
-                            >
-                                {getCategoryLabel(category)}
-                            </button>
-                        ))}
+                {categories.map((category) => (
+                    <button
+                        key={category}
+                        className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-[var(--blue)] text-white' : ''}`}
+                        onClick={() => handleCategoryChange(category)}
+                    >
+                        {getCategoryLabel(category)}
+                    </button>
+                ))}
             </div>
 
             <div className="list-product hide-product-sold grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
@@ -102,6 +124,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                 >
                     Anterior
                 </button>
+
                 {Array.from({ length: totalPages }).map((_, idx) => {
                     const pageNumber = idx + 1
                     const isActive = pageNumber === page
@@ -115,6 +138,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                         </button>
                     )
                 })}
+
                 <button
                     className={`button-main bg-white text-black border border-line px-4 py-2 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={() => handlePageChange(page + 1)}

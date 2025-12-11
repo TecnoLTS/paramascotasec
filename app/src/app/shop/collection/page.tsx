@@ -4,11 +4,12 @@ import React, { useState } from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
-import productData from '@/data/Product.json'
 import ShopCollection from '@/components/Shop/ShopCollection'
 import Footer from '@/components/Footer/Footer'
+import useProducts from '@/hooks/useProducts'
 
 export default function Collection() {
+    const { products, loading, error } = useProducts()
 
     return (
         <>
@@ -17,7 +18,13 @@ export default function Collection() {
                 <MenuOne props="bg-transparent" />
                 <Breadcrumb heading='Shop Collection' subHeading='Collection' />
             </div>
-            <ShopCollection data={productData} />
+            {loading ? (
+                <div className="container py-10 text-center">Cargando productos...</div>
+            ) : error ? (
+                <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : (
+                <ShopCollection data={products} />
+            )}
             <Footer />
         </>
     )

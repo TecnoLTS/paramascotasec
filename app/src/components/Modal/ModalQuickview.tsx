@@ -29,6 +29,9 @@ const ModalQuickview = () => {
     const { addToCompare, removeFromCompare, compareState } = useCompare();
     const { openModalCompare } = useModalCompareContext()
     const percentSale = selectedProduct && Math.floor(100 - ((selectedProduct.price / selectedProduct.originPrice) * 100))
+    const galleryImages = Array.isArray((selectedProduct as any)?.images)
+        ? (selectedProduct as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
+        : []
 
     const handleOpenSizeGuide = () => {
         setOpenSizeGuide(true);
@@ -113,13 +116,13 @@ const ModalQuickview = () => {
                     <div className="flex h-full max-md:flex-col-reverse gap-y-6">
                         <div className="left lg:w-[388px] md:w-[300px] flex-shrink-0 px-6">
                             <div className="list-img max-md:flex items-center gap-4">
-                                {selectedProduct?.images.map((item, index) => (
+                                {galleryImages.map((item, index) => (
                                     <div className="bg-img w-full aspect-[3/4] max-md:w-[150px] max-md:flex-shrink-0 rounded-[20px] overflow-hidden md:mt-6" key={index}>
                                         <Image
                                             src={item}
                                             width={1500}
                                             height={2000}
-                                            alt={item}
+                                            alt={selectedProduct?.name ?? 'product'}
                                             priority={true}
                                             className='w-full h-full object-cover'
                                         />
@@ -177,7 +180,7 @@ const ModalQuickview = () => {
                                     <div className="choose-color">
                                         <div className="text-title">Colors: <span className='text-title color'>{activeColor}</span></div>
                                         <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                                            {selectedProduct?.variation.map((item, index) => (
+                                            {(selectedProduct?.variation ?? []).map((item, index) => (
                                                 <div
                                                     className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
                                                     key={index}
@@ -212,7 +215,7 @@ const ModalQuickview = () => {
                                             <ModalSizeguide data={selectedProduct} isOpen={openSizeGuide} onClose={handleCloseSizeGuide} />
                                         </div>
                                         <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                                            {selectedProduct?.sizes.map((item, index) => (
+                                            {(selectedProduct?.sizes ?? []).map((item, index) => (
                                                 <div
                                                     className={`size-item ${item === 'freesize' ? 'px-3 py-2' : 'w-12 h-12'} flex items-center justify-center text-button rounded-full bg-white border border-line ${activeSize === item ? 'active' : ''}`}
                                                     key={index}

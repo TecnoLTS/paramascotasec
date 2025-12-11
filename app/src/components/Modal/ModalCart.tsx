@@ -40,10 +40,11 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     }
 
     let moneyForFreeship = 150;
-    let [totalCart, setTotalCart] = useState<number>(0)
+    const totalCart = cartState.cartArray.reduce(
+        (acc, item) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1),
+        0
+    )
     let [discountCart, setDiscountCart] = useState<number>(0)
-
-    cartState.cartArray.map(item => totalCart += item.price * item.quantity)
 
     return (
         <>
@@ -115,13 +116,20 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                 <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
                     <div className="infor flex items-center gap-3 w-full">
                         <div className="bg-img w-[100px] aspect-square flex-shrink-0 rounded-lg overflow-hidden">
-                            <Image
-                                                src={product.images[0]}
-                                                width={300}
-                                                height={300}
-                                                alt={product.name}
-                                                className='w-full h-full'
-                                            />
+                            {(() => {
+                                const imgs = Array.isArray(product.images) ? product.images : []
+                                const first = imgs[0]
+                                const src = typeof first === 'string' ? first : (first as any)?.url ?? ''
+                                return (
+                                    <Image
+                                        src={src || '/images/product/1.jpg'}
+                                        width={300}
+                                        height={300}
+                                        alt={product.name}
+                                        className='w-full h-full object-cover'
+                                    />
+                                )
+                            })()}
                         </div>
                         <div className='w-full'>
                             <div className="flex items-center justify-between w-full">
@@ -135,7 +143,8 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                             </div>
                             <div className="flex items-center justify-between gap-2 mt-3 w-full">
                                 <div className="flex items-center text-secondary2 capitalize">
-                                    {product.selectedSize || product.sizes[0]}/{product.selectedColor || product.variation[0].color}
+                                    {(product.selectedSize || (product.sizes ?? [])[0] || '').toString()}/
+                                    {(product.selectedColor || (product.variation ?? [])[0]?.color || '').toString()}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-2 border border-line rounded-md px-2 py-1">
@@ -156,7 +165,9 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                             +
                                         </button>
                                     </div>
-                                    <div className="product-price text-title">${product.price * (product.quantity ?? 1)}.00</div>
+                                    <div className="product-price text-title">
+                                        ${Number(product.price ?? 0) * Number(product.quantity ?? 1)}.00
+                                    </div>
                                 </div>
                             </div>
                         </div>

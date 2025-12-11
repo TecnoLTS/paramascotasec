@@ -129,7 +129,15 @@ const Cart = () => {
                                                         <div className="flex items-center gap-6">
                                                             <div className="bg-img md:w-[100px] w-20 aspect-[3/4]">
                                                                 <Image
-                                                                    src={product.thumbImage[0]}
+                                                                    src={
+                                                                        Array.isArray((product as any).thumbImage)
+                                                                            ? (product as any).thumbImage[0]
+                                                                            : Array.isArray((product as any).images)
+                                                                            ? (typeof (product as any).images[0] === 'string'
+                                                                                ? (product as any).images[0]
+                                                                                : ((product as any).images[0]?.url ?? ''))
+                                                                            : '/images/product/1.jpg'
+                                                                    }
                                                                     width={1000}
                                                                     height={1000}
                                                                     alt={product.name}

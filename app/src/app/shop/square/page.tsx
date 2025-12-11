@@ -5,13 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import ShopFilterDropdown from '@/components/Shop/ShopFilterDropdown'
-import productData from '@/data/Product.json'
 import Footer from '@/components/Footer/Footer'
+import useProducts from '@/hooks/useProducts'
 
 export default function FilterDropdown() {
     const searchParams = useSearchParams()
     const type = searchParams.get('type')
     const category = searchParams.get('category')
+    const { products, loading, error } = useProducts()
 
     return (
         <>
@@ -20,7 +21,13 @@ export default function FilterDropdown() {
                 <MenuOne props="bg-transparent" />
             </div>
             <div className="shop-square">
-                <ShopFilterDropdown data={productData} productPerPage={12} dataType={type} />
+                {loading ? (
+                    <div className="container py-10 text-center">Cargando productos...</div>
+                ) : error ? (
+                    <div className="container py-10 text-center text-red-600">{error}</div>
+                ) : (
+                    <ShopFilterDropdown data={products} productPerPage={12} dataType={type} />
+                )}
             </div>
             <Footer />
         </>

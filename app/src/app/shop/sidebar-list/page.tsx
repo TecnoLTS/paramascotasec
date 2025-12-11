@@ -5,14 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import ShopSidebarList from '@/components/Shop/ShopSidebarList'
-import productData from '@/data/Product.json'
 import Footer from '@/components/Footer/Footer'
+import useProducts from '@/hooks/useProducts'
 
 export default function SidebarList() {
     const searchParams = useSearchParams()
     const type = searchParams.get('type')
     const category = searchParams.get('category')
     const gender = searchParams.get('gender')
+    const { products, loading, error } = useProducts()
 
     return (
         <>
@@ -20,7 +21,13 @@ export default function SidebarList() {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            <ShopSidebarList data={productData} productPerPage={4} dataType={type} category={category} gender={gender} />
+            {loading ? (
+                <div className="container py-10 text-center">Cargando productos...</div>
+            ) : error ? (
+                <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : (
+                <ShopSidebarList data={products} productPerPage={4} dataType={type} category={category} gender={gender} />
+            )}
             <Footer />
         </>
     )

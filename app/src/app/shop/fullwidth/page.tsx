@@ -5,13 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuOne'
 import ShopFilterCanvas from '@/components/Shop/ShopFilterCanvas'
-import productData from '@/data/Product.json'
 import Footer from '@/components/Footer/Footer'
+import useProducts from '@/hooks/useProducts'
 
 export default function Fullwidth() {
     const searchParams = useSearchParams()
     const type = searchParams.get('type')
     const category = searchParams.get('category')
+    const { products, loading, error } = useProducts()
 
     return (
         <>
@@ -19,7 +20,13 @@ export default function Fullwidth() {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            <ShopFilterCanvas data={productData} productPerPage={12} dataType={type} />
+            {loading ? (
+                <div className="container py-10 text-center">Cargando productos...</div>
+            ) : error ? (
+                <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : (
+                <ShopFilterCanvas data={products} productPerPage={12} dataType={type} />
+            )}
             <Footer />
         </>
     )

@@ -35,9 +35,9 @@ const CartContext = createContext<CartContextProps | undefined>(undefined);
 
 const cartReducer = (state: CartState, action: CartAction): CartState => {
     switch (action.type) {
-        case 'ADD_TO_CART':
-            const quantityToAdd = action.payload.quantityPurchase ?? 1;
-            const existed = state.cartArray.find(item => item.id === action.payload.id);
+        case 'ADD_TO_CART': {
+            const quantityToAdd = Number(action.payload.quantityPurchase ?? action.payload.quantity ?? 1)
+            const existed = state.cartArray.find(item => item.id === action.payload.id)
             if (existed) {
                 return {
                     ...state,
@@ -48,11 +48,17 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
                     ),
                 };
             }
-            const newItem: CartItem = { ...action.payload, quantity: quantityToAdd, selectedSize: '', selectedColor: '' };
+            const newItem: CartItem = {
+                ...action.payload,
+                quantity: quantityToAdd,
+                selectedSize: '',
+                selectedColor: '',
+            }
             return {
                 ...state,
                 cartArray: [...state.cartArray, newItem],
             };
+        }
         case 'REMOVE_FROM_CART':
             return {
                 ...state,
@@ -92,7 +98,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const stored = localStorage.getItem('cart');
             if (stored) {
                 const parsed = JSON.parse(stored) as CartItem[];
-                dispatch({ type: 'LOAD_CART', payload: parsed });
+                const normalized = parsed.map((item) => ({
+                    ...item,
+                    quantity: Number(item.quantity ?? item.quantityPurchase ?? 1),
+                    selectedSize: item.selectedSize ?? '',
+                    selectedColor: item.selectedColor ?? '',
+                }))
+                dispatch({ type: 'LOAD_CART', payload: normalized });
             }
         } catch (error) {
             console.error('Error al cargar carrito', error);

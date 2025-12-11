@@ -49,6 +49,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   if (productMain === undefined) {
     productMain = data[0]
   }
+  productMain.quantityPurchase = productMain.quantityPurchase ?? 1
+  const relatedCandidates = data.filter((p) => p.id !== productMain.id && p.gender === productMain.gender)
+  const primaryRelated = relatedCandidates.filter((p) => p.category === productMain.category)
+  const relatedProducts = [
+    ...primaryRelated,
+    ...relatedCandidates.filter((p) => p.category !== productMain.category),
+  ].slice(0, 4)
 
   const sampleImages = [
     '/images/slider/slade1-1080.jpg',
@@ -56,10 +63,14 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     '/images/slider/slade3-1080.jpg',
   ]
 
+  const productImages = Array.isArray((productMain as any)?.images)
+    ? (productMain as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
+    : []
+
   const galleryImages = (
-    productMain.images && productMain.images.length > 0 ? productMain.images : sampleImages
+    productImages.length > 0 ? productImages : sampleImages
   ).map((img, idx) =>
-    img.includes('1000x1000') ? sampleImages[idx % sampleImages.length] : img
+    typeof img === 'string' && img.includes('1000x1000') ? sampleImages[idx % sampleImages.length] : img
   )
 
   const normalizedVariations = (productMain.variation ?? []).map((variation, idx) => ({
@@ -95,23 +106,26 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const handleActiveSize = (item: string) => setActiveSize(item)
 
   const handleIncreaseQuantity = () => {
-    productMain.quantityPurchase += 1
-    updateCart(productMain.id, productMain.quantityPurchase + 1, activeSize, activeColor);
+    productMain.quantityPurchase = (productMain.quantityPurchase ?? 1) + 1
+    updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor);
   };
 
   const handleDecreaseQuantity = () => {
-    if (productMain.quantityPurchase > 1) {
-      productMain.quantityPurchase -= 1
-      updateCart(productMain.id, productMain.quantityPurchase - 1, activeSize, activeColor);
-    }
+    if ((productMain.quantityPurchase ?? 1) <= 1) return
+    productMain.quantityPurchase = (productMain.quantityPurchase ?? 1) - 1
+    updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor);
   };
 
   const handleAddToCart = () => {
-    if (!cartState.cartArray.find(item => item.id === productMain.id)) {
-      addToCart({ ...productMain });
-      updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor)
+    const quantityToAdd = productMain.quantityPurchase ?? 1
+    const existing = cartState.cartArray.find(item => item.id === productMain.id)
+
+    if (!existing) {
+      addToCart({ ...productMain, quantityPurchase: quantityToAdd });
+      updateCart(productMain.id, quantityToAdd, activeSize, activeColor)
     } else {
-      updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor)
+      const nextQty = (existing.quantity ?? 0) + quantityToAdd
+      updateCart(productMain.id, nextQty, activeSize, activeColor)
     }
     openModalCart()
   };
@@ -347,7 +361,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     />
                   </div>
                   <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                    {productMain.sizes.map((item, index) => (
+                    {(productMain.sizes ?? []).map((item, index) => (
                       <div
                         className={`size-item ${item === 'freesize' ? 'px-3 py-2' : 'w-12 h-12'} flex items-center justify-center text-button rounded-full bg-white border border-line ${activeSize === item ? 'active' : ''}`}
                         key={index}
@@ -562,7 +576,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
           <div className="container">
             <div className="heading3 text-center">Related Products</div>
             <div className="list-product hide-product-sold  grid lg:grid-cols-4 grid-cols-2 md:gap-[30px] gap-5 md:mt-10 mt-6">
-              {data.slice(Number(productId), Number(productId) + 4).map((item, index) => (
+              {relatedProducts.map((item, index) => (
                 <Product key={index} data={item} type='grid' style='style-1' />
               ))}
             </div>

@@ -95,10 +95,10 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
         }).length;
     };
 
-    const uniqueSizes = Array.from(new Set(data.flatMap((product) => product.sizes))).sort();
-    const uniqueColors = Array.from(new Set(data.flatMap((product) => product.variation.map((variation) => variation.color)))).sort();
-    const uniqueBrands = Array.from(new Set(data.map((product) => product.brand))).sort();
-    const brandCounts = (brandValue: string) => data.filter((product) => product.brand === brandValue).length;
+    const uniqueSizes = Array.from(new Set(data.flatMap((product) => product.sizes ?? []))).sort();
+    const uniqueColors = Array.from(new Set(data.flatMap((product) => (product.variation ?? []).map((variation) => variation.color)))).sort();
+    const uniqueBrands = Array.from(new Set(data.map((product) => product.brand ?? ''))).sort();
+    const brandCounts = (brandValue: string) => data.filter((product) => (product.brand ?? '') === brandValue).length;
 
     let filteredData = data.filter(product => {
         let isShowOnlySaleMatched = true;
@@ -129,7 +129,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
         let isSizeMatched = true;
         if (size) {
-            isSizeMatched = product.sizes.includes(size)
+            isSizeMatched = (product.sizes ?? []).includes(size)
         }
 
         let isPriceRangeMatched = true;
@@ -139,7 +139,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
         let isColorMatched = true;
         if (color) {
-            isColorMatched = product.variation.some(item => item.color === color)
+            isColorMatched = (product.variation ?? []).some(item => item.color === color)
         }
 
         let isBrandMatched = true;

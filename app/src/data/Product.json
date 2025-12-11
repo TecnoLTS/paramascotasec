@@ -2,22 +2,19 @@
   {
     "id": "1",
     "category": "juguetes",
-    "type": "toy",
-    "name": "Pelota para Perro",
+    "type": "",
+    "name": "Pelota para Perro 5",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 4,
+    "rate": 0,
     "price": 8,
     "originPrice": 8,
     "brand": "petplay",
     "sold": 45,
     "quantity": 150,
     "quantityPurchase": 1,
-    "sizes": [
-      "1",
-      "2"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "rojo",
@@ -45,21 +42,19 @@
   {
     "id": "2",
     "category": "juguetes",
-    "type": "toy",
-    "name": "Juguete Rat\u00f3n para Gato",
+    "type": "",
+    "name": "Juguete Ratón para Gato",
     "gender": "cat",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 6,
     "originPrice": 6,
     "brand": "petplay",
     "sold": 52,
     "quantity": 200,
     "quantityPurchase": 1,
-    "sizes": [
-      "1"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "rojo",
@@ -80,28 +75,26 @@
     "images": [
       "/images/product/2.jpg"
     ],
-    "description": "Juguete rat\u00f3n para gatos. Perfecto para estimular el instinto de caza.",
+    "description": "Juguete ratón para gatos. Perfecto para estimular el instinto de caza.",
     "action": "add to cart",
     "slug": "juguete-raton-gato"
   },
   {
     "id": "3",
     "category": "juguetes",
-    "type": "toy",
+    "type": "",
     "name": "Pelota con Cuerda para Gato",
     "gender": "cat",
     "new": true,
     "sale": true,
-    "rate": 5,
+    "rate": 0,
     "price": 7,
     "originPrice": 10,
     "brand": "petplay",
     "sold": 38,
     "quantity": 180,
     "quantityPurchase": 1,
-    "sizes": [
-      "1"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "multicolor",
@@ -123,26 +116,22 @@
   {
     "id": "4",
     "category": "comida para perros",
-    "type": "food",
+    "type": "",
     "name": "Premios Suaves para Perro",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 20,
     "originPrice": 20,
     "brand": "american",
     "sold": 24,
     "quantity": 100,
     "quantityPurchase": 1,
-    "sizes": [
-      "200",
-      "300",
-      "500"
-    ],
+    "sizes": [],
     "variation": [
       {
-        "color": "marr\u00f3n",
+        "color": "marrón",
         "colorCode": "#8B4513",
         "colorImage": "/images/product/1000x1000.png",
         "image": "/images/product/4.jpg"
@@ -161,23 +150,19 @@
   {
     "id": "5",
     "category": "comida para perros",
-    "type": "food",
+    "type": "",
     "name": "Alimento Premium Royal Canin",
     "gender": "dog",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 25,
     "originPrice": 25,
     "brand": "royal",
     "sold": 18,
     "quantity": 100,
     "quantityPurchase": 1,
-    "sizes": [
-      "300",
-      "500",
-      "1000"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "beige",
@@ -192,33 +177,29 @@
     "images": [
       "/images/product/5.jpg"
     ],
-    "description": "Alimento premium para perros adultos. Nutrici\u00f3n completa y equilibrada.",
+    "description": "Alimento premium para perros adultos. Nutrición completa y equilibrada.",
     "action": "quick shop",
     "slug": "alimento-royal-canin"
   },
   {
     "id": "6",
     "category": "comida para perros",
-    "type": "food",
+    "type": "",
     "name": "Comida Natural Milo Kitchen",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 20,
     "originPrice": 20,
     "brand": "american",
     "sold": 24,
     "quantity": 100,
     "quantityPurchase": 1,
-    "sizes": [
-      "200",
-      "300",
-      "500"
-    ],
+    "sizes": [],
     "variation": [
       {
-        "color": "marr\u00f3n",
+        "color": "marrón",
         "colorCode": "#8B4513",
         "colorImage": "/images/product/1000x1000.png",
         "image": "/images/product/6.jpg"
@@ -237,23 +218,19 @@
   {
     "id": "7",
     "category": "comida para gatos",
-    "type": "food",
+    "type": "",
     "name": "Alimento Saludable Beneful",
     "gender": "cat",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 16,
     "originPrice": 16,
     "brand": "purina",
     "sold": 16,
     "quantity": 80,
     "quantityPurchase": 1,
-    "sizes": [
-      "100",
-      "200",
-      "300"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "beige",
@@ -268,33 +245,29 @@
     "images": [
       "/images/product/7.jpg"
     ],
-    "description": "Alimento saludable para gatos. Nutrientes esenciales para salud \u00f3ptima.",
+    "description": "Alimento saludable para gatos. Nutrientes esenciales para salud óptima.",
     "action": "quick shop",
     "slug": "alimento-beneful-gato"
   },
   {
     "id": "8",
     "category": "comida para gatos",
-    "type": "food",
+    "type": "",
     "name": "Premios Premium para Gato",
     "gender": "cat",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 16,
     "originPrice": 16,
     "brand": "purina",
     "sold": 16,
     "quantity": 80,
     "quantityPurchase": 1,
-    "sizes": [
-      "100",
-      "200",
-      "300"
-    ],
+    "sizes": [],
     "variation": [
       {
-        "color": "salm\u00f3n",
+        "color": "salmón",
         "colorCode": "#FA8072",
         "colorImage": "/images/product/1000x1000.png",
         "image": "/images/product/8.jpg"
@@ -306,31 +279,26 @@
     "images": [
       "/images/product/8.jpg"
     ],
-    "description": "Premios premium para gatos con sabor a salm\u00f3n.",
+    "description": "Premios premium para gatos con sabor a salmón.",
     "action": "add to cart",
     "slug": "premios-premium-gato"
   },
   {
     "id": "9",
     "category": "camas",
-    "type": "bed",
+    "type": "",
     "name": "Cama Acogedora para Perro",
     "gender": "dog",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 99,
     "originPrice": 99,
     "brand": "bedpet",
     "sold": 12,
     "quantity": 40,
     "quantityPurchase": 1,
-    "sizes": [
-      "2",
-      "3",
-      "4",
-      "5"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "gris",
@@ -339,7 +307,7 @@
         "image": "/images/product/9.jpg"
       },
       {
-        "color": "marr\u00f3n",
+        "color": "marrón",
         "colorCode": "#8B4513",
         "colorImage": "/images/product/color/48x48.png",
         "image": "/images/product/9.jpg"
@@ -351,31 +319,26 @@
     "images": [
       "/images/product/9.jpg"
     ],
-    "description": "Cama c\u00f3moda y acogedora para perros. Perfecta para descanso.",
+    "description": "Cama cómoda y acogedora para perros. Perfecta para descanso.",
     "action": "add to cart",
     "slug": "cama-acogedora-perro"
   },
   {
     "id": "10",
     "category": "camas",
-    "type": "bed",
+    "type": "",
     "name": "Cama Deluxe para Perro",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 104,
     "originPrice": 104,
     "brand": "bedpet",
     "sold": 12,
     "quantity": 40,
     "quantityPurchase": 1,
-    "sizes": [
-      "2",
-      "3",
-      "4",
-      "5"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "azul marino",
@@ -403,24 +366,19 @@
   {
     "id": "11",
     "category": "camas",
-    "type": "bed",
+    "type": "",
     "name": "Cama Suave para Gato",
     "gender": "cat",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 129,
     "originPrice": 129,
     "brand": "bedpet",
     "sold": 12,
     "quantity": 40,
     "quantityPurchase": 1,
-    "sizes": [
-      "2",
-      "3",
-      "4",
-      "5"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "rosa",
@@ -441,29 +399,26 @@
     "images": [
       "/images/product/11.jpg"
     ],
-    "description": "Cama suave y acogedora para gatos. Material hipoalerg\u00e9nico.",
+    "description": "Cama suave y acogedora para gatos. Material hipoalergénico.",
     "action": "add to cart",
     "slug": "cama-suave-gato"
   },
   {
     "id": "12",
     "category": "camas",
-    "type": "bed",
+    "type": "",
     "name": "Cama Elevada para Gato",
     "gender": "cat",
     "new": true,
     "sale": true,
-    "rate": 5,
+    "rate": 0,
     "price": 85,
     "originPrice": 110,
     "brand": "bedpet",
     "sold": 28,
     "quantity": 50,
     "quantityPurchase": 1,
-    "sizes": [
-      "1",
-      "2"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "beige",
@@ -485,22 +440,19 @@
   {
     "id": "13",
     "category": "accesorios",
-    "type": "leash",
+    "type": "",
     "name": "Correa para Perro",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 4,
+    "rate": 0,
     "price": 12,
     "originPrice": 12,
     "brand": "petgear",
     "sold": 33,
     "quantity": 100,
     "quantityPurchase": 1,
-    "sizes": [
-      "peque\u00f1o",
-      "grande"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "negro",
@@ -521,33 +473,29 @@
     "images": [
       "/images/product/13.jpg"
     ],
-    "description": "Correa resistente para perros. C\u00f3moda de sostener.",
+    "description": "Correa resistente para perros. Cómoda de sostener.",
     "action": "add to cart",
     "slug": "correa-perro"
   },
   {
     "id": "14",
     "category": "accesorios",
-    "type": "collar",
+    "type": "",
     "name": "Collar de Cuero para Perro",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 4,
+    "rate": 0,
     "price": 18,
     "originPrice": 18,
     "brand": "petgear",
     "sold": 21,
     "quantity": 80,
     "quantityPurchase": 1,
-    "sizes": [
-      "peque\u00f1o",
-      "mediano",
-      "grande"
-    ],
+    "sizes": [],
     "variation": [
       {
-        "color": "marr\u00f3n",
+        "color": "marrón",
         "colorCode": "#8B4513",
         "colorImage": "/images/product/color/48x48.png",
         "image": "/images/product/14.jpg"
@@ -572,24 +520,19 @@
   {
     "id": "15",
     "category": "accesorios",
-    "type": "harness",
-    "name": "Arn\u00e9s Ajustable para Perro",
+    "type": "",
+    "name": "Arnés Ajustable para Perro",
     "gender": "dog",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 22,
     "originPrice": 22,
     "brand": "petgear",
     "sold": 19,
     "quantity": 75,
     "quantityPurchase": 1,
-    "sizes": [
-      "peque\u00f1o",
-      "mediano",
-      "grande",
-      "muy grande"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "negro",
@@ -610,30 +553,26 @@
     "images": [
       "/images/product/15.jpg"
     ],
-    "description": "Arn\u00e9s ajustable y seguro para perros. M\u00e1xima comodidad.",
+    "description": "Arnés ajustable y seguro para perros. Máxima comodidad.",
     "action": "add to cart",
     "slug": "arnes-ajustable-perro"
   },
   {
     "id": "16",
     "category": "comederos",
-    "type": "bowl",
+    "type": "",
     "name": "Comedero Acero Inoxidable",
     "gender": "dog",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 14,
     "originPrice": 14,
     "brand": "petgear",
     "sold": 28,
     "quantity": 120,
     "quantityPurchase": 1,
-    "sizes": [
-      "peque\u00f1o",
-      "mediano",
-      "grande"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "plateado",
@@ -648,28 +587,26 @@
     "images": [
       "/images/product/16.jpg"
     ],
-    "description": "Comedero de acero inoxidable para perros. Duradero y f\u00e1cil de limpiar.",
+    "description": "Comedero de acero inoxidable para perros. Duradero y fácil de limpiar.",
     "action": "add to cart",
     "slug": "comedero-acero-perro"
   },
   {
     "id": "17",
     "category": "comederos",
-    "type": "bowl",
-    "name": "Set Comederos de Cer\u00e1mica",
+    "type": "",
+    "name": "Set Comederos de Cerámica",
     "gender": "cat",
     "new": true,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 12,
     "originPrice": 12,
     "brand": "petgear",
     "sold": 35,
     "quantity": 90,
     "quantityPurchase": 1,
-    "sizes": [
-      "1"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "blanco",
@@ -690,28 +627,26 @@
     "images": [
       "/images/product/17.jpg"
     ],
-    "description": "Set de comederos de cer\u00e1mica para gatos. Elegante y seguro.",
+    "description": "Set de comederos de cerámica para gatos. Elegante y seguro.",
     "action": "add to cart",
     "slug": "comederos-ceramica-gato"
   },
   {
     "id": "18",
     "category": "cuidado",
-    "type": "brush",
+    "type": "",
     "name": "Cepillo de Aseo para Perro",
     "gender": "dog",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 11,
     "originPrice": 11,
     "brand": "petcare",
     "sold": 38,
     "quantity": 110,
     "quantityPurchase": 1,
-    "sizes": [
-      "1"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "azul",
@@ -733,22 +668,19 @@
   {
     "id": "19",
     "category": "cuidado",
-    "type": "shampoo",
-    "name": "Champ\u00fa Natural para Perro",
+    "type": "",
+    "name": "Champú Natural para Perro",
     "gender": "dog",
     "new": false,
     "sale": false,
-    "rate": 5,
+    "rate": 0,
     "price": 13,
     "originPrice": 13,
     "brand": "petcare",
     "sold": 42,
     "quantity": 130,
     "quantityPurchase": 1,
-    "sizes": [
-      "500ml",
-      "1000ml"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "blanco",
@@ -763,31 +695,26 @@
     "images": [
       "/images/product/19.jpg"
     ],
-    "description": "Champ\u00fa natural para perros. Suave con la piel.",
+    "description": "Champú natural para perros. Suave con la piel.",
     "action": "quick shop",
     "slug": "champu-natural-perro"
   },
   {
     "id": "20",
     "category": "accesorios",
-    "type": "outfit",
+    "type": "",
     "name": "Abrigo Forrado para Perro",
     "gender": "dog",
     "new": false,
     "sale": true,
-    "rate": 5,
+    "rate": 0,
     "price": 129,
     "originPrice": 140,
     "brand": "petoutfit",
     "sold": 24,
     "quantity": 80,
     "quantityPurchase": 1,
-    "sizes": [
-      "1",
-      "2",
-      "3",
-      "4"
-    ],
+    "sizes": [],
     "variation": [
       {
         "color": "azul marino",
@@ -808,7 +735,7 @@
     "images": [
       "/images/product/20.jpg"
     ],
-    "description": "Abrigo forrado de pelusa para perros. C\u00e1lido y elegante.",
+    "description": "Abrigo forrado de pelusa para perros. Cálido y elegante.",
     "action": "add to cart",
     "slug": "abrigo-forrado-perro"
   }
