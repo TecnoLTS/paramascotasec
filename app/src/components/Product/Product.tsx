@@ -20,9 +20,10 @@ interface ProductProps {
     data: ProductType
     type: string
     style?: string
+    showQuickView?: boolean
 }
 
-const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
+const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView = false }) => {
     const [activeColor, setActiveColor] = useState<string>('')
     const [activeSize, setActiveSize] = useState<string>('')
     const [openQuickShop, setOpenQuickShop] = useState<boolean>(false)
@@ -174,9 +175,9 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
                                     ))}
                                 </div>
                             ) : <></>}
-                            {style === 'style-1' || style === 'style-3' ?
-                                <div className={`list-action ${style === 'style-1' ? 'flex justify-center' : ''} px-5 absolute w-full bottom-5 max-lg:hidden`}>
-                                    {style === 'style-1' && (
+                            {(style === 'style-1' || style === 'style-3' || showQuickView) ?
+                                <div className={`list-action ${(style === 'style-1' || showQuickView) ? 'flex justify-center' : ''} px-5 absolute w-full bottom-5 max-lg:hidden`}>
+                                    {(style === 'style-1' || showQuickView) && (
                                         <div
                                             className="quick-view-btn w-auto min-w-[160px] text-button-uppercase py-2 px-5 text-center rounded-full duration-300 bg-white hover:bg-black hover:text-white"
                                             onClick={(e) => {

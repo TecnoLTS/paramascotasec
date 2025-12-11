@@ -1,7 +1,7 @@
 'use client'
 
 // Quickview.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { ProductType } from '@/type/ProductType';
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -22,6 +22,7 @@ const ModalQuickview = () => {
     const { selectedProduct, closeQuickview } = useModalQuickviewContext()
     const [activeColor, setActiveColor] = useState<string>('')
     const [activeSize, setActiveSize] = useState<string>('')
+    const [quantity, setQuantity] = useState<number>(1)
     const { addToCart, updateCart, cartState } = useCart()
     const { openModalCart } = useModalCartContext()
     const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist()
@@ -32,6 +33,16 @@ const ModalQuickview = () => {
     const galleryImages = Array.isArray((selectedProduct as any)?.images)
         ? (selectedProduct as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
         : []
+
+    useEffect(() => {
+        if (selectedProduct) {
+            setQuantity(selectedProduct.quantityPurchase ?? 1)
+            setActiveColor('')
+            setActiveSize('')
+        } else {
+            setQuantity(1)
+        }
+    }, [selectedProduct])
 
     const handleOpenSizeGuide = () => {
         setOpenSizeGuide(true);
@@ -50,26 +61,33 @@ const ModalQuickview = () => {
     }
 
     const handleIncreaseQuantity = () => {
-        if (selectedProduct) {
-            selectedProduct.quantityPurchase += 1
-            updateCart(selectedProduct.id, selectedProduct.quantityPurchase + 1, activeSize, activeColor);
-        }
+        if (!selectedProduct) return
+        setQuantity((prev) => {
+            const nextQuantity = (prev ?? 1) + 1
+            updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
+            return nextQuantity
+        })
     };
 
     const handleDecreaseQuantity = () => {
-        if (selectedProduct && selectedProduct.quantityPurchase > 1) {
-            selectedProduct.quantityPurchase -= 1
-            updateCart(selectedProduct.id, selectedProduct.quantityPurchase - 1, activeSize, activeColor);
-        }
+        if (!selectedProduct) return
+        setQuantity((prev) => {
+            const currentQty = prev ?? 1
+            if (currentQty <= 1) return currentQty
+            const nextQuantity = currentQty - 1
+            updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
+            return nextQuantity
+        })
     };
 
     const handleAddToCart = () => {
         if (selectedProduct) {
+            const quantityToAdd = quantity ?? 1
             if (!cartState.cartArray.find(item => item.id === selectedProduct.id)) {
-                addToCart({ ...selectedProduct });
-                updateCart(selectedProduct.id, selectedProduct.quantityPurchase, activeSize, activeColor)
+                addToCart({ ...selectedProduct, quantityPurchase: quantityToAdd });
+                updateCart(selectedProduct.id, quantityToAdd, activeSize, activeColor)
             } else {
-                updateCart(selectedProduct.id, selectedProduct.quantityPurchase, activeSize, activeColor)
+                updateCart(selectedProduct.id, quantityToAdd, activeSize, activeColor)
             }
             openModalCart()
             closeQuickview()
@@ -233,7 +251,7 @@ const ModalQuickview = () => {
                                                 onClick={handleDecreaseQuantity}
                                                 className={`${selectedProduct?.quantityPurchase === 1 ? 'disabled' : ''} cursor-pointer body1`}
                                             />
-                                            <div className="body1 font-semibold">{selectedProduct?.quantityPurchase}</div>
+                                            <div className="body1 font-semibold">{quantity}</div>
                                             <Icon.Plus
                                                 onClick={handleIncreaseQuantity}
                                                 className='cursor-pointer body1'

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ProductType } from '@/type/ProductType'
@@ -39,6 +39,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [activeColor, setActiveColor] = useState<string>('')
   const [activeSize, setActiveSize] = useState<string>('')
   const [activeTab, setActiveTab] = useState<string | undefined>('description')
+  const [quantity, setQuantity] = useState<number>(1)
   const { addToCart, updateCart, cartState } = useCart()
   const { openModalCart } = useModalCartContext()
   const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist()
@@ -105,19 +106,20 @@ const Default: React.FC<Props> = ({ data, productId }) => {
 
   const handleActiveSize = (item: string) => setActiveSize(item)
 
+  useEffect(() => {
+    setQuantity(productMain.quantityPurchase ?? 1)
+  }, [productMain.id])
+
   const handleIncreaseQuantity = () => {
-    productMain.quantityPurchase = (productMain.quantityPurchase ?? 1) + 1
-    updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor);
+    setQuantity((prev) => prev + 1)
   };
 
   const handleDecreaseQuantity = () => {
-    if ((productMain.quantityPurchase ?? 1) <= 1) return
-    productMain.quantityPurchase = (productMain.quantityPurchase ?? 1) - 1
-    updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor);
+    setQuantity((prev) => (prev <= 1 ? prev : prev - 1))
   };
 
   const handleAddToCart = () => {
-    const quantityToAdd = productMain.quantityPurchase ?? 1
+    const quantityToAdd = quantity ?? 1
     const existing = cartState.cartArray.find(item => item.id === productMain.id)
 
     if (!existing) {
@@ -382,7 +384,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                       onClick={handleDecreaseQuantity}
                       className={`${productMain.quantityPurchase === 1 ? 'disabled' : ''} cursor-pointer`}
                     />
-                    <div className="body1 font-semibold">{productMain.quantityPurchase}</div>
+                    <div className="body1 font-semibold">{quantity}</div>
                     <Icon.Plus
                       size={20}
                       onClick={handleIncreaseQuantity}
