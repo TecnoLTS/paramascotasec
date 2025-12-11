@@ -364,7 +364,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                 <>
                     {type === "list" ? (
                         <>
-                            <div className="product-item list-type">
+                            <div className="product-item list-type border-b border-line pb-6 last:border-none">
                                 <div className="product-main cursor-pointer flex lg:items-center sm:justify-between gap-7 max-lg:gap-5">
                                     <div onClick={() => handleDetailProduct(data.id)} className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2">
                                         {data.new && (
