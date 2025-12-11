@@ -26,6 +26,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const [color, setColor] = useState<string | null>()
     const [brand, setBrand] = useState<string | null>()
     const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 100 });
+    const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = 15;
     const offset = currentPage * productsPerPage;
@@ -65,6 +66,9 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const handleBrand = (brand: string) => {
         setBrand((prevBrand) => (prevBrand === brand ? null : brand));
         setCurrentPage(0);
+    }
+    const handleViewType = (view: 'grid' | 'list') => {
+        setViewType(view);
     }
 
 
@@ -357,7 +361,20 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                             <div className="filter-heading flex items-center gap-5 flex-wrap">
                                 <div className="left flex has-line items-center flex-wrap gap-5">
                                     <div className="choose-layout flex items-center gap-2">
-                     
+                                        <button
+                                            type="button"
+                                            className={`w-10 h-10 border rounded-lg flex items-center justify-center ${viewType === 'grid' ? 'bg-black text-white' : 'bg-white'}`}
+                                            onClick={() => handleViewType('grid')}
+                                        >
+                                            <Icon.SquaresFour />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`w-10 h-10 border rounded-lg flex items-center justify-center ${viewType === 'list' ? 'bg-black text-white' : 'bg-white'}`}
+                                            onClick={() => handleViewType('list')}
+                                        >
+                                            <Icon.List />
+                                        </button>
                                     </div>
                                     <div className="check-sale flex items-center gap-2">
                                         <input
@@ -437,12 +454,12 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                 }
                             </div>
 
-                            <div className="list-product hide-product-sold grid lg:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-7">
+                            <div className={`list-product hide-product-sold ${viewType === 'grid' ? 'grid lg:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px]' : 'flex flex-col gap-6'} mt-7`}>
                                 {currentProducts.map((item) => (
                                     item.id === 'no-data' ? (
                                         <div key={item.id} className="no-data-product">No products match the selected criteria.</div>
                                     ) : (
-                                        <Product key={item.id} data={item} type='grid' showQuickView />
+                                        <Product key={item.id} data={item} type={viewType} showQuickView />
                                     )
                                 ))}
                             </div>
