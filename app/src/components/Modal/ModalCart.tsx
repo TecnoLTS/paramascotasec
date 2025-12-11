@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import productData from '@/data/Product.json'
 import { ProductType } from '@/type/ProductType';
 import { useModalCartContext } from '@/context/ModalCartContext'
 import { useCart } from '@/context/CartContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
+import { fetchProducts } from '@/lib/products'
+import productData from '@/data/Product.json'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
@@ -25,6 +26,26 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const [activeTab, setActiveTab] = useState<string | undefined>('')
     const { isModalOpen, closeModalCart } = useModalCartContext();
     const { cartState, addToCart, removeFromCart, updateCart } = useCart()
+    const [suggested, setSuggested] = useState<ProductType[]>(productData.slice(0, 4))
+    const [loadingSuggested, setLoadingSuggested] = useState<boolean>(false)
+    const [errorSuggested, setErrorSuggested] = useState<string | null>(null)
+
+    useEffect(() => {
+        const loadSuggested = async () => {
+            setLoadingSuggested(true)
+            try {
+                const data = await fetchProducts()
+                setSuggested(data.slice(0, 4))
+                setErrorSuggested(null)
+            } catch (err: any) {
+                setErrorSuggested(err?.message ?? 'No se pudieron cargar sugerencias')
+                setSuggested(productData.slice(0, 4))
+            } finally {
+                setLoadingSuggested(false)
+            }
+        }
+        loadSuggested()
+    }, [])
 
     const handleAddToCart = (productItem: ProductType) => {
         if (!cartState.cartArray.find(item => item.id === productItem.id)) {
@@ -56,37 +77,47 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                     <div className="left w-1/2 border-r border-line py-6 max-md:hidden">
                         <div className="heading5 px-6 pb-3">Tambien te puede gustar</div>
                         <div className="list px-6">
-                            {productData.slice(0, 4).map((product) => (
-                                <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
-                                    <div className="infor flex items-center gap-5">
-                                        <div className="bg-img">
-                                            <Image
-                                                src={product.images[0]}
-                                                width={300}
-                                                height={300}
-                                                alt={product.name}
-                                                className='w-[100px] aspect-square flex-shrink-0 rounded-lg'
-                                            />
-                                        </div>
-                                        <div className=''>
-                                            <div className="name text-button">{product.name}</div>
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <div className="product-price text-title">${product.price}.00</div>
-                                                <div className="product-origin-price text-title text-secondary2"><del>${product.originPrice}.00</del></div>
+                            {loadingSuggested && (
+                                <div className="py-4 text-secondary">Cargando sugerencias...</div>
+                            )}
+                            {errorSuggested && !loadingSuggested && (
+                                <div className="py-4 text-secondary">Mostrando sugerencias locales.</div>
+                            )}
+                            {suggested.map((product) => {
+                                const firstImage = Array.isArray(product.images) ? product.images[0] : null
+                                const src = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? '/images/product/1.jpg'
+                                return (
+                                    <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
+                                        <div className="infor flex items-center gap-5">
+                                            <div className="bg-img">
+                                                <Image
+                                                    src={src}
+                                                    width={300}
+                                                    height={300}
+                                                    alt={product.name}
+                                                    className='w-[100px] aspect-square flex-shrink-0 rounded-lg'
+                                                />
+                                            </div>
+                                            <div className=''>
+                                                <div className="name text-button">{product.name}</div>
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    <div className="product-price text-title">${product.price}.00</div>
+                                                    <div className="product-origin-price text-title text-secondary2"><del>${product.originPrice}.00</del></div>
+                                                </div>
                                             </div>
                                         </div>
+                                        <div
+                                            className="text-xl bg-white w-10 h-10 rounded-xl border border-black flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                handleAddToCart(product)
+                                            }}
+                                        >
+                                            <Icon.Handbag />
+                                        </div>
                                     </div>
-                                    <div
-                                        className="text-xl bg-white w-10 h-10 rounded-xl border border-black flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
-                                        onClick={e => {
-                                            e.stopPropagation();
-                                            handleAddToCart(product)
-                                        }}
-                                    >
-                                        <Icon.Handbag />
-                                    </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                     <div className="right cart-block md:w-1/2 w-full py-6 relative overflow-hidden">
