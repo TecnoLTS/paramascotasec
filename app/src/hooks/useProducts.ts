@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
+import { fetchProducts } from '@/lib/products'
 
 type UseProductsResult = {
   products: ProductType[]
@@ -15,9 +16,7 @@ const useProducts = (): UseProductsResult => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/products', { cache: 'no-store' })
-        if (!res.ok) throw new Error('No se pudieron cargar los productos')
-        const data = await res.json()
+        const data = await fetchProducts()
         setProducts(data)
       } catch (err: any) {
         setError(err?.message ?? 'Error al cargar productos')

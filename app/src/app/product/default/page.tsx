@@ -6,6 +6,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType'
+import { fetchProducts } from '@/lib/products'
 
 const ProductDefault = () => {
     const searchParams = useSearchParams()
@@ -18,9 +19,7 @@ const ProductDefault = () => {
         const load = async () => {
             try {
                 if (!productId) throw new Error('Producto no especificado')
-                const res = await fetch(`/api/products`, { cache: 'no-store' })
-                if (!res.ok) throw new Error('No se pudo cargar el producto')
-                const data = await res.json()
+                const data = await fetchProducts()
                 setProducts(data)
             } catch (err: any) {
                 setError(err?.message ?? 'Error al cargar producto')

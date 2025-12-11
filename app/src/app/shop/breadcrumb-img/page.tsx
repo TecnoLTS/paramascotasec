@@ -6,6 +6,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumb1';
 import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType';
+import { fetchProducts } from '@/lib/products'
 
 export default function BreadcrumbImg() {
     const searchParams = useSearchParams()
@@ -17,9 +18,7 @@ export default function BreadcrumbImg() {
     useEffect(() => {
         const load = async () => {
             try {
-                const res = await fetch('/api/products', { cache: 'no-store' })
-                if (!res.ok) throw new Error('No se pudieron cargar los productos')
-                const data = await res.json()
+                const data = await fetchProducts()
                 setProducts(data)
             } catch (err: any) {
                 setError(err?.message ?? 'Error al cargar productos')
