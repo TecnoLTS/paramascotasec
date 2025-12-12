@@ -46,7 +46,7 @@ services:
     networks:
       - edge
     ports:
-      - "80:80"
+      - "8080:80"
     logging:
       driver: json-file
       options:
@@ -74,7 +74,8 @@ services:
         max-file: "3"
 networks:
   edge:
-    driver: bridge
+    external: true
+    name: edge
 volumes:
   app_node_modules:
   postgres_data:

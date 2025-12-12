@@ -10,7 +10,6 @@ import { useCart } from '@/context/CartContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 import { fetchProducts } from '@/lib/products'
-import productData from '@/data/Product.json'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
@@ -26,7 +25,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const [activeTab, setActiveTab] = useState<string | undefined>('')
     const { isModalOpen, closeModalCart } = useModalCartContext();
     const { cartState, addToCart, removeFromCart, updateCart } = useCart()
-    const [suggested, setSuggested] = useState<ProductType[]>(productData.slice(0, 4))
+    const [suggested, setSuggested] = useState<ProductType[]>([])
     const [loadingSuggested, setLoadingSuggested] = useState<boolean>(false)
     const [errorSuggested, setErrorSuggested] = useState<string | null>(null)
 
@@ -39,7 +38,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                 setErrorSuggested(null)
             } catch (err: any) {
                 setErrorSuggested(err?.message ?? 'No se pudieron cargar sugerencias')
-                setSuggested(productData.slice(0, 4))
             } finally {
                 setLoadingSuggested(false)
             }
@@ -48,12 +46,9 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     }, [])
 
     const handleAddToCart = (productItem: ProductType) => {
-        if (!cartState.cartArray.find(item => item.id === productItem.id)) {
-            addToCart({ ...productItem });
-            updateCart(productItem.id, productItem.quantityPurchase, '', '')
-        } else {
-            updateCart(productItem.id, productItem.quantityPurchase, '', '')
-        }
+        // Desde sugerencias siempre agregamos 1 unidad, sin importar el valor por defecto del producto
+        const quantityToAdd = 1
+        addToCart({ ...productItem, quantityPurchase: quantityToAdd })
     };
 
     const handleActiveTab = (tab: string) => {
@@ -81,7 +76,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                 <div className="py-4 text-secondary">Cargando sugerencias...</div>
                             )}
                             {errorSuggested && !loadingSuggested && (
-                                <div className="py-4 text-secondary">Mostrando sugerencias locales.</div>
+                                <div className="py-4 text-secondary">No se pudieron cargar sugerencias.</div>
                             )}
                             {suggested.map((product) => {
                                 const firstImage = Array.isArray(product.images) ? product.images[0] : null

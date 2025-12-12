@@ -20,24 +20,24 @@ model User {
 model Product {
   id          String      @id @default(cuid())
   legacyId    String?     @unique
-  category    String
-  name        String
-  gender      String?
-  new         Boolean     @default(false)
-  sale        Boolean     @default(false)
-  price       Decimal     @db.Decimal(10, 2)
-  originPrice Decimal     @db.Decimal(10, 2)
-  brand       String?
-  sold        Int         @default(0)
-  quantity    Int
-  description String
-  action      String?
+  category    String      @map("categoria")
+  name        String      @map("nombre")
+  gender      String?     @map("genero")
+  new         Boolean     @default(false) @map("nuevo")
+  sale        Boolean     @default(false) @map("oferta")
+  price       Decimal     @db.Decimal(10, 2) @map("precio")
+  originPrice Decimal     @db.Decimal(10, 2) @map("precio_original")
+  brand       String?     @map("marca")
+  sold        Int         @default(0) @map("vendido")
+  quantity    Int         @map("cantidad")
+  description String      @map("descripcion")
+  action      String?     @map("accion")
   slug        String      @unique
   images      Image[]     @relation("ProductImages")
   variations  Variation[]
   orderItems  OrderItem[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime    @default(now()) @map("fecha_de_creacion")
+  updatedAt   DateTime    @updatedAt @map("fecha_de_actualziacion")
 }
 
 model Variation {

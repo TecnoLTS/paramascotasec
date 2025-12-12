@@ -100,7 +100,10 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const sizes = data.sizes ?? []
     const variations = data.variation ?? []
 
-    let percentSale = Math.floor(100 - ((data.price / data.originPrice) * 100))
+    const price = Number(data.price ?? 0)
+    const originPrice = Number(data.originPrice ?? 0)
+    const hasSale = (data.sale || originPrice > price) && originPrice > price
+    const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
     let percentSold = Math.floor((data.sold / data.quantity) * 100)
 
     return (
@@ -322,7 +325,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             <div className="product-name text-title duration-300">{data.name}</div>
                             <div className="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
                                 <div className="product-price text-title">${data.price}.00</div>
-                                {percentSale > 0 && (
+                                {hasSale && (
                                     <>
                                         <div className="product-origin-price caption1 text-secondary2"><del>${data.originPrice}.00</del></div>
                                         <div className="product-sale caption1 font-medium bg-[var(--bluefor)] px-3 py-0.5 inline-block rounded-full">
@@ -365,14 +368,17 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                     {type === "list" ? (
                         <>
                             <div className="product-item list-type border-b border-line pb-6 last:border-none">
-                                <div className="product-main cursor-pointer flex lg:items-center sm:justify-between gap-7 max-lg:gap-5">
-                                    <div onClick={() => handleDetailProduct(data.id)} className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2">
+                                <div className="product-main cursor-pointer grid md:grid-cols-[300px,1fr,auto] grid-cols-1 items-center gap-7 max-lg:gap-5">
+                                    <div
+                                        onClick={() => handleDetailProduct(data.id)}
+                                        className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2 md:w-full md:max-w-[300px] md:flex-shrink-0"
+                                    >
                                         {data.new && (
                                             <div className="product-tag text-button-uppercase bg-green px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                                                 Nuevo
                                             </div>
                                         )}
-                                        {data.sale && (
+                                        {hasSale && (
                                             <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                                                 Oferta
                                             </div>
@@ -420,67 +426,75 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                             </div>
                                         </div>
                                     </div>
-                                    <div className='flex sm:items-center gap-7 max-lg:gap-4 max-lg:flex-wrap max-lg:w-full max-sm:flex-col max-sm:w-1/2'>
-                                        <div className="product-infor max-sm:w-full">
+                                    <div className='flex items-start gap-7 max-lg:gap-4 max-lg:flex-wrap max-lg:w-full max-sm:flex-col max-sm:w-full'>
+                                        <div className="product-infor max-sm:w-full flex-1 min-w-[260px]">
                                             <div onClick={() => handleDetailProduct(data.id)} className="product-name heading6 inline-block duration-300">{data.name}</div>
                                             <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
                                                 <div className="product-price text-title">${data.price}.00</div>
-                                                <div className="product-origin-price caption1 text-secondary2"><del>${data.originPrice}.00</del></div>
-                                                {data.originPrice && (
-                                                    <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
-                                                        -{percentSale}%
-                                                    </div>
+                                                {hasSale && (
+                                                    <>
+                                                        <div className="product-origin-price caption1 text-secondary2"><del>${data.originPrice}.00</del></div>
+                                                        <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
+                                                            -{percentSale}%
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
-                                            {variations.length > 0 && data.action === 'add to cart' ? (
-                                                <div className="list-color max-md:hidden py-2 mt-5 mb-1 flex items-center gap-3 flex-wrap duration-300">
-                                                    {variations.map((item, index) => (
-                                                        <div
-                                                            key={index}
-                                                            className={`color-item w-8 h-8 rounded-full duration-300 relative`}
-                                                            style={{ backgroundColor: `${item.colorCode}` }}
-                                                        >
-                                                            <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">{item.color}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {variations.length > 0 && data.action === 'quick shop' ? (
-                                                        <>
-                                                            <div className="list-color flex items-center gap-2 flex-wrap mt-5">
-                                                                {variations.map((item, index) => (
-                                                                    <div
-                                                                            className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
-                                                                            key={index}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation()
-                                                                            handleActiveColor(item.color)
-                                                                        }}
-                                                                    >
-                                                                        <Image
-                                                                            src={item.colorImage}
-                                                                            width={100}
-                                                                            height={100}
-                                                                            alt='color'
-                                                                            priority={true}
-                                                                            className='rounded-xl'
-                                                                        />
-                                                                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                                                                            {item.color}
-                                                                        </div>
+                                            {(variations.length > 0 || sizes.length > 0) && (
+                                                <div className="flex items-center gap-4 flex-wrap mt-5 mb-1">
+                                                    {variations.length > 0 && (
+                                                        <div className="list-color py-2 flex items-center gap-3 flex-wrap duration-300">
+                                                            {variations.map((item, index) => (
+                                                                <button
+                                                                    key={index}
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleActiveColor(item.color)
+                                                                    }}
+                                                                    className={`color-item w-10 h-10 rounded-full border relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
+                                                                    aria-label={`Color ${item.color}`}
+                                                                >
+                                                                    <span
+                                                                        className="w-8 h-8 rounded-full block"
+                                                                        style={{ backgroundColor: item.colorCode || '#d9d9d9' }}
+                                                                    />
+                                                                    <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                                                        {item.color}
                                                                     </div>
-                                                                ))}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <></>
+                                                                </button>
+                                                            ))}
+                                                        </div>
                                                     )}
-                                                </>
+                                                    {sizes.length > 0 && (
+                                                        <div className="list-size flex items-center gap-2 flex-wrap">
+                                                            {sizes.map((item, index) => (
+                                                                <div
+                                                                    key={index}
+                                                                    className="px-3 py-1 rounded-full border border-line text-button bg-white"
+                                                                >
+                                                                    {item}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
-                                            <div className='text-secondary desc mt-5 max-sm:hidden'>{data.description}</div>
+                                            <div
+                                                className='text-secondary desc mt-5 max-sm:hidden'
+                                                style={{
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden',
+                                                    maxWidth: '520px',
+                                                    minHeight: '48px',
+                                                }}
+                                            >
+                                                {data.description}
+                                            </div>
                                         </div>
-                                        <div className="action w-fit flex flex-col items-center justify-center">
+                                        <div className="action w-fit flex flex-col items-center justify-center self-center flex-shrink-0">
                                             <div
                                                 className="quick-shop-btn button-main whitespace-nowrap py-2 px-9 max-lg:px-5 rounded-full bg-white text-black border border-black hover:bg-black hover:text-white"
                                                 onClick={e => {

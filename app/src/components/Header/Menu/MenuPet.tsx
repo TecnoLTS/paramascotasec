@@ -132,13 +132,11 @@ const MenuPet = () => {
     const serviceLinks: MegaNavLink[] = [
         { label: 'Envíos y devoluciones', href: '/pages/faqs' },
         { label: 'Centro de ayuda', href: '/pages/contact' },
-        { label: 'Contacto', href: '/pages/contact' },
     ];
 
     const companyLinks: MegaNavLink[] = [
         { label: 'Nuestra historia', href: '/pages/about' },
         { label: 'Blog', href: '/blog/default' },
-        { label: 'Lista de tiendas', href: '/pages/store-list' },
     ];
 
     const renderMegaMenu = (

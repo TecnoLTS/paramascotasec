@@ -13,10 +13,6 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import SwiperCore from 'swiper/core';
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
-import { useWishlist } from '@/context/WishlistContext'
-import { useModalWishlistContext } from '@/context/ModalWishlistContext'
-import { useCompare } from '@/context/CompareContext'
-import { useModalCompareContext } from '@/context/ModalCompareContext'
 import ModalSizeguide from '@/components/Modal/ModalSizeguide'
 
 SwiperCore.use([Navigation, Thumbs]);
@@ -42,10 +38,6 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [quantity, setQuantity] = useState<number>(1)
   const { addToCart, updateCart, cartState } = useCart()
   const { openModalCart } = useModalCartContext()
-  const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist()
-  const { openModalWishlist } = useModalWishlistContext()
-  const { addToCompare, removeFromCompare, compareState } = useCompare();
-  const { openModalCompare } = useModalCompareContext()
   let productMain = data.find(product => product.id === productId) as ProductType
   if (productMain === undefined) {
     productMain = data[0]
@@ -130,28 +122,6 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       updateCart(productMain.id, nextQty, activeSize, activeColor)
     }
     openModalCart()
-  };
-
-  const handleAddToWishlist = () => {
-    if (wishlistState.wishlistArray.some(item => item.id === productMain.id)) {
-      removeFromWishlist(productMain.id);
-    } else {
-      addToWishlist(productMain);
-    }
-    openModalWishlist();
-  };
-
-  const handleAddToCompare = () => {
-    if (compareState.compareArray.length < 3) {
-      if (compareState.compareArray.some(item => item.id === productMain.id)) {
-        removeFromCompare(productMain.id);
-      } else {
-        addToCompare(productMain);
-      }
-    } else {
-      alert('Compare up to 3 products')
-    }
-    openModalCompare();
   };
 
   const handleActiveTab = (tab: string) => setActiveTab(tab)
@@ -269,29 +239,20 @@ const Default: React.FC<Props> = ({ data, productId }) => {
             {/* --------- COLUMNA DERECHA: INFO + ACCIONES --------- */}
             <div className="product-infor w-full">
               {/* Título + wishlist */}
-              <div className="flex justify-between gap-4">
+              <div className="flex gap-4">
                 <div>
                   <div className="caption2 text-secondary font-semibold uppercase">
                     {productMain.type}
                   </div>
                   <div className="heading4 mt-1">{productMain.name}</div>
                 </div>
-                <div
-                  className={`add-wishlist-btn w-12 h-12 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white ${wishlistState.wishlistArray.some(item => item.id === productMain.id) ? 'active' : ''}`}
-                  onClick={handleAddToWishlist}
-                >
-                  {wishlistState.wishlistArray.some(item => item.id === productMain.id) ? (
-                    <Icon.Heart size={24} weight='fill' className='text-white' />
-                  ) : (
-                    <Icon.Heart size={24} />
-                  )}
-                </div>
+
               </div>
 
               {/* Rating */}
               <div className="flex items-center mt-3 gap-2">
                 <Rate currentRate={productMain.rate} size={14} />
-                <span className='caption1 text-secondary'>(1.234 reviews)</span>
+                <span className='caption1 text-secondary'>(1.234 reseñas)</span>
               </div>
 
               {/* Precio + descripción corta */}
@@ -319,27 +280,25 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               <div className="list-action mt-6">
                 <div className="choose-color">
                   <div className="text-title">
-                    Colors: <span className='text-title color'>{activeColor}</span>
+                    Colores: <span className='text-title color'>{activeColor}</span>
                   </div>
                   <div className="list-color flex items-center gap-2 flex-wrap mt-3">
                     {normalizedVariations.map((item, index) => (
-                      <div
-                        className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
+                      <button
+                        type="button"
                         key={index}
-                        datatype={item.image}
                         onClick={() => handleActiveColor(item.color)}
+                        className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
+                        aria-label={`Color ${item.color}`}
                       >
-                        <Image
-                          src={item.colorImage}
-                          width={100}
-                          height={100}
-                          alt='color'
-                          className='rounded-xl'
+                        <span
+                          className="w-10 h-10 rounded-full block"
+                          style={{ backgroundColor: item.colorCode || '#d9d9d9' }}
                         />
                         <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
                           {item.color}
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -348,13 +307,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 <div className="choose-size mt-5">
                   <div className="heading flex items-center justify-between gap-3">
                     <div className="text-title">
-                      Size: <span className='text-title size'>{activeSize}</span>
+                      Talla: <span className='text-title size'>{activeSize}</span>
                     </div>
                     <div
                       className="caption1 size-guide text-red underline cursor-pointer whitespace-nowrap"
                       onClick={handleOpenSizeGuide}
                     >
-                      Size Guide
+                      Guía de tallas
                     </div>
                     <ModalSizeguide
                       data={productMain}
@@ -376,7 +335,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 </div>
 
                 {/* Cantidad + Add to cart */}
-                <div className="text-title mt-5">Quantity:</div>
+                <div className="text-title mt-5">Cantidad:</div>
                 <div className="choose-quantity flex items-center lg:justify-between gap-5 gap-y-3 mt-3 flex-wrap">
                   <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
                     <Icon.Minus
@@ -395,31 +354,22 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     onClick={handleAddToCart}
                     className="button-main w-full text-center bg-white text-black border border-black"
                   >
-                    Add To Cart
+                    Agregar al carrito
                   </div>
                 </div>
 
                 {/* CTA principal */}
                 <div className="button-block mt-5">
-                  <div className="button-main w-full text-center">Buy It Now</div>
+                  <div className="button-main w-full text-center">Comprar ahora</div>
                 </div>
 
                 {/* Acciones secundarias: compare / share */}
                 <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
-                  <div
-                    className="compare flex items-center gap-3 cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); handleAddToCompare() }}
-                  >
-                    <div className="compare-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                      <Icon.ArrowsCounterClockwise className='heading6' />
-                    </div>
-                    <span>Compare</span>
-                  </div>
                   <div className="share flex items-center gap-3 cursor-pointer">
                     <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duración-300 hover:bg-black hover:text-white">
                       <Icon.ShareNetwork weight='fill' className='heading6' />
                     </div>
-                    <span>Share Products</span>
+                    <span>Compartir producto</span>
                   </div>
                 </div>
               </div>{/* list-action */}
@@ -441,7 +391,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     }`}
                     onClick={() => handleActiveTab('description')}
                   >
-                    Description
+                    Descripción
                   </button>
                   <button
                     type="button"
@@ -452,7 +402,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     }`}
                     onClick={() => handleActiveTab('specifications')}
                   >
-                    Specifications
+                    Especificaciones
                   </button>
                 </div>
 
@@ -473,9 +423,9 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                         </ul>
                       ) : (
                         <ul className="list-disc pl-5 space-y-1 max-w-3xl">
-                          <li>Category: {productMain.category}</li>
-                          <li>Gender: {productMain.gender}</li>
-                          <li>Tag: {productMain.type}</li>
+                          <li>Categoría: {productMain.category}</li>
+                          <li>Mascota: {productMain.gender}</li>
+                          <li>Etiqueta: {productMain.type}</li>
                         </ul>
                       )}
                     </div>
@@ -490,39 +440,39 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               <div className="border border-line rounded-xl p-4 lg:p-6">
                 <div className="flex items-center gap-2">
                   <Icon.ArrowClockwise className='body1' />
-                  <div className="text-title">Delivery & Return</div>
+                  <div className="text-title">Envío y devoluciones</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <Icon.Timer className='body1' />
-                  <div className="text-title">Estimated Delivery:</div>
-                  <div className="text-secondary">14 January - 18 January</div>
+                  <div className="text-title">Entrega estimada:</div>
+                  <div className="text-secondary">14 de enero - 18 de enero</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <Icon.Eye className='body1' />
                   <div className="text-title">38</div>
-                  <div className="text-secondary">people viewing this product right now!</div>
+                  <div className="text-secondary">personas viendo este producto ahora mismo</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <Icon.Question className='body1' />
-                  <div className="text-title">Ask A Question</div>
+                  <div className="text-title">Hacer una pregunta</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <div className="text-title">SKU:</div>
                   <div className="text-secondary">53453412</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
-                  <div className="text-title">Categories:</div>
+                  <div className="text-title">Categorías:</div>
                   <div className="text-secondary">{productMain.category}, {productMain.gender}</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
-                  <div className="text-title">Tag:</div>
+                  <div className="text-title">Etiqueta:</div>
                   <div className="text-secondary">{productMain.type}</div>
                 </div>
               </div>
 
               {/* Card: Safe checkout */}
               <div className="border border-line rounded-xl p-4 lg:p-6">
-                <div className="heading6 mb-4">Guaranteed Safe Checkout</div>
+                <div className="heading6 mb-4">Pago seguro garantizado</div>
                 <div className="grid grid-cols-6 gap-2">
                   {['Frame-0', 'Frame-1', 'Frame-2', 'Frame-3', 'Frame-4', 'Frame-5'].map((frame) => (
                     <div key={frame} className="flex items-center justify-center">
@@ -540,31 +490,31 @@ const Default: React.FC<Props> = ({ data, productId }) => {
 
               {/* Card: Get it today */}
               <div className="border border-line rounded-xl p-4 lg:p-6">
-                <div className="heading5">Get it Today</div>
+                <div className="heading5">Recíbelo hoy</div>
                 <div className="item flex items-center gap-3 mt-4">
                   <div className="icon-delivery-truck text-4xl"></div>
                   <div>
-                    <div className="text-title">Free Shipping</div>
+                    <div className="text-title">Envío gratis</div>
                     <div className="caption1 text-secondary mt-1">
-                      Free shipping on orders over $75.
+                      Envío gratis en pedidos mayores a $75.
                     </div>
                   </div>
                 </div>
                 <div className="item flex items-center gap-3 mt-4">
                   <div className="icon-phone-call text-4xl"></div>
                   <div>
-                    <div className="text-title">Support Everyday</div>
+                    <div className="text-title">Soporte diario</div>
                     <div className="caption1 text-secondary mt-1">
-                      Support from 8:30 AM to 10:00 PM everyday
+                      Atención de 8:30 AM a 10:00 PM todos los días
                     </div>
                   </div>
                 </div>
                 <div className="item flex items-center gap-3 mt-4">
                   <div className="icon-return text-4xl"></div>
                   <div>
-                    <div className="text-title">100 Day Returns</div>
+                    <div className="text-title">Devoluciones hasta 100 días</div>
                     <div className="caption1 text-secondary mt-1">
-                      Not impressed? Get a refund. You have 100 days to break our hearts.
+                      ¿No te convence? Solicita reembolso dentro de 100 días.
                     </div>
                   </div>
                 </div>
@@ -576,7 +526,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
         {/* ===================== 3. RELATED PRODUCTS (FULL WIDTH) ===================== */}
         <div className="related-product md:py-20 py-10">
           <div className="container">
-            <div className="heading3 text-center">Related Products</div>
+            <div className="heading3 text-center">Productos relacionados</div>
             <div className="list-product hide-product-sold  grid lg:grid-cols-4 grid-cols-2 md:gap-[30px] gap-5 md:mt-10 mt-6">
               {relatedProducts.map((item, index) => (
                 <Product key={index} data={item} type='grid' style='style-1' />
@@ -589,9 +539,9 @@ const Default: React.FC<Props> = ({ data, productId }) => {
         <div className="review-block md:py-20 py-10 bg-surface">
           <div className="container">
             <div className="heading flex items-center justify-between flex-wrap gap-4">
-              <div className="heading4">Customer Review</div>
+              <div className="heading4">Opiniones de clientes</div>
               <Link href={'#form-review'} className='button-main bg-white text-black border border-black'>
-                Write Reviews
+                Escribir reseña
               </Link>
             </div>
 
@@ -601,7 +551,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <div className="text-display">4.6</div>
                   <div className='flex flex-col items-center'>
                     <Rate currentRate={5} size={18} />
-                    <div className='text-secondary text-center mt-1'>(1,968 Ratings)</div>
+                    <div className='text-secondary text-center mt-1'>(1,968 valoraciones)</div>
                   </div>
                 </div>
                 <div className="list-rating mt-3">
@@ -659,7 +609,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               </div>
 
               <div className="list-img lg:w-3/4 md:w-[70%] lg:pl-[15px] md:pl-[15px]">
-                <div className="heading5">All Image (128)</div>
+                <div className="heading5">Todas las imágenes (128)</div>
                 <div className="list md:mt-6 mt-3">
                   <Swiper
                     spaceBetween={16}
@@ -688,13 +638,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   </Swiper>
                 </div>
                 <div className="sorting flex items-center flex-wrap md:gap-5 gap-3 gap-y-3 mt-6">
-                  <div className="text-button">Sort by</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">Newest</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">5 Star</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">4 Star</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">3 Star</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">2 Star</div>
-                  <div className="item bg-white px-4 py-1 border border-line rounded-full">1 Star</div>
+                  <div className="text-button">Ordenar por</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">Más recientes</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">5 estrellas</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">4 estrellas</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">3 estrellas</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">2 estrellas</div>
+                  <div className="item bg-white px-4 py-1 border border-line rounded-full">1 estrella</div>
                 </div>
               </div>
             </div>
@@ -719,7 +669,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     <div className="user mt-3">
                       <div className="text-title">Tony Nguyen</div>
                       <div className="flex items-center gap-2">
-                        <div className="text-secondary2">1 days ago</div>
+                        <div className="text-secondary2">Hace 1 día</div>
                         <div className="text-secondary2">-</div>
                         <div className="text-secondary2">
                           <span>Yellow</span> / <span>XL</span>
@@ -730,17 +680,17 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <div className="right lg:w-3/4 w-full lg:pl-[15px]">
                     <Rate currentRate={5} size={16} />
                     <div className="heading5 mt-3">
-                      {id === 1 && 'Unbeatable Style and Quality: A Fashion Brand That Delivers'}
-                      {id === 2 && 'Exceptional Fashion: The Perfect Blend of Style and Durability'}
-                      {id === 3 && 'Elevate Your Wardrobe: Stunning Dresses That Make a Statement'}
+                      {id === 1 && 'Estilo y calidad imbatibles'}
+                      {id === 2 && 'Moda excepcional: equilibrio entre estilo y durabilidad'}
+                      {id === 3 && 'Eleva tu clóset: prendas que destacan'}
                     </div>
                     <div className="body1 mt-3">
                       {id === 1 &&
-                        'I can\'t get enough of the fashion pieces from this brand. They have a great selection for every occasion and the prices are reasonable. The shipping is fast and the items always arrive in perfect condition.'}
+                        'Me encanta la selección, siempre encuentro algo para cada ocasión y los precios son razonables. El envío es rápido y los productos llegan en perfecto estado.'}
                       {id === 2 &&
-                        'The fashion brand\'s online shopping experience is seamless. The website is user-friendly, the product images are clear, and the checkout process is quick.'}
+                        'La experiencia de compra es fluida. El sitio es fácil de usar, las imágenes claras y el checkout rápido.'}
                       {id === 3 &&
-                        'I love how sustainable and ethically conscious this fashion brand is. They prioritize eco-friendly materials and fair trade practices, which makes me feel good about supporting them.'}
+                        'Aprecio el enfoque sostenible y ético. Materiales responsables y buenas prácticas que me hacen sentir bien al comprar.'}
                     </div>
                     <div className="action mt-3">
                       <div className="flex items-center gap-4">
@@ -749,7 +699,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                           <div className="text-button">20</div>
                         </div>
                         <Link href={'#form-review'} className="reply-btn text-button text-secondary cursor-pointer hover:text-black">
-                          Reply
+                          Responder
                         </Link>
                       </div>
                     </div>
@@ -757,20 +707,20 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 </div>
               ))}
               <div className="text-button more-review-btn text-center mt-2 underline">
-                View More Comments
+                Ver más comentarios
               </div>
             </div>
 
             {/* Formulario review */}
             <div id="form-review" className='form-review pt-6'>
-              <div className="heading4">Leave A comment</div>
+              <div className="heading4">Deja un comentario</div>
               <form className="grid sm:grid-cols-2 gap-4 gap-y-5 mt-6">
                 <div className="name ">
                   <input
                     className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
                     id="username"
                     type="text"
-                    placeholder="Your Name *"
+                    placeholder="Tu nombre *"
                     required
                   />
                 </div>
@@ -779,7 +729,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
                     id="email"
                     type="email"
-                    placeholder="Your Email *"
+                    placeholder="Tu correo *"
                     required
                   />
                 </div>
@@ -788,18 +738,18 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     className="border border-line px-4 py-3 w-full rounded-lg"
                     id="message"
                     name="message"
-                    placeholder="Your message *"
+                    placeholder="Tu mensaje *"
                     required
                   ></textarea>
                 </div>
                 <div className="col-span-full flex items-start -mt-2 gap-2">
                   <input type="checkbox" id="saveAccount" name="saveAccount" className='mt-1.5' />
                   <label htmlFor="saveAccount">
-                    Save my name, email, and website in this browser for the next time I comment.
+                    Guardar mi nombre y correo para la próxima vez que comente.
                   </label>
                 </div>
                 <div className="col-span-full sm:pt-3">
-                  <button className='button-main bg-white text-black border border-black'>Submit Reviews</button>
+                  <button className='button-main bg-white text-black border border-black'>Enviar reseña</button>
                 </div>
               </form>
             </div>

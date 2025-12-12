@@ -3,14 +3,15 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useEffect } from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import productData from '@/data/Product.json'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
 import Image from 'next/image';
+import useProducts from '@/hooks/useProducts'
 
 const ModalNewsletter = () => {
     const [open, setOpen] = useState<boolean>(false)
     const router = useRouter()
     const { openQuickview } = useModalQuickviewContext()
+    const { products, loading, error } = useProducts()
 
     const handleDetailProduct = (productId: string) => {
         // redirect to shop with category selected
@@ -50,39 +51,49 @@ const ModalNewsletter = () => {
                                 <Icon.X weight='bold' className='text-xl' />
                             </div>
                             <div className="heading5 pb-5">You May Also Like</div>
-                            <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
-                                {productData.slice(11, 16).map((item) => (
-                                    <div
-                                        className='product-item item pb-5 flex items-center justify-between gap-3 border-b border-line'
-                                        key={item.id}
-                                    >
-                                        <div
-                                            className="infor flex items-center gap-5 cursor-pointer"
-                                            onClick={() => handleDetailProduct(item.id)}
-                                        >
-                                            <div className="bg-img flex-shrink-0">
-                                                <Image width={5000} height={5000} src={item.thumbImage[0]} alt={item.name}
-                                                    className='w-[100px] aspect-square flex-shrink-0 rounded-lg' />
-                                            </div>
-                                            <div className=''>
-                                                <div className="name text-button">{item.name}</div>
-                                                <div className="flex items-center gap-2 mt-2">
-                                                    <div className="product-price text-title">${item.price}.00</div>
-                                                    <div className="product-origin-price text-title text-secondary2">
-                                                        <del>${item.originPrice}.00</del>
+                            {loading && <div className="py-4 text-secondary">Cargando productos...</div>}
+                            {error && !loading && <div className="py-4 text-secondary">No se pudieron cargar productos.</div>}
+                            {!loading && products.length > 0 && (
+                                <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">
+                                    {products.slice(11, 16).map((item) => {
+                                        const firstImage = Array.isArray(item.images) ? item.images[0] : null
+                                        const src = typeof firstImage === 'string'
+                                            ? firstImage
+                                            : (firstImage as any)?.url ?? item.thumbImage?.[0] ?? '/images/product/1.jpg'
+                                        return (
+                                            <div
+                                                className='product-item item pb-5 flex items-center justify-between gap-3 border-b border-line'
+                                                key={item.id}
+                                            >
+                                                <div
+                                                    className="infor flex items-center gap-5 cursor-pointer"
+                                                    onClick={() => handleDetailProduct(item.id)}
+                                                >
+                                                    <div className="bg-img flex-shrink-0">
+                                                        <Image width={5000} height={5000} src={src} alt={item.name}
+                                                            className='w-[100px] aspect-square flex-shrink-0 rounded-lg' />
+                                                    </div>
+                                                    <div className=''>
+                                                        <div className="name text-button">{item.name}</div>
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <div className="product-price text-title">${item.price}.00</div>
+                                                            <div className="product-origin-price text-title text-secondary2">
+                                                                <del>${item.originPrice}.00</del>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <button
+                                                    className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
+                                                    onClick={() => openQuickview(item)}
+                                                >
+                                                    QUICK VIEW
+                                                </button>
                                             </div>
-                                        </div>
-                                        <button
-                                            className="quick-view-btn button-main sm:py-3 py-2 sm:px-5 px-4 bg-black hover:bg-green text-white rounded-full whitespace-nowrap"
-                                            onClick={() => openQuickview(item)}
-                                        >
-                                            QUICK VIEW
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -6,17 +6,18 @@ import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType'
-import productData from '@/data/Product.json'
 import Product from '@/components/Product/Product'
 import HandlePagination from '@/components/Other/HandlePagination'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import useProducts from '@/hooks/useProducts'
 
 const SearchResult = () => {
     const [searchKeyword, setSearchKeyword] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = 8;
     const offset = currentPage * productsPerPage;
-    let filteredData = productData
+    const { products, loading, error } = useProducts()
+    let filteredData = products
 
     const router = useRouter()
 
@@ -31,7 +32,7 @@ const SearchResult = () => {
     if (query === null) {
         query = 'dress'
     } else {
-        filteredData = productData.filter((product) =>
+        filteredData = products.filter((product) =>
             product.name.toLowerCase().includes(query.toLowerCase()) ||
             product.type.toLowerCase().includes(query.toLowerCase())
         );
@@ -94,8 +95,8 @@ const SearchResult = () => {
             </div>
             <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
                 <div className="container">
-                    <div className="heading flex flex-col items-center">
-                        <div className="heading4 text-center"> {filteredData.length} resultado para {String.raw`"`}{query}{String.raw`"`}</div>
+                        <div className="heading flex flex-col items-center">
+                            <div className="heading4 text-center"> {filteredData.length} resultado para {String.raw`"`}{query}{String.raw`"`}</div>
                         <div className="input-block lg:w-1/2 sm:w-3/5 w-full md:h-[52px] h-[44px] sm:mt-8 mt-5">
                             <div className='w-full h-full relative'>
                                 <input
@@ -117,20 +118,26 @@ const SearchResult = () => {
                     </div>
                     <div className="list-product-block relative md:pt-10 pt-6">
                         <div className="heading6">product Search: {query}</div>
-                        <div className={`list-product hide-product-sold grid lg:grid-cols-4 sm:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-5`}>
-                            {currentProducts.map((item) => (
-                                item.id === 'no-data' ? (
-                                    <div key={item.id} className="no-data-product">No products match the selected criteria.</div>
-                                ) : (
-                                    <Product key={item.id} data={item} type='grid' />
-                                )
-                            ))}
-                        </div>
+                        {loading && <div className="py-6 text-secondary">Cargando productos...</div>}
+                        {error && !loading && <div className="py-6 text-secondary">No se pudieron cargar productos.</div>}
+                        {!loading && !error && (
+                            <>
+                                <div className={`list-product hide-product-sold grid lg:grid-cols-4 sm:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-5`}>
+                                    {currentProducts.map((item) => (
+                                        item.id === 'no-data' ? (
+                                            <div key={item.id} className="no-data-product">No products match the selected criteria.</div>
+                                        ) : (
+                                            <Product key={item.id} data={item} type='grid' />
+                                        )
+                                    ))}
+                                </div>
 
-                        {pageCount > 1 && (
-                            <div className="list-pagination flex items-center justify-center md:mt-10 mt-7">
-                                <HandlePagination pageCount={pageCount} onPageChange={handlePageChange} />
-                            </div>
+                                {pageCount > 1 && (
+                                    <div className="list-pagination flex items-center justify-center md:mt-10 mt-7">
+                                        <HandlePagination pageCount={pageCount} onPageChange={handlePageChange} />
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
