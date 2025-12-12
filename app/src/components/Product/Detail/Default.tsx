@@ -76,7 +76,10 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       : variation.colorImage,
   }))
 
-  const percentSale = Math.floor(100 - ((productMain?.price / productMain?.originPrice) * 100))
+  const price = Number(productMain?.price ?? 0)
+  const originPrice = Number(productMain?.originPrice ?? 0)
+  const hasSale = (productMain?.sale || originPrice > price) && originPrice > 0
+  const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
   const specifications = (productMain as any)?.specifications as string[] | undefined
   const longDescription = (productMain as any)?.longDescription as string | undefined
 
@@ -259,7 +262,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               <div className="mt-5 pb-6 border-b border-line">
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="product-price heading5">${productMain.price}.00</div>
-                  {productMain.originPrice && (
+                  {hasSale && (
                     <>
                       <div className='w-px h-4 bg-line'></div>
                       <div className="product-origin-price font-normal text-secondary2">
