@@ -1,32 +1,13 @@
 'use client'
-import React, { useState } from 'react'
-import { useSearchParams } from 'next/navigation';
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
-import BreadcrumbProduct from '@/components/Breadcrumb/BreadcrumbProduct'
-import Default from '@/components/Product/Detail/Default';
-import Footer from '@/components/Footer/Footer'
-import productData from '@/data/Product.json'
+import React from 'react'
+import Default from '@/components/Product/Detail/Default'
+import ProductDetailPageLayout from '@/components/Product/ProductDetailPageLayout'
 
-const ProductThumbnailLeft = () => {
-    const searchParams = useSearchParams()
-    let productId = searchParams.get('id')
-
-    if (productId === null) {
-        productId = '1'
-    }
-
-    return (
-        <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-white" />
-                <BreadcrumbProduct data={productData} productPage='default' productId={productId} />
-            </div>
-            <Default data={productData} productId={productId} />
-            <Footer />
-        </>
-    )
-}
+const ProductThumbnailLeft = () => (
+    <ProductDetailPageLayout
+        productPage="default"
+        renderProduct={(products, productId) => <Default data={products} productId={productId} />}
+    />
+)
 
 export default ProductThumbnailLeft

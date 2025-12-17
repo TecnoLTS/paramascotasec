@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
+import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumbImg';
 import Footer from '@/components/Footer/Footer'
 import useProducts from '@/hooks/useProducts'

@@ -1,32 +1,13 @@
 'use client'
-import React, { useState } from 'react'
-import { useSearchParams } from 'next/navigation';
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
-import BreadcrumbProduct from '@/components/Breadcrumb/BreadcrumbProduct'
-import Sidebar from '@/components/Product/Detail/Sidebar';
-import Footer from '@/components/Footer/Footer'
-import productData from '@/data/Product.json'
+import React from 'react'
+import Sidebar from '@/components/Product/Detail/Sidebar'
+import ProductDetailPageLayout from '@/components/Product/ProductDetailPageLayout'
 
-const ProductSidebar = () => {
-    const searchParams = useSearchParams()
-    let productId = searchParams.get('id')
-
-    if (productId === null) {
-        productId = '1'
-    }
-
-    return (
-        <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-white" />
-                <BreadcrumbProduct data={productData} productPage='sidebar' productId={productId} />
-            </div>
-            <Sidebar data={productData} productId={productId} />
-            <Footer />
-        </>
-    )
-}
+const ProductSidebar = () => (
+    <ProductDetailPageLayout
+        productPage="sidebar"
+        renderProduct={(products, productId) => <Sidebar data={products} productId={productId} />}
+    />
+)
 
 export default ProductSidebar

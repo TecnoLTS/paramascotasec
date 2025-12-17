@@ -6,10 +6,12 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
+import { useRouter } from 'next/navigation'
 
 const Cart = () => {
 
 
+    const router = useRouter()
     const { cartState, updateCart, removeFromCart } = useCart();
 
     const handleQuantityChange = (productId: string, newQuantity: number) => {

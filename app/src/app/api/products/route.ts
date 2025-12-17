@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { mapProductsToDto, mapProductToDto } from '@/lib/productMapper'
 
 export async function GET() {
   try {
@@ -8,12 +9,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
-    const normalized = products.map((product) => ({
-      ...product,
-      images: product.images?.map((img) => img.url) ?? [],
-      variation: product.variations ?? [],
-    }))
-
+    const normalized = mapProductsToDto(products)
     return NextResponse.json(normalized)
   } catch (error) {
     console.error('Error al consultar productos', error)
@@ -26,7 +22,8 @@ export async function POST(req: Request) {
 
   const product = await prisma.product.create({
     data: payload,
+    include: { images: true, variations: true },
   })
 
-  return NextResponse.json(product, { status: 201 })
+  return NextResponse.json(mapProductToDto(product), { status: 201 })
 }

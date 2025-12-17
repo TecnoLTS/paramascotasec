@@ -1,6 +1,1 @@
-import { ProductType } from '@/type/ProductType'
-import { fetchJson } from './apiClient'
-
-export const fetchProducts = async (): Promise<ProductType[]> => {
-  return fetchJson<ProductType[]>('/api/products')
-}
+export { listProducts as fetchProducts, getProduct, createProduct, updateProduct, deleteProduct } from './api/products'

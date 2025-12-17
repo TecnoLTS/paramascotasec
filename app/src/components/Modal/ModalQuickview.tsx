@@ -186,7 +186,9 @@ const ModalQuickview = () => {
                                 </div>
                             </div>
                             <div className="product-infor px-4">
-                                
+                                <div className="heading4 leading-tight">
+                                    {selectedProduct?.name ?? 'Producto'}
+                                </div>
                                 <div className="flex items-center mt-3">
                                     <Rate currentRate={selectedProduct?.rate} size={14} />
                                     <span className='caption1 text-secondary'>(1.234 reseñas)</span>

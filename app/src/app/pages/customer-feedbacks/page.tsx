@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuOne'
+import MenuOne from '@/components/Header/Menu/MenuPet'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb';
 import reviewData from '@/data/Testimonial.json'
 import TestimonialItem from '@/components/Testimonial/TestimonialItem';

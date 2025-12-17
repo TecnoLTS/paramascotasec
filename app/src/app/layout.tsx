@@ -14,9 +14,32 @@ const serverTimeLeft: CountdownTimeType = countdownTime();
 
 const instrument = Instrument_Sans({ subsets: ['latin'] })
 
+const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+
 export const metadata: Metadata = {
-  title: 'ParaMascotasEC',
-  description: 'Multipurpose eCommerce Template',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'ParaMascotasEC',
+    template: '%s | ParaMascotasEC',
+  },
+  description: 'Tienda online para mascotas: alimentos, juguetes, accesorios y cuidado para perros y gatos.',
+  applicationName: 'ParaMascotasEC',
+  openGraph: {
+    title: 'ParaMascotasEC',
+    description: 'Tienda online para mascotas: alimentos, juguetes, accesorios y cuidado para perros y gatos.',
+    url: siteUrl,
+    siteName: 'ParaMascotasEC',
+    locale: 'es_ES',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ParaMascotasEC',
+    description: 'Tienda online para mascotas: alimentos, juguetes, accesorios y cuidado para perros y gatos.',
+  },
+  alternates: {
+    canonical: '/',
+  },
 }
 
 export default function RootLayout({
@@ -26,7 +49,7 @@ export default function RootLayout({
 }) {
   return (
     <GlobalProvider>
-      <html lang="en">
+      <html lang="es">
         <body className={instrument.className}>
           {children}
           <ModalCart serverTimeLeft={serverTimeLeft} />
