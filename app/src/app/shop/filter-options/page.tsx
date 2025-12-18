@@ -1,18 +1,12 @@
-'use client'
-
-import React, { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation';
+import React from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopFilterOptions from '@/components/Shop/ShopFilterOptions'
 import Footer from '@/components/Footer/Footer'
-import useProducts from '@/hooks/useProducts'
+import { loadProducts } from '@/lib/products.server'
 
-export default function FilterOptions() {
-    const searchParams = useSearchParams()
-    const type = searchParams.get('type')
-    const category = searchParams.get('category')
-    const { products, loading, error } = useProducts()
+export default async function FilterOptions() {
+    const { products, error } = await loadProducts()
 
     return (
         <>
@@ -20,10 +14,10 @@ export default function FilterOptions() {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            {loading ? (
-                <div className="container py-10 text-center">Cargando productos...</div>
-            ) : error ? (
+            {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : !products.length ? (
+                <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopFilterOptions data={products} productPerPage={12} />
             )}

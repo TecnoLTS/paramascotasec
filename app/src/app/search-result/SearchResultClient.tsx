@@ -1,0 +1,137 @@
+'use client'
+
+import React, { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import TopNavOne from '@/components/Header/TopNav/TopNavOne'
+import MenuOne from '@/components/Header/Menu/MenuPet'
+import Footer from '@/components/Footer/Footer'
+import { ProductType } from '@/type/ProductType'
+import Product from '@/components/Product/Product'
+import HandlePagination from '@/components/Other/HandlePagination'
+
+type Props = {
+  products: ProductType[]
+  error: string | null
+  initialQuery: string | null
+}
+
+const SearchResultClient = ({ products, error, initialQuery }: Props) => {
+  const [searchKeyword, setSearchKeyword] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(0)
+  const productsPerPage = 8
+  const router = useRouter()
+
+  const query = initialQuery ?? 'dress'
+
+  const filteredData = useMemo(() => {
+    if (!query) return products
+
+    const matches = products.filter((product) =>
+      product.name.toLowerCase().includes(query.toLowerCase()) ||
+      product.type.toLowerCase().includes(query.toLowerCase())
+    )
+
+    if (matches.length > 0) return matches
+
+    return [{
+      id: 'no-data',
+      category: 'no-data',
+      type: 'no-data',
+      name: 'no-data',
+      gender: 'no-data',
+      new: false,
+      sale: false,
+      rate: 0,
+      price: 0,
+      originPrice: 0,
+      brand: 'no-data',
+      sold: 0,
+      quantity: 0,
+      quantityPurchase: 0,
+      sizes: [],
+      variation: [],
+      thumbImage: [],
+      images: [],
+      description: 'no-data',
+      action: 'no-data',
+      slug: 'no-data',
+    }]
+  }, [products, query])
+
+  const pageCount = Math.ceil(filteredData.length / productsPerPage)
+  const offset = currentPage * productsPerPage
+  const currentProducts = filteredData.slice(offset, offset + productsPerPage)
+
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [query])
+
+  const handlePageChange = (selected: number) => {
+    setCurrentPage(selected)
+  }
+
+  const handleSearch = (value: string) => {
+    router.push(`/search-result?query=${value}`)
+    setSearchKeyword('')
+  }
+
+  return (
+    <>
+      <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
+      <div id="header" className='relative w-full'>
+        <MenuOne props="bg-transparent" />
+      </div>
+      <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
+        <div className="container">
+          <div className="heading flex flex-col items-center">
+            <div className="heading4 text-center"> {filteredData.length} resultado para {String.raw`"`}{query}{String.raw`"`}</div>
+            <div className="input-block lg:w-1/2 sm:w-3/5 w-full md:h-[52px] h-[44px] sm:mt-8 mt-5">
+              <div className='w-full h-full relative'>
+                <input
+                  type="text"
+                  placeholder='Search...'
+                  className='caption1 w-full h-full pl-4 md:pr-[150px] pr-32 rounded-xl border border-line'
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
+                />
+                <button
+                  className='button-main absolute top-1 bottom-1 right-1 flex items-center justify-center'
+                  onClick={() => handleSearch(searchKeyword)}
+                >
+                  search
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="list-product-block relative md:pt-10 pt-6">
+            <div className="heading6">product Search: {query}</div>
+            {error && <div className="py-6 text-secondary">No se pudieron cargar productos.</div>}
+            {!error && (
+              <>
+                <div className="list-product hide-product-sold grid lg:grid-cols-4 sm:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-5">
+                  {currentProducts.map((item) => (
+                    item.id === 'no-data' ? (
+                      <div key={item.id} className="no-data-product">No products match the selected criteria.</div>
+                    ) : (
+                      <Product key={item.id} data={item} type='grid' />
+                    )
+                  ))}
+                </div>
+
+                {pageCount > 1 && (
+                  <div className="list-pagination flex items-center justify-center md:mt-10 mt-7">
+                    <HandlePagination pageCount={pageCount} onPageChange={handlePageChange} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      <Footer />
+    </>
+  )
+}
+
+export default SearchResultClient

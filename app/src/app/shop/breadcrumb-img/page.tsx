@@ -1,43 +1,26 @@
-'use client'
-
-import React, { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation';
+import React from 'react'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumb1';
 import Footer from '@/components/Footer/Footer'
-import { ProductType } from '@/type/ProductType';
-import { fetchProducts } from '@/lib/products'
+import { loadProducts } from '@/lib/products.server'
 
-export default function BreadcrumbImg() {
-    const searchParams = useSearchParams()
-    const type = searchParams.get('type')
-    const [products, setProducts] = useState<ProductType[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+type SearchParams = {
+    type?: string | string[]
+}
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const data = await fetchProducts()
-                setProducts(data)
-            } catch (err: any) {
-                setError(err?.message ?? 'Error al cargar productos')
-            } finally {
-                setLoading(false)
-            }
-        }
-        load()
-    }, [])
+export default async function BreadcrumbImg({ searchParams }: { searchParams?: SearchParams }) {
+    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
+    const { products, error } = await loadProducts()
 
     return (
         <>
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            {loading ? (
-                <div className="container py-10 text-center">Cargando productos...</div>
-            ) : error ? (
+            {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : !products.length ? (
+                <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopBreadCrumbImg data={products} productPerPage={12} dataType={type} />
             )}

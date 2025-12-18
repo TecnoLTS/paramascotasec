@@ -1,15 +1,13 @@
-'use client'
-
-import React, { useState } from 'react'
+import React from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
 import ShopCollection from '@/components/Shop/ShopCollection'
 import Footer from '@/components/Footer/Footer'
-import useProducts from '@/hooks/useProducts'
+import { loadProducts } from '@/lib/products.server'
 
-export default function Collection() {
-    const { products, loading, error } = useProducts()
+export default async function Collection() {
+    const { products, error } = await loadProducts()
 
     return (
         <>
@@ -18,10 +16,10 @@ export default function Collection() {
                 <MenuOne props="bg-transparent" />
                 <Breadcrumb heading='Shop Collection' subHeading='Collection' />
             </div>
-            {loading ? (
-                <div className="container py-10 text-center">Cargando productos...</div>
-            ) : error ? (
+            {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : !products.length ? (
+                <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopCollection data={products} />
             )}

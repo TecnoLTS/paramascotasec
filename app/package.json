@@ -12,8 +12,7 @@
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed",
-    "db:export:products": "node prisma/export-products.js"
+    "db:seed": "prisma db seed"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

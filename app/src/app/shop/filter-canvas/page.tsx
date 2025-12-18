@@ -1,18 +1,18 @@
-'use client'
-
-import React, { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation';
+import React from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopFilterCanvas from '@/components/Shop/ShopFilterCanvas'
 import Footer from '@/components/Footer/Footer'
-import useProducts from '@/hooks/useProducts'
+import { loadProducts } from '@/lib/products.server'
 
-export default function FilterCanvas() {
-    const searchParams = useSearchParams()
-    const type = searchParams.get('type')
-    const category = searchParams.get('category')
-    const { products, loading, error } = useProducts()
+type SearchParams = {
+    type?: string | string[]
+    category?: string | string[]
+}
+
+export default async function FilterCanvas({ searchParams }: { searchParams?: SearchParams }) {
+    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
+    const { products, error } = await loadProducts()
 
     return (
         <>
@@ -20,10 +20,10 @@ export default function FilterCanvas() {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            {loading ? (
-                <div className="container py-10 text-center">Cargando productos...</div>
-            ) : error ? (
+            {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : !products.length ? (
+                <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopFilterCanvas data={products} productPerPage={12} dataType={type} />
             )}

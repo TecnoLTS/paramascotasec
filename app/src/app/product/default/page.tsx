@@ -1,45 +1,26 @@
-'use client'
-import React, { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation';
+import React from 'react'
 import MenuOne from '@/components/Header/Menu/MenuPet'
-//import BreadcrumbProduct from '@/components/Breadcrumb/BreadcrumbProduct'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
-import { ProductType } from '@/type/ProductType'
-import { fetchProducts } from '@/lib/products'
+import { loadProducts } from '@/lib/products.server'
 
-const ProductDefault = () => {
-    const searchParams = useSearchParams()
-    const productId = searchParams.get('id')
-    const [products, setProducts] = useState<ProductType[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+type SearchParams = {
+    id?: string | string[]
+}
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                if (!productId) throw new Error('Producto no especificado')
-                const data = await fetchProducts()
-                setProducts(data)
-            } catch (err: any) {
-                setError(err?.message ?? 'Error al cargar producto')
-            } finally {
-                setLoading(false)
-            }
-        }
-        load()
-    }, [productId])
+const ProductDefault = async ({ searchParams }: { searchParams?: SearchParams }) => {
+    const { products, error } = await loadProducts()
+    const productId = typeof searchParams?.id === 'string' ? searchParams.id : (products[0]?.id ?? '')
 
     return (
         <>
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-white" />
-                
             </div>
-            {loading ? (
-                <div className="container py-10 text-center">Cargando producto...</div>
-            ) : error ? (
+            {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>
+            ) : !products.length ? (
+                <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <Default data={products} productId={productId} />
             )}

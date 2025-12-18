@@ -31,14 +31,20 @@ export const metadata: Metadata = {
     siteName: 'ParaMascotasEC',
     locale: 'es_ES',
     type: 'website',
+    images: [
+      {
+        url: '/images/slider/bg-pet1-1.png',
+        width: 1200,
+        height: 630,
+        alt: 'ParaMascotasEC - Tienda online para mascotas',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ParaMascotasEC',
     description: 'Tienda online para mascotas: alimentos, juguetes, accesorios y cuidado para perros y gatos.',
-  },
-  alternates: {
-    canonical: '/',
+    images: ['/images/slider/bg-pet1-1.png'],
   },
 }
 

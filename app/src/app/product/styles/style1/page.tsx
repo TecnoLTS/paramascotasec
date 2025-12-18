@@ -1,22 +1,20 @@
-'use client'
-
 import React from 'react'
-import { useSearchParams } from 'next/navigation'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopFilterCanvas from '@/components/Shop/ShopFilterCanvas'
 import Footer from '@/components/Footer/Footer'
-import useProducts from '@/hooks/useProducts'
+import { loadProducts } from '@/lib/products.server'
 
-export default function FilterCanvasProductOne() {
-    const searchParams = useSearchParams()
-    const type = searchParams.get('type')
-    const { products, loading, error } = useProducts()
+type SearchParams = {
+    type?: string | string[]
+}
+
+export default async function FilterCanvasProductOne({ searchParams }: { searchParams?: SearchParams }) {
+    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
+    const { products, error } = await loadProducts()
 
     let content: React.ReactNode = null
-    if (loading) {
-        content = <div className="container py-10 text-center">Cargando productos...</div>
-    } else if (error) {
+    if (error) {
         content = <div className="container py-10 text-center text-red-600">{error}</div>
     } else if (!products.length) {
         content = <div className="container py-10 text-center">No hay productos disponibles.</div>

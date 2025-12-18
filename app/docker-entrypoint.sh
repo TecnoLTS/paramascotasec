@@ -50,8 +50,6 @@ if [ -n "$DATABASE_URL" ]; then
   echo "Ejecutando seed de datos..."
   npm run db:seed || true
 
-  echo "Exportando productos de la base a src/data/Product.json..."
-  npm run db:export:products || true
 else
   echo "DATABASE_URL no definido; omitiendo prisma db push/seed."
 fi
