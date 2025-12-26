@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useEffect } from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import ReactLoading from 'react-loading'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
 import Image from 'next/image';
 import useProducts from '@/hooks/useProducts'
@@ -51,7 +52,12 @@ const ModalNewsletter = () => {
                                 <Icon.X weight='bold' className='text-xl' />
                             </div>
                             <div className="heading5 pb-5">You May Also Like</div>
-                            {loading && <div className="py-4 text-secondary">Cargando productos...</div>}
+                            {loading && (
+                                <div className="flex items-center gap-2 py-4 text-secondary">
+                                    <ReactLoading type="spin" color="#000" height={18} width={18} />
+                                    <span>Cargando productos...</span>
+                                </div>
+                            )}
                             {error && !loading && <div className="py-4 text-secondary">No se pudieron cargar productos.</div>}
                             {!loading && products.length > 0 && (
                                 <div className="list flex flex-col gap-5 overflow-x-auto sm:pr-6">

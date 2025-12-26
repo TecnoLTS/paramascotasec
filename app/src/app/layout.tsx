@@ -9,6 +9,7 @@ import ModalQuickview from '@/components/Modal/ModalQuickview'
 import ModalCompare from '@/components/Modal/ModalCompare'
 import CountdownTimeType from '@/type/CountdownType'
 import { countdownTime } from '@/store/countdownTime'
+import RouteLoading from '@/components/Other/RouteLoading'
 
 const serverTimeLeft: CountdownTimeType = countdownTime();
 
@@ -58,6 +59,7 @@ export default function RootLayout({
       <html lang="es">
         <body className={instrument.className}>
           {children}
+          <RouteLoading />
           <ModalCart serverTimeLeft={serverTimeLeft} />
           <ModalWishlist />
           <ModalSearch />

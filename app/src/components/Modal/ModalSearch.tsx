@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import ReactLoading from 'react-loading'
 import Product from '../Product/Product';
 import { useModalSearchContext } from '@/context/ModalSearchContext'
 import useProducts from '@/hooks/useProducts'
@@ -75,7 +76,12 @@ const ModalSearch = () => {
                     </div>
                     <div className="list-recent mt-8">
                         <div className="heading6">Recently viewed products</div>
-                        {loading && <div className="py-4 text-secondary">Cargando productos...</div>}
+                        {loading && (
+                            <div className="flex items-center gap-2 py-4 text-secondary">
+                                <ReactLoading type="spin" color="#000" height={18} width={18} />
+                                <span>Cargando productos...</span>
+                            </div>
+                        )}
                         {error && !loading && (
                             <div className="py-4 text-secondary">No se pudieron cargar productos.</div>
                         )}

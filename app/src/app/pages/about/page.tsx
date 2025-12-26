@@ -1,10 +1,9 @@
 import Image from 'next/image';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
-import Benefit from '@/components/Home1/Benefit'
-import Newsletter from '@/components/Home4/Newsletter'
-import Instagram from '@/components/Home6/Instagram'
-import Brand from '@/components/Home1/Brand'
+import Benefit from '@/components/Pet/Benefit'
+import Instagram from '@/components/Pet/Instagram'
+import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 
 const AboutUs = () => {
@@ -56,7 +55,6 @@ const AboutUs = () => {
                 </div>
             </div>
             <Benefit props="md:pt-20 pt-10" />
-            <Newsletter props="bg-green md:mt-20 mt-10" />
             <Instagram />
             <Brand />
             <Footer />
