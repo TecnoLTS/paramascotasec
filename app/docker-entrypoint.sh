@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+# Asegura openssl (requerido por Prisma en alpine)
+if ! command -v openssl >/dev/null 2>&1; then
+  apk add --no-cache openssl >/dev/null
+fi
+
 lock_hash_file="/app/node_modules/.package-lock.hash"
 # Evita que falle si el hash previo o el lock no existen aún.
 current_hash="$(sha1sum /app/package-lock.json 2>/dev/null | awk '{print $1}' || true)"

@@ -284,6 +284,7 @@ const MenuPet = () => {
                                 src="/images/brand/LogoVerde150.svg"
                                 width={184}
                                 height={80}
+                                alt="ParaMascotasEC"
                                 className="h-[55px] w-auto md:h-[80px]"
                                 priority
                             />

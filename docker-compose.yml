@@ -1,47 +1,113 @@
 services:
-  app:
-    build:
-      context: ./app
-      dockerfile: Dockerfile
-    container_name: next-test-app
+  db:
+    image: postgres:16-alpine
+    container_name: next-test-db
     restart: unless-stopped
     environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: paramascotasec
       TZ: America/Bogota
-      NODE_ENV: development
-      PORT: 3000
-      NEXT_PUBLIC_CONTAINER_NAME: next-test
-      CHOKIDAR_USEPOLLING: "1"
-      WATCHPACK_POLLING: "true"
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/paramascotasec?schema=public
-    working_dir: /app
+    ports:
+      - "5432:5432"
     volumes:
-      - ./app:/app
-      - app_node_modules:/app/node_modules
-    command: ["npm","run","dev","--","--hostname","0.0.0.0","--port","3000"]
+      - ../paramascostas-DB/postgres_data:/var/lib/postgresql/data
     networks:
       - edge
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
-  nginx:
-    image: nginx:alpine
-    container_name: next-test-nginx
+  paramascotas-app:
+    image: node:20-alpine
+    container_name: paramascotas-app
+    restart: unless-stopped
+    environment:
+      TZ: America/Bogota
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_CONTAINER_NAME: paramascotas
+      CHOKIDAR_USEPOLLING: "1"
+      WATCHPACK_POLLING: "true"
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/paramascotasec?schema=public
+    working_dir: /app
+    volumes:
+      - ./app:/app
+      - paramascotas_node_modules:/app/node_modules
+    entrypoint: ["/bin/sh","/app/docker-entrypoint.sh"]
+    command: ["npm","run","dev","--","--hostname","0.0.0.0","--port","3000"]
     depends_on:
-      - app
+      db:
+        condition: service_healthy
+    networks:
+      - edge
+    ports:
+      - "3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  example-app:
+    image: node:20-alpine
+    container_name: example-app
+    restart: unless-stopped
+    environment:
+      TZ: America/Bogota
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_CONTAINER_NAME: example
+      CHOKIDAR_USEPOLLING: "1"
+      WATCHPACK_POLLING: "true"
+    working_dir: /app
+    volumes:
+      - ./example-app:/app
+      - example_node_modules:/app/node_modules
+    entrypoint: ["/bin/sh","/app/docker-entrypoint.sh"]
+    command: ["npm","run","dev","--","--hostname","0.0.0.0","--port","3000"]
+    networks:
+      - edge
+    ports:
+      - "3001:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  gateway:
+    image: nginx:alpine
+    container_name: nginx-gateway
+    depends_on:
+      paramascotas-app:
+        condition: service_started
+      example-app:
+        condition: service_started
     restart: unless-stopped
     environment:
       TZ: America/Bogota
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./logs:/var/log/nginx
+      - ../gateway/conf.d:/etc/nginx/conf.d:ro
+      - ../gateway/certs:/etc/nginx/certs:ro
       - /usr/share/zoneinfo/America/Bogota:/etc/localtime:ro
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
     networks:
       - edge
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     logging:
       driver: json-file
       options:
@@ -50,8 +116,9 @@ services:
 
 networks:
   edge:
-    external: true
     name: edge
+    driver: bridge
 
 volumes:
-  app_node_modules:
+  paramascotas_node_modules:
+  example_node_modules:

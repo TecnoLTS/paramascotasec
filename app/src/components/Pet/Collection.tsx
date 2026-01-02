@@ -18,6 +18,8 @@ const Collection: React.FC<CollectionProps> = ({ categories = petCategoryCards }
     router.push(`/shop/breadcrumb1?category=${category}`)
   }
 
+  const enableLoop = categories.length > 6
+
   return (
     <div className="trending-block style-six md:py-10 py-5">
       <div className="container">
@@ -27,8 +29,7 @@ const Collection: React.FC<CollectionProps> = ({ categories = petCategoryCards }
             spaceBetween={12}
             slidesPerView={2}
             navigation
-            loop
-            preloadImages
+            loop={enableLoop}
             modules={[Navigation, Autoplay]}
             breakpoints={{
               576: {
