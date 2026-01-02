@@ -117,3 +117,13 @@ git status
 
 
 
+sudo apt-get install git-lfs -y
+git lfs install
+
+git reset HEAD~1
+git lfs track "example-app/node_modules/@next/swc-linux-x64-musl/next-swc.linux-x64-musl.node"
+
+git add .gitattributes
+git add .
+git commit -m "Configura LFS para binarios grandes"
+git push
