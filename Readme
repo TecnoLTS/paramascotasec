@@ -77,3 +77,20 @@ git log --oneline --decorate -3
 git status
 
 
+git revert --no-commit 31cac353ed68923985a9015f87c693e52b68d4c4..HEAD
+git commit -m "Rollback al estado del commit 31cac35"
+git push
+git push --force
+
+
+
+
+
+
+docker compose down -v
+docker stop $(docker ps -aq) || true
+docker rm $(docker ps -aq) || true
+docker network prune -f
+docker compose up -d
+docker compose up -d --build
+
