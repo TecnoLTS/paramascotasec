@@ -8,6 +8,9 @@ import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
 import { useCart } from '@/context/CartContext';
 import { useModalCartContext } from '@/context/ModalCartContext';
 import { useModalCompareContext } from '@/context/ModalCompareContext'
+import { useWishlist } from '@/context/WishlistContext';
+import { useModalWishlistContext } from '@/context/ModalWishlistContext';
+import { useCompare } from '@/context/CompareContext';
 import Rate from '../Other/Rate';
 import ModalSizeguide from './ModalSizeguide';
 
@@ -22,6 +25,9 @@ const ModalQuickview = () => {
     const { addToCart, updateCart, cartState } = useCart()
     const { openModalCart } = useModalCartContext()
     const { openModalCompare } = useModalCompareContext()
+    const { wishlistState, addToWishlist, removeFromWishlist } = useWishlist();
+    const { openModalWishlist } = useModalWishlistContext();
+    const { compareState, addToCompare, removeFromCompare } = useCompare();
     const price = Number(selectedProduct?.price ?? 0)
     const originPrice = Number(selectedProduct?.originPrice ?? 0)
     const hasSale = (selectedProduct?.sale || originPrice > price) && originPrice > 0
@@ -161,7 +167,7 @@ const ModalQuickview = () => {
                     <div className="flex h-full max-md:flex-col-reverse gap-y-6">
                         <div className="left lg:w-[388px] md:w-[300px] flex-shrink-0 px-6">
                             <div className="list-img max-md:flex items-center gap-4">
-                                {galleryImages.map((item, index) => (
+                                {galleryImages.map((item: string, index: number) => (
                                     <div className="bg-img w-full aspect-[3/4] max-md:w-[150px] max-md:flex-shrink-0 rounded-[20px] overflow-hidden md:mt-6" key={index}>
                                         <Image
                                             src={item}
@@ -186,9 +192,7 @@ const ModalQuickview = () => {
                                 </div>
                             </div>
                             <div className="product-infor px-4">
-                                <div className="heading4 leading-tight">
-                                    {selectedProduct?.name ?? 'Producto'}
-                                </div>
+                                
                                 <div className="flex items-center mt-3">
                                     <Rate currentRate={selectedProduct?.rate} size={14} />
                                     <span className='caption1 text-secondary'>(1.234 reseñas)</span>

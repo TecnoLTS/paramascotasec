@@ -13,7 +13,11 @@ import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
-const MenuPet = () => {
+type MenuPetProps = {
+    props?: string; // si quieres, luego lo renombramos a className
+};
+
+const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     const pathname = usePathname()
     const { openLoginPopup, handleLoginPopup } = useLoginPopup()
     const { openShopDepartmentPopup, handleShopDepartmentPopup } = useShopDepartmentPopup()
@@ -271,22 +275,26 @@ const MenuPet = () => {
     return (
         <>
             <div
-                ref={headerRef}
-                className={`header-menu style-eight ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
-            >
+    ref={headerRef}
+    className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
+>
+
                 <div className="container mx-auto h-full">
-                    <div className="header-main flex items-center justify-between h-full">
+                        <div className="header-main flex items-center justify-between h-full">
                         <div className="menu-mobile-icon lg:hidden flex items-center" onClick={handleMenuMobile}>
                             <i className="icon-category text-2xl"></i>
                         </div>
                         <Link href={'/'} className='flex items-center'>
-                            <Image
-                                src="/images/brand/LogoVerde150.svg"
-                                width={184}
-                                height={80}
-                                className="h-[55px] w-auto md:h-[80px]"
-                                priority
-                            />
+                            <div className="relative h-[55px] w-[126px] md:h-[80px] md:w-[184px]">
+                                <Image
+                                    src="/images/brand/LogoVerde150.svg"
+                                    alt="ParaMascotasEC"
+                                    fill
+                                    priority
+                                    className="object-contain"
+                                    sizes="(min-width: 1024px) 184px, 126px"
+                                />
+                            </div>
                         </Link>
                         <div className="form-search w-[54%] pl-8 flex items-center h-[48px] max-lg:hidden">
                             <div className='w-full flex items-center h-full border border-[#2f4f4f] shadow-sm overflow-hidden'>
@@ -454,14 +462,16 @@ const MenuPet = () => {
                                     <Icon.X size={14} />
                                 </div>
                                 <Link href={'/'} className='logo text-3xl font-semibold text-center'>
-                                    <Image
-                                        src="/images/brand/LogoVerde150.png"
-                                        alt="ParaMascotasEC logo"
-                                        width={345}
-                                        height={150}
-                                        className="mx-auto h-14 w-auto"
-                                        priority
-                                    />
+                                    <div className="relative mx-auto h-14 w-[160px]">
+                                        <Image
+                                            src="/images/brand/LogoVerde150.png"
+                                            alt="ParaMascotasEC logo"
+                                            fill
+                                            className="object-contain"
+                                            priority
+                                            sizes="160px"
+                                        />
+                                    </div>
                                 </Link>
                             </div>
                             <div className="form-search relative mt-2">

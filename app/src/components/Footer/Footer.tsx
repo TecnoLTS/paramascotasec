@@ -12,13 +12,13 @@ const Footer = () => {
                         <div className="content-footer py-[60px] flex justify-between flex-wrap gap-y-8">
                             <div className="company-infor basis-1/4 max-lg:basis-full pr-7">
                                 <Link href={'/'} className="logo">
-                                    <div className="logo-image">
+                                    <div className="logo-image relative w-[150px] h-[50px]">
                                         <Image
                                             src={'/images/brand/LogoVerde150.svg'}
                                             alt={'ParaMascotasEC'}
-                                            width={150}
-                                            height={50}
-                                            className="block"
+                                            fill
+                                            className="object-contain"
+                                            sizes="150px"
                                         />
                                     </div>
                                 </Link>

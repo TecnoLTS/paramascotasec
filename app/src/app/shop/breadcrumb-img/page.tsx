@@ -1,6 +1,6 @@
 import React from 'react'
 import MenuOne from '@/components/Header/Menu/MenuPet'
-import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumb1';
+import ShopBreadCrumbImg from '@/components/Shop/ShopBreadCrumbImg';
 import Footer from '@/components/Footer/Footer'
 import { loadProducts } from '@/lib/products.server'
 

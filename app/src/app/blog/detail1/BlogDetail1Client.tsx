@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import blogData from '@/data/Blog.json'
-import NewsInsight from '@/components/Home3/NewsInsight';
+//import NewsInsight from '@/components/Home3/NewsInsight';
 import Footer from '@/components/Footer/Footer'
 import { useRouter } from 'next/navigation'
 
@@ -177,7 +177,7 @@ const BlogDetailOne = () => {
                     </div>
                 </div>
                 <div className='md:pb-20 pb-10'>
-                    <NewsInsight data={blogData} start={0} limit={3} />
+                    {/*<NewsInsight data={blogData} start={0} limit={3} />*/}
                 </div>
             </div>
             <Footer />

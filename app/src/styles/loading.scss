@@ -3,11 +3,12 @@
 }
 
 .loading {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   z-index: 9999;
+  pointer-events: none;
   background: radial-gradient(
     1200px 600px at 50% 40%,
     rgba(10, 123, 143, 0.14),

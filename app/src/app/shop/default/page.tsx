@@ -18,7 +18,7 @@ export default async function Default({ searchParams }: { searchParams?: SearchP
         <>
             <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
             <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" />
+                <MenuOne />
             </div>
             {error ? (
                 <div className="container py-10 text-center text-red-600">{error}</div>

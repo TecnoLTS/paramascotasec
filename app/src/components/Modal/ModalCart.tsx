@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -63,9 +63,29 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     )
     let [discountCart, setDiscountCart] = useState<number>(0)
 
+    const overlayRef = useRef<HTMLDivElement | null>(null)
+    const overlayStyle: React.CSSProperties = isModalOpen
+        ? { position: 'fixed', pointerEvents: 'auto' }
+        : { position: 'static', pointerEvents: 'none', opacity: 0, visibility: 'hidden' }
+
+    // Si se cierra el modal y el foco quedó dentro, lo limpiamos para evitar warnings de aria-hidden
+    useEffect(() => {
+        if (isModalOpen) return
+        const active = document.activeElement as HTMLElement | null
+        if (active && overlayRef.current?.contains(active)) {
+            active.blur()
+        }
+    }, [isModalOpen])
+
     return (
         <>
-            <div className={`modal-cart-block`} onClick={closeModalCart}>
+            <div
+                className="modal-cart-block"
+                ref={overlayRef}
+                style={overlayStyle}
+                aria-hidden={isModalOpen ? undefined : true}
+                onClick={closeModalCart}
+            >
                 <div
                     className={`modal-cart-main flex ${isModalOpen ? 'open' : ''}`}
                     onClick={(e) => { e.stopPropagation() }}

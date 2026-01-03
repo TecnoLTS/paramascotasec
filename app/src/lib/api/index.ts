@@ -1,9 +1,17 @@
+// src/lib/api/index.ts
+
+// 👇 Importamos lo que vamos a USAR dentro de este archivo
+import { apiEndpoints } from './endpoints'
+import { fetchJson } from '@/lib/apiClient'
+
+// 👇 Re-exports (para que otros módulos puedan importar desde aquí)
 export { apiEndpoints } from './endpoints'
 export { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from './products'
 export { fetchJson, requestApi } from '@/lib/apiClient'
 
 // Endpoints ligeros disponibles para chequeo rápido de salud/demo.
 export type HealthResponse = { ok: boolean; message: string; timestamp: string }
+
 export const healthApi = () => fetchJson<HealthResponse>(apiEndpoints.health)
 export const ejemploApi = () => fetchJson<HealthResponse>(apiEndpoints.ejemplo)
 export const ejemplo2Api = () => fetchJson<HealthResponse>(apiEndpoints.ejemplo2)

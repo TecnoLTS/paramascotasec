@@ -8,6 +8,17 @@ import { Autoplay, Pagination } from 'swiper/modules';
 import 'swiper/css/bundle';
 
 const Brand = () => {
+    const brands = [
+        { src: '/images/brand/7.png', alt: 'Marca 1' },
+        { src: '/images/brand/8.png', alt: 'Marca 2' },
+        { src: '/images/brand/9.png', alt: 'Marca 3' },
+        { src: '/images/brand/10.png', alt: 'Marca 4' },
+        { src: '/images/brand/13.png', alt: 'Marca 5' },
+        { src: '/images/brand/12.png', alt: 'Marca 6' },
+    ]
+
+    const enableLoop = brands.length > 6
+
     return (
         <>
             <div className="brand-block md:py-[60px] py-[32px]">
@@ -16,7 +27,7 @@ const Brand = () => {
                         <Swiper
                             spaceBetween={12}
                             slidesPerView={2}
-                            loop={true}
+                            loop={enableLoop}
                             modules={[Autoplay]}
                             autoplay={{
                                 delay: 4000,
@@ -40,72 +51,19 @@ const Brand = () => {
                                 },
                             }}
                         >
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/7.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/8.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/9.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/10.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/13.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
-                            <SwiperSlide>
-                                <div className="brand-item relative flex items-center justify-center h-[36px]">
-                                    <Image
-                                        src={'/images/brand/12.png'}
-                                        width={300}
-                                        height={300}
-                                        alt='1'
-                                        className='h-full w-auto duration-500 relative object-cover'
-                                    />
-                                </div>
-                            </SwiperSlide>
+                            {brands.map((brand) => (
+                                <SwiperSlide key={brand.src}>
+                                    <div className="brand-item relative flex items-center justify-center h-[36px]">
+                                        <Image
+                                            src={brand.src}
+                                            width={300}
+                                            height={300}
+                                            alt={brand.alt}
+                                            className='h-full w-auto duration-500 relative object-cover'
+                                        />
+                                    </div>
+                                </SwiperSlide>
+                            ))}
                         </Swiper>
                     </div>
                 </div>

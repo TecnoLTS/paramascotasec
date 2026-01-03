@@ -12,6 +12,7 @@ import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 import petCategoryCards from '@/data/petCategoryCards'
 import { fetchProducts } from '@/lib/products'
+export const dynamic = 'force-dynamic'
 
 export default async function HomePet() {
     const products = await fetchProducts()

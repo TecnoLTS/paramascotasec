@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -11,13 +11,27 @@ const ModalCompare = () => {
     const { isModalOpen, closeModalCompare } = useModalCompareContext();
     const { compareState, removeFromCompare } = useCompare()
 
+    // 🔹 NUEVO: un solo objeto de estilos, tipado
+    const overlayStyle: React.CSSProperties = {
+        position: isModalOpen ? 'fixed' : 'static',
+        pointerEvents: isModalOpen ? 'auto' : 'none',
+        opacity: isModalOpen ? 1 : 0,
+        visibility: isModalOpen ? 'visible' : 'hidden',
+    }
+
     return (
         <>
-            <div className={`modal-compare-block`}>
+            <div
+                className="modal-compare-block"
+                style={overlayStyle}
+                aria-hidden={!isModalOpen}
+            >
                 <div
                     className={`modal-compare-main py-6 ${isModalOpen ? 'open' : ''}`}
                     onClick={(e) => { e.stopPropagation() }}
                 >
+                    {/* ... resto del componente igual ... */}
+
                     <div
                         className="close-btn absolute 2xl:right-6 right-4 2xl:top-6 md:-top-4 top-3 lg:w-10 w-6 lg:h-10 h-6 rounded-full bg-surface flex items-center justify-center duration-300 cursor-pointer hover:bg-black hover:text-white"
                         onClick={closeModalCompare}

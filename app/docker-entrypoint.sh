@@ -54,4 +54,10 @@ else
   echo "DATABASE_URL no definido; omitiendo prisma db push/seed."
 fi
 
+# Build en caliente si estamos en producción y falta el build
+if [ "$APP_ENV" = "production" ] && [ ! -f /app/.next/BUILD_ID ]; then
+  echo "Construyendo Next para producción..."
+  npm run build
+fi
+
 exec "$@"

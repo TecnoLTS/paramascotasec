@@ -2,19 +2,31 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Dependencia necesaria para Prisma en alpine
 RUN apk add --no-cache openssl
 
-# Instala dependencias (permite actualizar lock en la imagen si hay cambios)
-COPY package*.json ./
-RUN npm install
-# Asegura prisma en la imagen aunque el lock local no esté actualizado
-RUN npm install --no-save prisma @prisma/client
+# Control de ambiente (development | production)
+ARG APP_ENV=production
+ENV APP_ENV=${APP_ENV}
+ENV NODE_ENV=${APP_ENV}
 
-# Copia el código de la app
+# Instala dependencias de npm (incluye dev deps aunque APP_ENV=production)
+COPY package*.json ./
+RUN NODE_ENV=development npm install --include=dev
+
+# Copia el código de la app (incluye la carpeta prisma/)
 COPY . .
+
+# 🔹 Muy importante: generar el cliente de Prisma
+RUN npx prisma generate
+
+# Build de producción de Next (omitido en dev para que el contenedor arranque más rápido)
+RUN if [ "$APP_ENV" = "production" ]; then npm run build; else echo "Skip build in development"; fi
+
+# Copia el entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["sh", "-c", "if [ \"$APP_ENV\" = \"development\" ]; then npm run dev -- --hostname 0.0.0.0 --port 3000; else npm run start -- --hostname 0.0.0.0 --port 3000; fi"]

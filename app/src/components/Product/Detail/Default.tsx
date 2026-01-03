@@ -38,11 +38,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [quantity, setQuantity] = useState<number>(1)
   const { addToCart, updateCart, cartState } = useCart()
   const { openModalCart } = useModalCartContext()
+
   let productMain = data.find(product => product.id === productId) as ProductType
   if (productMain === undefined) {
     productMain = data[0]
   }
   productMain.quantityPurchase = productMain.quantityPurchase ?? 1
+
   const relatedCandidates = data.filter((p) => p.id !== productMain.id && p.gender === productMain.gender)
   const primaryRelated = relatedCandidates.filter((p) => p.category === productMain.category)
   const relatedProducts = [
@@ -57,13 +59,18 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   ]
 
   const productImages = Array.isArray((productMain as any)?.images)
-    ? (productMain as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
+    ? (productMain as any).images
+        .map((img: any) => (typeof img === 'string' ? img : img?.url ?? ''))
+        .filter(Boolean)
     : []
 
-  const galleryImages = (
+  // 🔧 Aquí estaba el error: tipamos img y el array resultante
+  const galleryImages: string[] = (
     productImages.length > 0 ? productImages : sampleImages
-  ).map((img, idx) =>
-    typeof img === 'string' && img.includes('1000x1000') ? sampleImages[idx % sampleImages.length] : img
+  ).map((img: string, idx: number) =>
+    img.includes('1000x1000')
+      ? sampleImages[idx % sampleImages.length]
+      : img
   )
 
   const normalizedVariations = (productMain.variation ?? []).map((variation, idx) => ({
@@ -128,6 +135,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   };
 
   const handleActiveTab = (tab: string) => setActiveTab(tab)
+  const enableGalleryLoop = galleryImages.length > 1
 
   return (
     <>
@@ -152,7 +160,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <SwiperSlide
                     key={index}
                     onClick={() => {
-                        mainSwiperRef.current?.slideTo(index, 0)
+                      mainSwiperRef.current?.slideTo(index, 0)
                       setPhotoIndex(index)
                       setOpenPopupImg(true)
                     }}
@@ -182,8 +190,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <SwiperSlide
                     key={index}
                     onClick={() => {
-                        mainSwiperRef.current?.slideTo(index, 0)
-                      mainSwiperRef.current?.slideTo(index);
+                      mainSwiperRef.current?.slideTo(index, 0)
                       setPhotoIndex(index);
                     }}
                   >
@@ -211,7 +218,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   slidesPerView={1}
                   modules={[Navigation, Thumbs]}
                   navigation={true}
-                  loop={true}
+                  loop={enableGalleryLoop}
                   className="popupSwiper"
                   initialSlide={photoIndex}
                   onSwiper={(swiper) => {
@@ -221,9 +228,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   {galleryImages.map((item, index) => (
                     <SwiperSlide
                       key={index}
-                      onClick={() => setOpenPopupImg(false)
-                        
-                      }
+                      onClick={() => setOpenPopupImg(false)}
                     >
                       <Image
                         src={item}
@@ -249,7 +254,6 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   </div>
                   <div className="heading4 mt-1">{productMain.name}</div>
                 </div>
-
               </div>
 
               {/* Rating */}
@@ -369,7 +373,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 {/* Acciones secundarias: compare / share */}
                 <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
                   <div className="share flex items-center gap-3 cursor-pointer">
-                    <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duración-300 hover:bg-black hover:text-white">
+                    <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
                       <Icon.ShareNetwork weight='fill' className='heading6' />
                     </div>
                     <span>Compartir producto</span>
