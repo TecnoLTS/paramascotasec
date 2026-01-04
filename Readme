@@ -187,3 +187,11 @@ COMPOSE_PROFILES=production APP_ENV=production docker compose up -d --build
   || docker exec next-test-app-dev sh -c 'echo APP_ENV=$APP_ENV NODE_ENV=$NODE_ENV && ps -ef | grep "npm run"'
 
 
+
+
+
+
+
+sudo docker restart nginx-gateway
+
+
