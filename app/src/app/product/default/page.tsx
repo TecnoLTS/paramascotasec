@@ -8,9 +8,10 @@ type SearchParams = {
     id?: string | string[]
 }
 
-const ProductDefault = async ({ searchParams }: { searchParams?: SearchParams }) => {
+const ProductDefault = async ({ searchParams }: { searchParams?: Promise<SearchParams> }) => {
+    const resolvedSearchParams = await searchParams
     const { products, error } = await loadProducts()
-    const productId = typeof searchParams?.id === 'string' ? searchParams.id : (products[0]?.id ?? '')
+    const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (products[0]?.id ?? '')
 
     return (
         <>

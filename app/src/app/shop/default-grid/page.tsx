@@ -11,10 +11,11 @@ type SearchParams = {
     category?: string | string[]
 }
 
-export default async function DefaultGrid({ searchParams }: { searchParams?: SearchParams }) {
-    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
-    const gender = typeof searchParams?.gender === 'string' ? searchParams.gender : null
-    const category = typeof searchParams?.category === 'string' ? searchParams.category : null
+export default async function DefaultGrid({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+    const resolvedSearchParams = await searchParams
+    const type = typeof resolvedSearchParams?.type === 'string' ? resolvedSearchParams.type : null
+    const gender = typeof resolvedSearchParams?.gender === 'string' ? resolvedSearchParams.gender : null
+    const category = typeof resolvedSearchParams?.category === 'string' ? resolvedSearchParams.category : null
     const { products, error } = await loadProducts()
 
     return (

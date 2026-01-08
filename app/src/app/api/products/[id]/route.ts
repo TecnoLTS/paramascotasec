@@ -1,55 +1,56 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { mapProductToDto } from '@/lib/productMapper'
 
-type Params = {
-  params: { id: string }
+import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/productRepository'
+
+type RouteContext = {
+  params: Promise<{ id: string }>
 }
 
-export async function GET(_req: Request, { params }: Params) {
-  const product = await prisma.product.findFirst({
-    where: {
-      OR: [{ id: params.id }, { legacyId: params.id }],
-    },
-    include: { images: true, variations: true },
-  })
+export async function GET(_req: Request, { params }: RouteContext) {
+  try {
+    const { id } = await params
+    const product = await getProduct(id)
 
-  if (!product) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!product) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(product)
+  } catch (error) {
+    console.error('Error al consultar producto', error)
+    return NextResponse.json({ error: 'No se pudo obtener el producto' }, { status: 500 })
   }
-
-  return NextResponse.json(mapProductToDto(product))
 }
 
-export async function PUT(req: Request, { params }: Params) {
-  const payload = await req.json()
+export async function PUT(req: Request, { params }: RouteContext) {
+  try {
+    const { id } = await params
+    const payload = await req.json()
+    const updated = await updateProduct(id, payload)
 
-  const target = await prisma.product.findFirst({
-    where: { OR: [{ id: params.id }, { legacyId: params.id }] },
-  })
+    if (!updated) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
 
-  if (!target) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json(updated)
+  } catch (error: any) {
+    console.error('Error al actualizar producto', error)
+    return NextResponse.json({ error: error?.message ?? 'No se pudo actualizar el producto' }, { status: 400 })
   }
-
-  const updated = await prisma.product.update({
-    where: { id: target.id },
-    data: payload,
-    include: { images: true, variations: true },
-  })
-
-  return NextResponse.json(mapProductToDto(updated))
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
-  const target = await prisma.product.findFirst({
-    where: { OR: [{ id: params.id }, { legacyId: params.id }] },
-  })
+export async function DELETE(_req: Request, { params }: RouteContext) {
+  try {
+    const { id } = await params
+    const deleted = await deleteProduct(id)
 
-  if (!target) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!deleted) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('Error al eliminar producto', error)
+    return NextResponse.json({ error: 'No se pudo eliminar el producto' }, { status: 500 })
   }
-
-  await prisma.product.delete({ where: { id: target.id } })
-  return NextResponse.json({ ok: true })
 }

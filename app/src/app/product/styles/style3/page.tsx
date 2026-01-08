@@ -9,8 +9,9 @@ type SearchParams = {
     type?: string | string[]
 }
 
-export default async function FilterCanvasProductThree({ searchParams }: { searchParams?: SearchParams }) {
-    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
+export default async function FilterCanvasProductThree({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+    const resolvedSearchParams = await searchParams
+    const type = typeof resolvedSearchParams?.type === 'string' ? resolvedSearchParams.type : null
     const { products, error } = await loadProducts()
 
     let content: React.ReactNode = null

@@ -10,8 +10,9 @@ type SearchParams = {
     category?: string | string[]
 }
 
-export default async function BreadCrumb2({ searchParams }: { searchParams?: SearchParams }) {
-    const type = typeof searchParams?.type === 'string' ? searchParams.type : null
+export default async function BreadCrumb2({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+    const resolvedSearchParams = await searchParams
+    const type = typeof resolvedSearchParams?.type === 'string' ? resolvedSearchParams.type : null
     const { products, error } = await loadProducts()
 
     return (

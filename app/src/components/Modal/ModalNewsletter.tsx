@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useEffect } from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import ReactLoading from 'react-loading'
+import InlineSpinner from '@/components/Other/InlineSpinner'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
 import Image from 'next/image';
 import useProducts from '@/hooks/useProducts'
@@ -54,7 +54,7 @@ const ModalNewsletter = () => {
                             <div className="heading5 pb-5">You May Also Like</div>
                             {loading && (
                                 <div className="flex items-center gap-2 py-4 text-secondary">
-                                    <ReactLoading type="spin" color="#000" height={18} width={18} />
+                                    <InlineSpinner size={18} className="text-black" />
                                     <span>Cargando productos...</span>
                                 </div>
                             )}

@@ -48,9 +48,11 @@ mkdir -p pgdata
 
 ------------Clomar repositorio
 git clone https://github.com/Evasquez09/mascotasDB.git
-git clone https://github.com/Evasquez09/mascotasDB.git
 git clone https://github.com/Dnavas-28/next-test.git
 git clone https://github.com/Dnavas-28/gateway.git
+
+
+git remote set-url origin https://github.com/Evasquez09/paramascotasec.git
 
 
 

@@ -1,5 +1,10 @@
 import BlogDefaultClient from './BlogDefaultClient'
+import { Suspense } from 'react'
 
 export default function BlogDefault() {
-    return <BlogDefaultClient />
+    return (
+        <Suspense fallback={null}>
+            <BlogDefaultClient />
+        </Suspense>
+    )
 }

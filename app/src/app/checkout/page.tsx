@@ -1,5 +1,10 @@
 import CheckoutClient from './CheckoutClient'
+import { Suspense } from 'react'
 
 export default function Checkout() {
-    return <CheckoutClient />
+    return (
+        <Suspense fallback={null}>
+            <CheckoutClient />
+        </Suspense>
+    )
 }

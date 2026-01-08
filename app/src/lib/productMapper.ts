@@ -37,7 +37,7 @@ type ProductWithRelations = {
   type?: string | null
 
   // relaciones
-  images?: { url: string }[]
+  images?: ({ url: string } | string)[]
   variations?: Variation[]
 }
 
@@ -49,7 +49,8 @@ const mapVariation = (variation: Variation) => ({
 })
 
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
-  const images = product.images?.map((img) => img.url) ?? []
+  const images =
+    product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean) ?? []
   const variations = product.variations?.map(mapVariation) ?? []
 
   return {

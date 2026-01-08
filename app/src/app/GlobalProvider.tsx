@@ -1,3 +1,5 @@
+'use client'
+
 import React from 'react'
 import { CartProvider } from '@/context/CartContext'
 import { ModalCartProvider } from '@/context/ModalCartContext'

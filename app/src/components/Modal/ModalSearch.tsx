@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import * as Icon from '@phosphor-icons/react/dist/ssr';
-import ReactLoading from 'react-loading';
+import InlineSpinner from '@/components/Other/InlineSpinner';
 import Product from '../Product/Product';
 import { useModalSearchContext } from '@/context/ModalSearchContext';
 import useProducts from '@/hooks/useProducts';
@@ -97,7 +97,7 @@ const ModalSearch = () => {
 
             {loading && (
               <div className="flex items-center gap-2 py-4 text-secondary">
-                <ReactLoading type="spin" color="#000" height={18} width={18} />
+                <InlineSpinner size={18} className="text-black" />
                 <span>Cargando productos...</span>
               </div>
             )}

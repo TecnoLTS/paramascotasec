@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { mapProductsToDto, mapProductToDto } from '@/lib/productMapper'
+
+import { createProduct, listProducts } from '@/lib/repositories/productRepository'
 
 export async function GET() {
   try {
-    const products = await prisma.product.findMany({
-      include: { images: true, variations: true },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    const normalized = mapProductsToDto(products)
-    return NextResponse.json(normalized)
+    const products = await listProducts()
+    return NextResponse.json(products)
   } catch (error) {
     console.error('Error al consultar productos', error)
     return NextResponse.json({ error: 'No se pudieron obtener productos desde la base de datos' }, { status: 500 })
@@ -18,12 +13,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const payload = await req.json()
-
-  const product = await prisma.product.create({
-    data: payload,
-    include: { images: true, variations: true },
-  })
-
-  return NextResponse.json(mapProductToDto(product), { status: 201 })
+  try {
+    const payload = await req.json()
+    const product = await createProduct(payload)
+    return NextResponse.json(product, { status: 201 })
+  } catch (error: any) {
+    console.error('Error al crear producto', error)
+    return NextResponse.json({ error: error?.message ?? 'No se pudo crear el producto' }, { status: 400 })
+  }
 }

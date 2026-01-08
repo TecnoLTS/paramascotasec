@@ -26,7 +26,7 @@ interface Props {
 }
 
 const Grouped: React.FC<Props> = ({ data, productId }) => {
-    const swiperRef: any = useRef();
+    const swiperRef: any = useRef(null);
     const [photoIndex, setPhotoIndex] = useState(0)
     const [openPopupImg, setOpenPopupImg] = useState(false)
     const [openSizeGuide, setOpenSizeGuide] = useState<boolean>(false)

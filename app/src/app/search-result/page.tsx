@@ -6,9 +6,10 @@ type SearchParams = {
     query?: string | string[]
 }
 
-export default async function SearchResult({ searchParams }: { searchParams?: SearchParams }) {
+export default async function SearchResult({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+    const resolvedSearchParams = await searchParams
     const { products, error } = await loadProducts()
-    const query = typeof searchParams?.query === 'string' ? searchParams.query : null
+    const query = typeof resolvedSearchParams?.query === 'string' ? resolvedSearchParams.query : null
 
     return (
         <SearchResultClient
