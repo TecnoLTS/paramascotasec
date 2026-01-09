@@ -6,9 +6,8 @@ import ClientModals from './ClientModals'
 import CountdownTimeType from '@/type/CountdownType'
 import { countdownTime } from '@/store/countdownTime'
 
+const instrument = Instrument_Sans({ subsets: ['latin'], preload: false })
 const serverTimeLeft: CountdownTimeType = countdownTime();
-
-const instrument = Instrument_Sans({ subsets: ['latin'] })
 
 const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
