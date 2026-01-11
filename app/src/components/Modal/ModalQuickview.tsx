@@ -95,22 +95,18 @@ const ModalQuickview = () => {
 
     const handleIncreaseQuantity = () => {
         if (!selectedProduct) return
-        setQuantity((prev) => {
-            const nextQuantity = (prev ?? 1) + 1
-            updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
-            return nextQuantity
-        })
+        const nextQuantity = (quantity ?? 1) + 1
+        setQuantity(nextQuantity)
+        updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
     };
 
     const handleDecreaseQuantity = () => {
         if (!selectedProduct) return
-        setQuantity((prev) => {
-            const currentQty = prev ?? 1
-            if (currentQty <= 1) return currentQty
-            const nextQuantity = currentQty - 1
-            updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
-            return nextQuantity
-        })
+        const currentQty = quantity ?? 1
+        if (currentQty <= 1) return
+        const nextQuantity = currentQty - 1
+        setQuantity(nextQuantity)
+        updateCart(selectedProduct.id, nextQuantity, activeSize, activeColor);
     };
 
     const handleAddToCart = () => {
@@ -164,9 +160,9 @@ const ModalQuickview = () => {
                     className={`modal-quickview-main py-6 ${selectedProduct !== null ? 'open' : ''}`}
                     onClick={(e) => { e.stopPropagation() }}
                 >
-                    <div className="flex h-full max-md:flex-col-reverse gap-y-6">
+                    <div className="flex h-full max-md:flex-col gap-y-6">
                         <div className="left lg:w-[388px] md:w-[300px] flex-shrink-0 px-6">
-                            <div className="list-img max-md:flex items-center gap-4">
+                            <div className="list-img max-md:flex max-md:justify-center items-center gap-4">
                                 {galleryImages.map((item: string, index: number) => (
                                     <div className="bg-img w-full aspect-[3/4] max-md:w-[150px] max-md:flex-shrink-0 rounded-[20px] overflow-hidden md:mt-6" key={index}>
                                         <Image

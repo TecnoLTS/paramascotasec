@@ -105,14 +105,20 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
 
     const categoriesSections: Array<{ title: string; links: CategoryLink[] }> = [
         {
-            title: 'Ofertas y descuentos',
-            links: [{ id: 'descuentos' }, { id: 'todos' }],
+            title: 'Categorias principales',
+            links: [
+                { id: 'descuentos' },
+                { id: 'camas' },
+                { id: 'comederos' },
+                { id: 'cuidado' },
+                { id: 'todos', labelOverride: 'Todas las categorías' },
+            ],
         },
         {
             title: 'Perros',
             links: [
-                { id: 'juguetes' },
                 { id: 'comida para perros' },
+                { id: 'juguetes' },                
                 { id: 'accesorios', gender: 'dog', labelOverride: 'Accesorios para perros' },
             ],
         },
@@ -121,14 +127,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
             links: [
                 { id: 'comida para gatos' },
                 { id: 'accesorios', gender: 'cat', labelOverride: 'Accesorios para gatos' },
-            ],
-        },
-        {
-            title: 'Más categorías',
-            links: [
-                { id: 'camas' },
-                { id: 'comederos' },
-                { id: 'cuidado' },
             ],
         },
     ];
@@ -145,8 +143,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
 
     const renderMegaMenu = (
         sections: MegaMenuSection[],
-        banner: { title: string; subtitle: string; image: string },
-        options?: { viewAllCategory?: string }
+        banner: { title: string; subtitle: string; image: string }
     ) =>
     (
         <div className="mega-menu absolute top-[44px] left-0 bg-white w-screen">
@@ -176,29 +173,26 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                             )}
                                         </li>
                                     ))}
-                                    {options?.viewAllCategory && (
-                                        <li>
-                                            <div
-                                                onClick={() => handleCategoryClick(options.viewAllCategory as string)}
-                                                className="link text-secondary duration-300 cursor-pointer view-all-btn"
-                                            >
-                                                Ver todo
-                                            </div>
-                                        </li>
-                                    )}
                                 </ul>
                             </div>
                         ))}
                     </div>
                     <div className="banner-ads-block pl-2.5 basis-1/4 min-w-[220px]">
-                        <div className="banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer" onClick={() => handleCategoryClick('pet')}>
+                        <div
+                            className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${
+                                banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg'
+                                    ? 'min-h-[220px]'
+                                    : ''
+                            }`}
+                            onClick={() => router.push('/shop/breadcrumb1')}
+                        >
                             <div className="text-content py-14 pl-8 relative z-[1]">
-                                <div className="text-button-uppercase text-white bg-red px-2 py-0.5 inline-block rounded-sm">Ahorra $10</div>
+                                {/*<div className="text-button-uppercase text-white bg-red px-2 py-0.5 inline-block rounded-sm">Ahorra $10</div>*/}
                                 <div className="heading6 mt-2">{banner.title}</div>
                                 <div className="body1 mt-3 text-secondary">
                                     {banner.subtitle}
                                 </div>
-                                <div className="button-main mt-5">Comprar ahora</div>
+                                {/*<div className="button-main mt-5">Comprar ahora</div>*/}
                             </div>
                             <Image
                                 src={banner.image}
@@ -214,7 +208,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         </div>
     )
 
-    const renderMobileLinkItems = (links: MegaMenuLink[], options?: { viewAllCategory?: string }) => (
+    const renderMobileLinkItems = (links: MegaMenuLink[]) => (
         <>
             {links.map((link) => (
                 <li
@@ -238,16 +232,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                     )}
                 </li>
             ))}
-            {options?.viewAllCategory && (
-                <li className="pb-2" key="mobile-view-all">
-                    <div
-                        onClick={() => handleCategoryClick(options.viewAllCategory as string)}
-                        className="nav-item-mobile text-secondary duration-300 cursor-pointer view-all-btn"
-                    >
-                        Ver todo
-                    </div>
-                </li>
-            )}
         </>
     )
 
@@ -255,15 +239,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         `text-xl font-semibold flex items-center justify-between mt-5 py-4 text-secondary duration-300 ${isActive ? 'active' : ''}`
 
     const categoryBanner = {
-        title: 'Colección para mascotas',
-        subtitle: 'Ofertas y novedades seleccionadas con amor',
-        image: '/images/collection/1.jpg',
+        title: ' ',
+        subtitle: ' ',
+        image: '/images/collection/14.jpg',
     }
 
     const servicesBanner = {
-        title: 'Servicios premium',
-        subtitle: 'Soporte, garantías y envíos seguros',
-        image: '/images/other/bg-feature-pet.png',
+        title: ' ',
+        subtitle: ' ',
+        image: '/images/collection/15.jpg',
     }
 
     const companyBanner = {
@@ -402,11 +386,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                         <Link href="/shop/breadcrumb1" className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/shop/breadcrumb1' ? 'active' : ''}`}>
                                             Tienda
                                         </Link>
-                                        {renderMegaMenu(
-                                            categoriesSections,
-                                            categoryBanner,
-                                            { viewAllCategory: 'todos' }
-                                        )}
+                                            {renderMegaMenu(
+                                                categoriesSections,
+                                                categoryBanner
+                                            )}
                                     </li>
                                     <li className='h-full'>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
@@ -417,7 +400,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                             servicesBanner
                                         )}
                                     </li>
-                                    <li className='h-full'>
+                                    <li className='h-full '>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
                                             Conócenos
                                         </Link>
