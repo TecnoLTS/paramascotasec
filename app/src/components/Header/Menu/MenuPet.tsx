@@ -180,7 +180,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                     <div className="banner-ads-block pl-2.5 basis-1/4 min-w-[220px]">
                         <div
                             className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${
-                                banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg'
+                                banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg' || banner.image === '/images/collection/conocenos_paramascotas.jpg'
                                     ? 'min-h-[220px]'
                                     : ''
                             }`}
@@ -251,9 +251,9 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     }
 
     const companyBanner = {
-        title: 'Nuestra historia',
-        subtitle: 'Con más de 10 años cuidando mascotas',
-        image: '/images/collection/2.jpg',
+        title: ' ',
+        subtitle: ' ',
+        image: '/images/collection/conocenos_paramascotas.jpg',
     }
 
     return (

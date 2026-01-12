@@ -5,12 +5,12 @@ export interface PetCategoryCard {
 }
 
 const petCategoryCards: PetCategoryCard[] = [
-    { id: 'todos', label: 'Todas', image: '/images/collection/1.jpg' },
-    { id: 'descuentos', label: 'Ofertas', image: '/images/collection/2.jpg' },
-    { id: 'perros', label: 'Perros', image: '/images/collection/4.jpg' },
-    { id: 'gatos', label: 'Gatos', image: '/images/collection/5.jpg' },
-    { id: 'juguetes', label: 'Juguetes', image: '/images/collection/3.jpg' },
-    { id: 'camas', label: 'Camas', image: '/images/collection/6.jpg' },
+    { id: 'todos', label: 'Todas', image: '/images/collection/categoria_todas.jpg' },
+    { id: 'descuentos', label: 'Ofertas', image: '/images/collection/categoria_ofertas.jpg' },
+    { id: 'perros', label: 'Perros', image: '/images/collection/categoria_perros.jpg' },
+    { id: 'gatos', label: 'Gatos', image: '/images/collection/categoria_gatos.jpg' },
+    { id: 'juguetes', label: 'Juguetes', image: '/images/collection/categoria_juguetes.jpg' },
+    { id: 'camas', label: 'Camas', image: '/images/collection/categoria_camas.jpg' },
     { id: 'accesorios', label: 'Accesorios', image: '/images/collection/7.jpg' },
     { id: 'comederos', label: 'Comederos', image: '/images/collection/1.jpg' },
     { id: 'cuidado', label: 'Cuidado', image: '/images/collection/2.jpg' },
