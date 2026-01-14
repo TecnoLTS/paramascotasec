@@ -23,6 +23,7 @@ const Brand = () => {
         <>
             <div className="brand-block md:py-[60px] py-[32px]">
                 <div className="container">
+                    <div className="heading3 text-center mb-8">Marcas con las que trabajamos</div>
                     <div className="list-brand">
                         <Swiper
                             spaceBetween={12}

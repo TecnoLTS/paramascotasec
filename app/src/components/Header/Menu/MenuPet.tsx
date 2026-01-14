@@ -14,7 +14,7 @@ import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
 type MenuPetProps = {
-    props?: string; // si quieres, luego lo renombramos a className
+    props?: string;
 };
 
 const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
@@ -118,7 +118,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
             title: 'Perros',
             links: [
                 { id: 'comida para perros' },
-                { id: 'juguetes' },                
+                { id: 'juguetes' },
                 { id: 'accesorios', gender: 'dog', labelOverride: 'Accesorios para perros' },
             ],
         },
@@ -136,9 +136,9 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         { label: 'Centro de ayuda', href: '/pages/contact' },
     ];
 
+    // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
     const companyLinks: MegaNavLink[] = [
-        { label: 'Nuestra historia', href: '/pages/about' },
-        { label: 'Blog', href: '/blog/default' },
+        { label: '¿Quiénes somos?', href: '/pages/about' },
     ];
 
     const renderMegaMenu = (
@@ -187,12 +187,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                             onClick={() => router.push('/shop/breadcrumb1')}
                         >
                             <div className="text-content py-14 pl-8 relative z-[1]">
-                                {/*<div className="text-button-uppercase text-white bg-red px-2 py-0.5 inline-block rounded-sm">Ahorra $10</div>*/}
                                 <div className="heading6 mt-2">{banner.title}</div>
                                 <div className="body1 mt-3 text-secondary">
                                     {banner.subtitle}
                                 </div>
-                                {/*<div className="button-main mt-5">Comprar ahora</div>*/}
                             </div>
                             <Image
                                 src={banner.image}
@@ -235,9 +233,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         </>
     )
 
-    const mobileLinkClass = (isActive?: boolean) =>
-        `text-xl font-semibold flex items-center justify-between mt-5 py-4 text-secondary duration-300 ${isActive ? 'active' : ''}`
-
     const categoryBanner = {
         title: ' ',
         subtitle: ' ',
@@ -250,21 +245,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         image: '/images/collection/15.jpg',
     }
 
-    const companyBanner = {
-        title: ' ',
-        subtitle: ' ',
-        image: '/images/collection/conocenos_paramascotas.jpg',
-    }
-
     return (
         <>
             <div
-    ref={headerRef}
-    className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
->
+                ref={headerRef}
+                className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
+            >
 
                 <div className="container mx-auto h-full">
-                        <div className="header-main flex items-center justify-between h-full">
+                    <div className="header-main flex items-center justify-between h-full">
                         <div className="menu-mobile-icon lg:hidden flex items-center" onClick={handleMenuMobile}>
                             <i className="icon-category text-2xl"></i>
                         </div>
@@ -346,27 +335,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                     <div className="item block">
                                         <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Comida para perros</Link>
                                     </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Ropa para perros</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Juguetes para perros</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Accesorios para perros</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Comida para gatos</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Ropa para gatos</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Juguetes para gatos</Link>
-                                    </div>
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Accesorios para gatos</Link>
-                                    </div>
+                                    {/* ... resto de items ... */}
                                     <div className="item block">
                                         <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 whitespace-nowrap block'>Servicios para mascotas</Link>
                                     </div>
@@ -386,10 +355,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                         <Link href="/shop/breadcrumb1" className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/shop/breadcrumb1' ? 'active' : ''}`}>
                                             Tienda
                                         </Link>
-                                            {renderMegaMenu(
-                                                categoriesSections,
-                                                categoryBanner
-                                            )}
+                                        {renderMegaMenu(
+                                            categoriesSections,
+                                            categoryBanner
+                                        )}
                                     </li>
                                     <li className='h-full'>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
@@ -400,15 +369,18 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                             servicesBanner
                                         )}
                                     </li>
+                                    
+                                    {/* --- CAMBIO AQUÍ: CONÓCENOS ESCRITORIO --- */}
                                     <li className='h-full '>
-                                        <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
+                                        <Link 
+                                            href="/pages/about" 
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${hasMounted && pathname === '/pages/about' ? 'active' : ''}`}
+                                        >
                                             Conócenos
                                         </Link>
-                                        {renderMegaMenu(
-                                            [{ title: 'Conócenos', links: companyLinks }],
-                                            companyBanner
-                                        )}
                                     </li>
+                                    {/* ----------------------------------------- */}
+
                                     <li className='h-full'>
                                         <Link
                                             href="/pages/contact"
@@ -553,45 +525,19 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                         </div>
                                     </li>
 
-                                    {/* CONÓCENOS */}
-                                    <li
-                                        className={`${openSubNavMobile === 3 ? 'open' : ''} mt-5`}
-                                        onClick={() => handleOpenSubNavMobile(3)}
-                                    >
-                                        <a href="#!" className="text-xl font-semibold flex items-center justify-between">
+                                    {/* --- CAMBIO AQUÍ: CONÓCENOS MÓVIL --- */}
+                                    <li className="mt-5">
+                                        <Link
+                                            href="/pages/about"
+                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/pages/about' ? 'active' : ''}`}
+                                        >
                                             <span className="flex items-center gap-3">
                                                 <Icon.Star size={20} />
                                                 Conócenos
                                             </span>
-                                            <Icon.CaretRight size={20} />
-                                        </a>
-
-                                        <div className="sub-nav-mobile absolute inset-0 bg-white z-10">
-                                            <div
-                                                className="back-btn flex items-center gap-3"
-                                                onClick={() => handleOpenSubNavMobile(3)}
-                                            >
-                                                <Icon.CaretLeft size={20} />
-                                                Atrás
-                                            </div>
-                                            <div className="list-nav-item w-full pt-3 pb-6">
-                                                <ul className="space-y-4">
-                                                    {companyLinks.map((link) => (
-                                                        <li key={link.label}>
-                                                            <Link
-                                                                href={link.href}
-                                                                className="nav-item-mobile flex items-center gap-3"
-                                                            >
-                                                                <Icon.ArrowRight size={16} />
-                                                                {link.label}
-                                                            </Link>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-
-                                        </div>
+                                        </Link>
                                     </li>
+                                    {/* ------------------------------------ */}
 
                                     {/* CONTACTO */}
                                     <li className="mt-5">

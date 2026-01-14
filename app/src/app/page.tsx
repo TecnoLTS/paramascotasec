@@ -25,7 +25,7 @@ export default async function HomePet() {
             </div>
             <Collection categories={petCategoryCards} />
             <AllProducts data={products} />
-            <Benefit props="md:py-10 py-5" />
+            {/*<Benefit props="md:py-10 py-5" />*/}
             <Banner2 />
             <ChooseUs />
             <FeatureProduct data={products} start={0} limit={4} />
