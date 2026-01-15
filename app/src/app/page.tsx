@@ -10,6 +10,7 @@ import AllProducts from '@/components/Product/AllProducts'
 import Benefit from '@/components/Pet/Benefit'
 import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
+import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
 import petCategoryCards from '@/data/petCategoryCards'
 import { fetchProducts } from '@/lib/products'
 export const dynamic = 'force-dynamic'
@@ -19,13 +20,14 @@ export default async function HomePet() {
 
     return (
         <>
+            <ScrollToTopOnMount />
             <div id="header" className="relative w-full style-pet">
                 <MenuPet />
                 <SliderPet />
             </div>
             <Collection categories={petCategoryCards} />
             <AllProducts data={products} />
-            {/*<Benefit props="md:py-10 py-5" />*/}
+            <Benefit props="md:py-10 py-5" />
             <Banner2 />
             <ChooseUs />
             <FeatureProduct data={products} start={0} limit={4} />

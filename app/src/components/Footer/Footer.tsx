@@ -55,7 +55,7 @@ const Footer = () => {
                                     <div className="flex flex-col gap-2">
                                         <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/about'}>Conócenos</Link>
                                         <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/contact'}>Contáctanos</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/faqs'}>Preguntas frecuentes</Link>
+                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/preguntas-frecuentes'}>Preguntas frecuentes</Link>
                                     </div>
                                 </div>
 
@@ -73,9 +73,14 @@ const Footer = () => {
                                     <div className="text-button-uppercase pb-4 text-black font-bold">Atención al cliente</div>
                                     <div className="flex flex-col gap-2">
                                         <Link className='caption1 hover:text-green-600 duration-300' href={'/my-account'}>Mi cuenta</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/faqs'}>Envíos</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/order-tracking'}>Devoluciones y reembolsos</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/faqs'}>Política de privacidad</Link>
+                                        <Link 
+            className='caption1 hover:text-green-600 duration-300' 
+            href={'/pages/terminos-y-condiciones#envios'}
+        >
+            Envíos
+        </Link>
+                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/terminos-y-condiciones'}>Términos y condiciones</Link>
+                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/pages/politica-de-privacidad'}>Política de privacidad</Link>
                                     </div>
                                 </div>
                             </div>
