@@ -60,8 +60,8 @@ const Default: React.FC<Props> = ({ data, productId }) => {
 
   const productImages = Array.isArray((productMain as any)?.images)
     ? (productMain as any).images
-        .map((img: any) => (typeof img === 'string' ? img : img?.url ?? ''))
-        .filter(Boolean)
+      .map((img: any) => (typeof img === 'string' ? img : img?.url ?? ''))
+      .filter(Boolean)
     : []
 
   // 🔧 Aquí estaba el error: tipamos img y el array resultante
@@ -169,7 +169,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                       src={item}
                       width={1000}
                       height={1000}
-                      alt='prd-img'
+                      alt={`${productMain.name} - Vista ${index + 1}`}
                       className='w-full aspect-[3/4] object-cover'
                     />
                   </SwiperSlide>
@@ -198,7 +198,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                       src={item}
                       width={1000}
                       height={1000}
-                      alt='prd-img'
+                      alt={`${productMain.name} - Miniatura ${index + 1}`}
                       className='w-full aspect-[3/4] object-cover rounded-xl'
                     />
                   </SwiperSlide>
@@ -234,7 +234,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                         src={item}
                         width={1000}
                         height={1000}
-                        alt='prd-img'
+                        alt={`${productMain.name} - Zoom ${index + 1}`}
                         className='w-full aspect-[3/4] object-cover rounded-xl'
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -252,7 +252,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <div className="caption2 text-secondary font-semibold uppercase">
                     {productMain.type}
                   </div>
-                  <div className="heading4 mt-1">{productMain.name}</div>
+                  <h1 className="heading4 mt-1">{productMain.name}</h1>
                 </div>
               </div>
 
@@ -391,22 +391,20 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 <div className="tab-headers flex items-center gap-6 border-b border-line pb-3 overflow-x-auto">
                   <button
                     type="button"
-                    className={`text-button pb-1 relative ${
-                      activeTab === 'description'
-                        ? 'font-semibold after:content-[""] after:absolute after:left-0 after:-bottom-[2px] after:w-full after:h-[2px] after:bg-black'
-                        : 'text-secondary'
-                    }`}
+                    className={`text-button pb-1 relative ${activeTab === 'description'
+                      ? 'font-semibold after:content-[""] after:absolute after:left-0 after:-bottom-[2px] after:w-full after:h-[2px] after:bg-black'
+                      : 'text-secondary'
+                      }`}
                     onClick={() => handleActiveTab('description')}
                   >
                     Descripción
                   </button>
                   <button
                     type="button"
-                    className={`text-button pb-1 relative ${
-                      activeTab === 'specifications'
-                        ? 'font-semibold after:content-[""] after:absolute after:left-0 after:-bottom-[2px] after:w-full after:h-[2px] after:bg-black'
-                        : 'text-secondary'
-                    }`}
+                    className={`text-button pb-1 relative ${activeTab === 'specifications'
+                      ? 'font-semibold after:content-[""] after:absolute after:left-0 after:-bottom-[2px] after:w-full after:h-[2px] after:bg-black'
+                      : 'text-secondary'
+                      }`}
                     onClick={() => handleActiveTab('specifications')}
                   >
                     Especificaciones
@@ -487,7 +485,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                         src={`/images/payment/${frame}.png`}
                         width={500}
                         height={450}
-                        alt='payment'
+                        alt={`Método de pago ${frame}`}
                         className='w-full'
                       />
                     </div>

@@ -12,7 +12,7 @@ const petCategoryCards: PetCategoryCard[] = [
     { id: 'juguetes', label: 'Juguetes', image: '/images/collection/categoria_juguetes.jpg' },
     { id: 'camas', label: 'Camas', image: '/images/collection/categoria_camas.jpg' },
     { id: 'accesorios', label: 'Accesorios', image: '/images/collection/7.jpg' },
-    { id: 'comederos', label: 'Comederos', image: '/images/collection/1.jpg' },
+    { id: 'comederos', label: 'Comederos', image: '/images/collection/4.jpg' },
     { id: 'cuidado', label: 'Cuidado', image: '/images/collection/2.jpg' },
 ]
 

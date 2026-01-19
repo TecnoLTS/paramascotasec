@@ -8,6 +8,40 @@ import { useCart } from '@/context/CartContext'
 import { useSearchParams } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 
+interface AddressData {
+    firstName: string;
+    lastName: string;
+    company: string;
+    country: string;
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+    phone: string;
+    email: string;
+}
+
+interface SavedAddress {
+    id: string;
+    title: string;
+    billing: AddressData;
+    shipping: AddressData;
+    isSame: boolean;
+}
+
+const emptyAddress: AddressData = {
+    firstName: '',
+    lastName: '',
+    company: '',
+    country: '',
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
+    phone: '',
+    email: '',
+};
+
 const fallbackItems = [
     {
         id: 'sample-1',
@@ -44,6 +78,58 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState<'credit' | 'transfer' | 'cash'>('credit')
     const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
     const [transferSecondsLeft, setTransferSecondsLeft] = useState(600)
+
+    // Address management state
+    const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
+    const [selectedAddressId, setSelectedAddressId] = useState<string>('one-time')
+    const [tempAddress, setTempAddress] = useState<AddressData>(emptyAddress)
+    const [overwriteOriginal, setOverwriteOriginal] = useState(false)
+    const [contactInfo, setContactInfo] = useState({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: ''
+    })
+
+    useEffect(() => {
+        const saved = localStorage.getItem('savedAddresses')
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                setSavedAddresses(parsed)
+                if (parsed.length > 0) {
+                    setSelectedAddressId(parsed[0].id)
+                    setTempAddress(parsed[0].shipping)
+                }
+            } catch (e) {
+                console.error('Error parsing addresses', e)
+            }
+        }
+    }, [])
+
+
+    const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { id, value } = e.target
+        setTempAddress(prev => ({ ...prev, [id]: value }))
+    }
+
+    const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { id, value } = e.target
+        setContactInfo(prev => ({ ...prev, [id]: value }))
+    }
+
+    const handleConfirmStep1 = () => {
+        if (overwriteOriginal && selectedAddressId !== 'one-time') {
+            const updated = savedAddresses.map(addr =>
+                addr.id === selectedAddressId
+                    ? { ...addr, shipping: tempAddress, billing: addr.isSame ? tempAddress : addr.billing }
+                    : addr
+            )
+            setSavedAddresses(updated)
+            localStorage.setItem('userAddresses', JSON.stringify(updated))
+        }
+        setCurrentStep(2)
+    }
 
     const normalizedCart = useMemo(
         () =>
@@ -114,14 +200,12 @@ const Checkout = () => {
                                 return (
                                     <div
                                         key={step}
-                                        className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-                                            active ? 'border-[#2e4d4d] bg-[#2e4d4d1a]' : 'border-[#e5e7eb]'
-                                        }`}
+                                        className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${active ? 'border-[#2e4d4d] bg-[#2e4d4d1a]' : 'border-[#e5e7eb]'
+                                            }`}
                                     >
                                         <div
-                                            className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-semibold ${
-                                                active || done ? 'bg-[#2e4d4d] text-white' : 'bg-[#e5e7eb] text-[#6b7280]'
-                                            }`}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-semibold ${active || done ? 'bg-[#2e4d4d] text-white' : 'bg-[#e5e7eb] text-[#6b7280]'
+                                                }`}
                                         >
                                             {done ? '✓' : step}
                                         </div>
@@ -178,22 +262,34 @@ const Checkout = () => {
                                         <div className="grid sm:grid-cols-2 gap-4">
                                             <input
                                                 type="text"
+                                                id="firstName"
                                                 placeholder="Nombre *"
+                                                value={contactInfo.firstName}
+                                                onChange={handleContactChange}
                                                 className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                             />
                                             <input
                                                 type="text"
+                                                id="lastName"
                                                 placeholder="Apellido *"
+                                                value={contactInfo.lastName}
+                                                onChange={handleContactChange}
                                                 className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                             />
                                             <input
                                                 type="email"
+                                                id="email"
                                                 placeholder="Email *"
+                                                value={contactInfo.email}
+                                                onChange={handleContactChange}
                                                 className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                             />
                                             <input
                                                 type="tel"
+                                                id="phone"
                                                 placeholder="Teléfono *"
+                                                value={contactInfo.phone}
+                                                onChange={handleContactChange}
                                                 className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                             />
                                         </div>
@@ -204,11 +300,10 @@ const Checkout = () => {
                                         <div className="grid sm:grid-cols-2 gap-4">
                                             <button
                                                 onClick={() => setDeliveryMethod('delivery')}
-                                                className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
-                                                    deliveryMethod === 'delivery'
-                                                        ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                        : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                                }`}
+                                                className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${deliveryMethod === 'delivery'
+                                                    ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
+                                                    : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
+                                                    }`}
                                             >
                                                 <Truck className={`w-8 h-8 mb-2 ${deliveryMethod === 'delivery' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                                 <span className="font-medium text-[#111827]">Envío a domicilio</span>
@@ -216,11 +311,10 @@ const Checkout = () => {
                                             </button>
                                             <button
                                                 onClick={() => setDeliveryMethod('pickup')}
-                                                className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
-                                                    deliveryMethod === 'pickup'
-                                                        ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                        : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                                }`}
+                                                className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${deliveryMethod === 'pickup'
+                                                    ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
+                                                    : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
+                                                    }`}
                                             >
                                                 <Package className={`w-8 h-8 mb-2 ${deliveryMethod === 'pickup' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                                 <span className="font-medium text-[#111827]">Retiro en tienda</span>
@@ -230,29 +324,83 @@ const Checkout = () => {
 
                                         {deliveryMethod === 'delivery' && (
                                             <div className="mt-6 space-y-4">
-                                                <h3 className="font-medium text-[#111827]">Dirección de envío</h3>
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="font-medium text-[#111827]">Dirección de envío</h3>
+                                                    {savedAddresses.length > 0 && (
+                                                        <select
+                                                            className="text-sm border border-[#e5e7eb] rounded-lg px-3 py-1.5"
+                                                            value={selectedAddressId}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setSelectedAddressId(val);
+                                                                if (val !== 'one-time') {
+                                                                    const addr = savedAddresses.find(a => a.id === val);
+                                                                    if (addr) setTempAddress(addr.shipping);
+                                                                    setOverwriteOriginal(false);
+                                                                } else {
+                                                                    setTempAddress(emptyAddress);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {savedAddresses.map(addr => (
+                                                                <option key={addr.id} value={addr.id}>{addr.title}</option>
+                                                            ))}
+                                                            <option value="one-time">Usar otra dirección (un solo uso)</option>
+                                                        </select>
+                                                    )}
+                                                </div>
+
                                                 <div className="grid sm:grid-cols-2 gap-4">
-                                                    <select className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white">
-                                                        <option>País/Región *</option>
-                                                        <option>España</option>
-                                                        <option>México</option>
-                                                        <option>Argentina</option>
+                                                    <select
+                                                        id="country"
+                                                        value={tempAddress.country}
+                                                        onChange={handleAddressChange}
+                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
+                                                    >
+                                                        <option value="">País/Región *</option>
+                                                        <option value="Ecuador">Ecuador</option>
+                                                        <option value="España">España</option>
+                                                        <option value="México">México</option>
+                                                        <option value="Argentina">Argentina</option>
                                                     </select>
                                                     <input
                                                         type="text"
+                                                        id="city"
                                                         placeholder="Ciudad *"
+                                                        value={tempAddress.city}
+                                                        onChange={handleAddressChange}
                                                         className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                     />
                                                     <input
                                                         type="text"
+                                                        id="zip"
                                                         placeholder="Código Postal *"
+                                                        value={tempAddress.zip}
+                                                        onChange={handleAddressChange}
                                                         className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                     />
                                                     <input
                                                         type="text"
+                                                        id="street"
                                                         placeholder="Calle y número *"
+                                                        value={tempAddress.street}
+                                                        onChange={handleAddressChange}
                                                         className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
                                                     />
+
+                                                    {selectedAddressId !== 'one-time' && (
+                                                        <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
+                                                            <input
+                                                                type="checkbox"
+                                                                id="overwrite"
+                                                                checked={overwriteOriginal}
+                                                                onChange={(e) => setOverwriteOriginal(e.target.checked)}
+                                                                className="w-4 h-4 cursor-pointer text-[#2e4d4d] focus:ring-[#2e4d4d]"
+                                                            />
+                                                            <label htmlFor="overwrite" className="text-sm cursor-pointer text-[#6b7280]">Actualizar esta dirección guardada con los nuevos cambios</label>
+                                                        </div>
+                                                    )}
+
                                                     <textarea
                                                         placeholder="Notas adicionales (opcional)"
                                                         rows={3}
@@ -275,7 +423,7 @@ const Checkout = () => {
                                         <div className="mt-6 flex justify-end">
                                             <button
                                                 className="bg-[#1f3b3b] text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-[#2e4d4d] transition-colors"
-                                                onClick={() => setCurrentStep(2)}
+                                                onClick={handleConfirmStep1}
                                             >
                                                 Continuar a pago
                                             </button>
@@ -290,11 +438,10 @@ const Checkout = () => {
                                     <div className="space-y-3">
                                         <button
                                             onClick={() => setPaymentMethod('credit')}
-                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
-                                                paymentMethod === 'credit'
-                                                    ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                    : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                            }`}
+                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${paymentMethod === 'credit'
+                                                ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
+                                                : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
+                                                }`}
                                         >
                                             <CreditCard className={`w-5 h-5 ${paymentMethod === 'credit' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                             <span className="font-medium text-[#111827]">Tarjeta de crédito/débito</span>
@@ -302,11 +449,10 @@ const Checkout = () => {
 
                                         <button
                                             onClick={() => setPaymentMethod('transfer')}
-                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
-                                                paymentMethod === 'transfer'
-                                                    ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                    : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                            }`}
+                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${paymentMethod === 'transfer'
+                                                ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
+                                                : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
+                                                }`}
                                         >
                                             <Building2 className={`w-5 h-5 ${paymentMethod === 'transfer' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                             <span className="font-medium text-[#111827]">Transferencia bancaria</span>
@@ -314,11 +460,10 @@ const Checkout = () => {
 
                                         <button
                                             onClick={() => setPaymentMethod('cash')}
-                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
-                                                paymentMethod === 'cash'
-                                                    ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                    : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                            }`}
+                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${paymentMethod === 'cash'
+                                                ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
+                                                : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
+                                                }`}
                                         >
                                             <Banknote className={`w-5 h-5 ${paymentMethod === 'cash' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                             <span className="font-medium text-[#111827]">Pago en efectivo</span>
@@ -412,19 +557,59 @@ const Checkout = () => {
 
                             {isStep3 && (
                                 <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
-                                    <h2 className="text-xl font-semibold text-[#111827] mb-4">Confirmación</h2>
-                                    <p className="text-[#374151] text-sm">
-                                        Revisa los datos de envío y el método de pago. Cuando estés listo, confirma tu pedido.
-                                    </p>
-                                    <div className="mt-6 flex justify-between">
+                                    <h2 className="text-xl font-semibold text-[#111827] mb-6">Confirmación de Pedido</h2>
+
+                                    <div className="grid sm:grid-cols-2 gap-8 mb-8">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-[#6b7280] uppercase tracking-wider mb-3">Contacto</h3>
+                                            <p className="text-[#111827] font-medium">{contactInfo.firstName} {contactInfo.lastName}</p>
+                                            <p className="text-sm text-[#6b7280]">{contactInfo.email}</p>
+                                            <p className="text-sm text-[#6b7280]">{contactInfo.phone}</p>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-[#6b7280] uppercase tracking-wider mb-3">Entrega</h3>
+                                            {deliveryMethod === 'pickup' ? (
+                                                <p className="text-sm text-[#374151]">Retiro en tienda (Gratis)</p>
+                                            ) : (
+                                                <>
+                                                    <p className="text-[#111827] font-medium">{tempAddress.street}</p>
+                                                    <p className="text-sm text-[#6b7280]">{tempAddress.city}, {tempAddress.zip}</p>
+                                                    <p className="text-sm text-[#6b7280]">{tempAddress.country}</p>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-[#6b7280] uppercase tracking-wider mb-3">Método de Pago</h3>
+                                            <p className="text-[#111827] font-medium">
+                                                {paymentMethod === 'credit' && 'Tarjeta de Crédito/Débito'}
+                                                {paymentMethod === 'transfer' && 'Transferencia Bancaria'}
+                                                {paymentMethod === 'cash' && 'Pago en Efectivo'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl mb-8">
+                                        <p className="text-sm text-green-700 font-medium flex items-center gap-2">
+                                            <Icon.CheckCircle weight="fill" />
+                                            Revisa que toda la información sea correcta antes de confirmar.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex justify-between items-center pt-6 border-t border-[#e5e7eb]">
                                         <button
-                                            className="text-sm font-medium text-[#1f3b3b] border border-[#1f3b3b] rounded-lg px-4 py-2 hover:bg-[#2e4d4d1a] transition-colors"
+                                            className="text-sm font-medium text-[#1f3b3b] hover:underline"
                                             onClick={() => setCurrentStep(2)}
                                         >
-                                            Volver a pago
+                                            ← Volver a pago
                                         </button>
-                                        <button className="bg-[#1f3b3b] text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-[#2e4d4d] transition-colors">
-                                            Confirmar pedido
+                                        <button
+                                            className="bg-[#1f3b3b] text-white rounded-lg px-8 py-3 font-bold hover:bg-[#2e4d4d] transition-all shadow-lg"
+                                            onClick={() => {
+                                                alert('¡Pedido confirmado con éxito!');
+                                                window.location.href = '/my-account';
+                                            }}
+                                        >
+                                            Finalizar Compra
                                         </button>
                                     </div>
                                 </div>

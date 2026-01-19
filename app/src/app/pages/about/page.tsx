@@ -8,9 +8,9 @@ import MenuPet from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 
 // Lógica para detectar ancho de pantalla
-const getSuffixByWidth = (w) => {
+const getSuffixByWidth = (w: number) => {
     if (w < 768) return 'mobile';
-    return '1920'; 
+    return '1920';
 }
 
 const AboutUs = () => {
@@ -22,7 +22,7 @@ const AboutUs = () => {
         };
         // Ejecutar al inicio para asegurar la carga correcta
         updateSuffix();
-        
+
         window.addEventListener('resize', updateSuffix);
         return () => window.removeEventListener('resize', updateSuffix);
     }, []);
@@ -43,7 +43,7 @@ const AboutUs = () => {
                             fill
                             priority={true}
                             alt='About Us Banner'
-                            className='object-cover' 
+                            className='object-cover'
                         />
                         <div className="absolute inset-0 bg-black/30" />
                         <div className="container relative z-10 h-full flex flex-col justify-center items-center text-center">
@@ -61,7 +61,7 @@ const AboutUs = () => {
                             <div className="lg:w-1/2 w-full">
                                 <div className="image relative w-full h-[400px] md:h-[600px] rounded-[40px] overflow-hidden shadow-xl">
                                     <Image
-                                        src={`/images/banner/28.jpg`} 
+                                        src={`/images/banner/28.jpg`}
                                         /*src={`/images/banner/about-1-${suffix}.jpg`} */
                                         fill
                                         alt='Quiénes somos'
@@ -129,9 +129,9 @@ const AboutUs = () => {
                             </div>
                             {/* Imagen Derecha */}
                             <div className="lg:w-1/2 w-full">
-                                 <div className="image relative w-full h-[400px] md:h-[600px] rounded-[40px] overflow-hidden shadow-xl">
+                                <div className="image relative w-full h-[400px] md:h-[600px] rounded-[40px] overflow-hidden shadow-xl">
                                     <Image
-                                        src={`/images/banner/30.jpg`} 
+                                        src={`/images/banner/30.jpg`}
                                         //src={`/images/banner/about-2-${suffix}.jpg`} 
                                         fill
                                         alt='Lo que ofrecemos'
@@ -153,7 +153,7 @@ const AboutUs = () => {
                             </p>
                         </div>
                         <div className="relative w-full h-[300px] md:h-[500px] rounded-[40px] overflow-hidden shadow-xl mb-16">
-                             <Image
+                            <Image
                                 src={`/images/banner/31.jpg`}
                                 //src={`/images/banner/about-3-${suffix}.jpg`}
                                 fill
@@ -161,7 +161,7 @@ const AboutUs = () => {
                                 className='object-cover'
                             />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-6">
-                                 <blockquote className="text-white text-xl md:text-3xl font-medium text-center max-w-3xl italic leading-relaxed">
+                                <blockquote className="text-white text-xl md:text-3xl font-medium text-center max-w-3xl italic leading-relaxed">
                                     "Cuidamos cada detalle porque entendemos que detrás de cada compra hay una historia, una familia y una mascota que importa."
                                 </blockquote>
                             </div>

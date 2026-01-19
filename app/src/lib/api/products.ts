@@ -1,11 +1,17 @@
 import { fetchJson, requestApi } from '@/lib/apiClient'
 import { apiEndpoints } from './endpoints'
 import { ProductType } from '@/type/ProductType'
+import { mapProductToDto, mapProductsToDto } from '@/lib/productMapper'
 
-export const listProducts = () => fetchJson<ProductType[]>(apiEndpoints.products)
+export const listProducts = async () => {
+  const data = await fetchJson<any[]>(apiEndpoints.products)
+  return mapProductsToDto(data)
+}
 
-export const getProduct = (id: string) =>
-  fetchJson<ProductType>(apiEndpoints.product(id))
+export const getProduct = async (id: string) => {
+  const data = await fetchJson<any>(apiEndpoints.product(id))
+  return mapProductToDto(data)
+}
 
 export const createProduct = (payload: Partial<ProductType>) =>
   requestApi<ProductType>(apiEndpoints.products, {

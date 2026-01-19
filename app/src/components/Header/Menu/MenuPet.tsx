@@ -179,11 +179,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                     </div>
                     <div className="banner-ads-block pl-2.5 basis-1/4 min-w-[220px]">
                         <div
-                            className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${
-                                banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg' || banner.image === '/images/collection/conocenos_paramascotas.jpg'
+                            className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg' || banner.image === '/images/collection/conocenos_paramascotas.jpg'
                                     ? 'min-h-[220px]'
                                     : ''
-                            }`}
+                                }`}
                             onClick={() => router.push('/shop/breadcrumb1')}
                         >
                             <div className="text-content py-14 pl-8 relative z-[1]">
@@ -249,7 +248,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         <>
             <div
                 ref={headerRef}
-                className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-whith w-full md:h-[90px] h-[64px]`}
+                className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-white w-full md:h-[90px] h-[64px]`}
             >
 
                 <div className="container mx-auto h-full">
@@ -291,7 +290,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                         </div>
                         <div className="right flex gap-12">
                             <div className="list-action flex items-center gap-6">
-                                <div className="user-icon flex items-center flex-col justify-center cursor-pointer">
+                                <div className="user-icon relative flex items-center flex-col justify-center cursor-pointer">
                                     <Icon.User size={26} color='black' onClick={handleLoginPopup} />
                                     <div className="caption1" onClick={handleLoginPopup}>Mi cuenta</div>
                                     <div
@@ -369,11 +368,11 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                             servicesBanner
                                         )}
                                     </li>
-                                    
+
                                     {/* --- CAMBIO AQUÍ: CONÓCENOS ESCRITORIO --- */}
                                     <li className='h-full '>
-                                        <Link 
-                                            href="/pages/about" 
+                                        <Link
+                                            href="/pages/about"
                                             className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${hasMounted && pathname === '/pages/about' ? 'active' : ''}`}
                                         >
                                             Conócenos

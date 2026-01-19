@@ -20,4 +20,4 @@ export const fetchProducts = async () => {
   }
 }
 
-export { getProduct, createProduct, updateProduct, deleteProduct }
+export { listProducts, getProduct, createProduct, updateProduct, deleteProduct }

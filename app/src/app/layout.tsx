@@ -49,13 +49,36 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-      <html lang="es">
-        <body className={instrument.className}>
+    <html lang="es">
+      <body className={instrument.className}>
         <GlobalProvider>
           {children}
           <ClientModals serverTimeLeft={serverTimeLeft} />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Organization',
+                name: 'ParaMascotasEC',
+                url: siteUrl,
+                logo: `${siteUrl}/images/logo.png`,
+                contactPoint: {
+                  '@type': 'ContactPoint',
+                  telephone: '+593-XXXXXXXXX', // Should be updated with real info
+                  contactType: 'customer service',
+                  areaServed: 'EC',
+                  availableLanguage: 'Spanish'
+                },
+                sameAs: [
+                  'https://www.facebook.com/paramascotasec',
+                  'https://www.instagram.com/paramascotasec',
+                ]
+              })
+            }}
+          />
         </GlobalProvider>
-        </body>
-      </html>
+      </body>
+    </html>
   )
 }

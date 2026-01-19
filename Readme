@@ -197,3 +197,12 @@ COMPOSE_PROFILES=production APP_ENV=production docker compose up -d --build
 sudo docker restart nginx-gateway
 
 
+Prueba de Funcionamiento:
+He creado un usuario de prueba para que puedas verificarlo inmediatamente:
+
+
+cliente@example.com
+
+Email: admin@example.com
+
+Contraseña: password123

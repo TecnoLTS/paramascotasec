@@ -2,6 +2,10 @@ export const apiEndpoints = {
   products: '/api/products',
   product: (id: string) => `/api/products/${id}`,
   health: '/api/health',
+  auth: {
+    login: '/api/auth/login',
+    register: '/api/auth/register',
+  },
   ejemplo: '/api/ejemplo',
   ejemplo2: '/api/ejemplo2',
 } as const

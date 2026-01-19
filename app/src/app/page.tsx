@@ -13,6 +13,14 @@ import Footer from '@/components/Footer/Footer'
 import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
 import petCategoryCards from '@/data/petCategoryCards'
 import { fetchProducts } from '@/lib/products'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+    title: 'ParaMascotasEC - Tu Tienda de Mascotas en Ecuador',
+    description: 'Encuentra el mejor alimento, accesorios y cuidados para tus perros y gatos. Calidad premium con entrega en todo Ecuador.',
+    keywords: ['mascotas', 'perros', 'gatos', 'alimento para mascotas', 'Ecuador', 'tienda de mascotas online'],
+}
+
 export const dynamic = 'force-dynamic'
 
 export default async function HomePet() {

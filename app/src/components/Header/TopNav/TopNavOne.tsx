@@ -13,7 +13,7 @@ interface Props {
 const TopNavOne: React.FC<Props> = ({ props, slogan }) => {
     const [isOpenLanguage, setIsOpenLanguage] = useState(false)
     const [isOpenCurrence, setIsOpenCurrence] = useState(false)
-    const [language, setLanguage] = useState('English')
+    const [language, setLanguage] = useState('Español')
     const [currence, setCurrence] = useState('USD')
 
     return (
@@ -33,7 +33,7 @@ const TopNavOne: React.FC<Props> = ({ props, slogan }) => {
                                     <p className="selected caption2 text-white">{language}</p>
                                     <ul className={`list-option bg-white ${isOpenLanguage ? 'open' : ''}`}>
                                         {
-                                            ['English', 'Espana', 'France'].map((item, index) => (
+                                            ['English', 'Español', 'Français'].map((item, index) => (
                                                 <li key={index} className="caption2" onClick={() => setLanguage(item)}>{item}</li>
                                             ))
                                         }
@@ -68,7 +68,7 @@ const TopNavOne: React.FC<Props> = ({ props, slogan }) => {
                             <Link href={'https://www.facebook.com/'} target='_blank'>
                                 <i className="icon-facebook text-white"></i>
                             </Link>
-                            <Link href={'https://www.instagram.com/'} target='_blank'>
+                            <Link href={'https://www.instagram.com/paramascotas_ec/'} target='_blank'>
                                 <i className="icon-instagram text-white"></i>
                             </Link>
                             <Link href={'https://www.youtube.com/'} target='_blank'>

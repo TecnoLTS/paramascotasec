@@ -1,4 +1,7 @@
 const buildBaseUrl = () => {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  if (backendUrl) return backendUrl.replace(/\/$/, '').replace(/\/api$/, '')
+
   const explicitBase = process.env.NEXT_PUBLIC_BASE_URL
   if (explicitBase) return explicitBase.replace(/\/$/, '')
 
@@ -12,11 +15,18 @@ const resolveUrl = (path: string) => {
   if (path.startsWith('http')) return path
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
 
-  // En el navegador, un path relativo basta.
-  if (typeof window !== 'undefined') return normalizedPath
+  // Si estamos en el servidor (SSR), usamos la URL interna de Docker
+  if (typeof window === 'undefined') {
+    const internalUrl = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api'
+    return `${internalUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
+  }
 
-  // En el servidor, construir URL absoluta.
-  return `${buildBaseUrl()}${normalizedPath}`
+  // Si estamos en el navegador, usamos la URL pública
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  if (backendUrl) return `${backendUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
+
+  // Fallback (no recomendado ahora que el backend es externo)
+  return normalizedPath
 }
 
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -27,9 +37,12 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   const body = isJson ? await res.json() : await res.text()
 
   if (!res.ok) {
-    const message = typeof body === 'string' && body.length > 0
-      ? body
-      : `Error ${res.status} al consultar ${url}`
+    let message = `Error ${res.status} al consultar ${url}`
+    if (typeof body === 'string' && body.length > 0) {
+      message = body
+    } else if (typeof body === 'object' && body !== null) {
+      message = (body as any).error || (body as any).message || message
+    }
     throw new Error(message)
   }
 

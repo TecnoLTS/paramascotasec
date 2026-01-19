@@ -1,33 +1,103 @@
+'use client'
+
+import React, { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { register } from '@/lib/api/auth'
 
 const Register = () => {
+    const router = useRouter()
+    const [name, setName] = useState('')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError('')
+
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden')
+            return
+        }
+
+        setLoading(true)
+
+        try {
+            await register({ name, email, password })
+            // Redirigir al login tras registro exitoso
+            router.push('/login?registered=true')
+        } catch (err: any) {
+            setError(err.message || 'Error al registrarse')
+        } finally {
+            setLoading(false)
+        }
+    }
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
+            <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el código GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Create An Account' subHeading='Create An Account' />
+                <Breadcrumb heading='Crear una cuenta' subHeading='Crear una cuenta' />
             </div>
             <div className="register-block md:py-20 py-10">
                 <div className="container">
                     <div className="content-main flex gap-y-8 max-md:flex-col">
                         <div className="left md:w-1/2 w-full lg:pr-[60px] md:pr-[40px] md:border-r border-line">
-                            <div className="heading4">Register</div>
-                            <form className="md:mt-7 mt-4">
-                                <div className="email ">
-                                    <input className="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="username" type="email" placeholder="Username or email address *" required />
+                            <div className="heading4">Registrarse</div>
+                            {error && <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
+                            <form className="md:mt-7 mt-4" onSubmit={handleSubmit}>
+                                <div className="name">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="name"
+                                        type="text"
+                                        placeholder="Nombre completo *"
+                                        required
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="email mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="username"
+                                        type="email"
+                                        placeholder="Correo electrónico *"
+                                        required
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
                                 </div>
                                 <div className="pass mt-5">
-                                    <input className="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="password" type="password" placeholder="Password *" required />
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="password"
+                                        type="password"
+                                        placeholder="Contraseña *"
+                                        required
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
                                 </div>
                                 <div className="confirm-pass mt-5">
-                                    <input className="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="confirmPassword" type="password" placeholder="Confirm Password *" required />
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="confirmPassword"
+                                        type="password"
+                                        placeholder="Confirmar contraseña *"
+                                        required
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                    />
                                 </div>
                                 <div className='flex items-center mt-5'>
                                     <div className="block-input">
@@ -35,24 +105,27 @@ const Register = () => {
                                             type="checkbox"
                                             name='remember'
                                             id='remember'
+                                            required
                                         />
                                         <Icon.CheckSquare size={20} weight='fill' className='icon-checkbox' />
                                     </div>
-                                    <label htmlFor='remember' className="pl-2 cursor-pointer text-secondary2">I agree to the
-                                        <Link href={'#!'} className='text-black hover:underline pl-1'>Terms of User</Link>
+                                    <label htmlFor='remember' className="pl-2 cursor-pointer text-secondary2">Acepto los
+                                        <Link href={'#!'} className='text-black hover:underline pl-1'>Términos de Usuario</Link>
                                     </label>
                                 </div>
                                 <div className="block-button md:mt-7 mt-4">
-                                    <button className="button-main">Register</button>
+                                    <button className="button-main" disabled={loading}>
+                                        {loading ? 'Cargando...' : 'Registrarse'}
+                                    </button>
                                 </div>
                             </form>
                         </div>
                         <div className="right md:w-1/2 w-full lg:pl-[60px] md:pl-[40px] flex items-center">
                             <div className="text-content">
-                                <div className="heading4">Already have an account?</div>
-                                <div className="mt-2 text-secondary">Welcome back. Sign in to access your personalized experience, saved preferences, and more. We{String.raw`'re`} thrilled to have you with us again!</div>
+                                <div className="heading4">¿Ya tienes una cuenta?</div>
+                                <div className="mt-2 text-secondary">Bienvenido de nuevo. Inicia sesión para acceder a tu experiencia personalizada, preferencias guardadas y más. ¡Estamos encantados de tenerte con nosotros de nuevo!</div>
                                 <div className="block-button md:mt-7 mt-4">
-                                    <Link href={'/login'} className="button-main">Login</Link>
+                                    <Link href={'/login'} className="button-main">Iniciar Sesión</Link>
                                 </div>
                             </div>
                         </div>
