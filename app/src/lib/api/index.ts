@@ -7,6 +7,7 @@ import { fetchJson } from '@/lib/apiClient'
 // 👇 Re-exports (para que otros módulos puedan importar desde aquí)
 export { apiEndpoints } from './endpoints'
 export { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from './products'
+export { createOrder, getQuote } from './orders'
 export { fetchJson, requestApi } from '@/lib/apiClient'
 
 // Endpoints ligeros disponibles para chequeo rápido de salud/demo.

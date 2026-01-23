@@ -23,12 +23,14 @@ type CartAction =
         }
     }
     | { type: 'LOAD_CART'; payload: CartItem[] }
+    | { type: 'CLEAR_CART' }
 
 interface CartContextProps {
     cartState: CartState;
     addToCart: (item: ProductType) => void;
     removeFromCart: (itemId: string) => void;
     updateCart: (itemId: string, quantity: number, selectedSize: string, selectedColor: string) => void;
+    clearCart: () => void;
 }
 
 const CartContext = createContext<CartContextProps | undefined>(undefined);
@@ -83,6 +85,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
                 ...state,
                 cartArray: action.payload,
             };
+        case 'CLEAR_CART':
+            return {
+                ...state,
+                cartArray: [],
+            };
         default:
             return state;
     }
@@ -136,8 +143,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dispatch({ type: 'UPDATE_CART', payload: { itemId, quantity, selectedSize, selectedColor } });
     };
 
+    const clearCart = () => {
+        dispatch({ type: 'CLEAR_CART' });
+    };
+
     return (
-        <CartContext.Provider value={{ cartState, addToCart, removeFromCart, updateCart }}>
+        <CartContext.Provider value={{ cartState, addToCart, removeFromCart, updateCart, clearCart }}>
             {children}
         </CartContext.Provider>
     );

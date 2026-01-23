@@ -206,3 +206,19 @@ cliente@example.com
 Email: admin@example.com
 
 Contraseña: password123
+
+docker system prune -a
+
+
+
+
+Sigue AGENT_RULES.md.
+No hagas preguntas.
+Implementa la tarea end-to-end.
+Ejecuta tests y corrige fallos.
+Al final, resume cambios y comandos ejecutados.
+
+Tarea:
+<describe aquí lo que quieres>
+
+

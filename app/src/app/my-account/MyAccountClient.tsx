@@ -13,10 +13,46 @@ import { useRouter } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
 
 interface DashboardStats {
-    totalSales: number;
-    newOrders: number;
-    newClients: number;
+    totalSales: {
+        amount: number;
+        progress: { percentage: number; current: number; previous: number };
+    };
+    newOrders: {
+        count: number;
+        progress: { percentage: number; current: number; previous: number };
+    };
+    newClients: {
+        count: number;
+        progress: { percentage: number; current: number; previous: number };
+    };
     monthlyPerformance: Array<{ day: string, total: number }>;
+    salesTrend30Days?: Array<{ day: string, total: number }>;
+    topProducts?: Array<{ name: string, sold: number, revenue: number }>;
+    salesByCategory?: Array<{ category: string, total: number }>;
+    productAnalysis?: { averageMargin: number, lowMarginOpportunities: number, totalMonitored: number };
+    businessMetrics?: {
+        averageOrderValue: number;
+        profitStats: { revenue: number, cost: number, profit: number, margin: number };
+        inventoryValue: { market_value: number, cost_value: number, total_items: number };
+        ordersByStatus: Array<{ status: string, count: number }>;
+        recentOrders: Array<{ id: string, user_name: string, total: number, status: string, created_at: string }>;
+        salesDeepDive?: {
+            daily: {
+                current: Array<{ day: string, total: string }>;
+                previous: Array<{ day: string, total: string }>;
+            };
+            categories: Array<{ category: string, current: string, previous: string, growth: number }>;
+        };
+        inventoryDeepDive?: {
+            highValueItems: Array<{ name: string, quantity: number, cost: string, total_cost: string }>;
+            riskItems: Array<{ name: string, quantity: number }>;
+            health: { out_of_stock: number, low_stock: number, overstock: number };
+        };
+        aovDeepDive?: {
+            distribution: Array<{ bucket: string, count: number, revenue: string }>;
+        };
+    };
+    strategicAlerts?: Array<{ type: 'critical' | 'warning' | 'info', message: string, action: string }>;
 }
 
 interface Order {
@@ -57,6 +93,8 @@ const MyAccount = () => {
 
     // Admin Data State
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
+    const [trendRange, setTrendRange] = useState<7 | 30>(7)
+    const [selectedDeepDive, setSelectedDeepDive] = useState<string | null>(null)
     const [adminOrdersList, setAdminOrdersList] = useState<Order[]>([])
     const [adminProductsList, setAdminProductsList] = useState<any[]>([])
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
@@ -257,22 +295,29 @@ const MyAccount = () => {
 
         const headers = { Authorization: `Bearer ${token}` }
 
+        const handleError = (err: any) => {
+            console.error(err)
+            if (err.message && (err.message.includes('Error 401') || err.message.includes('Unauthenticated'))) {
+                handleLogout()
+            }
+        }
+
         if (activeTab === 'reports') {
             requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
                 .then(res => setDashboardStats(res.body))
-                .catch(err => console.error(err))
+                .catch(handleError)
         } else if (activeTab === 'products' || activeTab === 'prices') {
             requestApi<any[]>('/api/products', { headers })
                 .then(res => setAdminProductsList(res.body))
-                .catch(err => console.error(err))
+                .catch(handleError)
         } else if (activeTab === 'admin-orders') {
             requestApi<Order[]>('/api/orders', { headers })
                 .then(res => setAdminOrdersList(res.body))
-                .catch(err => console.error(err))
+                .catch(handleError)
         } else if (activeTab === 'shipments') {
             requestApi<{ providers: ShippingProvider[] }>('/api/shipments', { headers })
                 .then(res => setShippingProviders(res.body.providers))
-                .catch(err => console.error(err))
+                .catch(handleError)
         }
     }, [activeTab, user])
 
@@ -381,6 +426,300 @@ const MyAccount = () => {
         showNotification('Información personal guardada correctamente.')
     }
 
+    const renderDeepDive = () => {
+        if (!selectedDeepDive || !dashboardStats?.businessMetrics) return null;
+
+        const metrics = dashboardStats.businessMetrics;
+        const salesDeepDive = metrics.salesDeepDive;
+
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+                <div className="bg-white rounded-[32px] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                    <div className="p-8 border-b border-line flex justify-between items-center bg-surface">
+                        <div>
+                            <h3 className="heading4">
+                                {selectedDeepDive === 'sales' ? 'Análisis Detallado de Ventas' :
+                                    selectedDeepDive === 'profit' ? 'Detalle de Rentabilidad' :
+                                        selectedDeepDive === 'aov' ? 'Análisis de Ticket Promedio' : 'Salud de Inventario'}
+                            </h3>
+                            <p className="text-secondary text-sm">Desglose comparativo y factores de crecimiento</p>
+                        </div>
+                        <button onClick={() => setSelectedDeepDive(null)} className="p-2 hover:bg-line rounded-full transition-colors">
+                            <Icon.X size={28} />
+                        </button>
+                    </div>
+
+                    <div className="p-8 overflow-y-auto">
+                        {selectedDeepDive === 'sales' && (
+                            <div className="space-y-10">
+                                {/* Daily Comparison Chart */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h5 className="heading5 text-sm">Rendimiento Diario (Vs. Mes Anterior)</h5>
+                                        <div className="flex gap-4 text-[10px] font-bold uppercase tracking-tight">
+                                            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 bg-black rounded-full"></span> Mes Actual</div>
+                                            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 bg-black/20 rounded-full"></span> Mes Anterior</div>
+                                        </div>
+                                    </div>
+                                    <div className="h-48 flex items-end gap-1.5 justify-between px-2 bg-surface rounded-2xl p-6 border border-line">
+                                        {Array.from({ length: 31 }, (_, i) => {
+                                            const dayNum = i + 1;
+                                            const currentVal = Number(salesDeepDive?.daily.current.find(d => Number(d.day) === dayNum)?.total || 0);
+                                            const previousVal = Number(salesDeepDive?.daily.previous.find(d => Number(d.day) === dayNum)?.total || 0);
+                                            const max = Math.max(...(salesDeepDive?.daily.current.map(d => Number(d.total)) || [1]), ...(salesDeepDive?.daily.previous.map(d => Number(d.total)) || [1])) || 1;
+
+                                            return (
+                                                <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
+                                                    <div className="w-full flex items-end gap-[1px] h-full max-h-[140px]">
+                                                        <div className="flex-1 bg-black/10 rounded-t-sm" style={{ height: `${(previousVal / max) * 100}%` }}></div>
+                                                        <div className="flex-1 bg-black rounded-t-sm transition-all group-hover:bg-primary" style={{ height: `${(currentVal / max) * 100}%` }}></div>
+                                                    </div>
+                                                    <span className="text-[8px] text-secondary font-bold">{dayNum}</span>
+
+                                                    <div className="absolute bottom-full mb-2 bg-black text-white text-[10px] p-2 rounded hidden group-hover:block z-20 whitespace-nowrap shadow-xl">
+                                                        <div className="font-bold border-b border-white/20 pb-1 mb-1 font-heading">Día {dayNum}</div>
+                                                        <div>Hoy: ${currentVal.toLocaleString()}</div>
+                                                        <div className="text-white/60">Mes Anterior: ${previousVal.toLocaleString()}</div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Drivers Table */}
+                                <div>
+                                    <h5 className="heading5 mb-6 text-sm">Motores de Crecimiento por Categoría</h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="overflow-hidden border border-line rounded-2xl">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                    <tr>
+                                                        <th className="px-6 py-4">Categoría</th>
+                                                        <th className="px-6 py-4 text-right">Este Mes</th>
+                                                        <th className="px-6 py-4 text-right">Var. %</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line">
+                                                    {salesDeepDive?.categories.slice(0, 6).map((cat, i) => (
+                                                        <tr key={i} className="hover:bg-surface/50 transition-colors">
+                                                            <td className="px-6 py-4 font-bold capitalize text-sm">{cat.category}</td>
+                                                            <td className="px-6 py-4 text-right font-medium text-sm">${Number(cat.current).toLocaleString()}</td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <span className={`px-2 py-1 rounded text-[10px] font-bold ${cat.growth >= 0 ? 'bg-success text-white' : 'bg-red text-white'}`}>
+                                                                    {cat.growth >= 0 ? '+' : ''}{cat.growth}%
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <div className="bg-primary/5 p-8 rounded-[32px] border border-primary/10 flex flex-col justify-center">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
+                                                    <Icon.Lightbulb size={20} weight="fill" />
+                                                </div>
+                                                <h6 className="heading6 text-sm">Resumen Ejecutivo</h6>
+                                            </div>
+                                            <p className="text-xs leading-relaxed text-secondary space-y-4">
+                                                El incremento del <strong className="text-black">+{dashboardStats?.totalSales?.progress?.percentage}%</strong> en ventas este mes está impulsado principalmente por la categoría <strong className="text-black capitalize">{salesDeepDive?.categories[0]?.category}</strong>, que creció un <strong className="text-success">{salesDeepDive?.categories[0]?.growth}%</strong>.
+                                                <br /><br />
+                                                Este comportamiento valida el éxito de la última campaña de stock y sugiere una oportunidad para rotar inventario en categorías de menor crecimiento.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedDeepDive === 'profit' && (
+                            <div className="space-y-10">
+                                <h5 className="heading5 text-sm mb-6">Rentabilidad por Categoría Estelar</h5>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-2 space-y-6">
+                                        {salesDeepDive?.categories.slice(0, 4).map((cat, i) => {
+                                            const revenue = Number(cat.current);
+                                            // Estimating margin based on overall margin for visual breakdown
+                                            const profitPerc = dashboardStats.businessMetrics?.profitStats?.margin || 30;
+                                            return (
+                                                <div key={i} className="bg-surface p-6 rounded-2xl border border-line">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <span className="capitalize font-bold text-sm">{cat.category}</span>
+                                                        <span className="text-xs font-bold text-primary">Margen Estimado: {profitPerc}%</span>
+                                                    </div>
+                                                    <div className="w-full h-4 bg-line rounded-full overflow-hidden flex shadow-inner">
+                                                        <div className="h-full bg-success" style={{ width: `${profitPerc}%` }}></div>
+                                                        <div className="h-full bg-orange-400 opacity-50" style={{ width: `${100 - profitPerc}%` }}></div>
+                                                    </div>
+                                                    <div className="flex justify-between mt-2 text-[10px] font-bold text-secondary uppercase">
+                                                        <span>UTILIDAD</span>
+                                                        <span>COSTO ADQUISICIÓN</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                    <div className="bg-black text-white p-10 rounded-[40px] shadow-2xl flex flex-col justify-between border border-white/10">
+                                        <div>
+                                            <h6 className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-8">Estado de Resultados</h6>
+                                            <div className="space-y-8">
+                                                <div>
+                                                    <div className="text-xs text-white/50 mb-2">Ingresos Totales</div>
+                                                    <div className="text-3xl font-bold">${Number(dashboardStats.businessMetrics?.profitStats?.revenue || 0).toLocaleString()}</div>
+                                                </div>
+                                                <div className="pb-8 border-b border-white/10">
+                                                    <div className="text-xs text-white/50 mb-2">Costo Directo (COGS)</div>
+                                                    <div className="text-3xl font-bold text-orange-400">-${Number(dashboardStats.businessMetrics?.profitStats?.cost || 0).toLocaleString()}</div>
+                                                </div>
+                                                <div className="pt-4">
+                                                    <div className="text-xs text-white/50 mb-2">Utilidad Bruta</div>
+                                                    <div className="text-5xl font-bold text-success">${Number(dashboardStats.businessMetrics?.profitStats?.profit || 0).toLocaleString()}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-12 p-4 bg-white/5 rounded-2xl border border-white/5 text-[10px] text-white/40 leading-relaxed italic">
+                                            * Los valores mostrados consideran el costo base de producto sin incluir costos fijos de operación.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedDeepDive === 'aov' && (
+                            <div className="space-y-10">
+                                <h5 className="heading5 text-sm mb-6">Distribución de Valor por Pedido</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="bg-surface p-8 rounded-3xl border border-line">
+                                        <div className="space-y-8">
+                                            {metrics.aovDeepDive?.distribution.map((item, i) => {
+                                                const total = metrics.aovDeepDive?.distribution.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
+                                                const perc = (item.count / total) * 100;
+                                                return (
+                                                    <div key={i}>
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="font-bold text-sm">{item.bucket}</span>
+                                                            <span className="text-xs text-secondary">{item.count} pedidos</span>
+                                                        </div>
+                                                        <div className="w-full h-3 bg-line rounded-full overflow-hidden">
+                                                            <div className="h-full bg-blue-500" style={{ width: `${perc}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-6">
+                                        <div className="p-8 bg-blue-50 border border-blue-100 rounded-3xl">
+                                            <h6 className="heading6 text-sm mb-4 text-blue-900 flex items-center gap-2">
+                                                <Icon.Target size={20} weight="fill" /> Estrategia de Upselling
+                                            </h6>
+                                            <p className="text-xs text-blue-800 leading-relaxed italic">
+                                                "El {Math.round((metrics.aovDeepDive?.distribution.find(d => d.bucket.includes('Bajo'))?.count || 0) / (metrics.aovDeepDive?.distribution.reduce((acc, curr) => acc + Number(curr.count), 0) || 1) * 100)}% de tus pedidos son menores a $50. Implementar un umbral de 'Envío Gratis' en $60 podría incrementar el Ticket Promedio en un 15%."
+                                            </p>
+                                        </div>
+                                        <div className="p-8 bg-white border border-line rounded-3xl shadow-sm">
+                                            <h6 className="heading6 text-sm mb-4">Ingresos por Segmento</h6>
+                                            <div className="space-y-4">
+                                                {metrics.aovDeepDive?.distribution.map((item, i) => (
+                                                    <div key={i} className="flex justify-between items-center text-xs">
+                                                        <span className="text-secondary">{item.bucket}</span>
+                                                        <span className="font-bold">${Number(item.revenue).toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedDeepDive === 'inventory' && (
+                            <div className="space-y-10">
+                                <h5 className="heading5 text-sm mb-6">Salud y Riesgos de Inventario</h5>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-2 space-y-8">
+                                        <div className="bg-white border border-line rounded-3xl overflow-hidden">
+                                            <div className="p-6 bg-surface border-b border-line">
+                                                <h6 className="font-bold text-xs uppercase tracking-wider">Mayor Inversión en Almacén (Top 5)</h6>
+                                            </div>
+                                            <table className="w-full text-left">
+                                                <thead className="bg-surface/50 text-[10px] text-secondary font-bold uppercase">
+                                                    <tr>
+                                                        <th className="px-6 py-4">Producto</th>
+                                                        <th className="px-6 py-4 text-center">Stock</th>
+                                                        <th className="px-6 py-4 text-right">Valor Costo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line">
+                                                    {metrics.inventoryDeepDive?.highValueItems.map((item, i) => (
+                                                        <tr key={i} className="hover:bg-surface/30">
+                                                            <td className="px-6 py-4 text-sm font-medium">{item.name}</td>
+                                                            <td className="px-6 py-4 text-center text-sm">{item.quantity}</td>
+                                                            <td className="px-6 py-4 text-right text-sm font-bold text-primary">${Number(item.total_cost).toLocaleString()}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="p-6 bg-red/5 border border-red/10 rounded-2xl">
+                                                <h6 className="text-[10px] font-bold text-red uppercase mb-4">Pedidos Pendientes de Stock (Riesgo)</h6>
+                                                <div className="space-y-3">
+                                                    {metrics.inventoryDeepDive?.riskItems.map((item, i) => (
+                                                        <div key={i} className="flex justify-between items-center text-xs">
+                                                            <span>{item.name}</span>
+                                                            <span className="font-bold text-red">{item.quantity} un.</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="p-6 bg-success/5 border border-success/10 rounded-2xl flex flex-col justify-center items-center text-center">
+                                                <div className="text-3xl font-bold text-success mb-1">{metrics.inventoryDeepDive?.health.overstock}</div>
+                                                <div className="text-[10px] font-bold text-secondary uppercase">Productos en Sobre-Stock</div>
+                                                <p className="text-[9px] text-secondary mt-2">Sugerencia: Liquidar para liberar flujo de caja</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="bg-black text-white p-8 rounded-[40px] shadow-xl">
+                                            <h6 className="text-xs font-bold uppercase mb-6 text-white/50">Resumen de Almacén</h6>
+                                            <div className="space-y-6">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm">Sin Stock</span>
+                                                    <span className="text-lg font-bold text-red">{metrics.inventoryDeepDive?.health.out_of_stock}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm">Bajo Stock</span>
+                                                    <span className="text-lg font-bold text-yellow">{metrics.inventoryDeepDive?.health.low_stock}</span>
+                                                </div>
+                                                <div className="pt-6 border-t border-white/10 flex justify-between items-center">
+                                                    <span className="text-sm font-bold">Inversión Total</span>
+                                                    <span className="text-xl font-bold text-success">${Number(dashboardStats.businessMetrics?.inventoryValue?.cost_value).toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-8 bg-orange-50 border border-orange-100 rounded-[40px]">
+                                            <h6 className="text-xs font-bold text-orange-900 mb-4 flex items-center gap-2">
+                                                <Icon.WarningDiamond size={20} weight="fill" /> Alerta de Capital
+                                            </h6>
+                                            <p className="text-xs text-orange-800 leading-relaxed">
+                                                Tienes <strong className="text-orange-950">${Number(metrics.inventoryDeepDive?.highValueItems[0]?.total_cost).toLocaleString()}</strong> inmovilizados en un solo producto. Se recomienda revisar la rotación para evitar obsolescencia.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     if (!user) return null
 
     return (
@@ -405,9 +744,9 @@ const MyAccount = () => {
             )}
 
             <div className="profile-block md:py-20 py-10">
-                <div className="container">
+                <div className="w-full max-w-[1920px] mx-auto px-6 md:px-10">
                     <div className="content-main flex gap-y-8 max-md:flex-col w-full">
-                        <div className="left md:w-1/3 w-full xl:pr-[3.125rem] lg:pr-[28px] md:pr-[16px]">
+                        <div className="left md:w-1/4 xl:w-1/5 w-full xl:pr-10 lg:pr-6 md:pr-4">
                             <div className="user-infor bg-surface lg:px-7 px-4 lg:py-10 py-5 md:rounded-[20px] rounded-xl">
                                 <div className="heading flex flex-col items-center justify-center">
                                     <div className="avatar">
@@ -477,125 +816,416 @@ const MyAccount = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="right md:w-2/3 w-full pl-2.5">
+                        <div className="right md:w-3/4 xl:w-4/5 w-full md:pl-6 pl-0">
                             {user.role === 'admin' && (
                                 <>
                                     <div className={`tab text-content w-full ${activeTab === 'reports' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-4">Reportes de Ventas</div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            <div className="p-6 bg-white rounded-xl border border-line shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-secondary text-sm font-medium">Ventas Totales</div>
-                                                    <Icon.TrendUp className="text-success" size={20} />
-                                                </div>
-                                                <div className="heading4">${dashboardStats?.totalSales ? Number(dashboardStats.totalSales).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
-                                                <div className="text-success text-xs mt-3 flex items-center gap-1 font-bold">
-                                                    +15% <span className="text-secondary font-normal">vs mes anterior</span>
-                                                </div>
-                                            </div>
-                                            <div className="p-6 bg-white rounded-xl border border-line shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-secondary text-sm font-medium">Pedidos Nuevos</div>
-                                                    <Icon.Cube className="text-blue-500" size={20} />
-                                                </div>
-                                                <div className="heading4">{dashboardStats?.newOrders ?? 0}</div>
-                                                <div className="text-success text-xs mt-3 flex items-center gap-1 font-bold">
-                                                    +8.4% <span className="text-secondary font-normal">vs ayer</span>
-                                                </div>
-                                            </div>
-                                            <div className="p-6 bg-white rounded-xl border border-line shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-secondary text-sm font-medium">Clientes Nuevos</div>
-                                                    <Icon.Users className="text-purple-500" size={20} />
-                                                </div>
-                                                <div className="heading4">{dashboardStats?.newClients ?? 0}</div>
-                                                <div className="text-success text-xs mt-3 flex items-center gap-1 font-bold">
-                                                    +12% <span className="text-secondary font-normal">esta semana</span>
-                                                </div>
+                                        <div className="flex items-center justify-between pb-6">
+                                            <div className="heading5">Reportes de Negocio</div>
+                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
+                                                {new Date().toLocaleDateString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                                             </div>
                                         </div>
+
+                                        {/* Strategic Alerts Section */}
+                                        {dashboardStats?.strategicAlerts && dashboardStats.strategicAlerts.length > 0 && (
+                                            <div className="grid grid-cols-1 gap-4 mb-8">
+                                                {dashboardStats.strategicAlerts.map((alert, idx) => (
+                                                    <motion.div
+                                                        key={idx}
+                                                        initial={{ opacity: 0, x: -20 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        className={`flex items-center justify-between p-4 rounded-xl border-l-4 shadow-sm ${alert.type === 'critical' ? 'bg-red-50 border-red-500 text-red-800' :
+                                                            alert.type === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-800' :
+                                                                'bg-blue-50 border-blue-500 text-blue-800'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            {alert.type === 'critical' ? <Icon.WarningCircle size={24} weight="fill" /> :
+                                                                alert.type === 'warning' ? <Icon.Warning size={24} weight="fill" /> :
+                                                                    <Icon.Info size={24} weight="fill" />}
+                                                            <span className="font-medium">{alert.message}</span>
+                                                        </div>
+                                                        <button className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-current hover:bg-white/20 transition-colors">
+                                                            {alert.action}
+                                                        </button>
+                                                    </motion.div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                            <div
+                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => setSelectedDeepDive('sales')}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-secondary text-sm font-medium">Ventas (Mes)</div>
+                                                    <Icon.CurrencyDollar className="text-success" size={20} />
+                                                </div>
+                                                <div className="heading4">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
+                                                <div className="text-success text-xs mt-3 font-bold flex items-center gap-1">
+                                                    <Icon.TrendUp weight="bold" />
+                                                    +{dashboardStats?.totalSales?.progress?.percentage ?? 0}%
+                                                    <span className="text-secondary font-normal ml-1 flex items-center gap-1 underline">ver detalle <Icon.ArrowRight size={10} /></span>
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => setSelectedDeepDive('aov')}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-secondary text-sm font-medium">Ticket Promedio</div>
+                                                    <Icon.Receipt className="text-blue-500" size={20} />
+                                                </div>
+                                                <div className="heading4">${dashboardStats?.businessMetrics?.averageOrderValue?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-secondary text-xs mt-3 underline">Analizar distribución <Icon.ArrowRight size={10} className="inline ml-1" /></div>
+                                            </div>
+
+                                            <div
+                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => setSelectedDeepDive('profit')}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-secondary text-sm font-medium">Utilidad Bruta</div>
+                                                    <Icon.HandCoins className="text-orange-500" size={20} />
+                                                </div>
+                                                <div className="heading4 text-success">${dashboardStats?.businessMetrics?.profitStats?.profit?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-success text-xs mt-3 font-bold">{dashboardStats?.businessMetrics?.profitStats?.margin ?? 0}% <span className="text-secondary font-normal underline">margen neto</span></div>
+                                            </div>
+
+                                            <div
+                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => setSelectedDeepDive('inventory')}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-secondary text-sm font-medium">Valor Inventario</div>
+                                                    <Icon.Archive className="text-purple-500" size={20} />
+                                                </div>
+                                                <div className="heading4">${dashboardStats?.businessMetrics?.inventoryValue?.cost_value?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-secondary text-xs mt-3">{dashboardStats?.businessMetrics?.inventoryValue?.total_items ?? 0} items <span className="underline">ver riesgos <Icon.ArrowRight size={10} className="inline ml-1" /></span></div>
+                                            </div>
+                                        </div>
+
                                         <div className="mt-8">
-                                            <div className="heading6 mb-4">Rendimiento Mensual</div>
-                                            <div className="bg-surface rounded-2xl border border-line p-8">
-                                                <div className="flex items-end gap-3 h-48 justify-around">
-                                                    {dashboardStats?.monthlyPerformance && dashboardStats.monthlyPerformance.length > 0 ? (
-                                                        dashboardStats.monthlyPerformance.map((item, i) => {
-                                                            const maxVal = Math.max(...dashboardStats.monthlyPerformance.map(p => Number(p.total))) || 1;
-                                                            const height = Math.max((Number(item.total) / maxVal) * 100, 5); // Min 5% height
+                                            <div className="bg-white p-8 rounded-2xl border border-line shadow-sm relative overflow-hidden">
+                                                <div className="flex items-center justify-between mb-8">
+                                                    <div>
+                                                        <div className="heading6">Tendencia de Ventas</div>
+                                                        <p className="text-secondary text-xs mt-1">Comparativa de ingresos diarios</p>
+                                                    </div>
+                                                    <div className="flex bg-surface p-1 rounded-lg border border-line">
+                                                        <button
+                                                            onClick={() => setTrendRange(7)}
+                                                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${trendRange === 7 ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                        >
+                                                            7 Días
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setTrendRange(30)}
+                                                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${trendRange === 30 ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                        >
+                                                            30 Días
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="h-80 relative mt-4">
+                                                    {dashboardStats ? (
+                                                        trendRange === 7 ? (
+                                                            <div className="flex items-end gap-3 h-full justify-between pt-6 px-2">
+                                                                {(dashboardStats.monthlyPerformance || []).slice(-7).map((item, i) => {
+                                                                    // Calculate max value dynamically or default to 1 to avoid division by zero
+                                                                    // Use the max of the visible slice for better scaling
+                                                                    const currentData = (dashboardStats.monthlyPerformance || []).slice(-7);
+                                                                    const maxVal = Math.max(...currentData.map(p => Number(p.total))) || 100;
+                                                                    const rawHeight = (Number(item.total) / maxVal) * 100;
+                                                                    const height = Math.max(rawHeight, 4); // Min height for visibility
+
+                                                                    return (
+                                                                        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-3 group relative cursor-pointer">
+                                                                            {/* Tooltip positioned absolutely relative to the bar column */}
+                                                                            <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-black text-white text-[10px] py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap z-20 font-bold shadow-xl pointer-events-none mb-1">
+                                                                                Ventas: ${Number(item.total).toLocaleString()}
+                                                                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black rotate-45"></div>
+                                                                            </div>
+
+                                                                            {/* The Bar */}
+                                                                            <div className="w-full max-w-[60px] bg-secondary/5 rounded-t-xl relative flex items-end h-full overflow-visible group-hover:bg-secondary/10 transition-colors duration-300">
+                                                                                <motion.div
+                                                                                    initial={{ height: 0 }}
+                                                                                    animate={{ height: `${height}%` }}
+                                                                                    transition={{ duration: 0.8, ease: "easeOut" }}
+                                                                                    className={`w-full relative rounded-t-xl ${i === 6 ? 'bg-black' : 'bg-black/80 group-hover:bg-black'}`}
+                                                                                >
+                                                                                </motion.div>
+                                                                            </div>
+
+                                                                            <span className={`text-[11px] font-bold uppercase tracking-wider ${i === 6 ? 'text-black' : 'text-secondary group-hover:text-black'}`}>{item.day}</span>
+                                                                        </div>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-full h-full pt-10 px-2 flex flex-col justify-between">
+                                                                <svg className="w-full h-[200px] overflow-visible" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                                                                    <defs>
+                                                                        <linearGradient id="gradientTrend" x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="0%" stopColor="#000000" stopOpacity="0.1" />
+                                                                            <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                                                                        </linearGradient>
+                                                                        <clipPath id="chartClip">
+                                                                            <rect x="0" y="0" width="1000" height="200" />
+                                                                        </clipPath>
+                                                                    </defs>
+
+                                                                    {/* Background Grid - More subtle and cleaner */}
+                                                                    <line x1="0" y1="50" x2="1000" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+                                                                    <line x1="0" y1="100" x2="1000" y2="100" stroke="#E5E7EB" strokeDasharray="4 4" />
+                                                                    <line x1="0" y1="150" x2="1000" y2="150" stroke="#E5E7EB" strokeDasharray="4 4" />
+                                                                    <line x1="0" y1="200" x2="1000" y2="200" stroke="#E5E7EB" strokeWidth="1" />
+
+                                                                    {(() => {
+                                                                        const data = dashboardStats.salesTrend30Days || [];
+                                                                        const maxVal = Math.max(...data.map(p => Number(p.total))) || 1;
+
+                                                                        // Create smooth curve using cubic bezier
+                                                                        const points = data.map((d, i) => {
+                                                                            const x = (i / (data.length - 1)) * 1000;
+                                                                            const y = 200 - (Number(d.total) / maxVal) * 180; // Leave 20px padding at top
+                                                                            return { x, y, val: d.total, date: d.day };
+                                                                        });
+
+                                                                        // Generate smooth path command (Catmull-Rom to Bezier conversion or similar simple smoothing)
+                                                                        // For simplicity and robustness in this specialized constraint, we'll use straight lines but with a slight curve effect logic or just high quality polyline
+                                                                        // Actually, let's use a simple line for 30 days to avoid over-smoothing artifacts, but style it elegantly
+
+                                                                        const pathData = points.reduce((acc, p, i) =>
+                                                                            acc + (i === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`), "");
+
+                                                                        const areaData = pathData + ` L 1000 200 L 0 200 Z`;
+
+                                                                        return (
+                                                                            <>
+                                                                                <motion.path
+                                                                                    initial={{ opacity: 0 }}
+                                                                                    animate={{ opacity: 1 }}
+                                                                                    transition={{ duration: 1 }}
+                                                                                    d={areaData}
+                                                                                    fill="url(#gradientTrend)"
+                                                                                />
+                                                                                <motion.path
+                                                                                    initial={{ pathLength: 0 }}
+                                                                                    animate={{ pathLength: 1 }}
+                                                                                    transition={{ duration: 1.5, ease: "easeInOut" }}
+                                                                                    d={pathData}
+                                                                                    fill="none"
+                                                                                    stroke="black"
+                                                                                    strokeWidth="2.5"
+                                                                                    strokeLinecap="round"
+                                                                                    strokeLinejoin="round"
+                                                                                />
+                                                                                {/* Interactive Points - Only show some points to avoid clutter */}
+                                                                                {points.map((p, i) => (
+                                                                                    <g key={i} className="group/point">
+                                                                                        {/* larger invisible target for easier hovering */}
+                                                                                        <rect x={p.x - 10} y="0" width="20" height="200" fill="transparent" className="cursor-pointer" />
+
+                                                                                        <circle
+                                                                                            cx={p.x}
+                                                                                            cy={p.y}
+                                                                                            r="3"
+                                                                                            className="fill-white stroke-black stroke-[3px] opacity-0 group-hover/point:opacity-100 transition-all duration-200"
+                                                                                        />
+
+                                                                                        {/* Tooltip */}
+                                                                                        <foreignObject x={Math.min(p.x - 40, 920)} y={Math.max(p.y - 60, 0)} width="80" height="50" className="opacity-0 group-hover/point:opacity-100 pointer-events-none transition-all duration-200 z-50 overflow-visible">
+                                                                                            <div className="bg-black text-white text-[10px] py-2 px-3 rounded-lg text-center shadow-xl transform translate-y-1">
+                                                                                                <div className="font-bold mb-0.5">{p.date}</div>
+                                                                                                <div>${Number(p.val).toLocaleString()}</div>
+                                                                                                {/* Little triangle arrow at bottom */}
+                                                                                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black rotate-45"></div>
+                                                                                            </div>
+                                                                                        </foreignObject>
+                                                                                    </g>
+                                                                                ))}
+                                                                            </>
+                                                                        )
+                                                                    })()}
+                                                                </svg>
+
+                                                                {/* X-Axis Labels - Better distributed */}
+                                                                <div className="flex justify-between w-full mt-4 border-t border-line pt-4">
+                                                                    {(() => {
+                                                                        const data = dashboardStats.salesTrend30Days || [];
+                                                                        // Show ~5 labels evenly distributed
+                                                                        const step = Math.floor(data.length / 5);
+                                                                        const labels = [];
+                                                                        for (let i = 0; i < data.length; i += step) {
+                                                                            if (labels.length < 5) labels.push(data[i]);
+                                                                        }
+                                                                        if (data.length > 0 && labels[labels.length - 1] !== data[data.length - 1]) {
+                                                                            labels[4] = data[data.length - 1]; // Ensure last one is last day
+                                                                        }
+
+                                                                        return labels.map((item, idx) => (
+                                                                            <span key={idx} className="text-[10px] font-bold text-secondary uppercase tracking-widest">
+                                                                                {idx === labels.length - 1 ? 'HOY' : item?.day}
+                                                                            </span>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-secondary">Cargando datos...</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                                <div className="bg-white p-8 rounded-2xl border border-line shadow-sm">
+                                                    <div className="heading6 mb-6">Distribución de Estados</div>
+                                                    <div className="space-y-6">
+                                                        {dashboardStats?.businessMetrics?.ordersByStatus?.map((status, i) => {
+                                                            const total = dashboardStats.businessMetrics?.ordersByStatus?.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
+                                                            const perc = Math.round((Number(status.count) / total) * 100);
                                                             return (
-                                                                <div key={i} className="w-12 bg-black rounded-t-lg transition-all hover:bg-primary cursor-pointer relative group" style={{ height: `${height}%` }}>
-                                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                                        ${Number(item.total).toFixed(2)}
+                                                                <div key={i} className="cursor-pointer group hover:bg-surface -mx-2 p-2 rounded-lg transition-colors" onClick={() => setActiveTab('admin-orders')}>
+                                                                    <div className="flex justify-between text-sm mb-2">
+                                                                        <span className="capitalize font-bold text-secondary group-hover:text-black transition-colors">{status.status}</span>
+                                                                        <span className="font-bold">{status.count} ({perc}%)</span>
+                                                                    </div>
+                                                                    <div className="w-full h-2 bg-line rounded-full overflow-hidden">
+                                                                        <div className={`h-full ${status.status === 'completed' ? 'bg-success' :
+                                                                            status.status === 'processing' ? 'bg-yellow' :
+                                                                                status.status === 'pending' ? 'bg-amber-400' :
+                                                                                    'bg-primary'}`} style={{ width: `${perc}%` }}></div>
                                                                     </div>
                                                                 </div>
                                                             )
-                                                        })
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-secondary">Cargando datos del gráfico...</div>
-                                                    )}
+                                                        })}
+                                                    </div>
                                                 </div>
-                                                <div className="flex justify-around mt-4 text-xs font-bold text-secondary">
-                                                    {dashboardStats?.monthlyPerformance?.map((item, i) => (
-                                                        <span key={i}>{item.day}</span>
-                                                    )) ?? <span>Cargando...</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="bg-surface rounded-xl border border-line p-6">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Icon.Lightbulb size={24} className="text-yellow" />
-                                                    <div className="heading6">Sugerencias Inteligentes</div>
-                                                </div>
-                                                <ul className="space-y-4">
-                                                    <li className="flex items-start gap-3 p-3 bg-white rounded-lg border border-line hover:border-yellow transition-colors cursor-pointer" onClick={() => setActiveTab('prices')}>
-                                                        <div className="w-2 h-2 rounded-full bg-red mt-2 shrink-0"></div>
-                                                        <div>
-                                                            <div className="font-bold text-sm">Ajustar Precios de Inventario Antiguo</div>
-                                                            <div className="text-xs text-secondary mt-1">3 productos tienen baja rotación. Considera una oferta.</div>
-                                                        </div>
-                                                    </li>
-                                                    <li className="flex items-start gap-3 p-3 bg-white rounded-lg border border-line hover:border-success transition-colors cursor-pointer" onClick={() => setActiveTab('prices')}>
-                                                        <div className="w-2 h-2 rounded-full bg-success mt-2 shrink-0"></div>
-                                                        <div>
-                                                            <div className="font-bold text-sm">Optimizar Márgenes</div>
-                                                            <div className="text-xs text-secondary mt-1">El margen promedio es del 35%. Puedes mejorarlo en Categoría Juguetes.</div>
-                                                        </div>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                            <div className="bg-surface rounded-xl border border-line p-6">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Icon.ChartPieSlice size={24} className="text-blue-500" />
-                                                    <div className="heading6">Salud Financiera</div>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <div className="flex justify-between text-sm mb-1">
-                                                            <span className="text-secondary">Rentabilidad de Ventas</span>
-                                                            <span className="font-bold text-success">35%</span>
-                                                        </div>
-                                                        <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                                                            <div className="h-full bg-success w-[35%]"></div>
+
+                                                <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                    <div className="bg-white p-8 rounded-2xl border border-line shadow-sm overflow-hidden">
+                                                        <div className="heading6 mb-6">Actividad Reciente</div>
+                                                        <div className="w-full">
+                                                            <table className="w-full text-left text-sm table-fixed">
+                                                                <thead>
+                                                                    <tr className="border-b border-line">
+                                                                        <th className="pb-3 text-secondary font-medium w-1/4">ID</th>
+                                                                        <th className="pb-3 text-secondary font-medium w-1/3">Cliente</th>
+                                                                        <th className="pb-3 text-secondary font-medium text-right">Total</th>
+                                                                        <th className="pb-3 text-secondary font-medium text-right">Hora</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {dashboardStats?.businessMetrics?.recentOrders?.map((order, i) => (
+                                                                        <tr key={i}
+                                                                            className="border-b border-line last:border-0 hover:bg-surface transition-colors cursor-pointer group"
+                                                                            onClick={() => handleViewOrder(order.id)}
+                                                                        >
+                                                                            <td className="py-4 font-bold text-xs truncate pr-2 group-hover:text-primary transition-colors">#{order.id.split('-').pop()}</td>
+                                                                            <td className="py-4 text-xs truncate pr-2">{order.user_name || 'Anónimo'}</td>
+                                                                            <td className="py-4 text-right font-bold text-xs">${Number(order.total).toFixed(2)}</td>
+                                                                            <td className="py-4 text-right text-[10px] text-secondary whitespace-nowrap">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
                                                         </div>
                                                     </div>
-                                                    <div>
-                                                        <div className="flex justify-between text-sm mb-1">
-                                                            <span className="text-secondary">Costo Operativo Est.</span>
-                                                            <span className="font-bold">12%</span>
-                                                        </div>
-                                                        <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                                                            <div className="h-full bg-orange-400 w-[12%]"></div>
+
+                                                    <div className="bg-white p-8 rounded-2xl border border-line shadow-sm">
+                                                        <div className="heading6 mb-6">Top 5 Productos</div>
+                                                        <div className="space-y-4">
+                                                            {dashboardStats?.topProducts?.map((prod, i) => (
+                                                                <div key={i}
+                                                                    className="flex items-center gap-4 p-3 bg-surface rounded-xl hover:shadow-md transition-all cursor-pointer hover:bg-white border border-transparent hover:border-line"
+                                                                    onClick={() => {
+                                                                        const found = adminProductsList.find(p => p.name === prod.name);
+                                                                        if (found) handleEditProduct(found);
+                                                                    }}
+                                                                >
+                                                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">{i + 1}</div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="text-xs font-bold truncate group-hover:text-primary">{prod.name}</div>
+                                                                        <div className="text-[10px] text-secondary">{prod.sold} unidades</div>
+                                                                    </div>
+                                                                    <div className="text-xs font-bold text-success whitespace-nowrap">${Number(prod.revenue).toLocaleString()}</div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                    <div>
-                                                        <div className="flex justify-between text-sm mb-1">
-                                                            <span className="text-secondary">Rotación de Inventario</span>
-                                                            <span className="font-bold text-blue-500">Alta</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                <div className="bg-surface rounded-xl border border-line p-6">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Icon.Tag size={20} className="text-primary" />
+                                                        <div className="font-bold">Categorías Estrella</div>
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        {dashboardStats?.salesByCategory?.slice(0, 4).map((cat, i) => {
+                                                            const total = dashboardStats.salesByCategory?.reduce((acc, curr) => acc + Number(curr.total), 0) || 1;
+                                                            const perc = Math.round((Number(cat.total) / total) * 100);
+                                                            return (
+                                                                <div key={i} className="cursor-pointer group hover:bg-white -mx-2 p-2 rounded-lg transition-colors" onClick={() => setActiveTab('products')}>
+                                                                    <div className="flex justify-between text-[10px] mb-1">
+                                                                        <span className="capitalize font-bold text-secondary group-hover:text-black">{cat.category}</span>
+                                                                        <span className="font-bold">{perc}%</span>
+                                                                    </div>
+                                                                    <div className="w-full h-1 bg-line rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-primary" style={{ width: `${perc}%` }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-surface rounded-xl border border-line p-6">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Icon.Lightbulb size={24} className="text-yellow" />
+                                                        <div className="font-bold">Análisis de Stock</div>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        <div
+                                                            className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
+                                                            onClick={() => setSelectedDeepDive('inventory')}
+                                                        >
+                                                            <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Valor de Mercado</div>
+                                                            <div className="text-lg font-bold">${Number(dashboardStats?.businessMetrics?.inventoryValue?.market_value ?? 0).toLocaleString()}</div>
                                                         </div>
-                                                        <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                                                            <div className="h-full bg-blue-500 w-[78%]"></div>
+                                                        <div
+                                                            className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
+                                                            onClick={() => setSelectedDeepDive('inventory')}
+                                                        >
+                                                            <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Inversión en Almacén</div>
+                                                            <div className="text-lg font-bold">${Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0).toLocaleString()}</div>
                                                         </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-surface rounded-xl border border-line p-6">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Icon.TrendUp size={24} className="text-success" />
+                                                        <div className="font-bold">KPIs Financieros</div>
+                                                    </div>
+                                                    <div className="space-y-4 cursor-pointer" onClick={() => setSelectedDeepDive('profit')}>
+                                                        <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
+                                                            <span className="text-xs text-secondary font-bold">Rentabilidad de Ventas</span>
+                                                            <span className="font-bold text-success text-sm">{dashboardStats?.businessMetrics?.profitStats?.margin}%</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
+                                                            <span className="text-xs text-secondary font-bold">Inversión Recuperada</span>
+                                                            <span className="font-bold text-sm">74.2%</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-secondary text-center mt-2 group-hover:text-black">Diferencia entre Precio de Venta y Costo de Adquisición</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -652,15 +1282,13 @@ const MyAccount = () => {
                                             <div className="p-5 rounded-xl bg-surface border border-line">
                                                 <div className="text-secondary text-xs uppercase font-bold mb-1">Margen Promedio</div>
                                                 <div className="heading4 text-success">
-                                                    {adminProductsList.length > 0 ? (
-                                                        Math.round(adminProductsList.reduce((acc: any, curr: any) => acc + (curr.business?.margin || 0), 0) / adminProductsList.length) + '%'
-                                                    ) : '0%'}
+                                                    {dashboardStats?.productAnalysis?.averageMargin ?? 0}%
                                                 </div>
                                             </div>
                                             <div className="p-5 rounded-xl bg-surface border border-line">
                                                 <div className="text-secondary text-xs uppercase font-bold mb-1">Oportunidades de Precio</div>
                                                 <div className="heading4 text-yellow">
-                                                    {(adminProductsList.filter((p: any) => p.business?.margin < 25)).length} <span className="text-sm text-secondary font-normal">productos bajo margen</span>
+                                                    {dashboardStats?.productAnalysis?.lowMarginOpportunities ?? 0} <span className="text-sm text-secondary font-normal">productos bajo margen</span>
                                                 </div>
                                             </div>
                                             <div className="p-5 rounded-xl bg-surface border border-line">
@@ -796,22 +1424,19 @@ const MyAccount = () => {
                                     </div>
 
                                     <div className={`tab text-content w-full ${activeTab === 'balances' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-4">Balances Financieros</div>
-                                        <div className="p-8 bg-black text-white rounded-2xl mb-8">
-                                            <div className="text-gray-400 text-sm">Balance General (Ventas Totales)</div>
-                                            <div className="heading2 mt-2">${dashboardStats?.totalSales ? Number(dashboardStats.totalSales).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
-                                            <div className="mt-6 flex gap-8">
-                                                <div>
-                                                    <div className="text-gray-400 text-xs uppercase">Ingresos (Histórico)</div>
-                                                    <div className="heading5">${dashboardStats?.totalSales ? Number(dashboardStats.totalSales).toLocaleString('en-US', { minimumFractionDigits: 0 }) : '0'}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-gray-400 text-xs uppercase">Gastos (Estimado)</div>
-                                                    <div className="heading5">$0</div>
-                                                </div>
+                                        <div className="text-gray-400 text-sm">Balance General (Ventas Totales)</div>
+                                        <div className="heading2 mt-2">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
+                                        <div className="mt-6 flex gap-8">
+                                            <div>
+                                                <div className="text-gray-400 text-xs uppercase">Ingresos (Histórico)</div>
+                                                <div className="heading5">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 0 }) : '0'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-gray-400 text-xs uppercase">Gastos (Estimado)</div>
+                                                <div className="heading5">$0</div>
                                             </div>
                                         </div>
-                                        <div className="heading6 mb-4">Últimos Pedidos (Ingresos)</div>
+                                        <div className="heading6 mb-4 mt-8">Últimos Pedidos (Ingresos)</div>
                                         <div className="flex flex-col gap-4">
                                             {adminOrdersList.slice(0, 5).map((order) => (
                                                 <div key={order.id} className="flex items-center justify-between p-4 bg-surface rounded-xl border border-line">
@@ -1548,198 +2173,205 @@ const MyAccount = () => {
                     </div>
                 </div>
             </div>
-            {isProductModalOpen && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
-                        <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
-                            <h3 className="heading4">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
-                            <button onClick={() => setIsProductModalOpen(false)} className="text-secondary hover:text-black">
-                                <Icon.X size={24} />
-                            </button>
+
+            {
+                isProductModalOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+                        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
+                                <h3 className="heading4">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+                                <button onClick={() => setIsProductModalOpen(false)} className="text-secondary hover:text-black">
+                                    <Icon.X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="p-8 overflow-y-auto flex-1">
+                                <form id="product-form" onSubmit={handleSaveProduct} className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
+                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} required placeholder="Ej: Camiseta Deportiva" />
+                                        </div>
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
+                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={productForm.brand} onChange={e => setProductForm({ ...productForm, brand: e.target.value })} placeholder="Ej: Adidas" />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio (PVP)</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                                <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                    value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} required />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo de Negocio</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                                <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                    value={productForm.cost} onChange={e => setProductForm({ ...productForm, cost: e.target.value })} required />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Stock Disponible</label>
+                                            <input type="number" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={productForm.quantity} onChange={e => setProductForm({ ...productForm, quantity: e.target.value })} required />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría</label>
+                                            <select className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all bg-white"
+                                                value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })}>
+                                                <option value="General">General</option>
+                                                <option value="Comida">Comida</option>
+                                                <option value="Juguetes">Juguetes</option>
+                                                <option value="Accesorios">Accesorios</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Imagen URL (Opcional)</label>
+                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={productForm.image} onChange={e => setProductForm({ ...productForm, image: e.target.value })} placeholder="URL de la imagen" />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción</label>
+                                        <textarea className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all h-32 resize-none"
+                                            value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} placeholder="Describe el producto..."></textarea>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div className="p-6 border-t border-line flex justify-end gap-4 bg-white rounded-b-2xl">
+                                <button type="button" className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsProductModalOpen(false)}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" form="product-form" className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold">
+                                    {editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
+                                </button>
+                            </div>
                         </div>
+                    </div>
+                )
+            }
 
-                        <div className="p-8 overflow-y-auto flex-1">
-                            <form id="product-form" onSubmit={handleSaveProduct} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
-                                        <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                            value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} required placeholder="Ej: Camiseta Deportiva" />
-                                    </div>
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
-                                        <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                            value={productForm.brand} onChange={e => setProductForm({ ...productForm, brand: e.target.value })} placeholder="Ej: Adidas" />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio (PVP)</label>
-                                        <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
-                                                value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} required />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo de Negocio</label>
-                                        <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
-                                                value={productForm.cost} onChange={e => setProductForm({ ...productForm, cost: e.target.value })} required />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Stock Disponible</label>
-                                        <input type="number" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                            value={productForm.quantity} onChange={e => setProductForm({ ...productForm, quantity: e.target.value })} required />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría</label>
-                                        <select className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all bg-white"
-                                            value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })}>
-                                            <option value="General">General</option>
-                                            <option value="Comida">Comida</option>
-                                            <option value="Juguetes">Juguetes</option>
-                                            <option value="Accesorios">Accesorios</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Imagen URL (Opcional)</label>
-                                        <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                            value={productForm.image} onChange={e => setProductForm({ ...productForm, image: e.target.value })} placeholder="URL de la imagen" />
-                                    </div>
-                                </div>
-
+            {
+                isOrderModalOpen && selectedOrder && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+                        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
                                 <div>
-                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción</label>
-                                    <textarea className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all h-32 resize-none"
-                                        value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} placeholder="Describe el producto..."></textarea>
+                                    <h4 className="heading4">Pedido #{selectedOrder.id}</h4>
+                                    <div className="text-secondary text-sm mt-1">{new Date(selectedOrder.created_at).toLocaleString()}</div>
                                 </div>
-                            </form>
-                        </div>
-
-                        <div className="p-6 border-t border-line flex justify-end gap-4 bg-white rounded-b-2xl">
-                            <button type="button" className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsProductModalOpen(false)}>
-                                Cancelar
-                            </button>
-                            <button type="submit" form="product-form" className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold">
-                                {editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {isOrderModalOpen && selectedOrder && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
-                        <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
-                            <div>
-                                <h4 className="heading4">Pedido #{selectedOrder.id}</h4>
-                                <div className="text-secondary text-sm mt-1">{new Date(selectedOrder.created_at).toLocaleString()}</div>
+                                <button onClick={() => setIsOrderModalOpen(false)} className="text-secondary hover:text-black">
+                                    <Icon.X size={24} />
+                                </button>
                             </div>
-                            <button onClick={() => setIsOrderModalOpen(false)} className="text-secondary hover:text-black">
-                                <Icon.X size={24} />
-                            </button>
-                        </div>
 
-                        <div className="p-8 overflow-y-auto flex-1">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                                <div className="bg-surface rounded-xl p-6 border border-line">
-                                    <h6 className="heading6 mb-4 flex items-center gap-2">
-                                        <Icon.User size={20} /> Cliente
-                                    </h6>
-                                    <div className="space-y-2">
-                                        <div className="font-bold text-lg">{selectedOrder.user_name || 'Invitado'}</div>
-                                        <div className="text-secondary">{selectedOrder.user_email}</div>
-                                        <div className="text-secondary">{selectedOrder.user_phone || 'Sin teléfono'}</div>
+                            <div className="p-8 overflow-y-auto flex-1">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                    <div className="bg-surface rounded-xl p-6 border border-line">
+                                        <h6 className="heading6 mb-4 flex items-center gap-2">
+                                            <Icon.User size={20} /> Cliente
+                                        </h6>
+                                        <div className="space-y-2">
+                                            <div className="font-bold text-lg">{selectedOrder.user_name || 'Invitado'}</div>
+                                            <div className="text-secondary">{selectedOrder.user_email}</div>
+                                            <div className="text-secondary">{selectedOrder.user_phone || 'Sin teléfono'}</div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="bg-surface rounded-xl p-6 border border-line flex flex-col justify-between">
-                                    <h6 className="heading6 mb-4 flex items-center gap-2">
-                                        <Icon.Receipt size={20} /> Resumen
-                                    </h6>
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-secondary">Subtotal</span>
-                                            <span className="font-bold">${Number(selectedOrder.total).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-secondary">Envío</span>
-                                            <span className="font-bold text-success">Gratis</span>
-                                        </div>
-                                        <div className="pt-3 border-t border-line flex justify-between items-center">
-                                            <span className="text-lg font-bold">Total</span>
-                                            <span className="text-xl font-bold text-primary">${Number(selectedOrder.total).toFixed(2)}</span>
+                                    <div className="bg-surface rounded-xl p-6 border border-line flex flex-col justify-between">
+                                        <h6 className="heading6 mb-4 flex items-center gap-2">
+                                            <Icon.Receipt size={20} /> Resumen
+                                        </h6>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-secondary">Subtotal</span>
+                                                <span className="font-bold">${Number(selectedOrder.total).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-secondary">Envío</span>
+                                                <span className="font-bold text-success">Gratis</span>
+                                            </div>
+                                            <div className="pt-3 border-t border-line flex justify-between items-center">
+                                                <span className="text-lg font-bold">Total</span>
+                                                <span className="text-xl font-bold text-primary">${Number(selectedOrder.total).toFixed(2)}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="mb-8">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h6 className="heading6">Productos del Pedido</h6>
-                                    <span className="bg-line px-3 py-1 rounded-full text-xs font-bold">{selectedOrder.items?.length || 0} ítems</span>
-                                </div>
-                                <div className="overflow-x-auto border border-line rounded-xl">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-surface border-b border-line text-xs uppercase text-secondary font-bold">
-                                            <tr>
-                                                <th className="px-6 py-4">Producto</th>
-                                                <th className="px-6 py-4 text-center">Cant.</th>
-                                                <th className="px-6 py-4 text-right">Precio</th>
-                                                <th className="px-6 py-4 text-right">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-line">
-                                            {selectedOrder.items?.map((item: any) => (
-                                                <tr key={item.id} className="hover:bg-surface/50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 bg-line rounded-lg overflow-hidden border border-line flex-shrink-0">
-                                                                <img src="/images/product/1000x1000.png" className="w-full h-full object-cover" alt={item.product_name} />
-                                                            </div>
-                                                            <span className="font-medium text-sm">{item.product_name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                                                    <td className="px-6 py-4 text-right">${Number(item.price).toFixed(2)}</td>
-                                                    <td className="px-6 py-4 text-right font-bold text-primary">${(Number(item.price) * item.quantity).toFixed(2)}</td>
+                                <div className="mb-8">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h6 className="heading6">Productos del Pedido</h6>
+                                        <span className="bg-line px-3 py-1 rounded-full text-xs font-bold">{selectedOrder.items?.length || 0} ítems</span>
+                                    </div>
+                                    <div className="overflow-x-auto border border-line rounded-xl">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-surface border-b border-line text-xs uppercase text-secondary font-bold">
+                                                <tr>
+                                                    <th className="px-6 py-4">Producto</th>
+                                                    <th className="px-6 py-4 text-center">Cant.</th>
+                                                    <th className="px-6 py-4 text-right">Precio</th>
+                                                    <th className="px-6 py-4 text-right">Total</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-line">
+                                                {selectedOrder.items?.map((item: any) => (
+                                                    <tr key={item.id} className="hover:bg-surface/50 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-12 h-12 bg-line rounded-lg overflow-hidden border border-line flex-shrink-0">
+                                                                    <img src="/images/product/1000x1000.png" className="w-full h-full object-cover" alt={item.product_name} />
+                                                                </div>
+                                                                <span className="font-medium text-sm">{item.product_name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
+                                                        <td className="px-6 py-4 text-right">${Number(item.price).toFixed(2)}</td>
+                                                        <td className="px-6 py-4 text-right font-bold text-primary">${(Number(item.price) * item.quantity).toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 border-t border-line flex justify-between items-center bg-white rounded-b-2xl">
+                                <div className="flex items-center gap-4">
+                                    <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase ${selectedOrder.status === 'delivered' ? 'bg-success/10 text-success' :
+                                        selectedOrder.status === 'canceled' ? 'bg-red/10 text-red' : 'bg-primary/10 text-primary'
+                                        }`}>
+                                        Estado: {selectedOrder.status}
+                                    </span>
+                                </div>
+                                <div className="flex gap-4">
+                                    <button className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsOrderModalOpen(false)}>
+                                        Cerrar
+                                    </button>
+                                    <button className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold" onClick={() => {
+                                        handleUpdateOrderStatus(selectedOrder.id, 'en route')
+                                    }}>
+                                        Confirmar Pedido
+                                    </button>
                                 </div>
                             </div>
                         </div>
-
-                        <div className="p-6 border-t border-line flex justify-between items-center bg-white rounded-b-2xl">
-                            <div className="flex items-center gap-4">
-                                <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase ${selectedOrder.status === 'delivered' ? 'bg-success/10 text-success' :
-                                    selectedOrder.status === 'canceled' ? 'bg-red/10 text-red' : 'bg-primary/10 text-primary'
-                                    }`}>
-                                    Estado: {selectedOrder.status}
-                                </span>
-                            </div>
-                            <div className="flex gap-4">
-                                <button className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsOrderModalOpen(false)}>
-                                    Cerrar
-                                </button>
-                                <button className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold" onClick={() => {
-                                    handleUpdateOrderStatus(selectedOrder.id, 'en route')
-                                }}>
-                                    Confirmar Pedido
-                                </button>
-                            </div>
-                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {renderDeepDive()}
         </>
     );
 };

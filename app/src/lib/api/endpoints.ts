@@ -6,6 +6,7 @@ export const apiEndpoints = {
     login: '/api/auth/login',
     register: '/api/auth/register',
   },
+  orders: '/api/orders',
   ejemplo: '/api/ejemplo',
   ejemplo2: '/api/ejemplo2',
 } as const

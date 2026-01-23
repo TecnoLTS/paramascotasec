@@ -5,8 +5,9 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { Package, Truck, CreditCard, Building2, Banknote } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { createOrder, getQuote } from '@/lib/api'
 
 interface AddressData {
     firstName: string;
@@ -72,7 +73,6 @@ const Checkout = () => {
     const safeDiscount = Number.isNaN(discountParam) ? 0 : discountParam
     const baseShip = Number.isNaN(shipParam) ? 5 : shipParam
 
-    const { cartState } = useCart()
     const [showLogin, setShowLogin] = useState(false)
     const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery')
     const [paymentMethod, setPaymentMethod] = useState<'credit' | 'transfer' | 'cash'>('credit')
@@ -84,6 +84,10 @@ const Checkout = () => {
     const [selectedAddressId, setSelectedAddressId] = useState<string>('one-time')
     const [tempAddress, setTempAddress] = useState<AddressData>(emptyAddress)
     const [overwriteOriginal, setOverwriteOriginal] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
+    const { cartState, clearCart } = useCart()
+    const router = useRouter()
     const [contactInfo, setContactInfo] = useState({
         firstName: '',
         lastName: '',
@@ -131,6 +135,8 @@ const Checkout = () => {
         setCurrentStep(2)
     }
 
+    const [quote, setQuote] = useState<{ subtotal: number, shipping: number, total: number } | null>(null)
+
     const normalizedCart = useMemo(
         () =>
             cartState.cartArray.map((item) => ({
@@ -145,13 +151,32 @@ const Checkout = () => {
         [cartState.cartArray]
     )
 
-    const usingFallback = normalizedCart.length === 0
-    const items = usingFallback ? fallbackItems : normalizedCart
-    const subtotal = usingFallback
-        ? fallbackSubtotal
-        : normalizedCart.reduce((total, item) => total + item.price * item.quantity, 0)
-    const shipping = deliveryMethod === 'pickup' ? 0 : baseShip
-    const total = subtotal - safeDiscount + shipping
+    useEffect(() => {
+        const updateQuote = async () => {
+            if (normalizedCart.length === 0) return;
+            try {
+                const res = await getQuote({
+                    items: normalizedCart.map(i => ({ product_id: i.id, quantity: i.quantity })),
+                    delivery_method: deliveryMethod
+                });
+                setQuote(res);
+            } catch (err) {
+                console.error("Error fetching quote", err);
+            }
+        };
+        updateQuote();
+    }, [normalizedCart, deliveryMethod]);
+
+    const items = normalizedCart
+    const subtotal = quote?.subtotal || 0
+    const shipping = quote?.shipping || 0
+    const total = quote?.total || 0
+
+    useEffect(() => {
+        if (normalizedCart.length === 0) {
+            router.push('/cart')
+        }
+    }, [normalizedCart, router])
 
     useEffect(() => {
         if (paymentMethod !== 'transfer') {
@@ -179,8 +204,60 @@ const Checkout = () => {
     const isStep2 = currentStep === 2
     const isStep3 = currentStep === 3
 
+    const handleFinalizeOrder = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            setMessage({ text: 'Debes iniciar sesión para finalizar la compra.', type: 'error' });
+            setShowLogin(true);
+            setCurrentStep(1);
+            return;
+        }
+
+        setLoading(true);
+        setMessage(null);
+
+        try {
+            const orderData = {
+                total, // This is just for local UI, backend will re-calculate.
+                status: 'pending',
+                delivery_method: deliveryMethod,
+                shipping_address: {
+                    ...tempAddress,
+                    ...contactInfo
+                },
+                payment_method: paymentMethod,
+                items: items.map(item => ({
+                    product_id: item.id,
+                    quantity: item.quantity
+                }))
+            };
+
+            await createOrder(orderData);
+
+            setMessage({ text: '¡Pedido realizado con éxito!', type: 'success' });
+            clearCart();
+
+            setTimeout(() => {
+                router.push('/my-account');
+            }, 2000);
+
+        } catch (err: any) {
+            setMessage({ text: err.message || 'Error al procesar el pedido', type: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <>
+            {message && (
+                <div className={`fixed top-5 right-5 z-[200] p-4 rounded-lg shadow-2xl border ${message.type === 'success' ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'} animate-fadeIn`}>
+                    <div className="flex items-center gap-3">
+                        {message.type === 'success' ? <Icon.CheckCircle size={24} weight="fill" /> : <Icon.Warning size={24} weight="fill" />}
+                        <span className="font-semibold">{message.text}</span>
+                    </div>
+                </div>
+            )}
             <div id="header" className='relative w-full'>
                 <MenuOne />
             </div>
@@ -603,13 +680,11 @@ const Checkout = () => {
                                             ← Volver a pago
                                         </button>
                                         <button
-                                            className="bg-[#1f3b3b] text-white rounded-lg px-8 py-3 font-bold hover:bg-[#2e4d4d] transition-all shadow-lg"
-                                            onClick={() => {
-                                                alert('¡Pedido confirmado con éxito!');
-                                                window.location.href = '/my-account';
-                                            }}
+                                            className="bg-[#1f3b3b] text-white rounded-lg px-8 py-3 font-bold hover:bg-[#2e4d4d] transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                            onClick={handleFinalizeOrder}
+                                            disabled={loading}
                                         >
-                                            Finalizar Compra
+                                            {loading ? 'Procesando...' : 'Finalizar Compra'}
                                         </button>
                                     </div>
                                 </div>
