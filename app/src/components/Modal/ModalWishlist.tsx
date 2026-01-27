@@ -64,10 +64,10 @@ const ModalWishlist = () => {
                     <div className="name text-button">{product.name}</div>
                     <div className="flex items-center gap-2 mt-2">
                       <div className="product-price text-title">
-                        ${product.price}.00
+                        ${Number(product.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                       <div className="product-origin-price text-title text-secondary2">
-                        <del>${product.originPrice}.00</del>
+                        <del>${Number(product.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
                       </div>
                     </div>
                   </div>

@@ -21,11 +21,7 @@ const resolveUrl = (path: string) => {
     return `${internalUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
   }
 
-  // Si estamos en el navegador, usamos la URL pública
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-  if (backendUrl) return `${backendUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
-
-  // Fallback (no recomendado ahora que el backend es externo)
+  // En el navegador usamos el mismo origen y dejamos que Next.js proxee internamente
   return normalizedPath
 }
 

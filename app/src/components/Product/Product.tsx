@@ -308,11 +308,11 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             </div>
                             <div className="product-name text-title duration-300">{data.name}</div>
                             <div className="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
-                                <div className="product-price text-title">${data.price}.00</div>
+                                <div className="product-price text-title">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                 {hasSale && (
                                     <>
                                         <div className="product-origin-price caption1 text-secondary2">
-                                            <del>${data.originPrice}.00</del>
+                                            <del>${Number(data.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
                                         </div>
                                         <div className="product-sale caption1 font-medium bg-[var(--bluefor)] px-3 py-0.5 inline-block rounded-full">
                                             -{percentSale}%
@@ -416,11 +416,11 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     <div className="product-infor max-sm:w-full flex-1 min-w-[260px]">
                                         <div onClick={() => handleDetailProduct(data.id)} className="product-name heading6 inline-block duration-300">{data.name}</div>
                                         <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
-                                            <div className="product-price text-title">${data.price}.00</div>
+                                            <div className="product-price text-title">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                             {hasSale && (
                                                 <>
                                                     <div className="product-origin-price caption1 text-secondary2">
-                                                        <del>${data.originPrice}.00</del>
+                                                        <del>${Number(data.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
                                                     </div>
                                                     <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
                                                         -{percentSale}%
@@ -562,7 +562,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                         <div className="flex gap-0.5 mt-1">
                             <Rate currentRate={data.rate} size={16} />
                         </div>
-                        <span className="text-title inline-block mt-1">${data.price}.00</span>
+                        <span className="text-title inline-block mt-1">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
             ) : null}

@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import MenuOne from '@/components/Header/Menu/MenuPet'
@@ -7,6 +7,7 @@ import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useRouter } from 'next/navigation'
+import { getQuote } from '@/lib/api'
 
 const Cart = () => {
 
@@ -25,18 +26,20 @@ const Cart = () => {
         }
     };
 
-    const moneyForFreeship = 150;
     const totalCart = cartState.cartArray.reduce(
         (acc, item) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1),
         0
     )
+    const [vatRate, setVatRate] = useState(0)
+    const [vatSubtotal, setVatSubtotal] = useState(0)
+    const [vatAmount, setVatAmount] = useState(0)
     let [discountCart, setDiscountCart] = useState<number>(0)
-    let [shipCart, setShipCart] = useState<number>(30)
     let [applyCode, setApplyCode] = useState<number>(0)
-    const formattedSubtotal = totalCart.toFixed(2)
-    const formattedDiscount = discountCart.toFixed(2)
-    const formattedCartTotal = (totalCart - discountCart + shipCart).toFixed(2)
-    const remainingForFreeShip = Math.max(moneyForFreeship - totalCart, 0).toFixed(2)
+    const formattedSubtotal = totalCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formattedDiscount = discountCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formattedCartTotal = (totalCart - discountCart).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formattedVatSubtotal = vatSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formattedVatAmount = vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
     const handleApplyCode = (minValue: number, discount: number) => {
         if (totalCart > minValue) {
@@ -52,16 +55,33 @@ const Cart = () => {
         discountCart = 0
     }
 
-    if (totalCart < moneyForFreeship) {
-        shipCart = 30
-    }
-
-    if (cartState.cartArray.length === 0) {
-        shipCart = 0
-    }
+    useEffect(() => {
+        const items = cartState.cartArray.map((item) => ({
+            product_id: item.id,
+            quantity: Number(item.quantity ?? 1)
+        }))
+        if (items.length === 0) {
+            setVatRate(0)
+            setVatSubtotal(0)
+            setVatAmount(0)
+            return
+        }
+        getQuote({ items, delivery_method: 'pickup' })
+            .then((res: any) => {
+                setVatRate(Number(res?.vat_rate ?? 0))
+                setVatSubtotal(Number(res?.vat_subtotal ?? 0))
+                setVatAmount(Number(res?.vat_amount ?? 0))
+            })
+            .catch((err) => {
+                console.error('No se pudo calcular IVA del carrito', err)
+                setVatRate(0)
+                setVatSubtotal(0)
+                setVatAmount(0)
+            })
+    }, [cartState.cartArray])
 
     const redirectToCheckout = () => {
-        router.push(`/checkout?discount=${discountCart}&ship=${shipCart}`)
+        router.push(`/checkout?discount=${discountCart}&ship=0`)
     }
 
     return (
@@ -74,19 +94,7 @@ const Cart = () => {
                     <div className="content-main flex justify-between max-xl:flex-col gap-y-8">
                         <div className="xl:w-2/3 xl:pr-3 w-full">
                             
-                            <div className="heading banner mt-5">
-                                <div className="text">Compra
-                                    <span className="text-button"> $<span className="more-price">{remainingForFreeShip}</span> </span>
-                                    <span>más para obtener </span>
-                                    <span className="text-button">envío gratis</span>
-                                </div>
-                                <div className="tow-bar-block mt-4">
-                                    <div
-                                        className="progress-line"
-                                        style={{ width: totalCart <= moneyForFreeship ? `${(totalCart / moneyForFreeship) * 100}%` : `100%` }}
-                                    ></div>
-                                </div>
-                            </div>
+                            <div className="heading banner mt-5" />
                             <div className="list-product w-full sm:mt-7 mt-5">
                                 <div className='w-full'>
                                     <div className="heading bg-surface bora-4 pt-4 pb-4">
@@ -141,7 +149,7 @@ const Cart = () => {
                                                             </div>
                                                         </div>
                                                         <div className="w-1/12 price flex items-center justify-center">
-                                                            <div className="text-title text-center">${itemPrice.toFixed(2)}</div>
+                                                            <div className="text-title text-center">${itemPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                         </div>
                                                         <div className="w-1/6 flex items-center justify-center">
                                                             <div className="quantity-block bg-surface md:p-3 p-2 flex items-center justify-between rounded-lg border border-line md:w-[100px] flex-shrink-0 w-20">
@@ -161,7 +169,7 @@ const Cart = () => {
                                                             </div>
                                                         </div>
                                                         <div className="w-1/6 flex total-price items-center justify-center">
-                                                            <div className="text-title text-center">${itemTotal.toFixed(2)}</div>
+                                                            <div className="text-title text-center">${itemTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                         </div>
                                                         <div className="w-1/12 flex items-center justify-center">
                                                             <Icon.XCircle
@@ -184,66 +192,18 @@ const Cart = () => {
                             <div className="checkout-block bg-surface p-6 rounded-2xl">
                                 <div className="heading5">Resumen de compra</div>
                                 <div className="total-block py-5 flex justify-between border-b border-line">
-                                    <div className="text-title">Subtotal</div>
-                                    <div className="text-title">$<span className="total-product">{formattedSubtotal}</span></div>
+                                    <div className="text-title">Subtotal sin IVA</div>
+                                    <div className="text-title">$<span className="total-product">{formattedVatSubtotal}</span></div>
                                 </div>
+                                {vatRate > 0 && (
+                                    <div className="discount-block py-5 flex justify-between border-b border-line">
+                                        <div className="text-title">IVA ({vatRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</div>
+                                        <div className="text-title">$<span className="discount">{formattedVatAmount}</span></div>
+                                    </div>
+                                )}
                                 <div className="discount-block py-5 flex justify-between border-b border-line">
                                     <div className="text-title">Descuentos</div>
-                                    <div className="text-title"> <span>-$</span><span className="discount">{formattedDiscount}</span></div>
-                                </div>
-                                <div className="ship-block py-5 flex justify-between border-b border-line">
-                                    <div className="text-title">Envío</div>
-                                    <div className="choose-type flex gap-12">
-                                        <div className="left">
-                                            <div className="type">
-                                                {moneyForFreeship - totalCart > 0 ?
-                                                    (
-                                                        <input
-                                                            id="shipping"
-                                                            type="radio"
-                                                            name="ship"
-                                                            disabled
-                                                        />
-                                                    ) : (
-                                                        <input
-                                                            id="shipping"
-                                                            type="radio"
-                                                            name="ship"
-                                                            checked={shipCart === 0}
-                                                            onChange={() => setShipCart(0)}
-                                                        />
-                                                    )}
-                                                <label className="pl-1" htmlFor="shipping">Envío gratis:</label>
-                                            </div>
-                                            <div className="type mt-1">
-                                                <input
-                                                    id="local"
-                                                    type="radio"
-                                                    name="ship"
-                                                    value={30}
-                                                    checked={shipCart === 30}
-                                                    onChange={() => setShipCart(30)}
-                                                />
-                                                <label className="text-on-surface-variant1 pl-1" htmlFor="local">Local:</label>
-                                            </div>
-                                            <div className="type mt-1">
-                                                <input
-                                                    id="flat"
-                                                    type="radio"
-                                                    name="ship"
-                                                    value={40}
-                                                    checked={shipCart === 40}
-                                                    onChange={() => setShipCart(40)}
-                                                />
-                                                <label className="text-on-surface-variant1 pl-1" htmlFor="flat">Tarifa plana:</label>
-                                            </div>
-                                        </div>
-                                        <div className="right">
-                                            <div className="ship">$0.00</div>
-                                            <div className="local text-on-surface-variant1 mt-1">$30.00</div>
-                                            <div className="flat text-on-surface-variant1 mt-1">$40.00</div>
-                                        </div>
-                                    </div>
+                                    <div className="text-title"> <span>$</span><span className="discount">{formattedDiscount}</span></div>
                                 </div>
                                 <div className="total-cart-block pt-4 pb-4 flex justify-between">
                                     <div className="heading5">Total</div>

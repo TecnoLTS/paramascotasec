@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
@@ -8,6 +8,7 @@ import { useCart } from '@/context/CartContext'
 import { useSearchParams, useRouter } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { createOrder, getQuote } from '@/lib/api'
+import { fetchJson, requestApi } from '@/lib/apiClient'
 
 interface AddressData {
     firstName: string;
@@ -69,15 +70,19 @@ const fallbackSubtotal = fallbackItems.reduce((acc, item) => acc + item.price * 
 const Checkout = () => {
     const searchParams = useSearchParams()
     const discountParam = Number(searchParams.get('discount') ?? 0)
-    const shipParam = Number(searchParams.get('ship') ?? 10)
     const safeDiscount = Number.isNaN(discountParam) ? 0 : discountParam
-    const baseShip = Number.isNaN(shipParam) ? 5 : shipParam
+    const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
+    const [shippingRatesLoaded, setShippingRatesLoaded] = useState(false)
 
     const [showLogin, setShowLogin] = useState(false)
     const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery')
     const [paymentMethod, setPaymentMethod] = useState<'credit' | 'transfer' | 'cash'>('credit')
     const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
     const [transferSecondsLeft, setTransferSecondsLeft] = useState(600)
+    const [transferOrderRef, setTransferOrderRef] = useState(() => Math.floor(1000 + Math.random() * 9000))
+    const [transferReference, setTransferReference] = useState('')
+    const [transferAmount, setTransferAmount] = useState('')
+    const [transferProofName, setTransferProofName] = useState('')
 
     // Address management state
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
@@ -86,8 +91,11 @@ const Checkout = () => {
     const [overwriteOriginal, setOverwriteOriginal] = useState(false)
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
-    const { cartState, clearCart } = useCart()
+    const { cartState, clearCart, removeFromCart } = useCart()
     const router = useRouter()
+    const [availableProductIds, setAvailableProductIds] = useState<Set<string> | null>(null)
+    const removedMissingRef = useRef<Set<string>>(new Set())
+    const [isLoggedIn, setIsLoggedIn] = useState(false)
     const [contactInfo, setContactInfo] = useState({
         firstName: '',
         lastName: '',
@@ -96,7 +104,7 @@ const Checkout = () => {
     })
 
     useEffect(() => {
-        const saved = localStorage.getItem('savedAddresses')
+        const saved = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
         if (saved) {
             try {
                 const parsed = JSON.parse(saved)
@@ -108,6 +116,107 @@ const Checkout = () => {
             } catch (e) {
                 console.error('Error parsing addresses', e)
             }
+        }
+    }, [])
+
+    useEffect(() => {
+        fetch('/api/settings/shipping')
+            .then((res) => res.ok ? res.json() : null)
+            .then((data) => {
+                if (data && typeof data.delivery === 'number' && typeof data.pickup === 'number') {
+                    setShippingRates({
+                        delivery: data.delivery,
+                        pickup: data.pickup,
+                        taxRate: typeof data.tax_rate === 'number' ? data.tax_rate : 0
+                    })
+                }
+            })
+            .catch(() => {})
+            .finally(() => setShippingRatesLoaded(true))
+    }, [])
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken')
+        setIsLoggedIn(!!token)
+        if (!token) return
+
+        const userRaw = localStorage.getItem('user')
+        let email = ''
+        let name = ''
+        if (userRaw) {
+            try {
+                const user = JSON.parse(userRaw)
+                email = user?.email || ''
+                name = user?.name || ''
+            } catch (e) {
+                console.error('Error parsing user', e)
+            }
+        }
+
+        requestApi<{ name?: string; profile?: { firstName?: string; lastName?: string; phone?: string } }>('/api/user/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then((res) => {
+                const profile = res.body.profile || {}
+                const fullName = res.body.name || name || ''
+                const [firstName, ...rest] = fullName.split(' ')
+                setContactInfo({
+                    firstName: profile.firstName || firstName || '',
+                    lastName: profile.lastName || rest.join(' ') || '',
+                    email: email || '',
+                    phone: profile.phone || ''
+                })
+            })
+            .catch((err) => {
+                console.error('No se pudo cargar el perfil', err)
+                if (name || email) {
+                    const [firstName, ...rest] = name.split(' ')
+                    setContactInfo((prev) => ({
+                        ...prev,
+                        firstName: prev.firstName || firstName || '',
+                        lastName: prev.lastName || rest.join(' ') || '',
+                        email: prev.email || email || ''
+                    }))
+                }
+            })
+    }, [])
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken')
+        if (!token) return
+        requestApi<{ addresses: SavedAddress[] }>('/api/user/addresses', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then((res) => {
+                const addresses = Array.isArray(res.body.addresses) ? res.body.addresses : []
+                if (addresses.length > 0) {
+                    setSavedAddresses(addresses)
+                    setSelectedAddressId(addresses[0].id)
+                    setTempAddress(addresses[0].shipping)
+                }
+            })
+            .catch((err) => {
+                console.error('No se pudieron cargar las direcciones', err)
+            })
+    }, [])
+
+    useEffect(() => {
+        let mounted = true
+        fetchJson<any[]>('/api/products')
+            .then((products) => {
+                if (!mounted) return
+                const ids = new Set<string>()
+                products.forEach((p) => {
+                    if (p?.id !== undefined && p?.id !== null) ids.add(String(p.id))
+                    if (p?.legacyId !== undefined && p?.legacyId !== null) ids.add(String(p.legacyId))
+                })
+                setAvailableProductIds(ids)
+            })
+            .catch((err) => {
+                console.error('No se pudo cargar el catálogo para validar el carrito', err)
+            })
+        return () => {
+            mounted = false
         }
     }, [])
 
@@ -154,6 +263,23 @@ const Checkout = () => {
     useEffect(() => {
         const updateQuote = async () => {
             if (normalizedCart.length === 0) return;
+            if (availableProductIds) {
+                const missing = normalizedCart.filter((item) => !availableProductIds.has(String(item.id)))
+                if (missing.length > 0) {
+                    missing.forEach((item) => {
+                        const id = String(item.id)
+                        removeFromCart(id)
+                        if (!removedMissingRef.current.has(id)) {
+                            removedMissingRef.current.add(id)
+                        }
+                    })
+                    setMessage({
+                        text: 'Se eliminaron productos que ya no están disponibles. Revisa tu carrito.',
+                        type: 'error'
+                    })
+                    return
+                }
+            }
             try {
                 const res = await getQuote({
                     items: normalizedCart.map(i => ({ product_id: i.id, quantity: i.quantity })),
@@ -161,16 +287,35 @@ const Checkout = () => {
                 });
                 setQuote(res);
             } catch (err) {
+                const message = err instanceof Error ? err.message : ''
+                if (message.includes('Producto no encontrado')) {
+                    const missingId = message.split(':').pop()?.trim()
+                    if (missingId) {
+                        removeFromCart(String(missingId))
+                        setMessage({
+                            text: 'Se eliminó un producto que ya no está disponible. Revisa tu carrito.',
+                            type: 'error'
+                        })
+                        return
+                    }
+                }
                 console.error("Error fetching quote", err);
+                setMessage({ text: 'No se pudo calcular el total del pedido.', type: 'error' })
             }
         };
         updateQuote();
-    }, [normalizedCart, deliveryMethod]);
+    }, [normalizedCart, deliveryMethod, removeFromCart, availableProductIds]);
 
     const items = normalizedCart
     const subtotal = quote?.subtotal || 0
     const shipping = quote?.shipping || 0
+    const fallbackDeliveryFee = shippingRatesLoaded ? shippingRates.delivery : 0
+    const fallbackPickupFee = shippingRatesLoaded ? shippingRates.pickup : 0
+    const deliveryFeeLabel = deliveryMethod === 'delivery' ? (shipping || fallbackDeliveryFee) : fallbackPickupFee
     const total = quote?.total || 0
+    const vatRateValue = Number(quote?.vat_rate ?? 0)
+    const vatNetSubtotal = Number(quote?.vat_subtotal ?? 0)
+    const vatAmount = Number(quote?.vat_amount ?? 0)
 
     useEffect(() => {
         if (normalizedCart.length === 0) {
@@ -181,17 +326,7 @@ const Checkout = () => {
     useEffect(() => {
         if (paymentMethod !== 'transfer') {
             setTransferSecondsLeft(600)
-            return
         }
-        setTransferSecondsLeft(600)
-    }, [paymentMethod])
-
-    useEffect(() => {
-        if (paymentMethod !== 'transfer') return
-        const interval = setInterval(() => {
-            setTransferSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0))
-        }, 1000)
-        return () => clearInterval(interval)
     }, [paymentMethod])
 
     const formatTime = (seconds: number) => {
@@ -203,6 +338,16 @@ const Checkout = () => {
     const isStep1 = currentStep === 1
     const isStep2 = currentStep === 2
     const isStep3 = currentStep === 3
+
+    const handleConfirmStep2 = () => {
+        if (paymentMethod === 'transfer') {
+            if (!transferReference.trim() || !transferAmount.trim()) {
+                setMessage({ text: 'Ingresa la referencia y el monto de la transferencia.', type: 'error' })
+                return
+            }
+        }
+        setCurrentStep(3)
+    }
 
     const handleFinalizeOrder = async () => {
         const token = localStorage.getItem('authToken');
@@ -225,6 +370,11 @@ const Checkout = () => {
                     ...tempAddress,
                     ...contactInfo
                 },
+                payment_details: paymentMethod === 'transfer' ? {
+                    reference: transferReference,
+                    amount: transferAmount,
+                    proof_name: transferProofName || null
+                } : null,
                 payment_method: paymentMethod,
                 items: items.map(item => ({
                     product_id: item.id,
@@ -297,79 +447,90 @@ const Checkout = () => {
                         <div className="lg:col-span-2 space-y-6">
                             {isStep1 && (
                                 <>
-                                    <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
-                                        <div
-                                            className="flex items-center justify-between cursor-pointer"
-                                            onClick={() => setShowLogin(!showLogin)}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[#6b7280]">¿Ya tienes cuenta?</span>
-                                                <button className="text-[#2e4d4d] hover:text-[#1f3b3b] font-medium">
-                                                    Iniciar sesión
-                                                </button>
+                                    {!isLoggedIn && (
+                                        <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
+                                            <div
+                                                className="flex items-center justify-between cursor-pointer"
+                                                onClick={() => setShowLogin(!showLogin)}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[#6b7280]">¿Ya tienes cuenta?</span>
+                                                    <button className="text-[#2e4d4d] hover:text-[#1f3b3b] font-medium">
+                                                        Iniciar sesión
+                                                    </button>
+                                                </div>
+                                                <Icon.CaretDown
+                                                    className={`text-[#9ca3af] transition-transform ${showLogin ? 'rotate-180' : ''}`}
+                                                    size={20}
+                                                    weight="bold"
+                                                />
                                             </div>
-                                            <Icon.CaretDown
-                                                className={`text-[#9ca3af] transition-transform ${showLogin ? 'rotate-180' : ''}`}
-                                                size={20}
-                                                weight="bold"
-                                            />
-                                        </div>
 
-                                        {showLogin && (
-                                            <div className="mt-4 grid sm:grid-cols-2 gap-4">
-                                                <input
-                                                    type="email"
-                                                    placeholder="Email"
-                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                />
-                                                <input
-                                                    type="password"
-                                                    placeholder="Contraseña"
-                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                />
-                                                <button className="sm:col-span-2 bg-[#1f3b3b] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d] transition-colors">
-                                                    Iniciar sesión
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                            {showLogin && (
+                                                <div className="mt-4 grid sm:grid-cols-2 gap-4">
+                                                    <input
+                                                        type="email"
+                                                        placeholder="Email"
+                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        placeholder="Contraseña"
+                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                    />
+                                                    <button className="sm:col-span-2 bg-[#1f3b3b] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d] transition-colors">
+                                                        Iniciar sesión
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
                                         <h2 className="text-xl font-semibold text-[#111827] mb-4">Información de contacto</h2>
-                                        <div className="grid sm:grid-cols-2 gap-4">
-                                            <input
-                                                type="text"
-                                                id="firstName"
-                                                placeholder="Nombre *"
-                                                value={contactInfo.firstName}
-                                                onChange={handleContactChange}
-                                                className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                            />
-                                            <input
-                                                type="text"
-                                                id="lastName"
-                                                placeholder="Apellido *"
-                                                value={contactInfo.lastName}
-                                                onChange={handleContactChange}
-                                                className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                            />
-                                            <input
-                                                type="email"
-                                                id="email"
-                                                placeholder="Email *"
-                                                value={contactInfo.email}
-                                                onChange={handleContactChange}
-                                                className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                            />
-                                            <input
-                                                type="tel"
-                                                id="phone"
-                                                placeholder="Teléfono *"
-                                                value={contactInfo.phone}
-                                                onChange={handleContactChange}
-                                                className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                            />
-                                        </div>
+                                        {isLoggedIn ? (
+                                            <div className="text-sm text-[#6b7280]">
+                                                <p className="text-[#111827] font-medium">{contactInfo.firstName} {contactInfo.lastName}</p>
+                                                <p>{contactInfo.email || 'Sin correo registrado'}</p>
+                                                <p>{contactInfo.phone || 'Sin teléfono registrado'}</p>
+                                                <p className="mt-3 text-xs">Usaremos la información de tu cuenta para el pedido.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid sm:grid-cols-2 gap-4">
+                                                <input
+                                                    type="text"
+                                                    id="firstName"
+                                                    placeholder="Nombre *"
+                                                    value={contactInfo.firstName}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    id="lastName"
+                                                    placeholder="Apellido *"
+                                                    value={contactInfo.lastName}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <input
+                                                    type="email"
+                                                    id="email"
+                                                    placeholder="Email *"
+                                                    value={contactInfo.email}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <input
+                                                    type="tel"
+                                                    id="phone"
+                                                    placeholder="Teléfono *"
+                                                    value={contactInfo.phone}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
@@ -384,7 +545,7 @@ const Checkout = () => {
                                             >
                                                 <Truck className={`w-8 h-8 mb-2 ${deliveryMethod === 'delivery' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                                 <span className="font-medium text-[#111827]">Envío a domicilio</span>
-                                                <span className="text-sm text-[#6b7280] mt-1">${baseShip.toFixed(2)}</span>
+                                                <span className="text-sm text-[#6b7280] mt-1">${deliveryFeeLabel.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                             </button>
                                             <button
                                                 onClick={() => setDeliveryMethod('pickup')}
@@ -395,7 +556,9 @@ const Checkout = () => {
                                             >
                                                 <Package className={`w-8 h-8 mb-2 ${deliveryMethod === 'pickup' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                                 <span className="font-medium text-[#111827]">Retiro en tienda</span>
-                                                <span className="text-sm text-[#6b7280] mt-1">Gratis</span>
+                                                <span className="text-sm text-[#6b7280] mt-1">
+                                                    {fallbackPickupFee === 0 ? 'Gratis' : `$${fallbackPickupFee.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                </span>
                                             </button>
                                         </div>
 
@@ -427,63 +590,74 @@ const Checkout = () => {
                                                     )}
                                                 </div>
 
-                                                <div className="grid sm:grid-cols-2 gap-4">
-                                                    <select
-                                                        id="country"
-                                                        value={tempAddress.country}
-                                                        onChange={handleAddressChange}
-                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
-                                                    >
-                                                        <option value="">País/Región *</option>
-                                                        <option value="Ecuador">Ecuador</option>
-                                                        <option value="España">España</option>
-                                                        <option value="México">México</option>
-                                                        <option value="Argentina">Argentina</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
-                                                        id="city"
-                                                        placeholder="Ciudad *"
-                                                        value={tempAddress.city}
-                                                        onChange={handleAddressChange}
-                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        id="zip"
-                                                        placeholder="Código Postal *"
-                                                        value={tempAddress.zip}
-                                                        onChange={handleAddressChange}
-                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        id="street"
-                                                        placeholder="Calle y número *"
-                                                        value={tempAddress.street}
-                                                        onChange={handleAddressChange}
-                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
-                                                    />
+                                                {selectedAddressId !== 'one-time' && isLoggedIn && savedAddresses.length > 0 ? (
+                                                    <div className="text-sm text-[#6b7280] space-y-1">
+                                                        <p className="text-[#111827] font-medium">{tempAddress.firstName} {tempAddress.lastName}</p>
+                                                        <p>{tempAddress.street}</p>
+                                                        <p>{tempAddress.city}{tempAddress.state ? `, ${tempAddress.state}` : ''} {tempAddress.zip}</p>
+                                                        <p>{tempAddress.country}</p>
+                                                        {tempAddress.phone && <p>{tempAddress.phone}</p>}
+                                                        <p className="mt-2 text-xs">Dirección registrada en tu cuenta.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid sm:grid-cols-2 gap-4">
+                                                        <select
+                                                            id="country"
+                                                            value={tempAddress.country}
+                                                            onChange={handleAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
+                                                        >
+                                                            <option value="">País/Región *</option>
+                                                            <option value="Ecuador">Ecuador</option>
+                                                            <option value="España">España</option>
+                                                            <option value="México">México</option>
+                                                            <option value="Argentina">Argentina</option>
+                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            id="city"
+                                                            placeholder="Ciudad *"
+                                                            value={tempAddress.city}
+                                                            onChange={handleAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            id="zip"
+                                                            placeholder="Código Postal *"
+                                                            value={tempAddress.zip}
+                                                            onChange={handleAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            id="street"
+                                                            placeholder="Calle y número *"
+                                                            value={tempAddress.street}
+                                                            onChange={handleAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
+                                                        />
 
-                                                    {selectedAddressId !== 'one-time' && (
-                                                        <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
-                                                            <input
-                                                                type="checkbox"
-                                                                id="overwrite"
-                                                                checked={overwriteOriginal}
-                                                                onChange={(e) => setOverwriteOriginal(e.target.checked)}
-                                                                className="w-4 h-4 cursor-pointer text-[#2e4d4d] focus:ring-[#2e4d4d]"
-                                                            />
-                                                            <label htmlFor="overwrite" className="text-sm cursor-pointer text-[#6b7280]">Actualizar esta dirección guardada con los nuevos cambios</label>
-                                                        </div>
-                                                    )}
+                                                        {selectedAddressId !== 'one-time' && (
+                                                            <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    id="overwrite"
+                                                                    checked={overwriteOriginal}
+                                                                    onChange={(e) => setOverwriteOriginal(e.target.checked)}
+                                                                    className="w-4 h-4 cursor-pointer text-[#2e4d4d] focus:ring-[#2e4d4d]"
+                                                                />
+                                                                <label htmlFor="overwrite" className="text-sm cursor-pointer text-[#6b7280]">Actualizar esta dirección guardada con los nuevos cambios</label>
+                                                            </div>
+                                                        )}
 
-                                                    <textarea
-                                                        placeholder="Notas adicionales (opcional)"
-                                                        rows={3}
-                                                        className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
-                                                    />
-                                                </div>
+                                                        <textarea
+                                                            placeholder="Notas adicionales (opcional)"
+                                                            rows={3}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -497,14 +671,7 @@ const Checkout = () => {
                                                 </p>
                                             </div>
                                         )}
-                                        <div className="mt-6 flex justify-end">
-                                            <button
-                                                className="bg-[#1f3b3b] text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-[#2e4d4d] transition-colors"
-                                                onClick={handleConfirmStep1}
-                                            >
-                                                Continuar a pago
-                                            </button>
-                                        </div>
+                             
                                     </div>
                                 </>
                             )}
@@ -577,32 +744,46 @@ const Checkout = () => {
                                         <div className="mt-6 p-4 bg-[#f3f4f6] rounded-lg border border-[#e5e7eb] space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <p className="text-sm text-[#374151] font-medium">Transferencia bancaria</p>
-                                                <span className="text-sm font-semibold text-[#1f3b3b]">
-                                                    Tiempo restante: {formatTime(transferSecondsLeft)}
-                                                </span>
                                             </div>
                                             <p className="text-sm text-[#374151]">
                                                 <strong>Datos bancarios:</strong><br />
                                                 Banco: Banco Ejemplo<br />
                                                 Cuenta: 1234567890<br />
                                                 IBAN: ES91 2100 0418 4502 0005 1332<br />
-                                                Concepto: Pedido #{Math.floor(Math.random() * 10000)}
+                                                Concepto: Pedido #{transferOrderRef}
                                             </p>
                                             <div className="grid sm:grid-cols-2 gap-4">
                                                 <input
                                                     type="text"
                                                     placeholder="Referencia de pago"
+                                                    value={transferReference}
+                                                    onChange={(e) => setTransferReference(e.target.value)}
                                                     className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                 />
                                                 <input
                                                     type="number"
                                                     placeholder="Monto pagado"
+                                                    value={transferAmount}
+                                                    onChange={(e) => setTransferAmount(e.target.value)}
                                                     className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                 />
-                                                <input
-                                                    type="file"
-                                                    className="sm:col-span-2 border border-[#e5e7eb] text-[#6b7280] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                />
+                                                <label className="sm:col-span-2 border border-dashed border-[#2e4d4d] bg-white rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-[#f8fafc] transition-colors">
+                                                    <span className="w-9 h-9 rounded-full bg-[#2e4d4d]/10 text-[#2e4d4d] flex items-center justify-center">
+                                                        <Icon.UploadSimple size={18} weight="bold" />
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-medium text-[#111827]">Adjuntar comprobante (opcional, recomendado)</p>
+                                                        <p className="text-xs text-[#6b7280]">
+                                                            {transferProofName ? transferProofName : 'PNG, JPG o PDF'}
+                                                        </p>
+                                                    </div>
+                                                    <input
+                                                        type="file"
+                                                        onChange={(e) => setTransferProofName(e.target.files?.[0]?.name || '')}
+                                                        className="hidden"
+                                                        accept=".png,.jpg,.jpeg,.pdf"
+                                                    />
+                                                </label>
                                             </div>
                                         </div>
                                     )}
@@ -624,7 +805,7 @@ const Checkout = () => {
                                         </button>
                                         <button
                                             className="bg-[#1f3b3b] text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-[#2e4d4d] transition-colors"
-                                            onClick={() => setCurrentStep(3)}
+                                            onClick={handleConfirmStep2}
                                         >
                                             Ir a resumen
                                         </button>
@@ -662,6 +843,13 @@ const Checkout = () => {
                                                 {paymentMethod === 'transfer' && 'Transferencia Bancaria'}
                                                 {paymentMethod === 'cash' && 'Pago en Efectivo'}
                                             </p>
+                                            {paymentMethod === 'transfer' && (
+                                                <div className="text-sm text-[#6b7280] mt-2 space-y-1">
+                                                    <p>Referencia: {transferReference || '—'}</p>
+                                                    <p>Monto: {transferAmount ? `$${Number(transferAmount).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</p>
+                                                    {transferProofName && <p>Comprobante: {transferProofName}</p>}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -715,7 +903,7 @@ const Checkout = () => {
                                                 <div className="flex items-center justify-between mt-1">
                                                     <span className="text-sm text-[#6b7280]">x{item.quantity}</span>
                                                     <span className="text-sm font-medium text-[#111827]">
-                                                        ${(item.price * item.quantity).toFixed(2)}
+                                                        ${(item.price * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
                                             </div>
@@ -725,34 +913,49 @@ const Checkout = () => {
 
                                 <div className="border-t border-[#e5e7eb] pt-4 space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-[#6b7280]">Subtotal</span>
-                                        <span className="text-[#111827]">${subtotal.toFixed(2)}</span>
+                                        <span className="text-[#6b7280]">Subtotal sin IVA</span>
+                                        <span className="text-[#111827]">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
+                                    {vatRateValue > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-[#6b7280]">IVA ({vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
+                                            <span className="text-[#111827]">${vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    )}
                                     {safeDiscount > 0 && (
                                         <div className="flex justify-between text-sm">
                                             <span className="text-[#6b7280]">Descuento</span>
-                                            <span className="text-green-600">-${safeDiscount.toFixed(2)}</span>
+                                            <span className="text-green-600">-${safeDiscount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
                                     <div className="flex justify-between text-sm">
                                         <span className="text-[#6b7280]">Envío</span>
                                         <span className="text-[#111827]">
-                                            {shipping === 0 ? 'Gratis' : `$${shipping.toFixed(2)}`}
+                                            {shipping === 0 ? 'Gratis' : `$${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                         </span>
                                     </div>
                                     <div className="border-t border-[#e5e7eb] pt-2 mt-2">
                                         <div className="flex justify-between">
                                             <span className="text-lg font-semibold text-[#111827]">Total</span>
-                                            <span className="text-lg font-semibold text-[#111827]">${total.toFixed(2)}</span>
+                                            <span className="text-lg font-semibold text-[#111827]">${total.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <button
                                     className="w-full mt-6 bg-[#1f3b3b] text-white rounded-lg px-6 py-3 font-medium hover:bg-[#2e4d4d] transition-colors"
-                                    onClick={() => setCurrentStep(3)}
+                                    onClick={() => {
+                                        if (currentStep === 1) {
+                                            handleConfirmStep1()
+                                        } else if (currentStep === 2) {
+                                            handleConfirmStep2()
+                                        } else if (currentStep === 3) {
+                                            handleFinalizeOrder()
+                                        }
+                                    }}
+                                    disabled={currentStep === 3 && loading}
                                 >
-                                    Confirmar pedido
+                                    {currentStep === 3 ? (loading ? 'Procesando...' : 'Finalizar compra') : 'Continuar'}
                                 </button>
 
                                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#6b7280]">

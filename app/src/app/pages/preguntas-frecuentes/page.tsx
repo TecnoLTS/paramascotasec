@@ -108,22 +108,22 @@ const FaqPage = () => {
                     </div>
                 </section>
 
-                <div className="container py-16 md:py-24">
-                    <div className="flex flex-col lg:flex-row gap-16 lg:gap-24">
+                <div className="container py-10 md:py-14">
+                    <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
                         
                         {/* Sidebar */}
                         <div className="lg:w-1/3 order-2 lg:order-1">
-                            <div className="sticky space-y-8" style={{ top: `${headerHeight}px` }}>
-                                <div className="bg-white p-8 rounded-[24px] border border-gray-100 shadow-xl shadow-gray-200/50">
+                            <div className="sticky space-y-6" style={{ top: `${headerHeight}px` }}>
+                                <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-xl shadow-gray-200/50">
                                     <h4 className="heading4 font-bold mb-4 text-black">¿Necesitas ayuda extra?</h4>
-                                    <p className="text-secondary text-sm mb-8 leading-relaxed">
+                                    <p className="text-secondary text-sm mb-6 leading-relaxed">
                                         Si no encuentras la respuesta que buscas, nuestro equipo está listo para atenderte.
                                     </p>
                                     <div className="space-y-4">
-                                        <a href="https://wa.me/593999999999" target="_blank" className="flex items-center justify-center gap-3 w-full bg-[#F5F5F5] hover:bg-green-500 hover:text-white text-black p-4 rounded-xl transition-all font-bold group">
-                                            <WhatsappLogo size={24} weight="fill" className="text-green-500 group-hover:text-white"/> <span>WhatsApp</span>
+                                        <a href="https://wa.me/593999999999" target="_blank" className="flex items-center justify-center gap-3 w-full bg-[#F5F5F5] hover:bg-[#1f3b3b] hover:text-white text-black p-4 rounded-xl transition-colors font-bold group">
+                                            <WhatsappLogo size={24} weight="fill" className="text-[#1f3b3b] group-hover:text-white"/> <span>WhatsApp</span>
                                         </a>
-                                        <Link href="/contact" className="flex items-center justify-center gap-3 w-full bg-white border-2 border-black hover:bg-black hover:text-white text-black p-4 rounded-xl transition-all font-bold">
+                                        <Link href="/contact" className="flex items-center justify-center gap-3 w-full bg-white border-2 border-black hover:bg-black hover:text-white text-black p-4 rounded-xl transition-colors font-bold">
                                             <EnvelopeSimple size={24} /> <span>Contacto</span>
                                         </Link>
                                     </div>
@@ -147,27 +147,27 @@ const FaqPage = () => {
 
                         {/* Preguntas */}
                         <div className="lg:w-2/3 order-1 lg:order-2">
-                            <div className="space-y-16">
+                            <div className="space-y-8">
                                 {faqData.map((section, sIndex) => (
                                     <div key={sIndex}>
-                                        <div className="flex items-center gap-4 mb-6 pb-2 border-b border-gray-200/60">
-                                            <h3 className="text-2xl font-bold text-black">{section.category}</h3>
+                                        <div className="flex items-center gap-4 mb-4 pb-2 border-b border-gray-200/60">
+                                            <h3 className="text-xl md:text-2xl font-bold text-black">{section.category}</h3>
                                         </div>
-                                        <div className="flex flex-col gap-4">
+                                        <div className="flex flex-col gap-3">
                                             {section.items.map((item, iIndex) => {
                                                 const uniqueId = `${sIndex}-${iIndex}`;
                                                 const isOpen = openIndex === uniqueId;
                                                 return (
                                                     <div key={iIndex} className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden group ${isOpen ? 'border-orange-500 shadow-lg' : 'border-gray-100 hover:shadow-md'}`}>
-                                                        <button onClick={() => toggleAccordion(uniqueId)} className="w-full p-6 flex items-center justify-between gap-6 text-left focus:outline-none">
-                                                            <span className={`text-lg font-bold transition-colors ${isOpen ? 'text-orange-600' : 'text-gray-800'}`}>{item.q}</span>
-                                                            <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${isOpen ? 'bg-orange-500 text-white rotate-180' : 'bg-gray-100 text-gray-500'}`}>
+                                                        <button onClick={() => toggleAccordion(uniqueId)} className="w-full px-4 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 text-left focus:outline-none">
+                                                            <span className={`text-base md:text-lg font-bold transition-colors ${isOpen ? 'text-orange-600' : 'text-gray-800'}`}>{item.q}</span>
+                                                            <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${isOpen ? 'bg-orange-500 text-white rotate-180' : 'bg-gray-100 text-gray-500'}`}>
                                                                 {isOpen ? <Minus size={18} weight="bold"/> : <Plus size={18} weight="bold"/>}
                                                             </div>
                                                         </button>
                                                         <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                                                             <div className="overflow-hidden">
-                                                                <div className="px-6 pb-6 pt-0 border-t border-gray-100 text-gray-600 text-base leading-relaxed pt-4">{item.a}</div>
+                                                                <div className="px-4 md:px-5 pb-4 pt-0 border-t border-gray-100 text-gray-600 text-sm md:text-base leading-relaxed pt-3">{item.a}</div>
                                                             </div>
                                                         </div>
                                                     </div>

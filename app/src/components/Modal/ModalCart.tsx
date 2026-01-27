@@ -56,7 +56,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         setActiveTab(tab)
     }
 
-    let moneyForFreeship = 150;
     const totalCart = cartState.cartArray.reduce(
         (acc, item) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1),
         0
@@ -120,8 +119,8 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                             <div className=''>
                                                 <div className="name text-button">{product.name}</div>
                                                 <div className="flex items-center gap-2 mt-2">
-                                                    <div className="product-price text-title">${product.price}.00</div>
-                                                    <div className="product-origin-price text-title text-secondary2"><del>${product.originPrice}.00</del></div>
+                                                    <div className="product-price text-title">${Number(product.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    <div className="product-origin-price text-title text-secondary2"><del>${Number(product.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -150,17 +149,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                             </div>
                         </div>
                  
-                        <div className="heading banner mt-3 px-6">
-                            <div className="text">Compra <span className="text-button"> $<span className="more-price">{moneyForFreeship - totalCart > 0 ? (<>{moneyForFreeship - totalCart}</>) : (0)}</span>.00 </span>
-                                <span>más para obtener </span>
-                                <span className="text-button">envío gratis</span></div>
-                            <div className="tow-bar-block mt-3">
-                                <div
-                                    className="progress-line"
-                                    style={{ width: totalCart <= moneyForFreeship ? `${(totalCart / moneyForFreeship) * 100}%` : `100%` }}
-                                ></div>
-                            </div>
-                        </div>
+                        <div className="heading banner mt-3 px-6" />
                         <div className="list-product px-6">
             {cartState.cartArray.map((product) => (
                 <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
@@ -216,7 +205,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                         </button>
                                     </div>
                                     <div className="product-price text-title">
-                                        ${Number(product.price ?? 0) * Number(product.quantity ?? 1)}.00
+                                        ${(Number(product.price ?? 0) * Number(product.quantity ?? 1)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                 </div>
                             </div>
@@ -251,7 +240,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                             </div>
                             <div className="flex items-center justify-between pt-6 px-6">
                                     <div className="heading5">Subtotal</div>
-                                <div className="heading5">${totalCart}.00</div>
+                                <div className="heading5">${Number(totalCart ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             </div>
                             <div className="block-button text-center p-6">
                                 <div className="flex items-center gap-4">

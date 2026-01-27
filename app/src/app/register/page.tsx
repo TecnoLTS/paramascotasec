@@ -23,6 +23,11 @@ const Register = () => {
         e.preventDefault()
         setError('')
 
+        if (password.length < 12) {
+            setError('La contraseña debe tener al menos 12 caracteres')
+            return
+        }
+
         if (password !== confirmPassword) {
             setError('Las contraseñas no coinciden')
             return
@@ -83,6 +88,7 @@ const Register = () => {
                                         id="password"
                                         type="password"
                                         placeholder="Contraseña *"
+                                        minLength={12}
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
@@ -94,6 +100,7 @@ const Register = () => {
                                         id="confirmPassword"
                                         type="password"
                                         placeholder="Confirmar contraseña *"
+                                        minLength={12}
                                         required
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -110,7 +117,7 @@ const Register = () => {
                                         <Icon.CheckSquare size={20} weight='fill' className='icon-checkbox' />
                                     </div>
                                     <label htmlFor='remember' className="pl-2 cursor-pointer text-secondary2">Acepto los
-                                        <Link href={'#!'} className='text-black hover:underline pl-1'>Términos de Usuario</Link>
+                                        <Link href={'/pages/terminos-y-condiciones'} className='text-black hover:underline pl-1'>Términos y Condiciones</Link>
                                     </label>
                                 </div>
                                 <div className="block-button md:mt-7 mt-4">

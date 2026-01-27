@@ -2,9 +2,7 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
-import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { motion } from 'framer-motion'
@@ -30,6 +28,7 @@ interface DashboardStats {
     topProducts?: Array<{ name: string, sold: number, revenue: number }>;
     salesByCategory?: Array<{ category: string, total: number }>;
     productAnalysis?: { averageMargin: number, lowMarginOpportunities: number, totalMonitored: number };
+    tax?: { rate: number; multiplier: number };
     businessMetrics?: {
         averageOrderValue: number;
         profitStats: { revenue: number, cost: number, profit: number, margin: number };
@@ -61,6 +60,14 @@ interface Order {
     total: number;
     status: string;
     created_at: string;
+    items?: Array<{
+        order_id: string;
+        product_id: string;
+        product_name: string;
+        product_image?: string | null;
+        quantity: number;
+        price: number;
+    }>;
 }
 
 interface ShippingProvider {
@@ -90,6 +97,17 @@ const MyAccount = () => {
         { id: Date.now(), title: 'Dirección Principal', billing: { ...emptyAddress }, shipping: { ...emptyAddress }, isSame: false }
     ])
     const [currentAddrIndex, setCurrentAddrIndex] = useState(0)
+    const [addressSaving, setAddressSaving] = useState(false)
+    const [addressLoading, setAddressLoading] = useState(false)
+    const [profileSaving, setProfileSaving] = useState(false)
+    const [profileLoading, setProfileLoading] = useState(false)
+    const [profile, setProfile] = useState({
+        firstName: '',
+        lastName: '',
+        phone: '',
+        gender: '',
+        birth: ''
+    })
 
     // Admin Data State
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
@@ -98,6 +116,12 @@ const MyAccount = () => {
     const [adminOrdersList, setAdminOrdersList] = useState<Order[]>([])
     const [adminProductsList, setAdminProductsList] = useState<any[]>([])
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
+    const [vatRate, setVatRate] = useState<number>(0)
+    const [vatLoading, setVatLoading] = useState(false)
+    const [vatSaving, setVatSaving] = useState(false)
+    const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
+    const [shippingLoading, setShippingLoading] = useState(false)
+    const [shippingSaving, setShippingSaving] = useState(false)
 
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
@@ -108,6 +132,8 @@ const MyAccount = () => {
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
+    const [userOrders, setUserOrders] = useState<Order[]>([])
+    const [userOrdersLoading, setUserOrdersLoading] = useState(false)
 
     // Handlers
     const handleNewProduct = () => {
@@ -117,11 +143,14 @@ const MyAccount = () => {
     }
 
     const handleEditProduct = (product: any) => {
+        const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+        const multiplier = 1 + rate / 100
+        const basePrice = multiplier > 0 ? Number(product.price ?? 0) / multiplier : Number(product.price ?? 0)
         setEditingProduct(product)
         setProductForm({
             id: product.id,
             name: product.name,
-            price: product.price,
+            price: Number.isFinite(basePrice) ? basePrice.toFixed(2) : product.price,
             cost: product.business?.cost || product.cost || 0,
             quantity: product.quantity,
             category: product.category || 'General',
@@ -240,6 +269,10 @@ const MyAccount = () => {
     const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
         try {
             const token = localStorage.getItem('authToken');
+            if (!token) {
+                showNotification('Debes iniciar sesión para actualizar el pedido.', 'error');
+                return;
+            }
             await requestApi(`/api/orders/${orderId}/status`, {
                 method: 'PATCH',
                 headers: {
@@ -251,19 +284,186 @@ const MyAccount = () => {
             showNotification(`Pedido ${newStatus === 'delivered' ? 'entregado' : 'actualizado'} correctamente`);
             setIsOrderModalOpen(false);
             // Refresh orders
-            const res = await requestApi<Order[]>('/api/orders', { headers: { Authorization: `Bearer ${token}` } });
-            setAdminOrdersList(res.body);
-        } catch (error) {
+            if (user?.role === 'admin') {
+                const res = await requestApi<Order[]>('/api/orders', { headers: { Authorization: `Bearer ${token}` } });
+                setAdminOrdersList(res.body);
+            } else {
+                const res = await requestApi<Order[]>('/api/orders/my-orders', { headers: { Authorization: `Bearer ${token}` } });
+                setUserOrders(res.body);
+            }
+        } catch (error: any) {
             console.error(error);
+            if (error?.message && (error.message.includes('Error 401') || error.message.includes('No autorizado'))) {
+                handleLogout();
+                return;
+            }
             showNotification('Error al actualizar el pedido', 'error');
         }
     }
 
+    const parseAddress = (value: any) => {
+        if (!value) return null
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value)
+            } catch {
+                return value
+            }
+        }
+        return value
+    }
+
+    const formatAddress = (value: any) => {
+        const addr = parseAddress(value)
+        if (!addr || typeof addr === 'string') return addr || '-'
+        const parts = [addr.street, addr.city, addr.state, addr.country, addr.zip].filter(Boolean)
+        return parts.length > 0 ? parts.join(', ') : '-'
+    }
+
+    const formatAddressLines = (value: any) => {
+        const addr = parseAddress(value)
+        if (!addr) return []
+        if (typeof addr === 'string') return [addr]
+        const nameLine = [addr.firstName, addr.lastName].filter(Boolean).join(' ')
+        const cityLine = [addr.city, addr.state, addr.zip].filter(Boolean).join(', ')
+        const lines = [
+            nameLine || null,
+            addr.company || null,
+            addr.street || null,
+            cityLine || null,
+            addr.country || null,
+            addr.phone || null,
+            addr.email || null
+        ].filter(Boolean) as string[]
+        return lines
+    }
+
+    const getDefaultBillingAddress = () => {
+        if (!savedAddresses || savedAddresses.length === 0) return null
+        const primary = savedAddresses[0]
+        return primary?.billing || null
+    }
+
+    const formatMoney = (value: any) => {
+        const num = Number(value ?? 0)
+        return `$${num.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    }
+
+    const getOrderItemsGrossSubtotal = (order: any) => {
+        if (!order) return 0
+        if (Array.isArray(order.items)) {
+            return order.items.reduce((acc: number, item: any) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1), 0)
+        }
+        return Number(order.total ?? 0)
+    }
+
+    const getOrderItemsNetSubtotal = (order: any) => {
+        const grossSubtotal = getOrderItemsGrossSubtotal(order)
+        const rate = Number(order?.vat_rate ?? 0)
+        const multiplier = 1 + rate / 100
+        return multiplier > 0 ? (grossSubtotal / multiplier) : grossSubtotal
+    }
+
+    const getOrderShipping = (order: any) => {
+        if (!order) return 0
+        const stored = Number(order.shipping ?? 0)
+        if (stored > 0) return stored
+        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
+        const total = Number(order.total ?? itemsSubtotal)
+        const shipping = total - itemsSubtotal
+        return shipping > 0 ? shipping : 0
+    }
+
+    const getOrderVatSubtotal = (order: any) => {
+        if (!order) return 0
+        const subtotal = Number(order.vat_subtotal ?? 0)
+        if (subtotal > 0) return subtotal
+        const rate = Number(order.vat_rate ?? 0)
+        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
+        const multiplier = 1 + rate / 100
+        return multiplier > 0 ? (itemsSubtotal / multiplier) : itemsSubtotal
+    }
+
+    const getOrderVatAmount = (order: any) => {
+        if (!order) return 0
+        const amount = Number(order.vat_amount ?? 0)
+        if (amount > 0) return amount
+        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
+        const net = getOrderVatSubtotal(order)
+        return itemsSubtotal - net
+    }
+
+    const getItemNetPrice = (item: any, order: any) => {
+        const rate = Number(order?.vat_rate ?? 0)
+        const price = Number(item?.price ?? 0)
+        const multiplier = 1 + rate / 100
+        return multiplier > 0 ? (price / multiplier) : price
+    }
+
+    const getOrderContact = (order: any) => {
+        if (!order) return { name: '-', email: '-', phone: '-' }
+        const shipping = parseAddress(order.shipping_address) || {}
+        const billing = parseAddress(order.billing_address) || {}
+        const nameFromAddress = [shipping.firstName || billing.firstName, shipping.lastName || billing.lastName].filter(Boolean).join(' ')
+        const defaultBilling = getDefaultBillingAddress() || {}
+        return {
+            name: order.customer_name || nameFromAddress || user?.name || '-',
+            email: order.customer_email || shipping.email || billing.email || defaultBilling.email || user?.email || '-',
+            phone: order.customer_phone || shipping.phone || billing.phone || defaultBilling.phone || '-'
+        }
+    }
+    const handleGenerateInvoice = async () => {
+        if (!selectedOrder) return
+        try {
+            const token = localStorage.getItem('authToken')
+            const res = await fetch(`/api/orders/${selectedOrder.id}/invoice`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (!res.ok) {
+                throw new Error('No se pudo abrir la factura.')
+            }
+            const html = await res.text()
+            const iframe = document.createElement('iframe')
+            iframe.style.position = 'fixed'
+            iframe.style.right = '0'
+            iframe.style.bottom = '0'
+            iframe.style.width = '0'
+            iframe.style.height = '0'
+            iframe.style.border = '0'
+            iframe.style.visibility = 'hidden'
+            document.body.appendChild(iframe)
+
+            const doc = iframe.contentWindow?.document
+            if (!doc) return
+            doc.open()
+            doc.write(html)
+            doc.close()
+
+            iframe.onload = () => {
+                setTimeout(() => {
+                    try {
+                        iframe.contentWindow?.focus()
+                        iframe.contentWindow?.print()
+                    } catch (err) {
+                        console.error(err)
+                    } finally {
+                        setTimeout(() => {
+                            iframe.remove()
+                        }, 1000)
+                    }
+                }, 300)
+            }
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo abrir la factura.', 'error')
+        }
+    }
     const handleSaveAddresses = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            setAddressSaving(true)
             const token = localStorage.getItem('authToken');
-            await requestApi('/api/user/addresses', {
+            const res = await requestApi<{ addresses: typeof savedAddresses }>('/api/user/addresses', {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -271,21 +471,176 @@ const MyAccount = () => {
                 },
                 body: JSON.stringify({ addresses: savedAddresses })
             });
+            if (Array.isArray(res.body.addresses)) {
+                setSavedAddresses(res.body.addresses)
+                setCurrentAddrIndex(0)
+            }
             showNotification('Direcciones guardadas correctamente');
         } catch (error) {
             console.error(error);
             showNotification('Error al guardar direcciones', 'error');
+        } finally {
+            setAddressSaving(false)
         }
     }
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
-        showNotification('Configuración guardada (Simulado)');
+        try {
+            setProfileSaving(true)
+            const token = localStorage.getItem('authToken');
+            const name = `${profile.firstName} ${profile.lastName}`.trim()
+            const res = await requestApi<{ name?: string; profile?: typeof profile }>('/api/user/profile', {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, profile })
+            });
+
+            if (res.body.profile) {
+                setProfile({
+                    firstName: res.body.profile.firstName || '',
+                    lastName: res.body.profile.lastName || '',
+                    phone: res.body.profile.phone || '',
+                    gender: res.body.profile.gender || '',
+                    birth: res.body.profile.birth || ''
+                })
+            }
+
+            if (res.body.name && user) {
+                const updatedUser = { ...user, name: res.body.name }
+                setUser(updatedUser)
+                localStorage.setItem('user', JSON.stringify(updatedUser))
+            }
+
+            showNotification('Información personal guardada correctamente.');
+        } catch (error) {
+            console.error(error);
+            showNotification('Error al guardar información personal', 'error');
+        } finally {
+            setProfileSaving(false)
+        }
     }
 
     const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
         setMessage({ text, type })
         setTimeout(() => setMessage(null), 5000)
+    }
+
+    const loadVatRate = async () => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role !== 'admin') return
+        setVatLoading(true)
+        try {
+            const res = await requestApi<{ rate: number }>('/api/admin/settings/tax', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            setVatRate(Number(res.body.rate ?? 0))
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo cargar el IVA.', 'error')
+        } finally {
+            setVatLoading(false)
+        }
+    }
+
+    const loadShippingRates = async () => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role !== 'admin') return
+        setShippingLoading(true)
+        try {
+            const res = await requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            setShippingRates({
+                delivery: Number(res.body.delivery ?? 0),
+                pickup: Number(res.body.pickup ?? 0),
+                taxRate: Number(res.body.tax_rate ?? 0)
+            })
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudieron cargar los costos de envío.', 'error')
+        } finally {
+            setShippingLoading(false)
+        }
+    }
+
+    const handleSaveVat = async () => {
+        const token = localStorage.getItem('authToken')
+        if (!token) return
+        setVatSaving(true)
+        try {
+            const res = await requestApi<{ rate: number }>('/api/admin/settings/tax', {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rate: vatRate })
+            })
+            setVatRate(Number(res.body.rate ?? 0))
+            showNotification('IVA actualizado correctamente.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo guardar el IVA.', 'error')
+        } finally {
+            setVatSaving(false)
+        }
+    }
+
+    const handleSaveShipping = async () => {
+        const token = localStorage.getItem('authToken')
+        if (!token) return
+        setShippingSaving(true)
+        try {
+            const res = await requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping', {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    delivery: shippingRates.delivery,
+                    pickup: shippingRates.pickup,
+                    tax_rate: shippingRates.taxRate
+                })
+            })
+            setShippingRates({
+                delivery: Number(res.body.delivery ?? 0),
+                pickup: Number(res.body.pickup ?? 0),
+                taxRate: Number(res.body.tax_rate ?? 0)
+            })
+            showNotification('Costos de envío actualizados.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudieron guardar los costos de envío.', 'error')
+        } finally {
+            setShippingSaving(false)
+        }
+    }
+
+    const normalizeStatus = (status?: string) => (status || '').toLowerCase()
+
+    const getStatusBadge = (status?: string) => {
+        const normalized = normalizeStatus(status)
+        if (['processing', 'in_process', 'in-process'].includes(normalized)) {
+            return { label: 'En proceso', className: 'bg-blue-100 text-blue-600' }
+        }
+        if (['completed', 'delivered'].includes(normalized)) {
+            return { label: 'Completado', className: 'bg-success text-success' }
+        }
+        if (['canceled', 'cancelled'].includes(normalized)) {
+            return { label: 'Cancelado', className: 'bg-red text-red' }
+        }
+        if (['shipped', 'shipping', 'delivery', 'delivering'].includes(normalized)) {
+            return { label: 'Enviado', className: 'bg-purple text-purple' }
+        }
+        if (['pickup', 'ready_for_pickup', 'ready'].includes(normalized)) {
+            return { label: 'Esperando Recojo', className: 'bg-amber-400 text-amber-400' }
+        }
+        return { label: 'Pendiente', className: 'bg-yellow text-yellow' }
     }
 
     // Fetch Admin Data
@@ -306,10 +661,14 @@ const MyAccount = () => {
             requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
                 .then(res => setDashboardStats(res.body))
                 .catch(handleError)
+            loadVatRate()
+            loadShippingRates()
         } else if (activeTab === 'products' || activeTab === 'prices') {
             requestApi<any[]>('/api/products', { headers })
                 .then(res => setAdminProductsList(res.body))
                 .catch(handleError)
+            loadVatRate()
+            loadShippingRates()
         } else if (activeTab === 'admin-orders') {
             requestApi<Order[]>('/api/orders', { headers })
                 .then(res => setAdminOrdersList(res.body))
@@ -320,6 +679,25 @@ const MyAccount = () => {
                 .catch(handleError)
         }
     }, [activeTab, user])
+
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role === 'admin') return
+
+        setUserOrdersLoading(true)
+        requestApi<Order[]>('/api/orders/my-orders', { headers: { Authorization: `Bearer ${token}` } })
+            .then(res => setUserOrders(res.body))
+            .catch((err) => {
+                console.error(err)
+                if (err?.message && (err.message.includes('Error 401') || err.message.includes('No autorizado'))) {
+                    handleLogout()
+                    return
+                }
+                showNotification('No se pudieron cargar tus pedidos.', 'error')
+                setUserOrders([])
+            })
+            .finally(() => setUserOrdersLoading(false))
+    }, [user])
 
     React.useEffect(() => {
         const token = localStorage.getItem('authToken')
@@ -337,6 +715,54 @@ const MyAccount = () => {
         }
     }, [router])
 
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role === 'admin') return
+
+        setProfileLoading(true)
+        requestApi<{ name?: string; profile?: typeof profile }>('/api/user/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => {
+                const apiProfile = res.body.profile || {}
+                const fallbackName = res.body.name || user.name || ''
+                const [firstName, ...rest] = fallbackName.split(' ')
+                setProfile({
+                    firstName: apiProfile.firstName || firstName || '',
+                    lastName: apiProfile.lastName || rest.join(' ') || '',
+                    phone: apiProfile.phone || '',
+                    gender: apiProfile.gender || '',
+                    birth: apiProfile.birth || ''
+                })
+            })
+            .catch(err => {
+                console.error(err)
+                showNotification('No se pudieron cargar los datos de perfil.', 'error')
+            })
+            .finally(() => setProfileLoading(false))
+    }, [user])
+
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role === 'admin') return
+
+        setAddressLoading(true)
+        requestApi<{ addresses: typeof savedAddresses }>('/api/user/addresses', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => {
+                if (Array.isArray(res.body.addresses) && res.body.addresses.length > 0) {
+                    setSavedAddresses(res.body.addresses)
+                    setCurrentAddrIndex(0)
+                }
+            })
+            .catch(err => {
+                console.error(err)
+                showNotification('No se pudieron cargar las direcciones guardadas.', 'error')
+            })
+            .finally(() => setAddressLoading(false))
+    }, [user])
+
     const handleLogout = () => {
         localStorage.removeItem('authToken')
         localStorage.removeItem('user')
@@ -352,6 +778,15 @@ const MyAccount = () => {
     }
 
     const currentAddress = savedAddresses[currentAddrIndex]
+    const vatDisplayRate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+    const vatDisplayMultiplier = Number(dashboardStats?.tax?.multiplier ?? (1 + vatDisplayRate / 100))
+    const vatRateLabel = vatDisplayRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const vatMultiplierLabel = vatDisplayMultiplier.toLocaleString('es-EC', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+    const vatExampleTotal = (100 * vatDisplayMultiplier).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const vatRateValue = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+    const vatMultiplier = 1 + vatRateValue / 100
+    const productPvpPrice = Number(productForm.price || 0) * vatMultiplier
+    const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
     const updateAddressData = (type: 'billing' | 'shipping', field: string, value: string) => {
         const newAddresses = [...savedAddresses]
@@ -566,15 +1001,20 @@ const MyAccount = () => {
                                             <h6 className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-8">Estado de Resultados</h6>
                                             <div className="space-y-8">
                                                 <div>
-                                                    <div className="text-xs text-white/50 mb-2">Ingresos Totales</div>
+                                                    <div className="text-xs text-white/50 mb-2">Ingresos Totales (sin IVA, sin envío)</div>
                                                     <div className="text-3xl font-bold">${Number(dashboardStats.businessMetrics?.profitStats?.revenue || 0).toLocaleString()}</div>
                                                 </div>
                                                 <div className="pb-8 border-b border-white/10">
                                                     <div className="text-xs text-white/50 mb-2">Costo Directo (COGS)</div>
                                                     <div className="text-3xl font-bold text-orange-400">-${Number(dashboardStats.businessMetrics?.profitStats?.cost || 0).toLocaleString()}</div>
                                                 </div>
+                                                <div className="pt-4 border-b border-white/10 pb-8">
+                                                    <div className="text-xs text-white/50 mb-2">Envío cobrado (pasarela)</div>
+                                                    <div className="text-3xl font-bold text-white/80">${Number(dashboardStats.businessMetrics?.profitStats?.shipping_cost || 0).toLocaleString()}</div>
+                                                    <div className="text-[10px] text-white/40 mt-2">Se considera reembolsado por el cliente, no afecta la utilidad.</div>
+                                                </div>
                                                 <div className="pt-4">
-                                                    <div className="text-xs text-white/50 mb-2">Utilidad Bruta</div>
+                                                    <div className="text-xs text-white/50 mb-2">Utilidad Bruta (sin IVA)</div>
                                                     <div className="text-5xl font-bold text-success">${Number(dashboardStats.businessMetrics?.profitStats?.profit || 0).toLocaleString()}</div>
                                                 </div>
                                             </div>
@@ -720,14 +1160,52 @@ const MyAccount = () => {
         )
     }
 
+    const recentUserOrders = userOrders.slice(0, 5)
+    const totalUserOrders = userOrders.length
+    const canceledUserOrders = userOrders.filter(order => ['canceled', 'cancelled'].includes(normalizeStatus(order.status))).length
+    const pickupUserOrders = userOrders.filter(order => ['pickup', 'ready_for_pickup', 'ready'].includes(normalizeStatus(order.status))).length
+
+    const matchesActiveOrder = (order: Order) => {
+        const status = normalizeStatus(order.status)
+        const isAdminOrders = activeTab === 'admin-orders'
+        if (!activeOrders || activeOrders === 'all') return true
+        if (activeOrders === 'pending') {
+            return isAdminOrders ? status === 'pending' : ['pending', 'processing'].includes(status)
+        }
+        if (activeOrders === 'processing') return ['processing', 'in_process', 'in-process'].includes(status)
+        if (activeOrders === 'delivery') return ['shipped', 'shipping', 'delivery', 'delivered'].includes(status)
+        if (activeOrders === 'completed') return ['completed', 'delivered'].includes(status)
+        if (activeOrders === 'canceled') return ['canceled', 'cancelled'].includes(status)
+        return true
+    }
+    const filteredUserOrders = userOrders.filter(matchesActiveOrder)
+    const filteredAdminOrders = adminOrdersList.filter(matchesActiveOrder)
+    const adminOrdersCounts = React.useMemo(() => {
+        const counts = {
+            all: adminOrdersList.length,
+            pending: 0,
+            processing: 0,
+            delivery: 0,
+            completed: 0,
+            canceled: 0
+        }
+        adminOrdersList.forEach((order) => {
+            const status = normalizeStatus(order.status)
+            if (status === 'pending') counts.pending += 1
+            if (['processing', 'in_process', 'in-process'].includes(status)) counts.processing += 1
+            if (['shipped', 'shipping', 'delivery', 'delivered'].includes(status)) counts.delivery += 1
+            if (['completed', 'delivered'].includes(status)) counts.completed += 1
+            if (['canceled', 'cancelled'].includes(status)) counts.canceled += 1
+        })
+        return counts
+    }, [adminOrdersList])
+
     if (!user) return null
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el código GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Mi Cuenta' subHeading='Mi Cuenta' />
             </div>
 
             {message && (
@@ -745,8 +1223,8 @@ const MyAccount = () => {
 
             <div className="profile-block md:py-20 py-10">
                 <div className="w-full max-w-[1920px] mx-auto px-6 md:px-10">
-                    <div className="content-main flex gap-y-8 max-md:flex-col w-full">
-                        <div className="left md:w-1/4 xl:w-1/5 w-full xl:pr-10 lg:pr-6 md:pr-4">
+                    <div className="content-main flex gap-y-8 max-lg:flex-col w-full min-w-0">
+                        <div className="left lg:w-1/4 xl:w-1/5 w-full xl:pr-10 lg:pr-6 min-w-0">
                             <div className="user-infor bg-surface lg:px-7 px-4 lg:py-10 py-5 md:rounded-[20px] rounded-xl">
                                 <div className="heading flex flex-col items-center justify-center">
                                     <div className="avatar">
@@ -759,7 +1237,7 @@ const MyAccount = () => {
                                         />
                                     </div>
                                     <div className="name heading6 mt-4 text-center">{user.name}</div>
-                                    <div className="mail heading6 font-normal normal-case text-secondary text-center mt-1">{user.email}</div>
+                                    <div className="mail heading6 font-normal normal-case text-secondary text-center mt-1 break-all">{user.email}</div>
                                 </div>
                                 <div className="menu-tab w-full max-w-none lg:mt-10 mt-6">
                                     {user.role === 'admin' ? (
@@ -816,7 +1294,7 @@ const MyAccount = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="right md:w-3/4 xl:w-4/5 w-full md:pl-6 pl-0">
+                        <div className="right lg:w-3/4 xl:w-4/5 w-full lg:pl-6 pl-0 min-w-0">
                             {user.role === 'admin' && (
                                 <>
                                     <div className={`tab text-content w-full ${activeTab === 'reports' ? 'block' : 'hidden'}`}>
@@ -824,6 +1302,21 @@ const MyAccount = () => {
                                             <div className="heading5">Reportes de Negocio</div>
                                             <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
                                                 {new Date().toLocaleDateString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
+                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                                <div>
+                                                    <div className="text-secondary text-xs uppercase font-bold mb-1">IVA configurado</div>
+                                                    <div className="heading4">{vatRateLabel}%</div>
+                                                    <p className="text-secondary text-xs mt-1">Los precios del catálogo incluyen IVA.</p>
+                                                </div>
+                                                <div className="text-sm text-secondary">
+                                                    Multiplicador aplicado: <span className="font-bold text-black">{vatMultiplierLabel}x</span>
+                                                    <span className="mx-2 text-line">•</span>
+                                                    Ejemplo: $100 → <span className="font-bold text-black">${vatExampleTotal}</span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -854,13 +1347,47 @@ const MyAccount = () => {
                                             </div>
                                         )}
 
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                            {(() => {
+                                                const summary = dashboardStats?.businessMetrics?.salesSummary
+                                                const gross = Number(summary?.gross ?? 0)
+                                                const net = Number(summary?.net ?? 0)
+                                                const vat = Number(summary?.vat ?? 0)
+                                                const shipping = Number(summary?.shipping ?? 0)
+                                                return (
+                                                    <>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Total</div>
+                                                            <div className="heading5">${gross.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Incluye IVA + Envío</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Neta</div>
+                                                            <div className="heading5">${net.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Sin IVA ni envío</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">IVA Cobrado</div>
+                                                            <div className="heading5">${vat.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Impuesto del cliente</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Envío Cobrado</div>
+                                                            <div className="heading5">${shipping.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Cobro al cliente</div>
+                                                        </div>
+                                                    </>
+                                                )
+                                            })()}
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                                             <div
                                                 className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => setSelectedDeepDive('sales')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-secondary text-sm font-medium">Ventas (Mes)</div>
+                                                    <div className="text-secondary text-sm font-medium">Ventas (Mes, netas)</div>
                                                     <Icon.CurrencyDollar className="text-success" size={20} />
                                                 </div>
                                                 <div className="heading4">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
@@ -888,7 +1415,7 @@ const MyAccount = () => {
                                                 onClick={() => setSelectedDeepDive('profit')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-secondary text-sm font-medium">Utilidad Bruta</div>
+                                                    <div className="text-secondary text-sm font-medium">Utilidad Bruta (sin IVA y sin envío)</div>
                                                     <Icon.HandCoins className="text-orange-500" size={20} />
                                                 </div>
                                                 <div className="heading4 text-success">${dashboardStats?.businessMetrics?.profitStats?.profit?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
@@ -1130,7 +1657,7 @@ const MyAccount = () => {
                                                                         >
                                                                             <td className="py-4 font-bold text-xs truncate pr-2 group-hover:text-primary transition-colors">#{order.id.split('-').pop()}</td>
                                                                             <td className="py-4 text-xs truncate pr-2">{order.user_name || 'Anónimo'}</td>
-                                                                            <td className="py-4 text-right font-bold text-xs">${Number(order.total).toFixed(2)}</td>
+                                                                            <td className="py-4 text-right font-bold text-xs">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                             <td className="py-4 text-right text-[10px] text-secondary whitespace-nowrap">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                                                         </tr>
                                                                     ))}
@@ -1258,7 +1785,7 @@ const MyAccount = () => {
                                                             </td>
                                                             <td className="py-4 font-semibold">{product.name}</td>
                                                             <td className="py-4">{product.quantity ?? 0} unidades</td>
-                                                            <td className="py-4 font-bold">${Number(product.price).toFixed(2)}</td>
+                                                            <td className="py-4 font-bold">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                             <td className="py-4">
                                                                 <div className="flex gap-2">
                                                                     <button className="p-2 hover:bg-line rounded-full transition-colors" onClick={() => handleEditProduct(product)}><Icon.PencilSimple size={18} /></button>
@@ -1277,6 +1804,84 @@ const MyAccount = () => {
                                     <div className={`tab text-content w-full ${activeTab === 'prices' ? 'block' : 'hidden'}`}>
                                         <div className="heading5 pb-4">Gestión Inteligente de Precios</div>
                                         <p className="text-secondary mb-6">Optimiza tus márgenes con sugerencias basadas en costos.</p>
+                                        <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
+                                            <div className="flex flex-col md:flex-row md:items-end gap-4">
+                                                <div className="flex-1">
+                                                    <label htmlFor="vatRate" className="text-secondary text-xs uppercase font-bold mb-2 block">IVA (%)</label>
+                                                    <input
+                                                        id="vatRate"
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={vatRate}
+                                                        onChange={(e) => setVatRate(Number(e.target.value))}
+                                                        disabled={vatLoading || vatSaving}
+                                                    />
+                                                    <p className="text-secondary text-xs mt-2">Los precios del catálogo se muestran con IVA incluido.</p>
+                                                </div>
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={handleSaveVat}
+                                                    disabled={vatLoading || vatSaving}
+                                                >
+                                                    {vatSaving ? 'Guardando...' : 'Guardar IVA'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
+                                            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+                                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label htmlFor="shippingDelivery" className="text-secondary text-xs uppercase font-bold mb-2 block">Envío a domicilio ($)</label>
+                                                        <input
+                                                            id="shippingDelivery"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={shippingRates.delivery}
+                                                            onChange={(e) => setShippingRates({ ...shippingRates, delivery: Number(e.target.value) })}
+                                                            disabled={shippingLoading || shippingSaving}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="shippingPickup" className="text-secondary text-xs uppercase font-bold mb-2 block">Retiro en tienda ($)</label>
+                                                        <input
+                                                            id="shippingPickup"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={shippingRates.pickup}
+                                                            onChange={(e) => setShippingRates({ ...shippingRates, pickup: Number(e.target.value) })}
+                                                            disabled={shippingLoading || shippingSaving}
+                                                        />
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <label htmlFor="shippingTaxRate" className="text-secondary text-xs uppercase font-bold mb-2 block">IVA aplicado al envío (%)</label>
+                                                        <input
+                                                            id="shippingTaxRate"
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={shippingRates.taxRate}
+                                                            onChange={(e) => setShippingRates({ ...shippingRates, taxRate: Number(e.target.value) })}
+                                                            disabled={shippingLoading || shippingSaving}
+                                                        />
+                                                        <p className="text-secondary text-xs mt-2">Se suma al envío para cubrir impuestos. Ej: 15% incrementa el costo final.</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={handleSaveShipping}
+                                                    disabled={shippingLoading || shippingSaving}
+                                                >
+                                                    {shippingSaving ? 'Guardando...' : 'Guardar Envío'}
+                                                </button>
+                                            </div>
+                                        </div>
 
                                         <div className="grid grid-cols-3 gap-6 mb-8">
                                             <div className="p-5 rounded-xl bg-surface border border-line">
@@ -1321,8 +1926,8 @@ const MyAccount = () => {
                                                                     <div className="font-semibold text-sm">{product.name}</div>
                                                                     <div className="text-xs text-secondary">SKU: {product.id.substring(0, 6)}</div>
                                                                 </td>
-                                                                <td className="py-4 font-medium text-secondary text-sm">${Number(product.business?.cost || 0).toFixed(2)}</td>
-                                                                <td className="py-4 font-bold text-sm">${Number(product.price).toFixed(2)}</td>
+                                                                <td className="py-4 font-medium text-secondary text-sm">${Number(product.business?.cost || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="py-4 font-bold text-sm">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="py-4">
                                                                     <span className={`px-2 py-1 rounded text-xs font-bold ${((product.business?.margin || 0) < 20) ? 'bg-red text-white' :
                                                                         ((product.business?.margin || 0) < 35) ? 'bg-yellow text-white' : 'bg-success text-white'
@@ -1353,11 +1958,26 @@ const MyAccount = () => {
 
                                     <div className={`tab text-content w-full ${activeTab === 'admin-orders' ? 'block' : 'hidden'}`}>
                                         <div className="heading5 pb-6">Todos los Pedidos</div>
-                                        <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
-                                            <button className="px-4 py-1.5 rounded-full bg-black text-white text-sm">Todos (2,450)</button>
-                                            <button className="px-4 py-1.5 rounded-full bg-surface border border-line text-sm">Nuevos (12)</button>
-                                            <button className="px-4 py-1.5 rounded-full bg-surface border border-line text-sm">En Proceso (45)</button>
-                                            <button className="px-4 py-1.5 rounded-full bg-surface border border-line text-sm">Enviados (180)</button>
+                                        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+                                            {[
+                                                { id: 'all', label: 'Todos', count: adminOrdersCounts.all },
+                                                { id: 'pending', label: 'Nuevos', count: adminOrdersCounts.pending },
+                                                { id: 'processing', label: 'En proceso', count: adminOrdersCounts.processing },
+                                                { id: 'delivery', label: 'Enviados', count: adminOrdersCounts.delivery },
+                                                { id: 'completed', label: 'Completados', count: adminOrdersCounts.completed },
+                                                { id: 'canceled', label: 'Cancelados', count: adminOrdersCounts.canceled }
+                                            ].map((tab) => (
+                                                <button
+                                                    key={tab.id}
+                                                    className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${activeOrders === tab.id
+                                                        ? 'bg-black text-white border-black'
+                                                        : 'bg-white text-secondary border-line hover:bg-surface'
+                                                        }`}
+                                                    onClick={() => setActiveOrders(tab.id)}
+                                                >
+                                                    {tab.label} ({tab.count})
+                                                </button>
+                                            ))}
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse">
@@ -1372,15 +1992,17 @@ const MyAccount = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {adminOrdersList.length > 0 ? adminOrdersList.map((order) => (
+                                                    {filteredAdminOrders.length > 0 ? filteredAdminOrders.map((order) => {
+                                                        const badge = getStatusBadge(order.status)
+                                                        return (
                                                         <tr key={order.id} className="border-b border-line last:border-0 hover:bg-surface duration-300 text-sm">
                                                             <td className="py-4 font-bold">#{order.id}</td>
                                                             <td className="py-4">{order.user_name || 'Cliente'}</td>
                                                             <td className="py-4">{new Date(order.created_at).toLocaleDateString()}</td>
-                                                            <td className="py-4 font-bold">${Number(order.total).toFixed(2)}</td>
+                                                            <td className="py-4 font-bold">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                             <td className="py-4">
-                                                                <span className={`tag px-3 py-1 rounded-full text-xs font-semibold ${order.status === 'pending' ? 'bg-yellow bg-opacity-10 text-yellow' : 'bg-success bg-opacity-10 text-success'}`}>
-                                                                    {order.status === 'pending' ? 'Pendiente' : order.status}
+                                                                <span className={`tag px-3 py-1 rounded-full text-xs font-semibold bg-opacity-10 ${badge.className}`}>
+                                                                    {badge.label}
                                                                 </span>
                                                             </td>
                                                             <td className="py-4">
@@ -1389,7 +2011,7 @@ const MyAccount = () => {
                                                                 }}>Ver Detalles</button>
                                                             </td>
                                                         </tr>
-                                                    )) : (
+                                                    )}) : (
                                                         <tr><td colSpan={6} className="py-8 text-center text-secondary">No se encontraron pedidos.</td></tr>
                                                     )}
                                                 </tbody>
@@ -1424,11 +2046,11 @@ const MyAccount = () => {
                                     </div>
 
                                     <div className={`tab text-content w-full ${activeTab === 'balances' ? 'block' : 'hidden'}`}>
-                                        <div className="text-gray-400 text-sm">Balance General (Ventas Totales)</div>
+                                        <div className="text-gray-400 text-sm">Balance General (Ventas sin IVA y sin envío)</div>
                                         <div className="heading2 mt-2">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
                                         <div className="mt-6 flex gap-8">
                                             <div>
-                                                <div className="text-gray-400 text-xs uppercase">Ingresos (Histórico)</div>
+                                                <div className="text-gray-400 text-xs uppercase">Ingresos (Histórico, sin IVA y sin envío)</div>
                                                 <div className="heading5">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 0 }) : '0'}</div>
                                             </div>
                                             <div>
@@ -1436,7 +2058,7 @@ const MyAccount = () => {
                                                 <div className="heading5">$0</div>
                                             </div>
                                         </div>
-                                        <div className="heading6 mb-4 mt-8">Últimos Pedidos (Ingresos)</div>
+                                        <div className="heading6 mb-4 mt-8">Últimos Pedidos (Ingresos sin IVA y sin envío)</div>
                                         <div className="flex flex-col gap-4">
                                             {adminOrdersList.slice(0, 5).map((order) => (
                                                 <div key={order.id} className="flex items-center justify-between p-4 bg-surface rounded-xl border border-line">
@@ -1449,7 +2071,7 @@ const MyAccount = () => {
                                                             <div className="text-secondary text-xs">{new Date(order.created_at).toLocaleDateString()}</div>
                                                         </div>
                                                     </div>
-                                                    <div className="font-bold text-success">+${Number(order.total).toFixed(2)}</div>
+                                                    <div className="font-bold text-success">+${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                 </div>
                                             ))}
                                             {adminOrdersList.length === 0 && (
@@ -1467,21 +2089,21 @@ const MyAccount = () => {
                                             <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
                                                 <div className="counter">
                                                     <span className="text-secondary">Esperando Recojo</span>
-                                                    <h5 className="heading5 mt-1">4</h5>
+                                                    <h5 className="heading5 mt-1">{pickupUserOrders}</h5>
                                                 </div>
                                                 <Icon.HourglassMedium className='text-4xl' />
                                             </div>
                                             <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
                                                 <div className="counter">
                                                     <span className="text-secondary">Pedidos Cancelados</span>
-                                                    <h5 className="heading5 mt-1">12</h5>
+                                                    <h5 className="heading5 mt-1">{canceledUserOrders}</h5>
                                                 </div>
                                                 <Icon.ReceiptX className='text-4xl' />
                                             </div>
                                             <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
                                                 <div className="counter">
                                                     <span className="text-secondary">Número Total de Pedidos</span>
-                                                    <h5 className="heading5 mt-1">200</h5>
+                                                    <h5 className="heading5 mt-1">{totalUserOrders}</h5>
                                                 </div>
                                                 <Icon.Package className='text-4xl' />
                                             </div>
@@ -1489,7 +2111,7 @@ const MyAccount = () => {
                                         <div className="recent_order pt-5 px-5 pb-2 mt-7 border border-line rounded-xl">
                                             <h6 className="heading6">Pedidos Recientes</h6>
                                             <div className="list overflow-x-auto w-full mt-5">
-                                                <table className="w-full max-[1400px]:w-[700px] max-md:w-[700px]">
+                                                <table className="w-full min-w-[640px]">
                                                     <thead className="border-b border-line">
                                                         <tr>
                                                             <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Pedido</th>
@@ -1499,96 +2121,45 @@ const MyAccount = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <tr className="item duration-300 border-b border-line">
-                                                            <th scope="row" className="py-3 text-left">
-                                                                <strong className="text-title">54312452</strong>
-                                                            </th>
-                                                            <td className="py-3">
-                                                                <Link href={'/product/default'} className="product flex items-center gap-3">
-                                                                    <Image src={'/images/product/1000x1000.png'} width={400} height={400} alt='Camiseta Deportiva' className="flex-shrink-0 w-12 h-12 rounded" />
-                                                                    <div className="info flex flex-col">
-                                                                        <strong className="product_name text-button">Camiseta Deportiva</strong>
-                                                                        <span className="product_tag caption1 text-secondary">Mascotas, Ropa</span>
-                                                                    </div>
-                                                                </Link>
-                                                            </td>
-                                                            <td className="py-3 price">$45.00</td>
-                                                            <td className="py-3 text-right">
-                                                                <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-yellow text-yellow caption1 font-semibold">Pendiente</span>
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="item duration-300 border-b border-line">
-                                                            <th scope="row" className="py-3 text-left">
-                                                                <strong className="text-title">54312452</strong>
-                                                            </th>
-                                                            <td className="py-3">
-                                                                <Link href={'/product/default'} className="product flex items-center gap-3">
-                                                                    <Image src={'/images/product/1000x1000.png'} width={400} height={400} alt='Pantalones de Cuero Sintético' className="flex-shrink-0 w-12 h-12 rounded" />
-                                                                    <div className="info flex flex-col">
-                                                                        <strong className="product_name text-button">Pantalones de Cuero Sintético</strong>
-                                                                        <span className="product_tag caption1 text-secondary">Mascotas, Ropa</span>
-                                                                    </div>
-                                                                </Link>
-                                                            </td>
-                                                            <td className="py-3 price">$45.00</td>
-                                                            <td className="py-3 text-right">
-                                                                <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-purple text-purple caption1 font-semibold">Enviado</span>
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="item duration-300 border-b border-line">
-                                                            <th scope="row" className="py-3 text-left">
-                                                                <strong className="text-title">54312452</strong>
-                                                            </th>
-                                                            <td className="py-3">
-                                                                <Link href={'/product/default'} className="product flex items-center gap-3">
-                                                                    <Image src={'/images/product/1000x1000.png'} width={400} height={400} alt='Top de Punto con Cuello en V' className="flex-shrink-0 w-12 h-12 rounded" />
-                                                                    <div className="info flex flex-col">
-                                                                        <strong className="product_name text-button">Top de Punto con Cuello en V</strong>
-                                                                        <span className="product_tag caption1 text-secondary">Mascotas, Ropa</span>
-                                                                    </div>
-                                                                </Link>
-                                                            </td>
-                                                            <td className="py-3 price">$45.00</td>
-                                                            <td className="py-3 text-right">
-                                                                <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-success text-success caption1 font-semibold">Completado</span>
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="item duration-300 border-b border-line">
-                                                            <th scope="row" className="py-3 text-left">
-                                                                <strong className="text-title">54312452</strong>
-                                                            </th>
-                                                            <td className="py-3">
-                                                                <Link href={'/product/default'} className="product flex items-center gap-3">
-                                                                    <Image src={'/images/product/1000x1000.png'} width={400} height={400} alt='Camiseta Deportiva' className="flex-shrink-0 w-12 h-12 rounded" />
-                                                                    <div className="info flex flex-col">
-                                                                        <strong className="product_name text-button">Pantalones de Cuero Sintético</strong>
-                                                                        <span className="product_tag caption1 text-secondary">Mascotas, Ropa</span>
-                                                                    </div>
-                                                                </Link>
-                                                            </td>
-                                                            <td className="py-3 price">$45.00</td>
-                                                            <td className="py-3 text-right">
-                                                                <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-purple text-purple caption1 font-semibold">Enviado</span>
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="item duration-300">
-                                                            <th scope="row" className="py-3 text-left">
-                                                                <strong className="text-title">54312452</strong>
-                                                            </th>
-                                                            <td className="py-3">
-                                                                <Link href={'/product/default'} className="product flex items-center gap-3">
-                                                                    <Image src={'/images/product/1000x1000.png'} width={400} height={400} alt='Top de Punto con Cuello en V' className="flex-shrink-0 w-12 h-12 rounded" />
-                                                                    <div className="info flex flex-col">
-                                                                        <strong className="product_name text-button">Top de Punto con Cuello en V</strong>
-                                                                        <span className="product_tag caption1 text-secondary">Mascotas, Ropa</span>
-                                                                    </div>
-                                                                </Link>
-                                                            </td>
-                                                            <td className="py-3 price">$45.00</td>
-                                                            <td className="py-3 text-right">
-                                                                <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-red text-red caption1 font-semibold">Cancelado</span>
-                                                            </td>
-                                                        </tr>
+                                                        {userOrdersLoading && (
+                                                            <tr>
+                                                                <td colSpan={4} className="py-6 text-center text-secondary">Cargando pedidos...</td>
+                                                            </tr>
+                                                        )}
+                                                        {!userOrdersLoading && recentUserOrders.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={4} className="py-6 text-center text-secondary">No tienes pedidos recientes.</td>
+                                                            </tr>
+                                                        )}
+                                                        {!userOrdersLoading && recentUserOrders.map((order) => {
+                                                            const badge = getStatusBadge(order.status)
+                                                            const firstItem = order.items?.[0]
+                                                            const itemsCount = order.items?.length ?? 0
+                                                            return (
+                                                                <tr key={order.id} className="item duration-300 border-b border-line last:border-0">
+                                                                    <th scope="row" className="py-3 text-left">
+                                                                        <strong className="text-title">#{order.id}</strong>
+                                                                    </th>
+                                                                    <td className="py-3">
+                                                                        {firstItem ? (
+                                                                            <div className="product flex items-center gap-3">
+                                                                                <Image src={firstItem.product_image || '/images/product/1000x1000.png'} width={400} height={400} alt={firstItem.product_name} className="flex-shrink-0 w-12 h-12 rounded" />
+                                                                                <div className="info flex flex-col">
+                                                                                    <strong className="product_name text-button">{firstItem.product_name}</strong>
+                                                                                    <span className="product_tag caption1 text-secondary">{itemsCount > 1 ? `${itemsCount} productos` : '1 producto'}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="text-secondary text-sm">Sin productos</div>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="py-3 price">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                    <td className="py-3 text-right">
+                                                                        <span className={`tag px-4 py-1.5 rounded-full bg-opacity-10 ${badge.className} caption1 font-semibold`}>{badge.label}</span>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        })}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -1596,8 +2167,8 @@ const MyAccount = () => {
                                     </div>
                                     <div className={`tab text-content overflow-hidden w-full p-7 border border-line rounded-xl ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
                                         <h6 className="heading6">Tus Pedidos</h6>
-                                        <div className="w-full overflow-x-auto">
-                                            <div className="menu-tab grid grid-cols-5 max-lg:w-[500px] border-b border-line mt-3">
+                                        <div className="w-full">
+                                            <div className="menu-tab flex flex-wrap gap-2 border-b border-line mt-3 pb-3">
                                                 {[
                                                     { id: 'all', label: 'Todos' },
                                                     { id: 'pending', label: 'Pendientes' },
@@ -1607,7 +2178,7 @@ const MyAccount = () => {
                                                 ].map((item, index) => (
                                                     <button
                                                         key={index}
-                                                        className={`item relative px-3 py-2.5 text-secondary text-center duration-300 hover:text-black border-b-2 ${activeOrders === item.id ? 'active border-black' : 'border-transparent'}`}
+                                                        className={`item relative px-3 sm:px-4 py-2 text-secondary text-center duration-300 hover:text-black border-b-2 text-xs sm:text-sm ${activeOrders === item.id ? 'active border-black' : 'border-transparent'}`}
                                                         onClick={() => handleActiveOrders(item.id)}
                                                     >
                                                         <span className='relative text-button z-[1]'>
@@ -1618,208 +2189,64 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                         <div className="list_order">
-                                            <div className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 border-b border-line">
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Número de Pedido:</strong>
-                                                        <strong className="order_number text-button uppercase">s184989823</strong>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Estado del pedido:</strong>
-                                                        <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-purple text-purple caption1 font-semibold">Enviado</span>
-                                                    </div>
-                                                </div>
-                                                <div className="list_prd px-5">
-                                                    <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                <Image
-                                                                    src={'/images/product/1000x1000.png'}
-                                                                    width={1000}
-                                                                    height={1000}
-                                                                    alt={'Camiseta Deportiva'}
-                                                                    className='w-full h-full object-cover'
-                                                                />
+                                            {userOrdersLoading && (
+                                                <div className="text-center py-6 text-secondary">Cargando pedidos...</div>
+                                            )}
+                                            {!userOrdersLoading && filteredUserOrders.length === 0 && (
+                                                <div className="text-center py-6 text-secondary">No tienes pedidos en este estado.</div>
+                                            )}
+                                            {!userOrdersLoading && filteredUserOrders.map((order) => {
+                                                const badge = getStatusBadge(order.status)
+                                                return (
+                                                    <div key={order.id} className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
+                                                        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-4 p-5 border-b border-line">
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="text-title">Número de Pedido:</strong>
+                                                                <strong className="order_number text-button uppercase">{order.id}</strong>
                                                             </div>
-                                                            <div>
-                                                                <div className="prd_name text-title">Camiseta Deportiva</div>
-                                                                <div className="caption1 text-secondary mt-2">
-                                                                    <span className="prd_size uppercase">XL</span>
-                                                                    <span>/</span>
-                                                                    <span className="prd_color capitalize">Amarillo</span>
-                                                                </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="text-title">Estado del pedido:</strong>
+                                                                <span className={`tag px-4 py-1.5 rounded-full bg-opacity-10 ${badge.className} caption1 font-semibold`}>{badge.label}</span>
                                                             </div>
-                                                        </Link>
-                                                        <div className='text-title'>
-                                                            <span className="prd_quantity">1</span>
-                                                            <span> X </span>
-                                                            <span className="prd_price">$45.00</span>
+                                                        </div>
+                                                        <div className="list_prd px-5">
+                                                            {(order.items && order.items.length > 0) ? (
+                                                                order.items.map((item, idx) => (
+                                                                    <div key={`${order.id}-${idx}`} className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line last:border-0">
+                                                                        <Link href={'/product/default'} className="flex items-center gap-5">
+                                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
+                                                                                <Image
+                                                                                    src={item.product_image || '/images/product/1000x1000.png'}
+                                                                                    width={1000}
+                                                                                    height={1000}
+                                                                                    alt={item.product_name}
+                                                                                    className='w-full h-full object-cover'
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="prd_name text-title">{item.product_name}</div>
+                                                                                <div className="caption1 text-secondary mt-2">
+                                                                                    <span>{item.quantity} unidad{item.quantity === 1 ? '' : 'es'}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </Link>
+                                                                        <div className='text-title'>
+                                                                            <span className="prd_quantity">{item.quantity}</span>
+                                                                            <span> X </span>
+                                                                            <span className="prd_price">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="py-5 text-secondary">Sin productos asociados.</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-4 p-5">
+                                                            <button className="button-main" onClick={() => { setSelectedOrder(order); setOpenDetail(true); }}>Detalles del Pedido</button>
                                                         </div>
                                                     </div>
-                                                    <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                <Image
-                                                                    src={'/images/product/1000x1000.png'}
-                                                                    width={1000}
-                                                                    height={1000}
-                                                                    alt={'Camiseta Deportiva'}
-                                                                    className='w-full h-full object-cover'
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <div className="prd_name text-title">Camiseta Deportiva</div>
-                                                                <div className="caption1 text-secondary mt-2">
-                                                                    <span className="prd_size uppercase">XL</span>
-                                                                    <span>/</span>
-                                                                    <span className="prd_color capitalize">Blanco</span>
-                                                                </div>
-                                                            </div>
-                                                        </Link>
-                                                        <div className='text-title'>
-                                                            <span className="prd_quantity">2</span>
-                                                            <span> X </span>
-                                                            <span className="prd_price">$70.00</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-4 p-5">
-                                                    <button className="button-main" onClick={() => setOpenDetail(true)}>Detalles del Pedido</button>
-                                                    <button className="button-main bg-surface border border-line hover:bg-black text-black hover:text-white">Cancelar Pedido</button>
-                                                </div>
-                                            </div>
-                                            <div className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 border-b border-line">
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Número de Pedido:</strong>
-                                                        <strong className="order_number text-button uppercase">s184989824</strong>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Estado del pedido:</strong>
-                                                        <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-yellow text-yellow caption1 font-semibold">Pendiente</span>
-                                                    </div>
-                                                </div>
-                                                <div className="list_prd px-5">
-                                                    <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                <Image
-                                                                    src={'/images/product/1000x1000.png'}
-                                                                    width={1000}
-                                                                    height={1000}
-                                                                    alt={'Camiseta Deportiva'}
-                                                                    className='w-full h-full object-cover'
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <div className="prd_name text-title">Camiseta Deportiva</div>
-                                                                <div className="caption1 text-secondary mt-2">
-                                                                    <span className="prd_size uppercase">L</span>
-                                                                    <span>/</span>
-                                                                    <span className="prd_color capitalize">Rosa</span>
-                                                                </div>
-                                                            </div>
-                                                        </Link>
-                                                        <div className='text-title'>
-                                                            <span className="prd_quantity">1</span>
-                                                            <span> X </span>
-                                                            <span className="prd_price">$69.00</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-4 p-5">
-                                                    <button className="button-main" onClick={() => setOpenDetail(true)}>Detalles del Pedido</button>
-                                                    <button className="button-main bg-surface border border-line hover:bg-black text-black hover:text-white">Cancelar Pedido</button>
-                                                </div>
-                                            </div>
-                                            <div className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 border-b border-line">
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Número de Pedido:</strong>
-                                                        <strong className="order_number text-button uppercase">s184989824</strong>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Estado del pedido:</strong>
-                                                        <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-success text-success caption1 font-semibold">Completado</span>
-                                                    </div>
-                                                </div>
-                                                <div className="list_prd px-5">
-                                                    <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                <Image
-                                                                    src={'/images/product/1000x1000.png'}
-                                                                    width={1000}
-                                                                    height={1000}
-                                                                    alt={'Camiseta Deportiva'}
-                                                                    className='w-full h-full object-cover'
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <div className="prd_name text-title">Camiseta Deportiva</div>
-                                                                <div className="caption1 text-secondary mt-2">
-                                                                    <span className="prd_size uppercase">L</span>
-                                                                    <span>/</span>
-                                                                    <span className="prd_color capitalize">Blanco</span>
-                                                                </div>
-                                                            </div>
-                                                        </Link>
-                                                        <div className='text-title'>
-                                                            <span className="prd_quantity">1</span>
-                                                            <span> X </span>
-                                                            <span className="prd_price">$32.00</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-4 p-5">
-                                                    <button className="button-main" onClick={() => setOpenDetail(true)}>Detalles del Pedido</button>
-                                                    <button className="button-main bg-surface border border-line hover:bg-black text-black hover:text-white">Cancelar Pedido</button>
-                                                </div>
-                                            </div>
-                                            <div className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 border-b border-line">
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Número de Pedido:</strong>
-                                                        <strong className="order_number text-button uppercase">s184989824</strong>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="text-title">Estado del pedido:</strong>
-                                                        <span className="tag px-4 py-1.5 rounded-full bg-opacity-10 bg-red text-red caption1 font-semibold">Cancelado</span>
-                                                    </div>
-                                                </div>
-                                                <div className="list_prd px-5">
-                                                    <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                <Image
-                                                                    src={'/images/product/1000x1000.png'}
-                                                                    width={1000}
-                                                                    height={1000}
-                                                                    alt={'Camiseta Deportiva'}
-                                                                    className='w-full h-full object-cover'
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <div className="prd_name text-title">Camiseta Deportiva</div>
-                                                                <div className="caption1 text-secondary mt-2">
-                                                                    <span className="prd_size uppercase">M</span>
-                                                                    <span>/</span>
-                                                                    <span className="prd_color capitalize">Negro</span>
-                                                                </div>
-                                                            </div>
-                                                        </Link>
-                                                        <div className='text-title'>
-                                                            <span className="prd_quantity">1</span>
-                                                            <span> X </span>
-                                                            <span className="prd_price">$49.00</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-4 p-5">
-                                                    <button className="button-main" onClick={() => setOpenDetail(true)}>Detalles del Pedido</button>
-                                                    <button className="button-main bg-surface border border-line hover:bg-black text-black hover:text-white">Cancelar Pedido</button>
-                                                </div>
-                                            </div>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                     <div className={`tab_address text-content w-full p-7 border border-line rounded-xl ${activeTab === 'address' ? 'block' : 'hidden'}`}>
@@ -1983,7 +2410,9 @@ const MyAccount = () => {
                                                 </div>
                                             </div>
                                             <div className="block-button md:mt-10 mt-6 flex justify-end">
-                                                <button className="button-main py-3 px-10 rounded-full font-bold bg-black text-white hover:bg-primary transition-all">Guardar Direcciones</button>
+                                                <button className="button-main py-3 px-10 rounded-full font-bold bg-black text-white hover:bg-primary transition-all disabled:opacity-60 disabled:cursor-not-allowed" disabled={addressSaving || addressLoading}>
+                                                    {addressSaving ? 'Guardando...' : 'Guardar Direcciones'}
+                                                </button>
                                             </div>
                                         </form>
                                     </div>
@@ -2017,15 +2446,42 @@ const MyAccount = () => {
                                             <div className='grid sm:grid-cols-2 gap-4 gap-y-5 mt-5'>
                                                 <div className="first-name">
                                                     <label htmlFor="firstName" className='caption1 capitalize'>Nombre <span className='text-red'>*</span></label>
-                                                    <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="firstName" type="text" defaultValue={user.name.split(' ')[0]} placeholder='Nombre' required />
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="firstName"
+                                                        type="text"
+                                                        placeholder="Nombre"
+                                                        required
+                                                        value={profile.firstName}
+                                                        onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
                                                 </div>
                                                 <div className="last-name">
                                                     <label htmlFor="lastName" className='caption1 capitalize'>Apellido <span className='text-red'>*</span></label>
-                                                    <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="lastName" type="text" defaultValue={user.name.split(' ').slice(1).join(' ')} placeholder='Apellido' required />
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="lastName"
+                                                        type="text"
+                                                        placeholder="Apellido"
+                                                        required
+                                                        value={profile.lastName}
+                                                        onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
                                                 </div>
                                                 <div className="phone-number">
                                                     <label htmlFor="phoneNumber" className='caption1 capitalize'>Número de Teléfono <span className='text-red'>*</span></label>
-                                                    <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="phoneNumber" type="text" placeholder="Número de teléfono" />
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="phoneNumber"
+                                                        type="text"
+                                                        placeholder="Número de teléfono"
+                                                        required
+                                                        value={profile.phone}
+                                                        onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
                                                 </div>
                                                 <div className="email">
                                                     <label htmlFor="email" className='caption1 capitalize'>Correo Electrónico <span className='text-red'>*</span></label>
@@ -2034,7 +2490,15 @@ const MyAccount = () => {
                                                 <div className="gender">
                                                     <label htmlFor="gender" className='caption1 capitalize'>Género <span className='text-red'>*</span></label>
                                                     <div className="select-block mt-2">
-                                                        <select className="border border-line px-4 py-3 w-full rounded-lg" id="gender" name="gender" defaultValue={'default'}>
+                                                        <select
+                                                            className="border border-line px-4 py-3 w-full rounded-lg"
+                                                            id="gender"
+                                                            name="gender"
+                                                            value={profile.gender || 'default'}
+                                                            onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
+                                                            disabled={profileLoading}
+                                                            required
+                                                        >
                                                             <option value="default" disabled>Elegir Género</option>
                                                             <option value="Male">Masculino</option>
                                                             <option value="Female">Femenino</option>
@@ -2045,7 +2509,16 @@ const MyAccount = () => {
                                                 </div>
                                                 <div className="birth">
                                                     <label htmlFor="birth" className='caption1'>Fecha de Nacimiento <span className='text-red'>*</span></label>
-                                                    <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="birth" type="date" placeholder="Fecha de Nacimiento" />
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="birth"
+                                                        type="date"
+                                                        placeholder="Fecha de Nacimiento"
+                                                        required
+                                                        value={profile.birth}
+                                                        onChange={(e) => setProfile({ ...profile, birth: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
                                                 </div>
                                             </div>
                                             <div className="heading5 pb-4 lg:mt-10 mt-6">Cambiar Contraseña</div>
@@ -2062,7 +2535,9 @@ const MyAccount = () => {
                                                 <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="confirmPassword" type="password" placeholder="Confirmar Contraseña *" />
                                             </div>
                                             <div className="block-button lg:mt-10 mt-6 flex justify-end">
-                                                <button className="button-main py-3 px-10 rounded-full font-bold bg-black text-white hover:bg-primary transition-all">Guardar Cambios</button>
+                                                <button className="button-main py-3 px-10 rounded-full font-bold bg-black text-white hover:bg-primary transition-all disabled:opacity-60 disabled:cursor-not-allowed" disabled={profileSaving || profileLoading}>
+                                                    {profileSaving ? 'Guardando...' : 'Guardar Cambios'}
+                                                </button>
                                             </div>
                                         </form>
                                     </div>
@@ -2074,101 +2549,123 @@ const MyAccount = () => {
             </div>
             <Footer />
             <div className={`modal-order-detail-block flex items-center justify-center`} onClick={() => setOpenDetail(false)}>
-                <div className={`modal-order-detail-main grid grid-cols-2 w-[1160px] bg-white rounded-2xl ${openDetail ? 'open' : ''}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                    <div className="info p-10 border-r border-line">
+                <div className={`modal-order-detail-main grid grid-cols-1 lg:grid-cols-2 w-full max-w-[1160px] bg-white rounded-2xl max-md:mx-4 overflow-hidden shadow-2xl max-h-[90vh] ${openDetail ? 'open' : ''}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                    <div className="info p-8 md:p-10 bg-white lg:border-r border-line">
                         <h5 className="heading5">Detalles del Pedido</h5>
-                        <div className="list_info grid grid-cols-2 gap-10 gap-y-8 mt-5">
-                            <div className="info_item">
+                        <div className="list_info grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line sm:col-span-2">
                                 <strong className="text-button-uppercase text-secondary">Información de Contacto</strong>
-                                <h6 className="heading6 order_name mt-2">{user.name}</h6>
-                                <h6 className="heading6 order_phone mt-2">(+593) 99 999 9999</h6>
-                                <h6 className="heading6 normal-case order_email mt-2">{user.email}</h6>
+                                <h6 className="heading6 order_name mt-2">{getOrderContact(selectedOrder).name}</h6>
+                                {getOrderContact(selectedOrder).phone ? (
+                                    <h6 className="heading6 order_phone mt-2">{getOrderContact(selectedOrder).phone}</h6>
+                                ) : null}
+                                <h6 className="heading6 normal-case order_email mt-2 text-sm">{getOrderContact(selectedOrder).email}</h6>
                             </div>
-                            <div className="info_item">
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
                                 <strong className="text-button-uppercase text-secondary">Método de Pago</strong>
-                                <h6 className="heading6 order_payment mt-2">Pago contra entrega</h6>
+                                <h6 className="heading6 order_payment mt-2">{selectedOrder?.payment_method || '-'}</h6>
                             </div>
-                            <div className="info_item">
-                                <strong className="text-button-uppercase text-secondary">Dirección de Envío</strong>
-                                <h6 className="heading6 order_shipping_address mt-2">Quito, Ecuador</h6>
-                            </div>
-                            <div className="info_item">
-                                <strong className="text-button-uppercase text-secondary">Dirección de Facturación</strong>
-                                <h6 className="heading6 order_billing_address mt-2">Quito, Ecuador</h6>
-                            </div>
-                            <div className="info_item">
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
                                 <strong className="text-button-uppercase text-secondary">Empresa</strong>
-                                <h6 className="heading6 order_company mt-2">-</h6>
+                                <h6 className="heading6 order_company mt-2">{getDefaultBillingAddress()?.company || 'No aplica'}</h6>
+                            </div>
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
+                                <strong className="text-button-uppercase text-secondary">Dirección de Envío</strong>
+                                <div className="heading6 order_shipping_address mt-2 break-words text-sm leading-relaxed">
+                                    {(() => {
+                                        const shippingAddress = parseAddress(selectedOrder?.shipping_address) || {}
+                                        const shippingLines = formatAddressLines(shippingAddress)
+                                        if (getOrderShipping(selectedOrder) > 0 && shippingLines.length > 0) {
+                                            return shippingLines.map((line, idx) => (
+                                                <div key={idx}>{line}</div>
+                                            ))
+                                        }
+                                        return (
+                                            <>
+                                                <div>Local Para Mascotas EC</div>
+                                                <div>Retiro en tienda</div>
+                                            </>
+                                        )
+                                    })()}
+                                </div>
+                            </div>
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
+                                <strong className="text-button-uppercase text-secondary">Dirección de Facturación</strong>
+                                <div className="heading6 order_billing_address mt-2 break-words text-sm leading-relaxed">
+                                    {(() => {
+                                        const lines = formatAddressLines(getDefaultBillingAddress())
+                                        if (lines.length > 0) {
+                                            return lines.map((line, idx) => (
+                                                <div key={idx}>{line}</div>
+                                            ))
+                                        }
+                                        return <div>-</div>
+                                    })()}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div className="list p-10">
+                    <div className="list p-8 md:p-10 bg-white">
                         <h5 className="heading5">Artículos</h5>
-                        <div className="list_prd">
-                            <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                <Link href={'/product/default'} className="flex items-center gap-5">
-                                    <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                        <Image
-                                            src={'/images/product/1000x1000.png'}
-                                            width={1000}
-                                            height={1000}
-                                            alt={'Camiseta Deportiva'}
-                                            className='w-full h-full object-cover'
-                                        />
-                                    </div>
-                                    <div>
-                                        <div className="prd_name text-title">Camiseta Deportiva</div>
-                                        <div className="caption1 text-secondary mt-2">
-                                            <span className="prd_size uppercase">XL</span>
-                                            <span>/</span>
-                                            <span className="prd_color capitalize">Amarillo</span>
+                        <div className="list_prd mt-4">
+                            {Array.isArray(selectedOrder?.items) && selectedOrder.items.length > 0 ? (
+                                selectedOrder.items.map((item: any, idx: number) => (
+                                    <div key={`${item.product_id}-${idx}`} className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line last:border-0">
+                                        <div className="flex items-center gap-5">
+                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
+                                                <Image
+                                                    src={item.product_image || '/images/product/1000x1000.png'}
+                                                    width={1000}
+                                                    height={1000}
+                                                    alt={item.product_name || 'Producto'}
+                                                    className='w-full h-full object-cover'
+                                                />
+                                            </div>
+                                            <div>
+                                                <div className="prd_name text-title">{item.product_name || 'Producto'}</div>
+                                            </div>
+                                        </div>
+                                        <div className='text-title'>
+                                            <span className="prd_quantity">{item.quantity}</span>
+                                            <span> X </span>
+                                            <span className="prd_price">{formatMoney(getItemNetPrice(item, selectedOrder))}</span>
                                         </div>
                                     </div>
-                                </Link>
-                                <div className='text-title'>
-                                    <span className="prd_quantity">1</span>
-                                    <span> X </span>
-                                    <span className="prd_price">$45.00</span>
-                                </div>
+                                ))
+                            ) : (
+                                <div className="py-6 text-secondary">No hay artículos para este pedido.</div>
+                            )}
+                        </div>
+                        <div className="mt-6 p-5 rounded-xl bg-surface border border-line space-y-3">
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                                <strong className="text-title">Subtotal sin IVA</strong>
+                                <strong className="order_total text-title text-right">{formatMoney(getOrderVatSubtotal(selectedOrder))}</strong>
                             </div>
-                            <div className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line">
-                                <Link href={'/product/default'} className="flex items-center gap-5">
-                                    <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                        <Image
-                                            src={'/images/product/1000x1000.png'}
-                                            width={1000}
-                                            height={1000}
-                                            alt={'Camiseta Deportiva'}
-                                            className='w-full h-full object-cover'
-                                        />
-                                    </div>
-                                    <div>
-                                        <div className="prd_name text-title">Camiseta Deportiva</div>
-                                        <div className="caption1 text-secondary mt-2">
-                                            <span className="prd_size uppercase">XL</span>
-                                            <span>/</span>
-                                            <span className="prd_color capitalize">Blanco</span>
-                                        </div>
-                                    </div>
-                                </Link>
-                                <div className='text-title'>
-                                    <span className="prd_quantity">2</span>
-                                    <span> X </span>
-                                    <span className="prd_price">$70.00</span>
+                            {Number(selectedOrder?.vat_rate ?? 0) > 0 && (
+                                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                                    <span className="text-title">IVA ({Number(selectedOrder?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
+                                    <span className="text-title text-right">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
                                 </div>
+                            )}
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                                <span className="text-title">Envío</span>
+                                <span className="order_ship text-title text-right">{formatMoney(getOrderShipping(selectedOrder))}</span>
+                            </div>
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                                <span className="text-title">Descuentos</span>
+                                <span className="order_discounts text-title text-right">{formatMoney(0)}</span>
+                            </div>
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-3 border-t border-line">
+                                <strong className="text-title">Total</strong>
+                                <strong className="text-title text-right">{formatMoney(selectedOrder?.total)}</strong>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between mt-5">
-                            <strong className="text-title">Envío</strong>
-                            <strong className="order_ship text-title">Gratis</strong>
-                        </div>
-                        <div className="flex items-center justify-between mt-4">
-                            <strong className="text-title">Descuentos</strong>
-                            <strong className="order_discounts text-title">-$80.00</strong>
-                        </div>
-                        <div className="flex items-center justify-between mt-5 pt-5 border-t border-line">
-                            <h5 className="heading5">Subtotal</h5>
-                            <h5 className="order_total heading5">$105.00</h5>
+                        <div className="mt-6 flex justify-end">
+                            {selectedOrder?.status !== 'canceled' ? (
+                                <button className="button-main py-2 px-6" onClick={handleGenerateInvoice}>Ver factura</button>
+                            ) : (
+                                <span className="text-secondary text-sm">Factura no disponible para pedidos cancelados</span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -2202,20 +2699,24 @@ const MyAccount = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio (PVP)</label>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                                 <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
                                                     value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} required />
                                             </div>
+                                            <label className="text-secondary text-xs font-bold uppercase mt-3 mb-2 block">Precio PVP (con IVA)</label>
+                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full bg-surface text-secondary" readOnly
+                                                value={vatLoading ? 'Cargando...' : `$${productPvpPriceLabel}`} />
                                         </div>
                                         <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo de Negocio</label>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                                 <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
                                                     value={productForm.cost} onChange={e => setProductForm({ ...productForm, cost: e.target.value })} required />
                                             </div>
+                                            <p className="text-secondary text-xs mt-2">Costo real de compra (base para margen).</p>
                                         </div>
                                         <div>
                                             <label className="text-secondary text-sm font-bold uppercase mb-2 block">Stock Disponible</label>
@@ -2295,16 +2796,24 @@ const MyAccount = () => {
                                         </h6>
                                         <div className="space-y-3">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-secondary">Subtotal</span>
-                                                <span className="font-bold">${Number(selectedOrder.total).toFixed(2)}</span>
+                                                <span className="text-secondary">Subtotal sin IVA</span>
+                                                <span className="font-bold">{formatMoney(getOrderVatSubtotal(selectedOrder))}</span>
                                             </div>
+                                            {Number(selectedOrder?.vat_rate ?? 0) > 0 && (
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-secondary">IVA ({Number(selectedOrder?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
+                                                    <span className="font-bold">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-center">
                                                 <span className="text-secondary">Envío</span>
-                                                <span className="font-bold text-success">Gratis</span>
+                                                <span className={`font-bold ${getOrderShipping(selectedOrder) === 0 ? 'text-success' : 'text-[#111827]'}`}>
+                                                    {getOrderShipping(selectedOrder) === 0 ? 'Gratis' : formatMoney(getOrderShipping(selectedOrder))}
+                                                </span>
                                             </div>
                                             <div className="pt-3 border-t border-line flex justify-between items-center">
                                                 <span className="text-lg font-bold">Total</span>
-                                                <span className="text-xl font-bold text-primary">${Number(selectedOrder.total).toFixed(2)}</span>
+                                                <span className="text-xl font-bold text-primary">{formatMoney(selectedOrder?.total)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2337,8 +2846,8 @@ const MyAccount = () => {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                                                        <td className="px-6 py-4 text-right">${Number(item.price).toFixed(2)}</td>
-                                                        <td className="px-6 py-4 text-right font-bold text-primary">${(Number(item.price) * item.quantity).toFixed(2)}</td>
+                                                        <td className="px-6 py-4 text-right">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="px-6 py-4 text-right font-bold text-primary">${(Number(getItemNetPrice(item, selectedOrder)) * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2347,23 +2856,45 @@ const MyAccount = () => {
                                 </div>
                             </div>
 
-                            <div className="p-6 border-t border-line flex justify-between items-center bg-white rounded-b-2xl">
-                                <div className="flex items-center gap-4">
-                                    <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase ${selectedOrder.status === 'delivered' ? 'bg-success/10 text-success' :
-                                        selectedOrder.status === 'canceled' ? 'bg-red/10 text-red' : 'bg-primary/10 text-primary'
-                                        }`}>
-                                        Estado: {selectedOrder.status}
-                                    </span>
+                            <div className="p-6 border-t border-line flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white rounded-b-2xl">
+                                <div className="flex items-center gap-3">
+                                    {(() => {
+                                        const badge = getStatusBadge(selectedOrder.status)
+                                        return (
+                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase ${badge.className}`}>
+                                                Estado: {badge.label}
+                                            </span>
+                                        )
+                                    })()}
                                 </div>
-                                <div className="flex gap-4">
-                                    <button className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsOrderModalOpen(false)}>
+                                <div className="flex flex-wrap gap-2">
+                                    <button className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => setIsOrderModalOpen(false)}>
                                         Cerrar
                                     </button>
-                                    <button className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold" onClick={() => {
-                                        handleUpdateOrderStatus(selectedOrder.id, 'en route')
-                                    }}>
-                                        Confirmar Pedido
-                                    </button>
+                                    {user?.role === 'admin' && selectedOrder.status !== 'canceled' && selectedOrder.status !== 'delivered' && (
+                                        <>
+                                            <button className="px-4 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => {
+                                                handleUpdateOrderStatus(selectedOrder.id, 'processing')
+                                            }}>
+                                                En proceso
+                                            </button>
+                                            <button className="px-4 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => {
+                                                handleUpdateOrderStatus(selectedOrder.id, 'shipped')
+                                            }}>
+                                                Enviado
+                                            </button>
+                                            <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={() => {
+                                                handleUpdateOrderStatus(selectedOrder.id, 'delivered')
+                                            }}>
+                                                Completado
+                                            </button>
+                                            <button className="px-4 py-2 rounded-lg border border-red text-red hover:bg-red/10 transition-all text-sm font-semibold" onClick={() => {
+                                                handleUpdateOrderStatus(selectedOrder.id, 'canceled')
+                                            }}>
+                                                Cancelar
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

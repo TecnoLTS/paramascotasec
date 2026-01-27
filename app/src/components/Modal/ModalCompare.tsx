@@ -56,7 +56,7 @@ const ModalCompare = () => {
                                             </div>
                                             <div className=''>
                                                 <div className="name text-title">{product.name}</div>
-                                                <div className="product-price text-title mt-2">${product.price}.00</div>
+                                                <div className="product-price text-title mt-2">${Number(product.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                             </div>
                                         </div>
                                         <div className="close-btn absolute -right-4 -top-4 w-8 h-8 rounded-full bg-red text-white flex items-center justify-center duration-300 cursor-pointer hover:bg-black" onClick={() => removeFromCompare(product.id)}>

@@ -119,12 +119,12 @@ const TermsConditions = () => {
 
                         {/* --- TEXTO LEGAL --- */}
                         <div className="lg:w-3/4">
-                            <div className="bg-white p-8 md:p-12 rounded-[30px] shadow-sm border border-gray-100 space-y-12 [&>section]:scroll-mt-[320px]">
+                            <div className="bg-white p-8 md:p-12 rounded-[30px] shadow-sm border border-gray-100 space-y-10 text-[15px] md:text-base text-secondary [&>section]:scroll-mt-[320px]">
 
                                 {/* Introducción */}
                                 <section id="intro" className="border-b border-gray-100 pb-8">
-                                    <h2 className="heading4 font-bold mb-4 text-black">Bienvenido a Para Mascotas EC</h2>
-                                    <p className="body1 text-secondary leading-relaxed">
+                                    <h2 className="text-2xl md:text-3xl font-bold mb-4 text-black">Bienvenido a Para Mascotas EC</h2>
+                                    <p className="leading-relaxed">
                                         El presente documento establece los términos y condiciones aplicables al uso del sitio web, así como a las compras y pedidos realizados en Para Mascotas EC, ya sea en tienda física o a través de canales digitales. Al navegar por el sitio, confirmar un pedido o concretar una compra, el cliente declara haber leído, comprendido y aceptado estos Términos y Condiciones.
                                     </p>
                                 </section>
@@ -133,9 +133,9 @@ const TermsConditions = () => {
                                 <section id="uso">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><Desktop size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">1. Uso del sitio y alcance</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">1. Uso del sitio y alcance</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-3 pl-2 md:pl-12">
+                                    <div className="space-y-3 pl-2 md:pl-12">
                                         <p>El sitio web tiene como finalidad informar y permitir la realización de pedidos de productos para el cuidado, bienestar y alimentación de mascotas.</p>
                                         <ul className="list-disc list-outside ml-4 space-y-2 marker:text-orange-400">
                                             <li>Los servicios están disponibles únicamente para personas con capacidad legal para contratar.</li>
@@ -148,21 +148,21 @@ const TermsConditions = () => {
                                 <section id="precios">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><Tag size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">2. Precios y disponibilidad</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">2. Precios y disponibilidad</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-3 pl-2 md:pl-12">
+                                    <div className="space-y-3 pl-2 md:pl-12">
                                         <p>Todos los precios se expresan en <strong>dólares estadounidenses (USD)</strong> e incluyen los impuestos aplicables, salvo que se indique lo contrario.</p>
                                         <p>La disponibilidad de los productos está sujeta a stock. En caso de no contar con un producto solicitado, se informará al cliente para coordinar un cambio o la cancelación del pedido.</p>
                                     </div>
                                 </section>
 
                                 {/* 3. Pedidos y Pagos */}
-                                <section id="pagos" className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100">
+                                <section id="pagos" className="bg-orange-50/50 p-6 rounded-2xl">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-orange-100 p-2 rounded-lg"><Bank size={24} className="text-orange-600" /></div>
-                                        <h3 className="heading4 font-bold text-black">3. Pedidos y formas de pago</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">3. Pedidos y formas de pago</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-4">
+                                    <div className="space-y-4">
                                         <p>Los pedidos pueden realizarse a través del sitio web, redes sociales o canales de contacto oficiales.</p>
                                         
                                         <div>
@@ -173,7 +173,7 @@ const TermsConditions = () => {
                                             </div>
                                         </div>
 
-                                        <p className="text-sm">El pedido se considerará confirmado una vez validado el pago correspondiente.</p>
+                                        <p>El pedido se considerará confirmado una vez validado el pago correspondiente.</p>
                                         
                                         <p className="text-xs italic text-gray-500 mt-2">
                                             Nota: Para Mascotas EC no se hace responsable por pagos realizados a cuentas no oficiales o fuera de los canales autorizados.
@@ -185,9 +185,9 @@ const TermsConditions = () => {
                                 <section id="envios">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><Truck size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">4. Envíos y entregas</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">4. Envíos y entregas</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-3 pl-2 md:pl-12">
+                                    <div className="space-y-3 pl-2 md:pl-12">
                                         <p>Realizamos envíos a las zonas habilitadas. El costo, modalidad y tiempo estimado de entrega serán informados antes de confirmar el pedido.</p>
                                         <ul className="list-disc list-outside ml-4 space-y-2 marker:text-gray-400">
                                             <li>Los pedidos se procesan en días laborables.</li>
@@ -201,9 +201,9 @@ const TermsConditions = () => {
                                 <section id="cambios">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><ArrowsLeftRight size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">5. Cambios y devoluciones</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">5. Cambios y devoluciones</h3>
                                     </div>
-                                    <div className="body1 text-secondary pl-2 md:pl-12 space-y-6">
+                                    <div className="pl-2 md:pl-12 space-y-6">
                                         
                                         {/* Condiciones */}
                                         <div>
@@ -219,8 +219,8 @@ const TermsConditions = () => {
 
                                         {/* Excepciones */}
                                         <div className="bg-red-50 p-5 rounded-xl border border-red-100">
-                                            <p className="font-bold text-red-700 text-sm mb-2">Por razones de higiene y seguridad, NO se aceptan cambios ni devoluciones de:</p>
-                                            <ul className="list-disc list-inside text-sm text-red-600/80 space-y-1 ml-2">
+                                            <p className="font-bold text-red-700 mb-2">Por razones de higiene y seguridad, NO se aceptan cambios ni devoluciones de:</p>
+                                            <ul className="list-disc list-inside text-red-600/80 space-y-1 ml-2">
                                                 <li>Alimentos para mascotas.</li>
                                                 <li>Medicamentos.</li>
                                                 <li>Productos de higiene, cuidado o consumo.</li>
@@ -228,7 +228,7 @@ const TermsConditions = () => {
                                             <p className="text-xs mt-3 text-red-500 font-medium">*Salvo que presenten defectos de fabricación comprobables.</p>
                                         </div>
 
-                                        <p className="text-sm border-l-4 border-gray-300 pl-3 py-1">
+                                        <p className="border-l-4 border-gray-300 pl-3 py-1">
                                             Los reclamos por productos defectuosos o errores en el pedido deberán realizarse dentro de las <strong>48 horas posteriores a la recepción</strong>, adjuntando evidencia.
                                         </p>
                                     </div>
@@ -238,15 +238,15 @@ const TermsConditions = () => {
                                 <section id="reembolsos">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><HandCoins size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">6. Reembolsos</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">6. Reembolsos</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-3 pl-2 md:pl-12">
+                                    <div className="space-y-3 pl-2 md:pl-12">
                                         <p>No se realizan devoluciones de dinero de forma general.</p>
                                         <ul className="list-disc list-outside ml-4 space-y-2 marker:text-gray-400">
                                             <li>Las devoluciones aprobadas se gestionarán mediante <strong>cambio de producto de igual valor</strong> o <strong>crédito en tienda</strong>.</li>
                                             <li>El reembolso en dinero aplicará únicamente cuando el error sea atribuible a Para Mascotas EC (producto incorrecto, defectuoso o indisponibilidad confirmada) o cuando así lo establezca la Ley de Defensa del Consumidor.</li>
                                         </ul>
-                                        <p className="text-sm mt-2 text-gray-500">Los costos de envío no son reembolsables, salvo error imputable a la tienda.</p>
+                                        <p className="mt-2 text-gray-500">Los costos de envío no son reembolsables, salvo error imputable a la tienda.</p>
                                     </div>
                                 </section>
 
@@ -254,9 +254,9 @@ const TermsConditions = () => {
                                 <section id="garantia">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-gray-100 p-2 rounded-lg"><ShieldCheck size={24} className="text-gray-700" /></div>
-                                        <h3 className="heading4 font-bold text-black">7. Garantía de productos</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-black">7. Garantía de productos</h3>
                                     </div>
-                                    <div className="body1 text-secondary space-y-3 pl-2 md:pl-12">
+                                    <div className="space-y-3 pl-2 md:pl-12">
                                         <p>La garantía aplica desde la fecha de facturación y cubre exclusivamente defectos de fabricación. <strong>Para hacerla válida es indispensable presentar la factura original.</strong></p>
                                         <p>El producto no debe presentar signos de mal uso, golpes, humedad, manipulación indebida ni desgaste normal.</p>
                                         <p className="text-sm bg-blue-50 text-blue-800 p-3 rounded-lg">
@@ -272,17 +272,17 @@ const TermsConditions = () => {
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
                                             <div className="bg-gray-100 p-2 rounded-lg"><Gavel size={24} className="text-gray-700" /></div>
-                                            <h3 className="heading5 font-bold text-black">8. Modificaciones</h3>
+                                        <h3 className="text-lg md:text-xl font-bold text-black">8. Modificaciones</h3>
                                         </div>
-                                        <p className="body2 text-secondary pl-12">Para Mascotas EC se reserva el derecho de modificar estos Términos y Condiciones en cualquier momento. Las modificaciones entrarán en vigencia desde su publicación.</p>
+                                        <p className="pl-12">Para Mascotas EC se reserva el derecho de modificar estos Términos y Condiciones en cualquier momento. Las modificaciones entrarán en vigencia desde su publicación.</p>
                                     </div>
                                     <div>
-                                        <h3 className="heading5 font-bold text-black mb-2 pl-12">9. Jurisdicción</h3>
-                                        <p className="body2 text-secondary pl-12">Estos Términos y Condiciones se rigen por la legislación vigente de la <strong>República del Ecuador</strong>. Cualquier controversia será resuelta ante las autoridades competentes del territorio ecuatoriano.</p>
+                                        <h3 className="text-lg md:text-xl font-bold text-black mb-2 pl-12">9. Jurisdicción</h3>
+                                        <p className="pl-12">Estos Términos y Condiciones se rigen por la legislación vigente de la <strong>República del Ecuador</strong>. Cualquier controversia será resuelta ante las autoridades competentes del territorio ecuatoriano.</p>
                                     </div>
                                     <div className="bg-black text-white p-6 rounded-2xl text-center">
-                                        <h3 className="heading5 font-bold mb-2">10. Aceptación</h3>
-                                        <p className="text-white/80 text-sm">Al confirmar un pedido o realizar una compra por cualquiera de nuestros canales, el cliente declara conocer y aceptar los presentes Términos y Condiciones.</p>
+                                        <h3 className="text-lg md:text-xl font-bold mb-2">10. Aceptación</h3>
+                                        <p className="text-white/80">Al confirmar un pedido o realizar una compra por cualquiera de nuestros canales, el cliente declara conocer y aceptar los presentes Términos y Condiciones.</p>
                                     </div>
                                 </section>
 
