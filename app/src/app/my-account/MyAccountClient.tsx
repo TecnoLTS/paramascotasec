@@ -540,6 +540,10 @@ const MyAccount = () => {
             setVatRate(Number(res.body.rate ?? 0))
         } catch (error) {
             console.error(error)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
             showNotification('No se pudo cargar el IVA.', 'error')
         } finally {
             setVatLoading(false)
@@ -561,6 +565,10 @@ const MyAccount = () => {
             })
         } catch (error) {
             console.error(error)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
             showNotification('No se pudieron cargar los costos de envío.', 'error')
         } finally {
             setShippingLoading(false)
@@ -622,6 +630,15 @@ const MyAccount = () => {
     }
 
     const normalizeStatus = (status?: string) => (status || '').toLowerCase()
+    const parseMoney = (value: any) => {
+        if (typeof value === 'string') {
+            const normalized = value.replace(/\./g, '').replace(',', '.')
+            const parsed = Number(normalized)
+            return Number.isFinite(parsed) ? parsed : 0
+        }
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+    }
 
     const getStatusBadge = (status?: string) => {
         const normalized = normalizeStatus(status)
@@ -629,18 +646,18 @@ const MyAccount = () => {
             return { label: 'En proceso', className: 'bg-blue-100 text-blue-600' }
         }
         if (['completed', 'delivered'].includes(normalized)) {
-            return { label: 'Completado', className: 'bg-success text-success' }
+            return { label: 'Completado', className: 'bg-success/10 text-success' }
         }
         if (['canceled', 'cancelled'].includes(normalized)) {
-            return { label: 'Cancelado', className: 'bg-red text-red' }
+            return { label: 'Cancelado', className: 'bg-red/10 text-red' }
         }
         if (['shipped', 'shipping', 'delivery', 'delivering'].includes(normalized)) {
-            return { label: 'Enviado', className: 'bg-purple text-purple' }
+            return { label: 'Enviado', className: 'bg-purple/10 text-purple' }
         }
         if (['pickup', 'ready_for_pickup', 'ready'].includes(normalized)) {
-            return { label: 'Esperando Recojo', className: 'bg-amber-400 text-amber-400' }
+            return { label: 'Esperando Recojo', className: 'bg-amber-400/15 text-amber-600' }
         }
-        return { label: 'Pendiente', className: 'bg-yellow text-yellow' }
+        return { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }
     }
 
     // Fetch Admin Data
@@ -666,6 +683,9 @@ const MyAccount = () => {
         } else if (activeTab === 'products' || activeTab === 'prices') {
             requestApi<any[]>('/api/products', { headers })
                 .then(res => setAdminProductsList(res.body))
+                .catch(handleError)
+            requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
+                .then(res => setDashboardStats(res.body))
                 .catch(handleError)
             loadVatRate()
             loadShippingRates()
@@ -1883,6 +1903,97 @@ const MyAccount = () => {
                                             </div>
                                         </div>
 
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                                            {(() => {
+                                                const summary = dashboardStats?.businessMetrics?.salesSummary
+                                                const profit = dashboardStats?.businessMetrics?.profitStats
+                                                const gross = Number(summary?.gross ?? 0)
+                                                const net = Number(summary?.net ?? 0)
+                                                const vat = Number(summary?.vat ?? 0)
+                                                const shipping = Number(summary?.shipping ?? 0)
+                                                const cost = Number(profit?.cost ?? 0)
+                                                const utilidad = Number(profit?.profit ?? 0)
+                                                return (
+                                                    <>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Total</div>
+                                                            <div className="heading5">${gross.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Incluye IVA + Envío</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Neta</div>
+                                                            <div className="heading5">${net.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Sin IVA ni envío</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">IVA Cobrado</div>
+                                                            <div className="heading5">${vat.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Impuesto del cliente</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Envío Cobrado</div>
+                                                            <div className="heading5">${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Cobro al cliente</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Costo (COGS)</div>
+                                                            <div className="heading5 text-orange-500">-${cost.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Costo de producto</div>
+                                                        </div>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Utilidad Bruta</div>
+                                                            <div className="heading5 text-success">${utilidad.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Sin IVA</div>
+                                                        </div>
+                                                    </>
+                                                )
+                                            })()}
+                                        </div>
+
+                                        <div className="mb-6 rounded-xl border border-line bg-white p-5">
+                                            <div className="text-xs uppercase font-bold text-secondary mb-3">Resumen de costos e impuestos</div>
+                                            {(() => {
+                                                const summary = dashboardStats?.businessMetrics?.salesSummary
+                                                const profit = dashboardStats?.businessMetrics?.profitStats
+                                                const gross = Number(summary?.gross ?? 0)
+                                                const net = Number(summary?.net ?? 0)
+                                                const vat = Number(summary?.vat ?? 0)
+                                                const shipping = Number(summary?.shipping ?? 0)
+                                                const cost = Number(profit?.cost ?? 0)
+                                                const utilidad = Number(profit?.profit ?? 0)
+                                                const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                                return (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 text-sm">
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Venta total</div>
+                                                            <div className="font-semibold">${format(gross)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
+                                                            <div className="font-semibold">${format(net)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">IVA cobrado</div>
+                                                            <div className="font-semibold">${format(vat)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Envío cobrado</div>
+                                                            <div className="font-semibold">${format(shipping)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Costo (COGS)</div>
+                                                            <div className="font-semibold text-orange-600">-${format(cost)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
+                                                            <div className="font-semibold text-success">${format(utilidad)}</div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })()}
+                                            <div className="text-[11px] text-secondary mt-3">Los montos se calculan sin IVA y el envío se muestra por separado.</div>
+                                        </div>
+
                                         <div className="grid grid-cols-3 gap-6 mb-8">
                                             <div className="p-5 rounded-xl bg-surface border border-line">
                                                 <div className="text-secondary text-xs uppercase font-bold mb-1">Margen Promedio</div>
@@ -1902,6 +2013,116 @@ const MyAccount = () => {
                                             </div>
                                         </div>
 
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                                            {(() => {
+                                                const products = adminProductsList || []
+                                                const netSales = Number(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0) || 1
+                                                const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                                const risks = products.map((product: any) => {
+                                                    const price = Number(product.price) || 0
+                                                    const basePrice = vatDisplayMultiplier > 0 ? (price / vatDisplayMultiplier) : price
+                                                    const cost = parseMoney(product.business?.cost)
+                                                    const margin = basePrice > 0 ? ((basePrice - cost) / basePrice) * 100 : 0
+                                                    return {
+                                                        id: product.id,
+                                                        name: product.name,
+                                                        margin,
+                                                        cost,
+                                                        basePrice
+                                                    }
+                                                }).sort((a: any, b: any) => a.margin - b.margin).slice(0, 5)
+
+                                                const topProducts = (dashboardStats?.topProducts || []).map((item: any) => ({
+                                                    name: item.name,
+                                                    sold: Number(item.sold ?? 0),
+                                                    revenue: Number(item.revenue ?? 0),
+                                                    share: (Number(item.revenue ?? 0) / netSales) * 100
+                                                }))
+
+                                                const categories = (dashboardStats?.salesByCategory || []).slice(0, 5).map((cat: any) => ({
+                                                    name: cat.category || 'Sin categoría',
+                                                    total: Number(cat.total ?? 0),
+                                                    share: (Number(cat.total ?? 0) / netSales) * 100
+                                                }))
+
+                                                const missingCostItems = products.filter((p: any) => parseMoney(p.business?.cost) <= 0)
+                                                const missingCost = missingCostItems.length
+
+                                                return (
+                                                    <>
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-xs uppercase font-bold text-secondary mb-2">Márgenes más bajos</div>
+                                                            {missingCost > 0 && (
+                                                                <div className="text-[11px] text-orange-600 font-semibold mb-2">
+                                                                    Costos sin registrar: {missingCost}
+                                                                </div>
+                                                            )}
+                                                            <div className="space-y-2">
+                                                                {risks.map((item: any) => (
+                                                                    <div key={item.id} className="flex items-center justify-between text-sm">
+                                                                        <span className="truncate max-w-[70%]">{item.name}</span>
+                                                                        <span className={`font-bold ${item.margin < 20 ? 'text-red' : item.margin < 35 ? 'text-yellow' : 'text-success'}`}>
+                                                                            {item.margin.toFixed(1)}%
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                                {risks.length === 0 && (
+                                                                    <div className="text-sm text-secondary">No hay productos para evaluar.</div>
+                                                                )}
+                                                            </div>
+                                                            {missingCostItems.length > 0 && (
+                                                                <div className="mt-4 border-t border-line pt-3">
+                                                                    <div className="text-[10px] uppercase font-bold text-secondary mb-2">Sin costo</div>
+                                                                    <div className="space-y-1">
+                                                                        {missingCostItems.slice(0, 4).map((item: any) => (
+                                                                            <div key={item.id} className="text-xs text-secondary truncate">{item.name}</div>
+                                                                        ))}
+                                                                        {missingCostItems.length > 4 && (
+                                                                            <div className="text-xs text-secondary">+{missingCostItems.length - 4} más</div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            <div className="text-[11px] text-secondary mt-3">Ordenado por margen más bajo. Los costos faltantes se listan aparte.</div>
+                                                        </div>
+
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-xs uppercase font-bold text-secondary mb-3">Top contribuyentes</div>
+                                                            <div className="space-y-2">
+                                                                {topProducts.map((item: any) => (
+                                                                    <div key={item.name} className="flex items-center justify-between text-sm">
+                                                                        <span className="truncate max-w-[60%]">{item.name}</span>
+                                                                        <span className="text-secondary">{item.sold} uds</span>
+                                                                        <span className="font-bold">{item.share.toFixed(1)}%</span>
+                                                                    </div>
+                                                                ))}
+                                                                {topProducts.length === 0 && (
+                                                                    <div className="text-sm text-secondary">Sin ventas recientes.</div>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[11px] text-secondary mt-3">Participación sobre ventas netas.</div>
+                                                        </div>
+
+                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="text-xs uppercase font-bold text-secondary mb-3">Mix por categoría</div>
+                                                            <div className="space-y-2">
+                                                                {categories.map((cat: any) => (
+                                                                    <div key={cat.name} className="flex items-center justify-between text-sm">
+                                                                        <span className="truncate max-w-[70%]">{cat.name}</span>
+                                                                        <span className="font-bold">{cat.share.toFixed(1)}%</span>
+                                                                    </div>
+                                                                ))}
+                                                                {categories.length === 0 && (
+                                                                    <div className="text-sm text-secondary">Sin categorías vendidas.</div>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[11px] text-secondary mt-3">Distribución de ventas netas.</div>
+                                                        </div>
+                                                    </>
+                                                )
+                                            })()}
+                                        </div>
+
                                         <div className="bg-surface p-6 rounded-xl border border-line">
                                             <div className="flex items-center gap-4 mb-6">
                                                 <input className="border-line px-4 py-2 rounded-lg flex-1" placeholder="Buscar producto..." />
@@ -1913,42 +2134,43 @@ const MyAccount = () => {
                                                         <tr className="border-b border-line">
                                                             <th className="pb-4 font-bold text-secondary text-sm">PRODUCTO</th>
                                                             <th className="pb-4 font-bold text-secondary text-sm">COSTO</th>
-                                                            <th className="pb-4 font-bold text-secondary text-sm">PRECIO P.V.P</th>
+                                                            <th className="pb-4 font-bold text-secondary text-sm">BASE (SIN IVA)</th>
+                                                            <th className="pb-4 font-bold text-secondary text-sm">IVA</th>
+                                                            <th className="pb-4 font-bold text-secondary text-sm">P.V.P</th>
+                                                            <th className="pb-4 font-bold text-secondary text-sm">UTILIDAD</th>
                                                             <th className="pb-4 font-bold text-secondary text-sm">MARGEN</th>
-                                                            <th className="pb-4 font-bold text-secondary text-sm">SUGERIDO</th>
-                                                            <th className="pb-4 font-bold text-secondary text-sm">ACCIÓN</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {adminProductsList.length > 0 ? adminProductsList.map((product: any) => (
-                                                            <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
-                                                                <td className="py-4">
-                                                                    <div className="font-semibold text-sm">{product.name}</div>
-                                                                    <div className="text-xs text-secondary">SKU: {product.id.substring(0, 6)}</div>
-                                                                </td>
-                                                                <td className="py-4 font-medium text-secondary text-sm">${Number(product.business?.cost || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                <td className="py-4 font-bold text-sm">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                <td className="py-4">
-                                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${((product.business?.margin || 0) < 20) ? 'bg-red text-white' :
-                                                                        ((product.business?.margin || 0) < 35) ? 'bg-yellow text-white' : 'bg-success text-white'
-                                                                        }`}>
-                                                                        {product.business?.margin || 0}%
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-4 text-xs">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <div className="text-secondary">Min: <span className="font-bold text-black">${product.business?.suggestions?.min_price}</span></div>
-                                                                        <div className="text-secondary">Rec: <span className="font-bold text-green-600">${product.business?.suggestions?.recommended_price}</span></div>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="py-4">
-                                                                    <button className="text-button-uppercase text-xs underline font-bold" onClick={() => {
-                                                                        handleOptimizePrice(product)
-                                                                    }}>Optimizar</button>
-                                                                </td>
-                                                            </tr>
-                                                        )) : (
-                                                            <tr><td colSpan={6} className="py-8 text-center text-secondary">Cargando análisis de precios...</td></tr>
+                                                        {adminProductsList.length > 0 ? adminProductsList.map((product: any) => {
+                                                            const price = Number(product.price) || 0
+                                                            const basePrice = vatDisplayMultiplier > 0 ? (price / vatDisplayMultiplier) : price
+                                                            const vatPart = Math.max(price - basePrice, 0)
+                                                            const cost = parseMoney(product.business?.cost)
+                                                            const utilidad = Math.max(basePrice - cost, 0)
+                                                            const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                                            return (
+                                                                <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
+                                                                    <td className="py-4">
+                                                                        <div className="font-semibold text-sm">{product.name}</div>
+                                                                    <div className="text-xs text-secondary">SKU: {product.sku || product.id}</div>
+                                                                    </td>
+                                                                    <td className="py-4 font-medium text-secondary text-sm">${format(cost)}</td>
+                                                                    <td className="py-4 font-medium text-sm">${format(basePrice)}</td>
+                                                                    <td className="py-4 font-medium text-sm text-secondary">${format(vatPart)}</td>
+                                                                    <td className="py-4 font-bold text-sm">${format(price)}</td>
+                                                                    <td className="py-4 font-bold text-sm text-success">${format(utilidad)}</td>
+                                                                    <td className="py-4">
+                                                                        <span className={`px-2 py-1 rounded text-xs font-bold ${((product.business?.margin || 0) < 20) ? 'bg-red text-white' :
+                                                                            ((product.business?.margin || 0) < 35) ? 'bg-yellow text-white' : 'bg-success text-white'
+                                                                            }`}>
+                                                                            {product.business?.margin || 0}%
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        }) : (
+                                                            <tr><td colSpan={7} className="py-8 text-center text-secondary">Cargando análisis de precios...</td></tr>
                                                         )}
                                                     </tbody>
                                                 </table>
@@ -2046,35 +2268,104 @@ const MyAccount = () => {
                                     </div>
 
                                     <div className={`tab text-content w-full ${activeTab === 'balances' ? 'block' : 'hidden'}`}>
-                                        <div className="text-gray-400 text-sm">Balance General (Ventas sin IVA y sin envío)</div>
-                                        <div className="heading2 mt-2">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
-                                        <div className="mt-6 flex gap-8">
-                                            <div>
-                                                <div className="text-gray-400 text-xs uppercase">Ingresos (Histórico, sin IVA y sin envío)</div>
-                                                <div className="heading5">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 0 }) : '0'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-gray-400 text-xs uppercase">Gastos (Estimado)</div>
-                                                <div className="heading5">$0</div>
-                                            </div>
+                                        <div className="text-gray-400 text-sm">Balance General (Información crítica para decisiones)</div>
+                                        <div className="heading2 mt-2">
+                                            {formatMoney(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0)}
                                         </div>
-                                        <div className="heading6 mb-4 mt-8">Últimos Pedidos (Ingresos sin IVA y sin envío)</div>
+                                        <div className="text-secondary text-sm mt-1">Ventas netas (sin IVA ni envío)</div>
+
+                                        {(() => {
+                                            const summary = dashboardStats?.businessMetrics?.salesSummary
+                                            const profit = dashboardStats?.businessMetrics?.profitStats
+                                            const gross = Number(summary?.gross ?? 0)
+                                            const net = Number(summary?.net ?? 0)
+                                            const vat = Number(summary?.vat ?? 0)
+                                            const shipping = Number(summary?.shipping ?? 0)
+                                            const cost = Number(profit?.cost ?? 0)
+                                            const utilidad = Number(profit?.profit ?? 0)
+                                            const margin = Number(profit?.margin ?? 0)
+                                            const roi = Number(profit?.roi ?? 0)
+                                            return (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-6">
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Venta total</div>
+                                                        <div className="heading5">{formatMoney(gross)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Incluye IVA + envío</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">IVA por pagar</div>
+                                                        <div className="heading5">{formatMoney(vat)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Impuesto cobrado</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Envío cobrado</div>
+                                                        <div className="heading5">{formatMoney(shipping)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Ingreso operativo</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Costo (COGS)</div>
+                                                        <div className="heading5 text-orange-600">-{formatMoney(cost)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Costo real de producto</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Utilidad bruta</div>
+                                                        <div className="heading5 text-success">{formatMoney(utilidad)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Sin IVA ni envío</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Margen neto</div>
+                                                        <div className="heading5">{margin.toFixed(1)}%</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / ventas netas</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">ROI</div>
+                                                        <div className="heading5">{roi.toFixed(1)}%</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / costo</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Venta neta</div>
+                                                        <div className="heading5">{formatMoney(net)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Base real de ingresos</div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })()}
+
+                                        <div className="heading6 mb-4 mt-10">Movimientos recientes (neto, IVA, envío)</div>
                                         <div className="flex flex-col gap-4">
-                                            {adminOrdersList.slice(0, 5).map((order) => (
-                                                <div key={order.id} className="flex items-center justify-between p-4 bg-surface rounded-xl border border-line">
+                                            {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 6).map((order: any) => {
+                                                const net = Number(order.vat_subtotal ?? (Number(order.total ?? 0) - Number(order.vat_amount ?? 0) - Number(order.shipping ?? 0)))
+                                                const vat = Number(order.vat_amount ?? 0)
+                                                const shipping = Number(order.shipping ?? 0)
+                                                return (
+                                                <div key={order.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-surface rounded-xl border border-line">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-10 h-10 bg-success bg-opacity-10 text-success rounded-full flex items-center justify-center">
                                                             <Icon.ArrowDownLeft weight="bold" />
                                                         </div>
                                                         <div>
-                                                            <div className="font-bold">Pago Recibido - Order #{order.id}</div>
+                                                            <div className="font-bold">Pedido #{order.id}</div>
                                                             <div className="text-secondary text-xs">{new Date(order.created_at).toLocaleDateString()}</div>
                                                         </div>
                                                     </div>
-                                                    <div className="font-bold text-success">+${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    <div className="grid grid-cols-3 gap-4 text-right text-sm md:w-[340px]">
+                                                        <div>
+                                                            <div className="text-[10px] uppercase text-secondary">Neto</div>
+                                                            <div className="font-bold tabular-nums">{formatMoney(net)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase text-secondary">IVA</div>
+                                                            <div className="font-bold tabular-nums">{formatMoney(vat)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] uppercase text-secondary">Envío</div>
+                                                            <div className="font-bold tabular-nums">{formatMoney(shipping)}</div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            ))}
-                                            {adminOrdersList.length === 0 && (
+                                                )
+                                            })}
+                                            {(dashboardStats?.businessMetrics?.recentOrders || []).length === 0 && (
                                                 <div className="text-center py-4 text-secondary">No hay transacciones recientes.</div>
                                             )}
                                         </div>
@@ -2795,25 +3086,25 @@ const MyAccount = () => {
                                             <Icon.Receipt size={20} /> Resumen
                                         </h6>
                                         <div className="space-y-3">
-                                            <div className="flex justify-between items-center">
+                                            <div className="grid grid-cols-[1fr_120px] items-center">
                                                 <span className="text-secondary">Subtotal sin IVA</span>
-                                                <span className="font-bold">{formatMoney(getOrderVatSubtotal(selectedOrder))}</span>
+                                                <span className="font-bold tabular-nums text-right">{formatMoney(getOrderVatSubtotal(selectedOrder))}</span>
                                             </div>
                                             {Number(selectedOrder?.vat_rate ?? 0) > 0 && (
-                                                <div className="flex justify-between items-center">
+                                                <div className="grid grid-cols-[1fr_120px] items-center">
                                                     <span className="text-secondary">IVA ({Number(selectedOrder?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
-                                                    <span className="font-bold">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
+                                                    <span className="font-bold tabular-nums text-right">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
                                                 </div>
                                             )}
-                                            <div className="flex justify-between items-center">
+                                            <div className="grid grid-cols-[1fr_120px] items-center">
                                                 <span className="text-secondary">Envío</span>
-                                                <span className={`font-bold ${getOrderShipping(selectedOrder) === 0 ? 'text-success' : 'text-[#111827]'}`}>
+                                                <span className={`font-bold tabular-nums text-right ${getOrderShipping(selectedOrder) === 0 ? 'text-success' : 'text-[#111827]'}`}>
                                                     {getOrderShipping(selectedOrder) === 0 ? 'Gratis' : formatMoney(getOrderShipping(selectedOrder))}
                                                 </span>
                                             </div>
-                                            <div className="pt-3 border-t border-line flex justify-between items-center">
+                                            <div className="pt-3 border-t border-line grid grid-cols-[1fr_120px] items-center">
                                                 <span className="text-lg font-bold">Total</span>
-                                                <span className="text-xl font-bold text-primary">{formatMoney(selectedOrder?.total)}</span>
+                                                <span className="text-xl font-bold text-primary tabular-nums text-right">{formatMoney(selectedOrder?.total)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2825,13 +3116,13 @@ const MyAccount = () => {
                                         <span className="bg-line px-3 py-1 rounded-full text-xs font-bold">{selectedOrder.items?.length || 0} ítems</span>
                                     </div>
                                     <div className="overflow-x-auto border border-line rounded-xl">
-                                        <table className="w-full text-left">
+                                        <table className="w-full text-left table-fixed">
                                             <thead className="bg-surface border-b border-line text-xs uppercase text-secondary font-bold">
                                                 <tr>
-                                                    <th className="px-6 py-4">Producto</th>
-                                                    <th className="px-6 py-4 text-center">Cant.</th>
-                                                    <th className="px-6 py-4 text-right">Precio</th>
-                                                    <th className="px-6 py-4 text-right">Total</th>
+                                                    <th className="px-6 py-4 w-[55%]">Producto</th>
+                                                    <th className="px-6 py-4 w-[12%] text-center">Cant.</th>
+                                                    <th className="px-6 py-4 w-[16%] text-right tabular-nums">Precio</th>
+                                                    <th className="px-6 py-4 w-[17%] text-right tabular-nums">Total</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-line">
@@ -2846,8 +3137,8 @@ const MyAccount = () => {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                                                        <td className="px-6 py-4 text-right">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                        <td className="px-6 py-4 text-right font-bold text-primary">${(Number(getItemNetPrice(item, selectedOrder)) * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="px-6 py-4 text-right tabular-nums">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="px-6 py-4 text-right font-bold text-primary tabular-nums">${(Number(getItemNetPrice(item, selectedOrder)) * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2868,6 +3159,11 @@ const MyAccount = () => {
                                     })()}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    {(user?.role === 'admin' || user?.role === 'customer') && selectedOrder.status !== 'canceled' && (
+                                        <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={handleGenerateInvoice}>
+                                            Ver factura
+                                        </button>
+                                    )}
                                     <button className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => setIsOrderModalOpen(false)}>
                                         Cerrar
                                     </button>
