@@ -307,9 +307,9 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                 <div className="heading6">Rango de precios</div>
                                 <Slider
                                     range
-                                    defaultValue={[0, 100]}
+                                    defaultValue={[0, 500]}
                                     min={0}
-                                    max={100}
+                                    max={500}
                                     onChange={handlePriceChange}
                                     className='mt-5'
                                 />

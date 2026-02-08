@@ -24,3 +24,17 @@ export const register = (body: any) =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     })
+
+export const requestOtp = (body: { email: string }) =>
+    fetchJson<any>(apiEndpoints.auth.requestOtp, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+
+export const verifyOtp = (body: { email: string; code: string }) =>
+    fetchJson<any>(apiEndpoints.auth.verifyOtp, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })

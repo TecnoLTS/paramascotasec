@@ -18,6 +18,7 @@ import { useModalWishlistContext } from '@/context/ModalWishlistContext'
 import { useCompare } from '@/context/CompareContext'
 import { useModalCompareContext } from '@/context/ModalCompareContext'
 import ModalSizeguide from '@/components/Modal/ModalSizeguide'
+import ShareMenu from '@/components/Product/ShareMenu'
 
 SwiperCore.use([Navigation, Thumbs]);
 
@@ -45,6 +46,18 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
     if (productMain === undefined) {
         productMain = data[0]
     }
+    const productType = (productMain.productType ?? '').toLowerCase()
+    const isClothing = productType === 'ropa'
+    const attributes = productMain.attributes ?? {}
+    const pageSettings = (productMain as any).pageSettings ?? {
+        deliveryEstimate: '14 de enero - 18 de enero',
+        viewerCount: 38,
+        freeShippingThreshold: 75,
+        supportHours: '8:30 AM a 10:00 PM',
+        returnDays: 100
+    }
+    const colorOptions = (productMain.variation ?? []).filter((item) => item.color)
+    const fallbackColor = (attributes as any)?.color
 
     const percentSale = Math.floor(100 - ((productMain.price / productMain.originPrice) * 100))
 
@@ -120,6 +133,7 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
     const handleActiveTab = (tab: string) => {
         setActiveTab(tab)
     }
+
 
     return (
         <>
@@ -255,50 +269,62 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
                                 <div className='desc text-secondary mt-3'>{productMain.description}</div>
                             </div>
                             <div className="list-action mt-6">
-                                <div className="choose-color mt-5">
-                                    <div className="text-title">Colors: <span className='text-title color'>Out of stock</span></div>
-                                    <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                                        {productMain.variation.map((item, index) => (
-                                            <div
-                                                className={`color-item w-12 h-12 rounded-xl duration-300 relative`}
-                                                key={index}
-                                            >
-                                                <Image
-                                                    src={item.colorImage}
-                                                    width={100}
-                                                    height={100}
-                                                    alt='color'
-                                                    className='rounded-xl'
-                                                />
-                                                <div className="tag-action whitespace-nowrap bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                                                    Out of stock
-                                                </div>
+                                {(colorOptions.length > 0 || fallbackColor) && (
+                                    <div className="choose-color mt-5">
+                                        <div className="text-title">Color: <span className='text-title color'>{activeColor || fallbackColor}</span></div>
+                                        {colorOptions.length > 0 ? (
+                                            <div className="list-color flex items-center gap-2 flex-wrap mt-3">
+                                                {colorOptions.map((item, index) => (
+                                                    <div
+                                                        className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
+                                                        key={index}
+                                                        onClick={() => handleActiveColor(item.color)}
+                                                    >
+                                                        <Image
+                                                            src={item.colorImage}
+                                                            width={100}
+                                                            height={100}
+                                                            alt='color'
+                                                            className='rounded-xl'
+                                                        />
+                                                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                                            {item.color}
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full border border-line text-sm">
+                                                {fallbackColor}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                                <div className="choose-size mt-5">
-                                    <div className="heading flex items-center justify-between">
-                                        <div className="text-title">Size: <span className='text-title size'>Out of stock</span></div>
-                                        <div
-                                            className="caption1 size-guide text-red underline cursor-pointer"
-                                            onClick={handleOpenSizeGuide}
-                                        >
-                                            Size Guide
+                                )}
+                                {isClothing && (productMain.sizes ?? []).length > 0 && (
+                                    <div className="choose-size mt-5">
+                                        <div className="heading flex items-center justify-between">
+                                            <div className="text-title">Size: <span className='text-title size'>{activeSize}</span></div>
+                                            <div
+                                                className="caption1 size-guide text-red underline cursor-pointer"
+                                                onClick={handleOpenSizeGuide}
+                                            >
+                                                Size Guide
+                                            </div>
+                                            <ModalSizeguide data={productMain} isOpen={openSizeGuide} onClose={handleCloseSizeGuide} />
                                         </div>
-                                        <ModalSizeguide data={productMain} isOpen={openSizeGuide} onClose={handleCloseSizeGuide} />
+                                        <div className="list-size flex items-center gap-2 flex-wrap mt-3">
+                                            {(productMain.sizes ?? []).map((item, index) => (
+                                                <div
+                                                    className={`size-item ${item === 'freesize' ? 'px-3 py-2' : 'w-12 h-12'} relative flex items-center justify-center text-button rounded-full bg-surface text-secondary2`}
+                                                    key={index}
+                                                    onClick={() => handleActiveSize(item)}
+                                                >
+                                                    {item}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                                        {productMain.sizes.map((item, index) => (
-                                            <div
-                                                className={`size-item ${item === 'freesize' ? 'px-3 py-2' : 'w-12 h-12'} relative flex items-center justify-center text-button rounded-full bg-surface text-secondary2`}
-                                                key={index}
-                                            >
-                                                {item}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                )}
                                 <div className="text-title mt-5">Quantity:</div>
                                 <div className="choose-quantity flex items-center lg:justify-between gap-5 gap-y-3 mt-3">
                                     <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
@@ -321,12 +347,7 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
                                         </div>
                                         <span>Compare</span>
                                     </div>
-                                    <div className="share flex items-center gap-3 cursor-pointer">
-                                        <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                                            <Icon.ShareNetwork weight='fill' className='heading6' />
-                                        </div>
-                                        <span>Share Products</span>
-                                    </div>
+                                    <ShareMenu product={productMain} />
                                 </div><div className="more-infor mt-6">
                                     <div className="flex items-center gap-4 flex-wrap">
                                         <div className="flex items-center gap-1">
@@ -341,24 +362,24 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Timer className='body1' />
                                         <div className="text-title">Estimated Delivery:</div>
-                                        <div className="text-secondary">14 January - 18 January</div>
+                                        <div className="text-secondary">{pageSettings.deliveryEstimate}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Eye className='body1' />
-                                        <div className="text-title">38</div>
+                                        <div className="text-title">{pageSettings.viewerCount}</div>
                                         <div className="text-secondary">people viewing this product right now!</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">SKU:</div>
-                                        <div className="text-secondary">53453412</div>
+                                        <div className="text-secondary">{(attributes as any)?.sku || '-'}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Categories:</div>
-                                        <div className="text-secondary">{productMain.category}, {productMain.gender}</div>
+                                        <div className="text-secondary">{productMain.category}{(attributes as any)?.species ? `, ${(attributes as any)?.species}` : ''}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Tag:</div>
-                                        <div className="text-secondary">{productMain.type}</div>
+                                        <div className="text-secondary">{(attributes as any)?.tag || productMain.type || '-'}</div>
                                     </div>
                                 </div>
                                 <div className="list-payment mt-7">
@@ -429,21 +450,21 @@ const OutOfStock: React.FC<Props> = ({ data, productId }) => {
                                     <div className="icon-delivery-truck text-4xl"></div>
                                     <div>
                                         <div className="text-title">Free shipping</div>
-                                        <div className="caption1 text-secondary mt-1">Free shipping on orders over $75.</div>
+                                        <div className="caption1 text-secondary mt-1">Free shipping on orders over ${pageSettings.freeShippingThreshold}.</div>
                                     </div>
                                 </div>
                                 <div className="item flex items-center gap-3 mt-4">
                                     <div className="icon-phone-call text-4xl"></div>
                                     <div>
                                         <div className="text-title">Support everyday</div>
-                                        <div className="caption1 text-secondary mt-1">Support from 8:30 AM to 10:00 PM everyday</div>
+                                        <div className="caption1 text-secondary mt-1">Support from {pageSettings.supportHours} everyday</div>
                                     </div>
                                 </div>
                                 <div className="item flex items-center gap-3 mt-4">
                                     <div className="icon-return text-4xl"></div>
                                     <div>
-                                        <div className="text-title">100 Day Returns</div>
-                                        <div className="caption1 text-secondary mt-1">Not impressed? Get a refund. You have 100 days to break our hearts.</div>
+                                        <div className="text-title">{pageSettings.returnDays} Day Returns</div>
+                                        <div className="caption1 text-secondary mt-1">Not impressed? Get a refund. You have {pageSettings.returnDays} days to break our hearts.</div>
                                     </div>
                                 </div>
                             </div>

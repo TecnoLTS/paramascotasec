@@ -8,12 +8,15 @@ import { useCart } from '@/context/CartContext'
 import { useSearchParams, useRouter } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { createOrder, getQuote } from '@/lib/api'
+import { login, register, requestOtp, verifyOtp } from '@/lib/api/auth'
 import { fetchJson, requestApi } from '@/lib/apiClient'
 
 interface AddressData {
     firstName: string;
     lastName: string;
     company: string;
+    documentType: string;
+    documentNumber: string;
     country: string;
     street: string;
     city: string;
@@ -35,6 +38,8 @@ const emptyAddress: AddressData = {
     firstName: '',
     lastName: '',
     company: '',
+    documentType: '',
+    documentNumber: '',
     country: '',
     street: '',
     city: '',
@@ -83,11 +88,15 @@ const Checkout = () => {
     const [transferReference, setTransferReference] = useState('')
     const [transferAmount, setTransferAmount] = useState('')
     const [transferProofName, setTransferProofName] = useState('')
+    const [guestOrderId, setGuestOrderId] = useState<string | null>(null)
+    const [orderNotes, setOrderNotes] = useState('')
 
     // Address management state
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
     const [selectedAddressId, setSelectedAddressId] = useState<string>('one-time')
     const [tempAddress, setTempAddress] = useState<AddressData>(emptyAddress)
+    const [billingAddress, setBillingAddress] = useState<AddressData>(emptyAddress)
+    const [useBillingSame, setUseBillingSame] = useState(true)
     const [overwriteOriginal, setOverwriteOriginal] = useState(false)
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
@@ -96,12 +105,37 @@ const Checkout = () => {
     const [availableProductIds, setAvailableProductIds] = useState<Set<string> | null>(null)
     const removedMissingRef = useRef<Set<string>>(new Set())
     const [isLoggedIn, setIsLoggedIn] = useState(false)
+    const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+    const [loginLoading, setLoginLoading] = useState(false)
     const [contactInfo, setContactInfo] = useState({
         firstName: '',
         lastName: '',
         email: '',
-        phone: ''
+        phone: '',
+        password: '',
+        confirmPassword: '',
+        documentType: '',
+        documentNumber: '',
+        businessName: ''
     })
+    const [registering, setRegistering] = useState(false)
+    const [otpSent, setOtpSent] = useState(false)
+    const [otpCode, setOtpCode] = useState('')
+    const [otpLoading, setOtpLoading] = useState(false)
+    const [otpVerified, setOtpVerified] = useState(false)
+    const [otpModalOpen, setOtpModalOpen] = useState(false)
+    const keepOneTimeSelectionRef = useRef(false)
+
+    const mergeAddressFields = (current: AddressData, incoming?: Partial<AddressData>) => {
+        if (!incoming) return current
+        const next = { ...current }
+        Object.entries(incoming).forEach(([key, value]) => {
+            if (value === undefined || value === null) return
+            if (typeof value === 'string' && value.trim() === '') return
+            ;(next as any)[key] = value
+        })
+        return next
+    }
 
     useEffect(() => {
         const saved = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
@@ -112,6 +146,8 @@ const Checkout = () => {
                 if (parsed.length > 0) {
                     setSelectedAddressId(parsed[0].id)
                     setTempAddress(parsed[0].shipping)
+                    setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
+                    setUseBillingSame(!!parsed[0].isSame)
                 }
             } catch (e) {
                 console.error('Error parsing addresses', e)
@@ -120,8 +156,7 @@ const Checkout = () => {
     }, [])
 
     useEffect(() => {
-        fetch('/api/settings/shipping')
-            .then((res) => res.ok ? res.json() : null)
+        fetchJson<{ delivery: number; pickup: number; tax_rate?: number }>('/api/settings/shipping')
             .then((data) => {
                 if (data && typeof data.delivery === 'number' && typeof data.pickup === 'number') {
                     setShippingRates({
@@ -153,7 +188,7 @@ const Checkout = () => {
             }
         }
 
-        requestApi<{ name?: string; profile?: { firstName?: string; lastName?: string; phone?: string } }>('/api/user/profile', {
+        requestApi<{ name?: string; profile?: { firstName?: string; lastName?: string; phone?: string; documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
             headers: { Authorization: `Bearer ${token}` }
         })
             .then((res) => {
@@ -166,6 +201,11 @@ const Checkout = () => {
                     email: email || '',
                     phone: profile.phone || ''
                 })
+                setBillingAddress((prev) => mergeAddressFields(prev, {
+                    documentType: profile.documentType,
+                    documentNumber: profile.documentNumber,
+                    company: profile.businessName
+                }))
             })
             .catch((err) => {
                 console.error('No se pudo cargar el perfil', err)
@@ -182,6 +222,44 @@ const Checkout = () => {
     }, [])
 
     useEffect(() => {
+        if (!isLoggedIn) return
+        const token = localStorage.getItem('authToken')
+        if (!token) return
+        requestApi<{ profile?: { documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then((res) => {
+                const profile = res.body.profile || {}
+                setBillingAddress((prev) => mergeAddressFields(prev, {
+                    documentType: profile.documentType,
+                    documentNumber: profile.documentNumber,
+                    company: profile.businessName
+                }))
+            })
+            .catch(() => {})
+    }, [isLoggedIn])
+
+    const handleLoginSubmit = async () => {
+        if (!loginForm.email.trim() || !loginForm.password.trim()) {
+            setMessage({ text: 'Ingresa tu correo y contraseña.', type: 'error' })
+            return
+        }
+        setLoginLoading(true)
+        try {
+            const res = await login({ email: loginForm.email, password: loginForm.password })
+            localStorage.setItem('authToken', res.token)
+            localStorage.setItem('user', JSON.stringify(res.user))
+            setIsLoggedIn(true)
+            setShowLogin(false)
+            setMessage({ text: 'Sesión iniciada correctamente.', type: 'success' })
+        } catch (err: any) {
+            setMessage({ text: err?.message || 'No se pudo iniciar sesión.', type: 'error' })
+        } finally {
+            setLoginLoading(false)
+        }
+    }
+
+    useEffect(() => {
         const token = localStorage.getItem('authToken')
         if (!token) return
         requestApi<{ addresses: SavedAddress[] }>('/api/user/addresses', {
@@ -193,12 +271,53 @@ const Checkout = () => {
                     setSavedAddresses(addresses)
                     setSelectedAddressId(addresses[0].id)
                     setTempAddress(addresses[0].shipping)
+                    setBillingAddress((prev) => mergeAddressFields(prev, addresses[0].billing))
+                    setUseBillingSame(!!addresses[0].isSame)
+                    return
+                }
+
+                // Fallback: use local addresses if backend has none, then sync to account
+                const stored = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored) as SavedAddress[]
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setSavedAddresses(parsed)
+                            setSelectedAddressId(parsed[0].id)
+                            setTempAddress(parsed[0].shipping)
+                            setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
+                            setUseBillingSame(!!parsed[0].isSame)
+                            requestApi('/api/user/addresses', {
+                                method: 'PUT',
+                                headers: {
+                                    Authorization: `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ addresses: parsed })
+                            }).catch(() => {})
+                        }
+                    } catch {
+                        // ignore parse errors
+                    }
                 }
             })
             .catch((err) => {
                 console.error('No se pudieron cargar las direcciones', err)
             })
     }, [])
+
+    useEffect(() => {
+        if (!isLoggedIn) return
+        if (savedAddresses.length === 0) return
+        if (selectedAddressId === 'one-time') {
+            if (keepOneTimeSelectionRef.current) return
+            const first = savedAddresses[0]
+            setSelectedAddressId(first.id)
+            setTempAddress(first.shipping)
+            setBillingAddress((prev) => mergeAddressFields(prev, first.billing))
+            setUseBillingSame(!!first.isSame)
+        }
+    }, [isLoggedIn, savedAddresses, selectedAddressId])
 
     useEffect(() => {
         let mounted = true
@@ -223,19 +342,268 @@ const Checkout = () => {
 
     const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target
-        setTempAddress(prev => ({ ...prev, [id]: value }))
+        setTempAddress(prev => {
+            const updated = { ...prev, [id]: value }
+            if (useBillingSame) {
+                const addressFields = {
+                    firstName: updated.firstName,
+                    lastName: updated.lastName,
+                    country: updated.country,
+                    street: updated.street,
+                    city: updated.city,
+                    state: updated.state,
+                    zip: updated.zip,
+                    phone: updated.phone,
+                    email: updated.email
+                }
+                setBillingAddress(current => ({
+                    ...current,
+                    ...addressFields
+                }))
+            }
+            return updated
+        })
     }
 
-    const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleBillingAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const target = e.target
+        const field = target.name || target.id
+        if (!field) return
+        setBillingAddress(prev => ({ ...prev, [field]: target.value }))
+    }
+
+    const handleContactChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target
         setContactInfo(prev => ({ ...prev, [id]: value }))
     }
 
-    const handleConfirmStep1 = () => {
+    const validateContactInfo = () => {
+        if (isLoggedIn) return true
+        if (!contactInfo.firstName.trim() || !contactInfo.lastName.trim() || !contactInfo.email.trim() || !contactInfo.phone.trim()) {
+            setMessage({ text: 'Completa nombre, apellido, correo y teléfono para continuar.', type: 'error' })
+            return false
+        }
+        const emailOk = /\S+@\S+\.\S+/.test(contactInfo.email)
+        if (!emailOk) {
+            setMessage({ text: 'Ingresa un correo válido.', type: 'error' })
+            return false
+        }
+        if (!contactInfo.password || contactInfo.password.length < 12) {
+            setMessage({ text: 'La contraseña debe tener al menos 12 caracteres.', type: 'error' })
+            return false
+        }
+        if (contactInfo.password !== contactInfo.confirmPassword) {
+            setMessage({ text: 'Las contraseñas no coinciden.', type: 'error' })
+            return false
+        }
+        if (!contactInfo.documentType.trim() || !contactInfo.documentNumber.trim()) {
+            setMessage({ text: 'Completa el tipo y número de identificación para la facturación.', type: 'error' })
+            return false
+        }
+        return true
+    }
+
+    const validateShippingAddress = () => {
+        if (deliveryMethod !== 'delivery') return true
+        if (!tempAddress.country.trim() || !tempAddress.city.trim() || !tempAddress.zip.trim() || !tempAddress.street.trim()) {
+            setMessage({ text: 'Completa país, ciudad, código postal y dirección para el envío.', type: 'error' })
+            return false
+        }
+        return true
+    }
+
+    const validateBillingAddress = () => {
+        const docType = isLoggedIn ? billingAddress.documentType : contactInfo.documentType
+        const docNumber = isLoggedIn ? billingAddress.documentNumber : contactInfo.documentNumber
+        if (!docType.trim() || !docNumber.trim()) {
+            if (!isLoggedIn) {
+                setMessage({
+                    text: 'Completa el tipo y número de identificación para la facturación.',
+                    type: 'error'
+                })
+            }
+            return false
+        }
+        if (deliveryMethod !== 'delivery') return true
+        if (useBillingSame) return true
+        if (!billingAddress.country.trim() || !billingAddress.city.trim() || !billingAddress.zip.trim() || !billingAddress.street.trim()) {
+            setMessage({ text: 'Completa país, ciudad, código postal y dirección para la facturación.', type: 'error' })
+            return false
+        }
+        return true
+    }
+
+    const handleRegister = async () => {
+        setRegistering(true)
+        try {
+            const fullName = `${contactInfo.firstName} ${contactInfo.lastName}`.trim()
+            const newAddress: SavedAddress = {
+                id: Date.now(),
+                title: 'Dirección principal',
+                billing: {
+                    ...billingAddress,
+                    firstName: contactInfo.firstName,
+                    lastName: contactInfo.lastName,
+                    email: contactInfo.email,
+                    phone: contactInfo.phone
+                },
+                shipping: {
+                    ...tempAddress,
+                    firstName: contactInfo.firstName,
+                    lastName: contactInfo.lastName,
+                    email: contactInfo.email,
+                    phone: contactInfo.phone
+                },
+                isSame: useBillingSame
+            }
+
+            await register({
+                name: fullName,
+                email: contactInfo.email,
+                password: contactInfo.password,
+                documentType: contactInfo.documentType,
+                documentNumber: contactInfo.documentNumber,
+                businessName: contactInfo.businessName,
+                skipVerificationEmail: true
+            })
+            await requestOtp({ email: contactInfo.email })
+            setOtpSent(true)
+            setOtpModalOpen(true)
+            setMessage({
+                text: 'Cuenta creada. Te enviamos un código al correo para verificarlo.',
+                type: 'success'
+            })
+            setSavedAddresses([newAddress])
+            setSelectedAddressId(newAddress.id.toString())
+            setTempAddress(newAddress.shipping)
+            setBillingAddress((prev) => mergeAddressFields(prev, newAddress.billing))
+            const localAddresses = [newAddress]
+            localStorage.setItem('savedAddresses', JSON.stringify(localAddresses))
+            localStorage.setItem('userAddresses', JSON.stringify(localAddresses))
+        } catch (err: any) {
+            setMessage({ text: err?.message || 'No se pudo crear la cuenta.', type: 'error' })
+        } finally {
+            setRegistering(false)
+        }
+    }
+
+    const handleVerifyOtp = async () => {
+        if (!otpCode.trim()) {
+            setMessage({ text: 'Ingresa el código de verificación.', type: 'error' })
+            return
+        }
+        setOtpLoading(true)
+        try {
+            await verifyOtp({ email: contactInfo.email, code: otpCode.trim() })
+            const res = await login({ email: contactInfo.email, password: contactInfo.password })
+            localStorage.setItem('authToken', res.token)
+            localStorage.setItem('user', JSON.stringify(res.user))
+            setIsLoggedIn(true)
+            setOtpVerified(true)
+            setOtpModalOpen(false)
+            const pending = localStorage.getItem('userAddresses') || localStorage.getItem('savedAddresses')
+            if (pending) {
+                try {
+                    const parsed = JSON.parse(pending)
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        await requestApi('/api/user/addresses', {
+                            method: 'PUT',
+                            headers: {
+                                Authorization: `Bearer ${res.token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ addresses: parsed })
+                        })
+                        setSavedAddresses(parsed)
+                        setSelectedAddressId(parsed[0].id)
+                        setTempAddress(parsed[0].shipping)
+                        setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
+                        setUseBillingSame(!!parsed[0].isSame)
+                    }
+                } catch {
+                    // ignore sync errors
+                }
+            }
+            setMessage({ text: 'Correo verificado. Continuemos con tu compra.', type: 'success' })
+            setCurrentStep(2)
+        } catch (err: any) {
+            setMessage({ text: err?.message || 'No se pudo verificar el código.', type: 'error' })
+        } finally {
+            setOtpLoading(false)
+        }
+    }
+
+    const handleResendOtp = async () => {
+        setOtpLoading(true)
+        try {
+            await requestOtp({ email: contactInfo.email })
+            setMessage({ text: 'Te enviamos un nuevo código.', type: 'success' })
+        } catch (err: any) {
+            setMessage({ text: err?.message || 'No se pudo reenviar el código.', type: 'error' })
+        } finally {
+            setOtpLoading(false)
+        }
+    }
+
+    const handleConfirmStep1 = async () => {
+        if (!validateContactInfo()) return
+        if (!validateShippingAddress()) return
+        if (!validateBillingAddress()) {
+            if (isLoggedIn) {
+                try {
+                    const token = localStorage.getItem('authToken')
+                    if (token) {
+                        const res = await requestApi<{ profile?: { documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
+                            headers: { Authorization: `Bearer ${token}` }
+                        })
+                        const profile = res.body.profile || {}
+                        if (profile.documentType && profile.documentNumber) {
+                            setBillingAddress((prev) => mergeAddressFields(prev, {
+                                documentType: profile.documentType,
+                                documentNumber: profile.documentNumber,
+                                company: profile.businessName
+                            }))
+                            return
+                        }
+                    }
+                } catch (err) {
+                    // noop: we'll show the validation error below
+                }
+                setMessage({
+                    text: 'Tus datos de facturación no se pudieron cargar. Verifícalos en Mi cuenta.',
+                    type: 'error'
+                })
+            }
+            return
+        }
+        if (!isLoggedIn) {
+            if (!otpVerified) {
+                if (!otpSent) {
+                    handleRegister()
+                } else {
+                    setMessage({ text: 'Ingresa el código que enviamos a tu correo para continuar.', type: 'error' })
+                    setOtpModalOpen(true)
+                }
+                return
+            }
+            return
+        }
         if (overwriteOriginal && selectedAddressId !== 'one-time') {
             const updated = savedAddresses.map(addr =>
                 addr.id === selectedAddressId
-                    ? { ...addr, shipping: tempAddress, billing: addr.isSame ? tempAddress : addr.billing }
+                    ? {
+                        ...addr,
+                        shipping: tempAddress,
+                        billing: useBillingSame
+                            ? {
+                                ...tempAddress,
+                                documentType: billingAddress.documentType,
+                                documentNumber: billingAddress.documentNumber,
+                                company: billingAddress.company
+                            }
+                            : billingAddress,
+                        isSame: useBillingSame
+                    }
                     : addr
             )
             setSavedAddresses(updated)
@@ -250,12 +618,16 @@ const Checkout = () => {
         () =>
             cartState.cartArray.map((item) => ({
                 id: item.id,
-                name: item.name,
+                name: item.name || 'Producto',
                 size: item.selectedSize || item.sizes?.[0] || '—',
                 color: item.selectedColor || item.variation?.[0]?.color || '—',
                 quantity: item.quantity,
                 price: item.price,
-                image: item.thumbImage?.[0] || '/images/placeholder.jpg',
+                image: item.thumbImage?.[0]
+                    || item.images?.[0]
+                    || item.variation?.[0]?.image
+                    || item.variation?.[0]?.colorImage
+                    || '/images/placeholder.jpg',
             })),
         [cartState.cartArray]
     )
@@ -329,6 +701,12 @@ const Checkout = () => {
         }
     }, [paymentMethod])
 
+    useEffect(() => {
+        if (deliveryMethod === 'pickup') {
+            setUseBillingSame(false)
+        }
+    }, [deliveryMethod])
+
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60)
         const s = seconds % 60
@@ -350,26 +728,46 @@ const Checkout = () => {
     }
 
     const handleFinalizeOrder = async () => {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            setMessage({ text: 'Debes iniciar sesión para finalizar la compra.', type: 'error' });
-            setShowLogin(true);
+        if (!isLoggedIn) {
+            setMessage({ text: 'Debes iniciar sesión para comprar.', type: 'error' })
+            return
+        }
+        if (!validateContactInfo()) {
             setCurrentStep(1);
-            return;
+            return
+        }
+        if (!validateShippingAddress()) {
+            setCurrentStep(1)
+            return
+        }
+        if (!validateBillingAddress()) {
+            setCurrentStep(1)
+            return
         }
 
         setLoading(true);
         setMessage(null);
 
         try {
+            const shippingAddress = {
+                ...tempAddress,
+                ...contactInfo
+            }
+            const billingAddressPayload = (deliveryMethod === 'delivery' && useBillingSame)
+                ? {
+                    ...shippingAddress,
+                    documentType: billingAddress.documentType,
+                    documentNumber: billingAddress.documentNumber,
+                    company: billingAddress.company
+                }
+                : { ...billingAddress, ...contactInfo }
             const orderData = {
                 total, // This is just for local UI, backend will re-calculate.
                 status: 'pending',
                 delivery_method: deliveryMethod,
-                shipping_address: {
-                    ...tempAddress,
-                    ...contactInfo
-                },
+                shipping_address: shippingAddress,
+                billing_address: billingAddressPayload,
+                order_notes: orderNotes.trim() || null,
                 payment_details: paymentMethod === 'transfer' ? {
                     reference: transferReference,
                     amount: transferAmount,
@@ -382,13 +780,20 @@ const Checkout = () => {
                 }))
             };
 
-            await createOrder(orderData);
-
-            setMessage({ text: '¡Pedido realizado con éxito!', type: 'success' });
+            const created = await createOrder(orderData);
+            const orderId = created?.id || created?.order?.id || null
+            if (!isLoggedIn && orderId) {
+                setGuestOrderId(orderId)
+                setMessage({ text: `¡Pedido realizado con éxito! Tu número de pedido es ${orderId}.`, type: 'success' })
+            } else {
+                setMessage({ text: '¡Pedido realizado con éxito!', type: 'success' })
+            }
             clearCart();
 
             setTimeout(() => {
-                router.push('/my-account');
+                if (isLoggedIn) {
+                    router.push('/my-account');
+                }
             }, 2000);
 
         } catch (err: any) {
@@ -405,6 +810,59 @@ const Checkout = () => {
                     <div className="flex items-center gap-3">
                         {message.type === 'success' ? <Icon.CheckCircle size={24} weight="fill" /> : <Icon.Warning size={24} weight="fill" />}
                         <span className="font-semibold">{message.text}</span>
+                    </div>
+                </div>
+            )}
+            {!isLoggedIn && otpSent && !otpVerified && otpModalOpen && (
+                <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-[#e5e7eb]">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-[#111827]">Verifica tu correo</h3>
+                            <button
+                                type="button"
+                                onClick={() => setOtpModalOpen(false)}
+                                className="text-[#9ca3af] hover:text-[#111827]"
+                                aria-label="Cerrar"
+                            >
+                                <Icon.X size={18} weight="bold" />
+                            </button>
+                        </div>
+                        <p className="mt-2 text-sm text-[#6b7280]">
+                            Te enviamos un código de 6 dígitos a <span className="font-medium text-[#111827]">{contactInfo.email}</span>.
+                        </p>
+                        <form
+                            className="mt-4 space-y-4"
+                            onSubmit={(e) => {
+                                e.preventDefault()
+                                handleVerifyOtp()
+                            }}
+                        >
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Código de verificación"
+                                value={otpCode}
+                                onChange={(e) => setOtpCode(e.target.value)}
+                                className="w-full border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                            />
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-[#1f3b3b] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                                    disabled={otpLoading}
+                                >
+                                    {otpLoading ? 'Verificando...' : 'Verificar'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleResendOtp}
+                                    className="flex-1 border border-[#1f3b3b] text-[#1f3b3b] rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d1a] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                                    disabled={otpLoading}
+                                >
+                                    Reenviar código
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
@@ -471,15 +929,23 @@ const Checkout = () => {
                                                     <input
                                                         type="email"
                                                         placeholder="Email"
+                                                        value={loginForm.email}
+                                                        onChange={(e) => setLoginForm((prev) => ({ ...prev, email: e.target.value }))}
                                                         className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                     />
                                                     <input
                                                         type="password"
                                                         placeholder="Contraseña"
+                                                        value={loginForm.password}
+                                                        onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
                                                         className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                     />
-                                                    <button className="sm:col-span-2 bg-[#1f3b3b] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d] transition-colors">
-                                                        Iniciar sesión
+                                                    <button
+                                                        className="sm:col-span-2 bg-[#1f3b3b] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[#2e4d4d] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                                                        onClick={handleLoginSubmit}
+                                                        disabled={loginLoading}
+                                                    >
+                                                        {loginLoading ? 'Ingresando...' : 'Iniciar sesión'}
                                                     </button>
                                                 </div>
                                             )}
@@ -529,6 +995,87 @@ const Checkout = () => {
                                                     onChange={handleContactChange}
                                                     className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                 />
+                                                <select
+                                                    id="documentType"
+                                                    value={contactInfo.documentType}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent bg-white"
+                                                >
+                                                    <option value="">Tipo de identificación *</option>
+                                                    <option value="Cédula">Cédula</option>
+                                                    <option value="RUC">RUC</option>
+                                                    <option value="Pasaporte">Pasaporte</option>
+                                                    <option value="Otro">Otro</option>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    id="documentNumber"
+                                                    placeholder="Número de identificación *"
+                                                    value={contactInfo.documentNumber}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    id="businessName"
+                                                    placeholder="Razón social (opcional)"
+                                                    value={contactInfo.businessName}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
+                                                />
+                                                <input
+                                                    type="password"
+                                                    id="password"
+                                                    placeholder="Contraseña (mínimo 12 caracteres) *"
+                                                    value={contactInfo.password}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <input
+                                                    type="password"
+                                                    id="confirmPassword"
+                                                    placeholder="Confirmar contraseña *"
+                                                    value={contactInfo.confirmPassword}
+                                                    onChange={handleContactChange}
+                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                />
+                                                <div className="sm:col-span-2 text-xs text-[#6b7280]">
+                                                    Necesitas una cuenta para comprar. La cuenta se creará con estos datos.
+                                                </div>
+                                            </div>
+                                        )}
+                                        {!isLoggedIn && otpSent && !otpVerified && (
+                                            <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-[#6b7280]">
+                                                <span>Te enviamos un código a tu correo. Revísalo para continuar.</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOtpModalOpen(true)}
+                                                    className="text-[#2e4d4d] font-medium hover:underline text-left"
+                                                >
+                                                    Verificar correo
+                                                </button>
+                                            </div>
+                                        )}
+                                        {isLoggedIn && (
+                                            <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm font-semibold text-[#111827]">Datos de facturación</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => router.push('/my-account')}
+                                                        className="text-xs font-medium text-[#2e4d4d] hover:underline"
+                                                    >
+                                                        Editar en mi cuenta
+                                                    </button>
+                                                </div>
+                                                <div className="mt-2 text-sm text-[#374151] space-y-1">
+                                                    <p>Tipo de identificación: {billingAddress.documentType || '—'}</p>
+                                                    <p>Número de identificación: {billingAddress.documentNumber || '—'}</p>
+                                                    {billingAddress.company && <p>Razón social: {billingAddress.company}</p>}
+                                                </div>
+                                                {(!billingAddress.documentType || !billingAddress.documentNumber) && (
+                                                    <p className="mt-2 text-xs text-[#b45309]">Necesitamos estos datos para emitir la factura.</p>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -574,10 +1121,16 @@ const Checkout = () => {
                                                                 const val = e.target.value;
                                                                 setSelectedAddressId(val);
                                                                 if (val !== 'one-time') {
+                                                                    keepOneTimeSelectionRef.current = false
                                                                     const addr = savedAddresses.find(a => a.id === val);
-                                                                    if (addr) setTempAddress(addr.shipping);
+                                                                    if (addr) {
+                                                                        setTempAddress(addr.shipping);
+                                                                        setBillingAddress((prev) => mergeAddressFields(prev, addr.billing));
+                                                                        setUseBillingSame(!!addr.isSame);
+                                                                    }
                                                                     setOverwriteOriginal(false);
                                                                 } else {
+                                                                    keepOneTimeSelectionRef.current = true
                                                                     setTempAddress(emptyAddress);
                                                                 }
                                                             }}
@@ -652,8 +1205,10 @@ const Checkout = () => {
                                                         )}
 
                                                         <textarea
-                                                            placeholder="Notas adicionales (opcional)"
+                                                            placeholder="Indicaciones adicionales (opcional)"
                                                             rows={3}
+                                                            value={orderNotes}
+                                                            onChange={(e) => setOrderNotes(e.target.value)}
                                                             className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
                                                         />
                                                     </div>
@@ -671,6 +1226,87 @@ const Checkout = () => {
                                                 </p>
                                             </div>
                                         )}
+
+                                        <div className="mt-6 space-y-6">
+                                            {deliveryMethod === 'delivery' && (
+                                                <div className="flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="billingSame"
+                                                        checked={useBillingSame}
+                                                        onChange={(e) => {
+                                                            const checked = e.target.checked
+                                                            setUseBillingSame(checked)
+                                                            if (checked) {
+                                                                const addressFields = {
+                                                                    firstName: tempAddress.firstName,
+                                                                    lastName: tempAddress.lastName,
+                                                                    country: tempAddress.country,
+                                                                    street: tempAddress.street,
+                                                                    city: tempAddress.city,
+                                                                    state: tempAddress.state,
+                                                                    zip: tempAddress.zip,
+                                                                    phone: tempAddress.phone,
+                                                                    email: tempAddress.email
+                                                                }
+                                                                setBillingAddress(current => ({
+                                                                    ...current,
+                                                                    ...addressFields
+                                                                }))
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4 cursor-pointer text-[#2e4d4d] focus:ring-[#2e4d4d]"
+                                                    />
+                                                    <label htmlFor="billingSame" className="text-sm cursor-pointer text-[#6b7280]">
+                                                        Usar esta misma dirección para la facturación
+                                                    </label>
+                                                </div>
+                                            )}
+
+                                            {!useBillingSame && (
+                                                <div className="space-y-4">
+                                                    <h3 className="font-medium text-[#111827]">Dirección de facturación</h3>
+                                                    <div className="grid sm:grid-cols-2 gap-4">
+                                                        <select
+                                                            name="country"
+                                                            value={billingAddress.country}
+                                                            onChange={handleBillingAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
+                                                        >
+                                                            <option value="">País/Región *</option>
+                                                            <option value="Ecuador">Ecuador</option>
+                                                            <option value="España">España</option>
+                                                            <option value="México">México</option>
+                                                            <option value="Argentina">Argentina</option>
+                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            name="city"
+                                                            placeholder="Ciudad *"
+                                                            value={billingAddress.city}
+                                                            onChange={handleBillingAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            name="zip"
+                                                            placeholder="Código Postal *"
+                                                            value={billingAddress.zip}
+                                                            onChange={handleBillingAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            name="street"
+                                                            placeholder="Calle y número *"
+                                                            value={billingAddress.street}
+                                                            onChange={handleBillingAddressChange}
+                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                              
                                     </div>
                                 </>
@@ -816,6 +1452,11 @@ const Checkout = () => {
                             {isStep3 && (
                                 <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
                                     <h2 className="text-xl font-semibold text-[#111827] mb-6">Confirmación de Pedido</h2>
+                                    {!isLoggedIn && guestOrderId && (
+                                        <div className="mb-6 p-4 rounded-xl border border-[#d1fae5] bg-[#ecfdf5] text-[#065f46] text-sm font-medium">
+                                            Tu número de pedido es <span className="font-bold">{guestOrderId}</span>. Guárdalo para seguimiento.
+                                        </div>
+                                    )}
 
                                     <div className="grid sm:grid-cols-2 gap-8 mb-8">
                                         <div>
@@ -885,24 +1526,33 @@ const Checkout = () => {
 
                                 <div className="space-y-4 mb-6">
                                     {items.map((item) => (
-                                        <div key={item.id} className="flex gap-3">
+                                        <div key={item.id} className="flex items-center gap-3">
                                             <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#f3f4f6] flex-shrink-0">
-                                                <Image
+                                                <img
                                                     src={item.image}
-                                                    width={80}
-                                                    height={80}
                                                     alt={item.name}
                                                     className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        const target = e.currentTarget
+                                                        if (!target.dataset.fallback) {
+                                                            target.dataset.fallback = 'true'
+                                                            target.src = '/images/placeholder.jpg'
+                                                        }
+                                                    }}
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-medium text-[#111827] truncate">{item.name}</h3>
-                                                <p className="text-xs text-[#6b7280] mt-1">
-                                                    {item.size} / {item.color}
-                                                </p>
-                                                <div className="flex items-center justify-between mt-1">
-                                                    <span className="text-sm text-[#6b7280]">x{item.quantity}</span>
-                                                    <span className="text-sm font-medium text-[#111827]">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-sm font-medium text-[#111827] truncate">{item.name || 'Producto'}</h3>
+                                                        {(item.size !== '—' || item.color !== '—') && (
+                                                            <p className="text-xs text-[#6b7280] mt-1">
+                                                                {[item.size, item.color].filter((val) => val && val !== '—').join(' / ') || '—'}
+                                                            </p>
+                                                        )}
+                                                        <span className="text-xs text-[#6b7280] mt-1 inline-block">x{item.quantity}</span>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-[#111827] text-right whitespace-nowrap">
                                                         ${(item.price * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
@@ -912,50 +1562,54 @@ const Checkout = () => {
                                 </div>
 
                                 <div className="border-t border-[#e5e7eb] pt-4 space-y-2">
-                                    <div className="flex justify-between text-sm">
+                                    <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                         <span className="text-[#6b7280]">Subtotal sin IVA</span>
-                                        <span className="text-[#111827]">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        <span className="text-[#111827] text-right tabular-nums">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     {vatRateValue > 0 && (
-                                        <div className="flex justify-between text-sm">
+                                        <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                             <span className="text-[#6b7280]">IVA ({vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
-                                            <span className="text-[#111827]">${vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-[#111827] text-right tabular-nums">${vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
                                     {safeDiscount > 0 && (
-                                        <div className="flex justify-between text-sm">
+                                        <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                             <span className="text-[#6b7280]">Descuento</span>
-                                            <span className="text-green-600">-${safeDiscount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-green-600 text-right tabular-nums">-${safeDiscount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between text-sm">
+                                    <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                         <span className="text-[#6b7280]">Envío</span>
-                                        <span className="text-[#111827]">
+                                        <span className="text-[#111827] text-right tabular-nums">
                                             {shipping === 0 ? 'Gratis' : `$${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                         </span>
                                     </div>
                                     <div className="border-t border-[#e5e7eb] pt-2 mt-2">
-                                        <div className="flex justify-between">
+                                        <div className="grid grid-cols-[1fr_auto] items-center gap-4">
                                             <span className="text-lg font-semibold text-[#111827]">Total</span>
-                                            <span className="text-lg font-semibold text-[#111827]">${total.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-lg font-semibold text-[#111827] text-right tabular-nums">${total.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <button
-                                    className="w-full mt-6 bg-[#1f3b3b] text-white rounded-lg px-6 py-3 font-medium hover:bg-[#2e4d4d] transition-colors"
+                                    className="w-full mt-6 bg-[#1f3b3b] text-white rounded-lg px-6 py-3 font-medium hover:bg-[#2e4d4d] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                                     onClick={() => {
                                         if (currentStep === 1) {
-                                            handleConfirmStep1()
-                                        } else if (currentStep === 2) {
-                                            handleConfirmStep2()
-                                        } else if (currentStep === 3) {
+            handleConfirmStep1()
+        } else if (currentStep === 2) {
+            handleConfirmStep2()
+        } else if (currentStep === 3) {
                                             handleFinalizeOrder()
                                         }
                                     }}
-                                    disabled={currentStep === 3 && loading}
+                                    disabled={(currentStep === 3 && loading) || (currentStep === 1 && registering)}
                                 >
-                                    {currentStep === 3 ? (loading ? 'Procesando...' : 'Finalizar compra') : 'Continuar'}
+                                    {currentStep === 3
+                                        ? (loading ? 'Procesando...' : 'Finalizar compra')
+                                        : (currentStep === 1 && !isLoggedIn
+                                            ? (registering ? 'Creando cuenta...' : 'Crear cuenta y continuar')
+                                            : 'Continuar')}
                                 </button>
 
                                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#6b7280]">

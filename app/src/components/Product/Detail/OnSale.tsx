@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ProductType } from '@/type/ProductType'
 import Product from '../Product'
 import Rate from '@/components/Other/Rate'
@@ -18,6 +19,7 @@ import { useModalWishlistContext } from '@/context/ModalWishlistContext'
 import { useCompare } from '@/context/CompareContext'
 import { useModalCompareContext } from '@/context/ModalCompareContext'
 import ModalSizeguide from '@/components/Modal/ModalSizeguide'
+import ShareMenu from '@/components/Product/ShareMenu'
 
 import { countdownTime } from '@/store/countdownTime'
 
@@ -43,10 +45,23 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
     const { openModalWishlist } = useModalWishlistContext()
     const { addToCompare, removeFromCompare, compareState } = useCompare();
     const { openModalCompare } = useModalCompareContext()
+    const router = useRouter()
     let productMain = data.find(product => product.id === productId) as ProductType
     if (productMain === undefined) {
         productMain = data[0]
     }
+    const productType = (productMain.productType ?? '').toLowerCase()
+    const isClothing = productType === 'ropa'
+    const attributes = productMain.attributes ?? {}
+    const pageSettings = (productMain as any).pageSettings ?? {
+        deliveryEstimate: '14 de enero - 18 de enero',
+        viewerCount: 38,
+        freeShippingThreshold: 75,
+        supportHours: '8:30 AM a 10:00 PM',
+        returnDays: 100
+    }
+    const colorOptions = (productMain.variation ?? []).filter((item) => item.color)
+    const fallbackColor = (attributes as any)?.color
 
     const percentSale = Math.floor(100 - ((productMain.price / productMain.originPrice) * 100))
 
@@ -98,6 +113,16 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
         openModalCart()
     };
 
+    const handleBuyNow = () => {
+        if (!cartState.cartArray.find(item => item.id === productMain.id)) {
+            addToCart({ ...productMain });
+            updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor)
+        } else {
+            updateCart(productMain.id, productMain.quantityPurchase, activeSize, activeColor)
+        }
+        router.push('/cart')
+    };
+
     const handleAddToWishlist = () => {
         // if product existed in wishlit, remove from wishlist and set state to false
         if (wishlistState.wishlistArray.some(item => item.id === productMain.id)) {
@@ -129,6 +154,21 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
         setActiveTab(prevTab => prevTab === tab ? undefined : tab)
     }
 
+
+    const rawGallery = [
+        ...(Array.isArray((productMain as any)?.images)
+            ? (productMain as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
+            : []),
+        ...((productMain.variation ?? [])
+            .flatMap((variation) => [variation.image, variation.colorImage])
+            .filter((img): img is string => typeof img === 'string' && img.length > 0))
+    ]
+    const galleryImages = Array.from(new Set(rawGallery)).filter(Boolean)
+    const fallbackThumbs = Array.isArray((productMain as any)?.thumbImage) ? (productMain as any).thumbImage.filter(Boolean) : []
+    const fallbackGallery = galleryImages.length > 0
+        ? galleryImages
+        : (fallbackThumbs.length > 0 ? fallbackThumbs : productMain.images)
+
     return (
         <>
             <div className="product-detail grouped">
@@ -146,7 +186,7 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                 },
                             }}
                         >
-                            {productMain.images.map((item, index) => (
+                            {fallbackGallery.map((item, index) => (
                                 <SwiperSlide
                                     key={index}
                                     onClick={() => {
@@ -156,10 +196,12 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                 >
                                     <Image
                                         src={item}
-                                        width={1000}
-                                        height={1000}
+                                        width={1200}
+                                        height={1400}
                                         alt='prd-img'
-                                        className='w-full aspect-[3/4] object-cover'
+                                        sizes="(min-width: 1024px) 520px, 90vw"
+                                        quality={90}
+                                        className='w-full aspect-[4/5] object-contain bg-white'
                                     />
                                 </SwiperSlide>
                             ))}
@@ -184,7 +226,7 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                     swiperRef.current = swiper
                                 }}
                             >
-                                {productMain.images.map((item, index) => (
+                                {fallbackGallery.map((item, index) => (
                                     <SwiperSlide
                                         key={index}
                                         onClick={() => {
@@ -193,10 +235,12 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                     >
                                         <Image
                                             src={item}
-                                            width={1000}
-                                            height={1000}
+                                            width={1400}
+                                            height={1600}
                                             alt='prd-img'
-                                            className='w-full aspect-[3/4] object-cover rounded-xl'
+                                            sizes="(min-width: 1024px) 70vw, 90vw"
+                                            quality={92}
+                                            className='w-full aspect-[4/5] object-contain bg-white rounded-xl'
                                             onClick={(e) => {
                                                 e.stopPropagation(); // prevent
                                             }}
@@ -670,29 +714,38 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="choose-color mt-5">
-                                    <div className="text-title">Colors: <span className='text-title color'>{activeColor}</span></div>
-                                    <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                                        {productMain.variation.map((item, index) => (
-                                            <div
-                                                className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
-                                                key={index}
-                                                onClick={() => handleActiveColor(item.color)}
-                                            >
-                                                <Image
-                                                    src={item.colorImage}
-                                                    width={100}
-                                                    height={100}
-                                                    alt='color'
-                                                    className='rounded-xl'
-                                                />
-                                                <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                                                    {item.color}
-                                                </div>
+                                {(colorOptions.length > 0 || fallbackColor) && (
+                                    <div className="choose-color mt-5">
+                                        <div className="text-title">Color: <span className='text-title color'>{activeColor || fallbackColor}</span></div>
+                                        {colorOptions.length > 0 ? (
+                                            <div className="list-color flex items-center gap-2 flex-wrap mt-3">
+                                                {colorOptions.map((item, index) => (
+                                                    <div
+                                                        className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
+                                                        key={index}
+                                                        onClick={() => handleActiveColor(item.color)}
+                                                    >
+                                                        <Image
+                                                            src={item.colorImage}
+                                                            width={100}
+                                                            height={100}
+                                                            alt='color'
+                                                            className='rounded-xl'
+                                                        />
+                                                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                                            {item.color}
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full border border-line text-sm">
+                                                {fallbackColor}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
+                                {isClothing && (productMain.sizes ?? []).length > 0 && (
                                 <div className="choose-size mt-5">
                                     <div className="heading flex items-center justify-between">
                                         <div className="text-title">Size: <span className='text-title size'>{activeSize}</span></div>
@@ -716,6 +769,7 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                         ))}
                                     </div>
                                 </div>
+                                )}
                                 <div className="text-title mt-5">Quantity:</div>
                                 <div className="choose-quantity flex items-center lg:justify-between gap-5 gap-y-3 mt-3">
                                     <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
@@ -734,7 +788,7 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                     <div onClick={handleAddToCart} className="button-main w-full text-center bg-white text-black border border-black">Add To Cart</div>
                                 </div>
                                 <div className="button-block mt-5">
-                                    <div className="button-main w-full text-center">Buy It Now</div>
+                                    <div className="button-main w-full text-center" onClick={handleBuyNow}>Buy It Now</div>
                                 </div>
                                 <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
                                     <div className="compare flex items-center gap-3 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleAddToCompare() }}>
@@ -743,12 +797,7 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                         </div>
                                         <span>Compare</span>
                                     </div>
-                                    <div className="share flex items-center gap-3 cursor-pointer">
-                                        <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                                            <Icon.ShareNetwork weight='fill' className='heading6' />
-                                        </div>
-                                        <span>Share Products</span>
-                                    </div>
+                                    <ShareMenu product={productMain} />
                                 </div><div className="more-infor mt-6">
                                     <div className="flex items-center gap-4 flex-wrap">
                                         <div className="flex items-center gap-1">
@@ -763,24 +812,24 @@ const OnSale: React.FC<Props> = ({ data, productId }) => {
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Timer className='body1' />
                                         <div className="text-title">Estimated Delivery:</div>
-                                        <div className="text-secondary">14 January - 18 January</div>
+                                        <div className="text-secondary">{pageSettings.deliveryEstimate}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Eye className='body1' />
-                                        <div className="text-title">38</div>
+                                        <div className="text-title">{pageSettings.viewerCount}</div>
                                         <div className="text-secondary">people viewing this product right now!</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">SKU:</div>
-                                        <div className="text-secondary">53453412</div>
+                                        <div className="text-secondary">{(attributes as any)?.sku || '-'}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Categories:</div>
-                                        <div className="text-secondary">{productMain.category}, {productMain.gender}</div>
+                                        <div className="text-secondary">{productMain.category}{(attributes as any)?.species ? `, ${(attributes as any)?.species}` : ''}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Tag:</div>
-                                        <div className="text-secondary">{productMain.type}</div>
+                                        <div className="text-secondary">{(attributes as any)?.tag || productMain.type || '-'}</div>
                                     </div>
                                 </div>
                                 <div className="list-payment mt-7">

@@ -18,18 +18,23 @@ export interface CreateOrderData {
 
 export const createOrder = async (data: any) => {
     const token = localStorage.getItem('authToken');
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+    };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
     return fetchJson<any>(apiEndpoints.orders, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            ...headers
         },
         body: JSON.stringify(data)
     });
 };
 
 export const getQuote = async (data: { items: any[], delivery_method: string }) => {
-    return fetchJson<any>(`${apiEndpoints.orders}/quote`, {
+    return fetchJson<any>('/quote', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

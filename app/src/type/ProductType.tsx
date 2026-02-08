@@ -7,7 +7,17 @@ interface Variation {
 
 export interface ProductType {
     id: string,
+    internalId?: string,
     category: string,
+    productType?: string,
+    attributes?: Record<string, string>,
+    pageSettings?: {
+        deliveryEstimate: string,
+        viewerCount: number,
+        freeShippingThreshold: number,
+        supportHours: string,
+        returnDays: number
+    },
     type: string,
     name: string,
     gender: string,
@@ -24,6 +34,12 @@ export interface ProductType {
     variation: Variation[],
     thumbImage: Array<string>,
     images: Array<string>,
+    imageMeta?: Array<{
+        url: string;
+        width?: number;
+        height?: number;
+        kind?: string;
+    }>,
     description: string,
     action: string,
     slug: string

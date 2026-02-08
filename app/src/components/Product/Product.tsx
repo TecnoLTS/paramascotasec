@@ -95,14 +95,20 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const thumbImages: string[] =
         Array.isArray((data as any)?.thumbImage) && (data as any)?.thumbImage.length
             ? (data as any).thumbImage
-            : (Array.isArray((data as any)?.images)
-                ? (data as any).images
-                    .map((img: any) => img?.url ?? img)
-                    .filter(Boolean)
-                : []);
+            : [];
+    const fullImages: string[] =
+        Array.isArray((data as any)?.images)
+            ? (data as any).images
+                .map((img: any) => img?.url ?? img)
+                .filter(Boolean)
+            : []
+    const primaryImage = thumbImages[0] || fullImages[0] || '/images/placeholder.jpg'
+    const shouldBypassOptimizer = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
 
     const sizes: string[] = data.sizes ?? []
     const variations = data.variation ?? []
+    const productType = (data.productType ?? '').toLowerCase()
+    const showSizes = productType === 'ropa' && sizes.length > 0
 
     const price = Number(data.price ?? 0)
     const originPrice = Number(data.originPrice ?? 0)
@@ -129,36 +135,37 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                 </div>
                             )}
 
-                            <div className="product-img w-full h-full aspect-[3/4]">
+                            <div className="product-img w-full aspect-[4/5] max-h-[240px] bg-white">
                                 {activeColor ? (
                                     <>
-                                        <Image
-                                            src={variations.find((item: any) => item.color === activeColor)?.image ?? ''}
-                                            width={500}
-                                            height={500}
-                                            alt={data.name}
-                                            priority={true}
-                                            className='w-full h-full object-cover duration-700'
-                                        />
+                                            <Image
+                                                src={variations.find((item: any) => item.color === activeColor)?.image || primaryImage}
+                                                width={400}
+                                                height={520}
+                                                alt={data.name}
+                                                sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
+                                                quality={85}
+                                                unoptimized={shouldBypassOptimizer(variations.find((item: any) => item.color === activeColor)?.image || primaryImage)}
+                                                className='w-full h-full object-contain duration-700'
+                                            />
                                     </>
                                 ) : (
                                     <>
-                                        {thumbImages.map((img: string, index: number) => (
-                                            <Image
-                                                key={index}
-                                                src={img}
-                                                width={500}
-                                                height={500}
-                                                priority={true}
-                                                alt={data.name}
-                                                className='w-full h-full object-cover duration-700'
-                                            />
-                                        ))}
+                                        <Image
+                                            src={primaryImage}
+                                            width={400}
+                                            height={520}
+                                            alt={data.name}
+                                            sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
+                                            quality={85}
+                                            unoptimized={shouldBypassOptimizer(primaryImage)}
+                                            className='w-full h-full object-contain duration-700'
+                                        />
                                     </>
                                 )}
                             </div>
 
-                            {style === 'style-2' || style === 'style-4' ? (
+                            {showSizes && (style === 'style-2' || style === 'style-4') ? (
                                 <div className="list-size-block flex items-center justify-center gap-4 absolute bottom-0 left-0 w-full h-8">
                                     {sizes.map((item: string, index: number) => (
                                         <strong key={index} className="size-item text-xs font-bold uppercase">{item}</strong>
@@ -239,6 +246,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                                     e.stopPropagation()
                                                 }}
                                             >
+                                            {showSizes && (
                                                 <div className="list-size flex items-center justify-center flex-wrap gap-2">
                                                     {sizes.map((item: string, index: number) => (
                                                         <div
@@ -250,11 +258,12 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div
-                                                    className="button-main w-full text-center rounded-full py-3 mt-4"
-                                                    onClick={() => {
-                                                        handleAddToCart()
-                                                        setOpenQuickShop(false)
+                                            )}
+                                            <div
+                                                className="button-main w-full text-center rounded-full py-3 mt-4"
+                                                onClick={() => {
+                                                    handleAddToCart()
+                                                    setOpenQuickShop(false)
                                                     }}
                                                 >
                                                     Agregar al carrito
@@ -388,17 +397,19 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                                 e.stopPropagation()
                                             }}
                                         >
-                                            <div className="list-size flex items-center justify-center flex-wrap gap-2">
-                                                {sizes.map((item: string, index: number) => (
-                                                    <div
-                                                        className={`size-item ${item !== 'freesize' ? 'w-10 h-10' : 'h-10 px-4'} flex items-center justify-center text-button bg-white rounded-full border border-line ${activeSize === item ? 'active' : ''}`}
-                                                        key={index}
-                                                        onClick={() => handleActiveSize(item)}
-                                                    >
-                                                        {item}
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            {showSizes && (
+                                                <div className="list-size flex items-center justify-center flex-wrap gap-2">
+                                                    {sizes.map((item: string, index: number) => (
+                                                        <div
+                                                            className={`size-item ${item !== 'freesize' ? 'w-10 h-10' : 'h-10 px-4'} flex items-center justify-center text-button bg-white rounded-full border border-line ${activeSize === item ? 'active' : ''}`}
+                                                            key={index}
+                                                            onClick={() => handleActiveSize(item)}
+                                                        >
+                                                            {item}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                             <div
                                                 className="button-main w-full text-center rounded-full py-3 mt-4"
                                                 onClick={() => {
@@ -429,7 +440,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                             )}
                                         </div>
 
-                                        {(variations.length > 0 || sizes.length > 0) && (
+                                        {(variations.length > 0 || showSizes) && (
                                             <div className="flex items-center gap-4 flex-wrap mt-5 mb-1">
                                                 {variations.length > 0 && (
                                                     <div className="list-color py-2 flex items-center gap-3 flex-wrap duration-300">
@@ -455,7 +466,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                                         ))}
                                                     </div>
                                                 )}
-                                                {sizes.length > 0 && (
+                                                {showSizes && (
                                                     <div className="list-size flex items-center gap-2 flex-wrap">
                                                         {sizes.map((item: string, index: number) => (
                                                             <div

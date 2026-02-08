@@ -5,7 +5,6 @@ import ModalCart from '@/components/Modal/ModalCart'
 import ModalWishlist from '@/components/Modal/ModalWishlist'
 import ModalSearch from '@/components/Modal/ModalSearch'
 import ModalQuickview from '@/components/Modal/ModalQuickview'
-import ModalCompare from '@/components/Modal/ModalCompare'
 import RouteLoading from '@/components/Other/RouteLoading'
 import CountdownTimeType from '@/type/CountdownType'
 
@@ -29,7 +28,6 @@ const ClientModals = ({ serverTimeLeft }: ClientModalsProps) => {
       <ModalWishlist />
       <ModalSearch />
       <ModalQuickview />
-      <ModalCompare />
     </>
   )
 }

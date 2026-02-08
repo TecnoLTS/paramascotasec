@@ -10,7 +10,6 @@ import { useModalCartContext } from '@/context/ModalCartContext'
 import { useCart } from '@/context/CartContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
-import { fetchProducts } from '@/lib/products'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
@@ -34,8 +33,20 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         const loadSuggested = async () => {
             setLoadingSuggested(true)
             try {
-                const data = await fetchProducts()
-                setSuggested(data.slice(0, 4))
+                const fetchSuggestions = async (path: string) => {
+                    const res = await fetch(path, { cache: 'no-store' })
+                    if (!res.ok) throw new Error(`Status ${res.status}`)
+                    const data = await res.json()
+                    return Array.isArray(data) ? data : (data?.data ?? [])
+                }
+
+                let items: ProductType[] = []
+                try {
+                    items = await fetchSuggestions('/suggestions')
+                } catch {
+                    items = await fetchSuggestions('/api/suggestions')
+                }
+                setSuggested(items.slice(0, 4))
                 setErrorSuggested(null)
             } catch (err: any) {
                 setErrorSuggested(err?.message ?? 'No se pudieron cargar sugerencias')
@@ -66,6 +77,16 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const overlayStyle: React.CSSProperties = isModalOpen
         ? { position: 'fixed', pointerEvents: 'auto' }
         : { position: 'static', pointerEvents: 'none', opacity: 0, visibility: 'hidden' }
+
+    const normalizeImageSrc = (src: string) => {
+        if (!src) return src
+        if (src.startsWith('http://localhost:8080') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+            return src.replace('http://localhost:8080', 'https://api.paramascotasec.com')
+        }
+        return src
+    }
+
+    const shouldUnoptimize = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
 
     // Si se cierra el modal y el foco quedó dentro, lo limpiamos para evitar warnings de aria-hidden
     useEffect(() => {
@@ -103,7 +124,8 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                             )}
                             {suggested.map((product) => {
                                 const firstImage = Array.isArray(product.images) ? product.images[0] : null
-                                const src = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? '/images/product/1.jpg'
+                                const rawSrc = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? '/images/product/1.jpg'
+                                const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
                                         <div className="infor flex items-center gap-5">
@@ -114,6 +136,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                                     height={300}
                                                     alt={product.name}
                                                     className='w-[100px] aspect-square flex-shrink-0 rounded-lg'
+                                                    unoptimized={shouldUnoptimize(src)}
                                                 />
                                             </div>
                                             <div className=''>
@@ -151,14 +174,15 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                  
                         <div className="heading banner mt-3 px-6" />
                         <div className="list-product px-6">
-            {cartState.cartArray.map((product) => (
+                            {cartState.cartArray.map((product) => (
                 <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
                     <div className="infor flex items-center gap-3 w-full">
                         <div className="bg-img w-[100px] aspect-square flex-shrink-0 rounded-lg overflow-hidden">
                             {(() => {
                                 const imgs = Array.isArray(product.images) ? product.images : []
                                 const first = imgs[0]
-                                const src = typeof first === 'string' ? first : (first as any)?.url ?? ''
+                                const rawSrc = typeof first === 'string' ? first : (first as any)?.url ?? ''
+                                const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <Image
                                         src={src || '/images/product/1.jpg'}
@@ -166,6 +190,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                         height={300}
                                         alt={product.name}
                                         className='w-full h-full object-cover'
+                                        unoptimized={shouldUnoptimize(src || '/images/product/1.jpg')}
                                     />
                                 )
                             })()}

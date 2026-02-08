@@ -17,6 +17,7 @@ services:
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
       BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
     working_dir: /app
     command: npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}
     ports:
@@ -44,6 +45,7 @@ services:
       PORT: ${PORT:-3000}
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
     working_dir: /app
     command: npm run dev -- --hostname 0.0.0.0 --port ${PORT:-3000}
     volumes:

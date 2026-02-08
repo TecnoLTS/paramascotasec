@@ -14,6 +14,7 @@ type ProductWithRelations = {
   id: string
   legacyId?: string | null
   category: string
+  productType?: string | null
   name: string
   gender?: string | null
   new: boolean
@@ -35,27 +36,58 @@ type ProductWithRelations = {
   quantityPurchase?: number | null
   sizes?: string[] | null
   type?: string | null
+  attributes?: Record<string, string> | null
 
   // relaciones
   images?: ({ url: string } | string)[]
+  thumbImage?: ({ url: string } | string)[]
+  imageMeta?: { url?: string; kind?: string }[]
   variations?: Variation[]
+}
+
+const normalizeImageUrl = (url: string) => {
+  if (!url) return url
+  if (url.startsWith('/')) return url
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname === 'api.paramascotasec.com') {
+      return url
+    }
+    const path = parsed.pathname
+    if (path.startsWith('/uploads/') || path.startsWith('/images/')) {
+      return path
+    }
+    return url
+  } catch {
+    return url
+  }
 }
 
 const mapVariation = (variation: Variation) => ({
   color: variation.color,
   colorCode: variation.colorCode ?? '',
-  colorImage: variation.colorImage ?? '',
-  image: variation.image ?? '',
+  colorImage: variation.colorImage ? normalizeImageUrl(variation.colorImage) : '',
+  image: variation.image ? normalizeImageUrl(variation.image) : '',
 })
 
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const images =
-    product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean) ?? []
+    product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean).map(normalizeImageUrl) ?? []
+  const thumbImages =
+    product.thumbImage?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean).map(normalizeImageUrl) ?? []
+  const thumbFromMeta =
+    product.imageMeta?.filter((item) => item?.kind === 'thumb' && item.url).map((item) => normalizeImageUrl(item.url as string)) ?? []
+  const galleryFromMeta =
+    product.imageMeta?.filter((item) => item?.kind === 'gallery' && item.url).map((item) => normalizeImageUrl(item.url as string)) ?? []
+  const resolvedThumbs = thumbImages.length > 0 ? thumbImages : (thumbFromMeta.length > 0 ? thumbFromMeta : images)
+  const resolvedGallery = images.length > 0 ? images : (galleryFromMeta.length > 0 ? galleryFromMeta : images)
   const variations = product.variations?.map(mapVariation) ?? []
 
   return {
     id: product.legacyId ?? product.id,
+    internalId: product.id,
     category: product.category,
+    productType: product.productType ?? '',
     type: product.type ?? '',
     name: product.name,
     gender: product.gender ?? '',
@@ -72,9 +104,10 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     quantity: product.quantity,
     quantityPurchase: Number(product.quantityPurchase ?? 1),
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
+    attributes: product.attributes ?? {},
     variation: variations,
-    thumbImage: images,
-    images,
+    thumbImage: resolvedThumbs,
+    images: resolvedGallery,
     description: product.description,
     action: product.action ?? '',
     slug: product.slug,

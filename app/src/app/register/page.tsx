@@ -16,6 +16,9 @@ const Register = () => {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+    const [documentType, setDocumentType] = useState('')
+    const [documentNumber, setDocumentNumber] = useState('')
+    const [businessName, setBusinessName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -32,11 +35,15 @@ const Register = () => {
             setError('Las contraseñas no coinciden')
             return
         }
+        if (!documentType || !documentNumber) {
+            setError('Ingresa el tipo y número de identificación')
+            return
+        }
 
         setLoading(true)
 
         try {
-            await register({ name, email, password })
+            await register({ name, email, password, documentType, documentNumber, businessName })
             // Redirigir al login tras registro exitoso
             router.push('/login?registered=true')
         } catch (err: any) {
@@ -80,6 +87,44 @@ const Register = () => {
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div className="document-type mt-5">
+                                    <div className="select-block">
+                                        <select
+                                            className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                            id="documentType"
+                                            value={documentType || 'default'}
+                                            onChange={(e) => setDocumentType(e.target.value)}
+                                            required
+                                        >
+                                            <option value="default" disabled>Tipo de identificación *</option>
+                                            <option value="Cédula">Cédula</option>
+                                            <option value="RUC">RUC</option>
+                                            <option value="Pasaporte">Pasaporte</option>
+                                            <option value="Otro">Otro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="document-number mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="documentNumber"
+                                        type="text"
+                                        placeholder="Número de identificación *"
+                                        required
+                                        value={documentNumber}
+                                        onChange={(e) => setDocumentNumber(e.target.value)}
+                                    />
+                                </div>
+                                <div className="business-name mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="businessName"
+                                        type="text"
+                                        placeholder="Razón social (opcional)"
+                                        value={businessName}
+                                        onChange={(e) => setBusinessName(e.target.value)}
                                     />
                                 </div>
                                 <div className="pass mt-5">

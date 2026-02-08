@@ -8,10 +8,12 @@ import { fetchJson } from '@/lib/apiClient'
 export { apiEndpoints } from './endpoints'
 export { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from './products'
 export { createOrder, getQuote } from './orders'
+export { fetchRecentOrdersReport } from './reports'
+export { getProductPageSettings, updateProductPageSettings } from './settings'
 export { fetchJson, requestApi } from '@/lib/apiClient'
 
 // Endpoints ligeros disponibles para chequeo rápido de salud/demo.
-export type HealthResponse = { ok: boolean; message: string; timestamp: string }
+export type HealthResponse = { estado: string; fecha: string; base_de_datos: string }
 
 export const healthApi = () => fetchJson<HealthResponse>(apiEndpoints.health)
 export const ejemploApi = () => fetchJson<HealthResponse>(apiEndpoints.ejemplo)

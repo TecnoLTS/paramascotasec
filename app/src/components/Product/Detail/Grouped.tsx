@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ProductType } from '@/type/ProductType'
 import Product from '../Product'
 import Rate from '@/components/Other/Rate'
@@ -17,6 +18,7 @@ import { useWishlist } from '@/context/WishlistContext'
 import { useModalWishlistContext } from '@/context/ModalWishlistContext'
 import { useCompare } from '@/context/CompareContext'
 import { useModalCompareContext } from '@/context/ModalCompareContext'
+import ShareMenu from '@/components/Product/ShareMenu'
 
 SwiperCore.use([Navigation, Thumbs]);
 
@@ -41,9 +43,18 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
     const { openModalWishlist } = useModalWishlistContext()
     const { addToCompare, removeFromCompare, compareState } = useCompare();
     const { openModalCompare } = useModalCompareContext()
+    const router = useRouter()
     let productMain = data.find(product => product.id === productId) as ProductType
     if (productMain === undefined) {
         productMain = data[0]
+    }
+    const attributes = productMain.attributes ?? {}
+    const pageSettings = (productMain as any).pageSettings ?? {
+        deliveryEstimate: '14 de enero - 18 de enero',
+        viewerCount: 38,
+        freeShippingThreshold: 75,
+        supportHours: '8:30 AM a 10:00 PM',
+        returnDays: 100
     }
 
     const percentSale = Math.floor(100 - ((productMain.price / productMain.originPrice) * 100))
@@ -83,6 +94,21 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
         openModalCart()
     };
 
+    const handleBuyNow = () => {
+        if (!cartState.cartArray
+            .find(item => item.id === productMain.id || item.id === data[Number(productId)].id || item.id === data[Number(productId) + 1].id || item.id === data[Number(productId) + 2].id)) {
+            addToCart(productMain);
+            addToCart(data[Number(productId)]);
+            addToCart(data[Number(productId) + 1]);
+            addToCart(data[Number(productId) + 2]);
+            updateCart(productMain.id, quantity.id, activeSize, activeColor)
+            updateCart(data[Number(productId)].id, quantity.id, activeSize, activeColor)
+            updateCart(data[Number(productId) + 1].id, quantity.id, activeSize, activeColor)
+            updateCart(data[Number(productId) + 2].id, quantity.id, activeSize, activeColor)
+        }
+        router.push('/cart')
+    };
+
     const handleAddToWishlist = () => {
         // if product existed in wishlit, remove from wishlist and set state to false
         if (wishlistState.wishlistArray.some(item => item.id === productMain.id)) {
@@ -113,6 +139,7 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
     const handleActiveTab = (tab: string) => {
         setActiveTab(prevTab => prevTab === tab ? undefined : tab)
     }
+
 
     return (
         <>
@@ -312,7 +339,7 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
                             <div className="list-action mt-6">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div onClick={handleAddToCart} className="button-main w-full text-center bg-white text-black border border-black">Add To Cart</div>
-                                    <div className="button-main w-full text-center">Buy It Now</div>
+                                    <div className="button-main w-full text-center" onClick={handleBuyNow}>Buy It Now</div>
                                 </div>
                                 <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
                                     <div className="compare flex items-center gap-3 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleAddToCompare() }}>
@@ -321,12 +348,7 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
                                         </div>
                                         <span>Compare</span>
                                     </div>
-                                    <div className="share flex items-center gap-3 cursor-pointer">
-                                        <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                                            <Icon.ShareNetwork weight='fill' className='heading6' />
-                                        </div>
-                                        <span>Share Products</span>
-                                    </div>
+                                    <ShareMenu product={productMain} />
                                 </div><div className="more-infor mt-6">
                                     <div className="flex items-center gap-4 flex-wrap">
                                         <div className="flex items-center gap-1">
@@ -341,24 +363,24 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Timer className='body1' />
                                         <div className="text-title">Estimated Delivery:</div>
-                                        <div className="text-secondary">14 January - 18 January</div>
+                                        <div className="text-secondary">{pageSettings.deliveryEstimate}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <Icon.Eye className='body1' />
-                                        <div className="text-title">38</div>
+                                        <div className="text-title">{pageSettings.viewerCount}</div>
                                         <div className="text-secondary">people viewing this product right now!</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">SKU:</div>
-                                        <div className="text-secondary">53453412</div>
+                                        <div className="text-secondary">{(attributes as any)?.sku || '-'}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Categories:</div>
-                                        <div className="text-secondary">{productMain.category}, {productMain.gender}</div>
+                                        <div className="text-secondary">{productMain.category}{(attributes as any)?.species ? `, ${(attributes as any)?.species}` : ''}</div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-3">
                                         <div className="text-title">Tag:</div>
-                                        <div className="text-secondary">{productMain.type}</div>
+                                        <div className="text-secondary">{(attributes as any)?.tag || productMain.type || '-'}</div>
                                     </div>
                                 </div>
                                 <div className="list-payment mt-7">
@@ -429,21 +451,21 @@ const Grouped: React.FC<Props> = ({ data, productId }) => {
                                     <div className="icon-delivery-truck text-4xl"></div>
                                     <div>
                                         <div className="text-title">Free shipping</div>
-                                        <div className="caption1 text-secondary mt-1">Free shipping on orders over $75.</div>
+                                        <div className="caption1 text-secondary mt-1">Free shipping on orders over ${pageSettings.freeShippingThreshold}.</div>
                                     </div>
                                 </div>
                                 <div className="item flex items-center gap-3 mt-4">
                                     <div className="icon-phone-call text-4xl"></div>
                                     <div>
                                         <div className="text-title">Support everyday</div>
-                                        <div className="caption1 text-secondary mt-1">Support from 8:30 AM to 10:00 PM everyday</div>
+                                        <div className="caption1 text-secondary mt-1">Support from {pageSettings.supportHours} everyday</div>
                                     </div>
                                 </div>
                                 <div className="item flex items-center gap-3 mt-4">
                                     <div className="icon-return text-4xl"></div>
                                     <div>
-                                        <div className="text-title">100 Day Returns</div>
-                                        <div className="caption1 text-secondary mt-1">Not impressed? Get a refund. You have 100 days to break our hearts.</div>
+                                        <div className="text-title">{pageSettings.returnDays} Day Returns</div>
+                                        <div className="caption1 text-secondary mt-1">Not impressed? Get a refund. You have {pageSettings.returnDays} days to break our hearts.</div>
                                     </div>
                                 </div>
                             </div>

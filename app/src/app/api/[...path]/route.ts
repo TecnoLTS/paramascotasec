@@ -16,6 +16,25 @@ const forward = async (req: NextRequest) => {
   headers.delete('host')
   headers.delete('content-length')
 
+  const pathname = req.nextUrl.pathname.replace(/^\/api/, '')
+  const hasAuth = headers.has('authorization')
+  const serviceToken = process.env.BACKEND_SERVICE_TOKEN
+  if (!hasAuth && serviceToken) {
+    if (req.method === 'GET') {
+      if (
+        pathname === '/products' ||
+        pathname.startsWith('/products/') ||
+        pathname === '/settings/shipping' ||
+        pathname === '/health'
+      ) {
+        headers.set('Authorization', `Bearer ${serviceToken}`)
+      }
+    }
+    if (req.method === 'POST' && pathname === '/orders/quote') {
+      headers.set('Authorization', `Bearer ${serviceToken}`)
+    }
+  }
+
   const init: RequestInit = {
     method: req.method,
     headers,

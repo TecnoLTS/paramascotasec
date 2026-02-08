@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import MenuOne from '@/components/Header/Menu/MenuPet'
@@ -9,6 +9,8 @@ import { motion } from 'framer-motion'
 
 import { useRouter } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
+import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings } from '@/lib/api/settings'
+import { mapProductsToDto } from '@/lib/productMapper'
 
 interface DashboardStats {
     totalSales: {
@@ -31,7 +33,7 @@ interface DashboardStats {
     tax?: { rate: number; multiplier: number };
     businessMetrics?: {
         averageOrderValue: number;
-        profitStats: { revenue: number, cost: number, profit: number, margin: number };
+        profitStats: { revenue: number, cost: number, shipping_cost?: number, profit: number, margin: number, roi?: number };
         inventoryValue: { market_value: number, cost_value: number, total_items: number };
         ordersByStatus: Array<{ status: string, count: number }>;
         recentOrders: Array<{ id: string, user_name: string, total: number, status: string, created_at: string }>;
@@ -60,6 +62,7 @@ interface Order {
     total: number;
     status: string;
     created_at: string;
+    order_notes?: string | null;
     items?: Array<{
         order_id: string;
         product_id: string;
@@ -86,7 +89,18 @@ const MyAccount = () => {
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
 
     // Address management
-    const emptyAddress = { firstName: '', lastName: '', company: '', country: '', street: '', city: '', state: '', zip: '', phone: '', email: '' }
+    const emptyAddress = {
+        firstName: '',
+        lastName: '',
+        company: '',
+        country: '',
+        street: '',
+        city: '',
+        state: '',
+        zip: '',
+        phone: '',
+        email: ''
+    }
     const [savedAddresses, setSavedAddresses] = useState<Array<{
         id: number,
         title: string,
@@ -106,7 +120,10 @@ const MyAccount = () => {
         lastName: '',
         phone: '',
         gender: '',
-        birth: ''
+        birth: '',
+        documentType: '',
+        documentNumber: '',
+        businessName: ''
     })
 
     // Admin Data State
@@ -122,41 +139,273 @@ const MyAccount = () => {
     const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
     const [shippingLoading, setShippingLoading] = useState(false)
     const [shippingSaving, setShippingSaving] = useState(false)
+    const [marginSettings, setMarginSettings] = useState({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 })
+    const [calcSettings, setCalcSettings] = useState({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 })
+    const [pricingRules, setPricingRules] = useState({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 })
+    const [productPageSettings, setProductPageSettings] = useState({
+        deliveryEstimate: '14 de enero - 18 de enero',
+        viewerCount: 38,
+        freeShippingThreshold: 75,
+        supportHours: '8:30 AM a 10:00 PM',
+        returnDays: 100
+    })
 
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<any | null>(null)
     const [productForm, setProductForm] = useState({
-        id: '', name: '', price: '', cost: '', quantity: '', category: 'General', brand: 'Generico', description: '', image: ''
+        id: '',
+        name: '',
+        price: '',
+        pvp: '',
+        cost: '',
+        quantity: '',
+        category: 'General',
+        brand: 'Generico',
+        description: '',
+        productType: '',
+        attributes: {},
+        thumbImages: [] as Array<{ url: string; width: string; height: string }>,
+        galleryImages: [] as Array<{ url: string; width: string; height: string }>
     })
+    const [imageUploading, setImageUploading] = useState<Record<string, boolean>>({})
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
+    const productFormRef = useRef<HTMLFormElement | null>(null)
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
     const [userOrders, setUserOrders] = useState<Order[]>([])
     const [userOrdersLoading, setUserOrdersLoading] = useState(false)
 
+    const normalizeAdminProducts = (items: any[]) => {
+        try {
+            return mapProductsToDto(items as any)
+        } catch {
+            return items
+        }
+    }
+
+    const getEmptyAttributes = (type: string) => {
+        if (type === 'comida') {
+            return { size: '', weight: '', flavor: '', age: '', species: '', ingredients: '', sku: '', tag: '' }
+        }
+        if (type === 'ropa') {
+            return { size: '', material: '', color: '', gender: '', species: '', sku: '', tag: '' }
+        }
+        if (type === 'accesorios') {
+            return { material: '', size: '', usage: '', species: '', sku: '', tag: '' }
+        }
+        return {}
+    }
+
+    const normalizeAttributes = (type: string, attrs: any) => {
+        const base = getEmptyAttributes(type)
+        const merged = { ...base, ...(attrs || {}) }
+        const cleaned: Record<string, string> = {}
+        Object.keys(merged).forEach((key) => {
+            const value = (merged as any)[key]
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                cleaned[key] = String(value).trim()
+            }
+        })
+        return cleaned
+    }
+
+    const setProductAttribute = (key: string, value: string) => {
+        setProductForm((prev: any) => ({
+            ...prev,
+            attributes: {
+                ...(prev.attributes || {}),
+                [key]: value
+            }
+        }))
+    }
+    const createImageEntry = () => ({ url: '', width: '', height: '' })
+    const addImageEntry = (kind: 'thumb' | 'gallery') => {
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setProductForm((prev: any) => ({
+            ...prev,
+            [key]: [...(prev[key] || []), createImageEntry()]
+        }))
+    }
+    const updateImageEntry = (kind: 'thumb' | 'gallery', index: number, field: 'url' | 'width' | 'height', value: string) => {
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setProductForm((prev: any) => {
+            const next = [...(prev[key] || [])]
+            next[index] = { ...next[index], [field]: value }
+            return { ...prev, [key]: next }
+        })
+    }
+    const removeImageEntry = (kind: 'thumb' | 'gallery', index: number) => {
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setProductForm((prev: any) => {
+            const next = [...(prev[key] || [])]
+            next.splice(index, 1)
+            return { ...prev, [key]: next }
+        })
+    }
+    const requiredImageSizes = {
+        thumb: { width: 400, height: 520 },
+        gallery: { width: 1200, height: 1400 }
+    }
+    const applyDefaultSizes = (entries: Array<{ url: string; width?: string | number; height?: string | number }>, kind: 'thumb' | 'gallery') => {
+        const required = requiredImageSizes[kind]
+        return entries.map((entry) => ({
+            ...entry,
+            width: entry.width && Number(entry.width) > 0 ? entry.width : required.width,
+            height: entry.height && Number(entry.height) > 0 ? entry.height : required.height
+        }))
+    }
+    const getImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
+        new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file)
+            const img = document.createElement('img')
+            img.onload = () => {
+                const width = img.naturalWidth
+                const height = img.naturalHeight
+                URL.revokeObjectURL(url)
+                resolve({ width, height })
+            }
+            img.onerror = () => {
+                URL.revokeObjectURL(url)
+                reject(new Error('No se pudo leer la imagen.'))
+            }
+            img.src = url
+        })
+    const resizeImage = (file: File, targetWidth: number, targetHeight: number): Promise<File> =>
+        new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file)
+            const img = document.createElement('img')
+            img.onload = () => {
+                const canvas = document.createElement('canvas')
+                canvas.width = targetWidth
+                canvas.height = targetHeight
+                const ctx = canvas.getContext('2d')
+                if (!ctx) {
+                    URL.revokeObjectURL(url)
+                    reject(new Error('No se pudo procesar la imagen.'))
+                    return
+                }
+                ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
+                canvas.toBlob((blob) => {
+                    URL.revokeObjectURL(url)
+                    if (!blob) {
+                        reject(new Error('No se pudo recortar la imagen.'))
+                        return
+                    }
+                    const ext = file.name.split('.').pop() || 'jpg'
+                    const resizedFile = new File([blob], `recorte-${Date.now()}.${ext}`, { type: blob.type })
+                    resolve(resizedFile)
+                }, file.type || 'image/jpeg', 0.92)
+            }
+            img.onerror = () => {
+                URL.revokeObjectURL(url)
+                reject(new Error('No se pudo procesar la imagen.'))
+            }
+            img.src = url
+        })
+    const uploadImage = async (file: File, kind: 'thumb' | 'gallery') => {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('kind', kind)
+
+        const url =
+            typeof window !== 'undefined'
+                ? `${window.location.origin}/uploads-api/images`
+                : '/uploads-api/images'
+
+        const res = await requestApi<{ url: string; width?: number; height?: number; kind: string }>(url, {
+            method: 'POST',
+            body: formData
+        })
+        return res.body
+    }
+    const handleImageFileChange = async (kind: 'thumb' | 'gallery', index: number, file?: File | null) => {
+        if (!file) return
+        const key = `${kind}-${index}`
+        setImageUploading((prev) => ({ ...prev, [key]: true }))
+        try {
+            const { width, height } = await getImageDimensions(file)
+            const required = requiredImageSizes[kind]
+            let fileToUpload = file
+            if (width !== required.width || height !== required.height) {
+                showNotification(`La imagen no cumple el tamaño (${required.width}x${required.height}px). Se recortará automáticamente.`, 'error')
+                fileToUpload = await resizeImage(file, required.width, required.height)
+            }
+            const uploaded = await uploadImage(fileToUpload, kind)
+            updateImageEntry(kind, index, 'url', uploaded.url)
+            updateImageEntry(kind, index, 'width', String((uploaded as any).width || required.width))
+            updateImageEntry(kind, index, 'height', String((uploaded as any).height || required.height))
+            showNotification('Imagen subida correctamente.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo subir la imagen.', 'error')
+        } finally {
+            setImageUploading((prev) => ({ ...prev, [key]: false }))
+        }
+    }
+
     // Handlers
     const handleNewProduct = () => {
         setEditingProduct(null)
-        setProductForm({ id: '', name: '', price: '', cost: '', quantity: '', category: 'General', brand: 'Generico', description: '', image: '' })
+        setProductForm({
+            id: '',
+            name: '',
+            price: '',
+            pvp: '',
+            cost: '',
+            quantity: '',
+            category: 'General',
+            brand: 'Generico',
+            description: '',
+            productType: '',
+            attributes: {},
+            thumbImages: [createImageEntry()],
+            galleryImages: [createImageEntry()]
+        })
         setIsProductModalOpen(true)
     }
 
     const handleEditProduct = (product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
         const multiplier = 1 + rate / 100
-        const basePrice = multiplier > 0 ? Number(product.price ?? 0) / multiplier : Number(product.price ?? 0)
+        const pvpPrice = Number(product.price ?? 0)
+        const basePrice = multiplier > 0 ? pvpPrice / multiplier : pvpPrice
+        const productType = (product.productType || '').toLowerCase()
+        const attributes = normalizeAttributes(productType, product.attributes)
+        const imageMeta = Array.isArray(product.imageMeta) ? product.imageMeta : []
+        const thumbMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'thumb')
+        const galleryMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'gallery')
+        const thumbImages = thumbMeta.length > 0
+            ? thumbMeta.map((img: any) => ({
+                url: img.url || '',
+                width: img.width ? String(img.width) : '',
+                height: img.height ? String(img.height) : ''
+            }))
+            : (Array.isArray(product.thumbImage) ? product.thumbImage : []).map((url: string) => ({ url, width: '', height: '' }))
+        const galleryImages = galleryMeta.length > 0
+            ? galleryMeta.map((img: any) => ({
+                url: img.url || '',
+                width: img.width ? String(img.width) : '',
+                height: img.height ? String(img.height) : ''
+            }))
+            : (Array.isArray(product.images) ? product.images : []).map((url: string) => ({ url, width: '', height: '' }))
+        const filledThumbs = applyDefaultSizes(thumbImages, 'thumb')
+        const filledGallery = applyDefaultSizes(galleryImages, 'gallery')
         setEditingProduct(product)
         setProductForm({
-            id: product.id,
+            id: product.internalId || product.id,
             name: product.name,
             price: Number.isFinite(basePrice) ? basePrice.toFixed(2) : product.price,
+            pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : product.price,
             cost: product.business?.cost || product.cost || 0,
             quantity: product.quantity,
             category: product.category || 'General',
             brand: product.brand || 'Generico',
             description: product.description || '',
-            image: product.images && product.images.length > 0 ? product.images[0] : ''
+            productType: productType,
+            attributes,
+            thumbImages: filledThumbs.length > 0 ? filledThumbs : [createImageEntry()],
+            galleryImages: filledGallery.length > 0 ? filledGallery : [createImageEntry()]
         })
         setIsProductModalOpen(true)
     }
@@ -173,7 +422,7 @@ const MyAccount = () => {
             showNotification('Producto eliminado correctamente');
             // Refresh list
             const res = await requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } });
-            setAdminProductsList(res.body);
+            setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
             showNotification('Error al eliminar producto', 'error');
@@ -183,16 +432,85 @@ const MyAccount = () => {
     const handleSaveProduct = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            if (Object.values(imageUploading).some(Boolean)) {
+                showNotification('Espera a que terminen de subir las imágenes.', 'error')
+                return
+            }
             const token = localStorage.getItem('authToken');
+            if (!productForm.productType) {
+                showNotification('Selecciona el tipo de producto.', 'error')
+                return
+            }
+            const normalizedAttributes = normalizeAttributes(productForm.productType, productForm.attributes)
+            if (!normalizedAttributes.sku) {
+                showNotification('El SKU es obligatorio.', 'error')
+                return
+            }
+            if (!normalizedAttributes.tag) {
+                showNotification('La etiqueta es obligatoria.', 'error')
+                return
+            }
+            if (!normalizedAttributes.species) {
+                showNotification('La especie/mascota es obligatoria.', 'error')
+                return
+            }
+            if (!productForm.description || !productForm.description.trim()) {
+                showNotification('La descripción es obligatoria.', 'error')
+                return
+            }
+            const thumbEntries = applyDefaultSizes(
+                (productForm.thumbImages || []).filter((img: any) => img.url && img.url.trim()),
+                'thumb'
+            )
+            const galleryEntries = applyDefaultSizes(
+                (productForm.galleryImages || []).filter((img: any) => img.url && img.url.trim()),
+                'gallery'
+            )
+            if (thumbEntries.length === 0) {
+                showNotification('Agrega al menos una miniatura para el listado.', 'error')
+                return
+            }
+            if (galleryEntries.length === 0) {
+                showNotification('Agrega al menos una imagen grande para la ficha del producto.', 'error')
+                return
+            }
+            const validateSizes = (entries: any[], label: string) => {
+                for (const entry of entries) {
+                    if (!entry.width || !entry.height) {
+                        showNotification(`Completa el ancho y alto de ${label}.`, 'error')
+                        return false
+                    }
+                    if (Number(entry.width) <= 0 || Number(entry.height) <= 0) {
+                        showNotification(`El tamaño de ${label} debe ser mayor a 0.`, 'error')
+                        return false
+                    }
+                }
+                return true
+            }
+            if (!validateSizes(thumbEntries, 'las miniaturas')) return
+            if (!validateSizes(galleryEntries, 'las imágenes grandes')) return
             const data = {
                 name: productForm.name,
                 price: parseFloat(productForm.price),
                 cost: parseFloat(productForm.cost),
                 quantity: parseInt(productForm.quantity),
                 category: productForm.category,
+                productType: productForm.productType,
+                attributes: normalizedAttributes,
                 brand: productForm.brand,
                 description: productForm.description,
-                images: productForm.image ? [productForm.image] : []
+                images: galleryEntries.map((img: any) => ({
+                    url: img.url.trim(),
+                    width: Number(img.width),
+                    height: Number(img.height),
+                    kind: 'gallery'
+                })),
+                thumbImages: thumbEntries.map((img: any) => ({
+                    url: img.url.trim(),
+                    width: Number(img.width),
+                    height: Number(img.height),
+                    kind: 'thumb'
+                }))
             };
 
             if (editingProduct) {
@@ -219,7 +537,7 @@ const MyAccount = () => {
             setIsProductModalOpen(false);
             // Refresh list
             const res = await requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } });
-            setAdminProductsList(res.body);
+            setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
             showNotification('Error al guardar producto', 'error');
@@ -245,7 +563,7 @@ const MyAccount = () => {
             showNotification(`Precio optimizado a $${newPrice}`);
             // Refresh list
             const res = await requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } });
-            setAdminProductsList(res.body);
+            setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
             showNotification('Error al optimizar precio', 'error');
@@ -505,7 +823,10 @@ const MyAccount = () => {
                     lastName: res.body.profile.lastName || '',
                     phone: res.body.profile.phone || '',
                     gender: res.body.profile.gender || '',
-                    birth: res.body.profile.birth || ''
+                    birth: res.body.profile.birth || '',
+                    documentType: res.body.profile.documentType || '',
+                    documentNumber: res.body.profile.documentNumber || '',
+                    businessName: res.body.profile.businessName || ''
                 })
             }
 
@@ -575,6 +896,25 @@ const MyAccount = () => {
         }
     }
 
+    const loadPricingSettings = async () => {
+        if (!user || user.role !== 'admin') return
+        try {
+            const [margins, calcs, rules] = await Promise.all([
+                getPricingMargins(),
+                getPricingCalc(),
+                getPricingRules()
+            ])
+            setMarginSettings(normalizeMarginSettings(margins))
+            setCalcSettings(normalizeCalcSettings(calcs))
+            setPricingRules(normalizePricingRules(rules))
+        } catch (error) {
+            console.error(error)
+            setMarginSettings(normalizeMarginSettings({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 }))
+            setCalcSettings(normalizeCalcSettings({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 }))
+            setPricingRules(normalizePricingRules({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 }))
+        }
+    }
+
     const handleSaveVat = async () => {
         const token = localStorage.getItem('authToken')
         if (!token) return
@@ -640,6 +980,42 @@ const MyAccount = () => {
         return Number.isFinite(parsed) ? parsed : 0
     }
 
+    const toNumber = (value: any, fallback = 0, min = 0, max?: number) => {
+        const parsed = Number(value)
+        if (!Number.isFinite(parsed)) return fallback
+        const clamped = Math.max(min, parsed)
+        if (typeof max === 'number') return Math.min(clamped, max)
+        return clamped
+    }
+
+    const normalizeMarginSettings = (input: typeof marginSettings) => {
+        let minMargin = toNumber(input.minMargin, 15)
+        let baseMargin = toNumber(input.baseMargin, 30)
+        let targetMargin = toNumber(input.targetMargin, 35)
+        const promoBuffer = toNumber(input.promoBuffer, 5)
+        if (baseMargin < minMargin) baseMargin = minMargin
+        if (targetMargin < baseMargin) targetMargin = baseMargin
+        return { baseMargin, minMargin, targetMargin, promoBuffer }
+    }
+
+    const normalizeCalcSettings = (input: typeof calcSettings) => {
+        const allowed = new Set(['cost_plus', 'target_margin', 'competitive'])
+        const strategy = allowed.has(input.strategy) ? input.strategy : 'cost_plus'
+        return {
+            rounding: toNumber(input.rounding, 0.05),
+            strategy,
+            includeVatInPvp: Boolean(input.includeVatInPvp),
+            shippingBuffer: toNumber(input.shippingBuffer, 0)
+        }
+    }
+
+    const normalizePricingRules = (input: typeof pricingRules) => ({
+        bulkThreshold: Math.round(toNumber(input.bulkThreshold, 10, 1)),
+        bulkDiscount: toNumber(input.bulkDiscount, 5, 0, 90),
+        clearanceThreshold: Math.round(toNumber(input.clearanceThreshold, 25, 1)),
+        clearanceDiscount: toNumber(input.clearanceDiscount, 15, 0, 90)
+    })
+
     const getStatusBadge = (status?: string) => {
         const normalized = normalizeStatus(status)
         if (['processing', 'in_process', 'in-process'].includes(normalized)) {
@@ -680,9 +1056,9 @@ const MyAccount = () => {
                 .catch(handleError)
             loadVatRate()
             loadShippingRates()
-        } else if (activeTab === 'products' || activeTab === 'prices') {
+        } else if (activeTab === 'products' || activeTab === 'prices' || activeTab === 'taxes') {
             requestApi<any[]>('/api/products', { headers })
-                .then(res => setAdminProductsList(res.body))
+                .then(res => setAdminProductsList(normalizeAdminProducts(res.body)))
                 .catch(handleError)
             requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
                 .then(res => setDashboardStats(res.body))
@@ -736,6 +1112,23 @@ const MyAccount = () => {
     }, [router])
 
     React.useEffect(() => {
+        if (!user || user.role !== 'admin') return
+        loadPricingSettings()
+        getProductPageSettings()
+            .then((settings) => setProductPageSettings(settings))
+            .catch((err) => {
+                console.error(err)
+                setProductPageSettings({
+                    deliveryEstimate: '14 de enero - 18 de enero',
+                    viewerCount: 38,
+                    freeShippingThreshold: 75,
+                    supportHours: '8:30 AM a 10:00 PM',
+                    returnDays: 100
+                })
+            })
+    }, [user])
+
+    React.useEffect(() => {
         const token = localStorage.getItem('authToken')
         if (!token || !user || user.role === 'admin') return
 
@@ -752,7 +1145,10 @@ const MyAccount = () => {
                     lastName: apiProfile.lastName || rest.join(' ') || '',
                     phone: apiProfile.phone || '',
                     gender: apiProfile.gender || '',
-                    birth: apiProfile.birth || ''
+                    birth: apiProfile.birth || '',
+                    documentType: apiProfile.documentType || '',
+                    documentNumber: apiProfile.documentNumber || '',
+                    businessName: apiProfile.businessName || ''
                 })
             })
             .catch(err => {
@@ -805,8 +1201,36 @@ const MyAccount = () => {
     const vatExampleTotal = (100 * vatDisplayMultiplier).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const vatRateValue = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
     const vatMultiplier = 1 + vatRateValue / 100
-    const productPvpPrice = Number(productForm.price || 0) * vatMultiplier
+    const productBasePrice = Number(productForm.price || 0)
+    const productCost = Number(productForm.cost || 0)
+    const productPvpPrice = Number(productForm.pvp || 0) || (productBasePrice * vatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productGrossProfit = Math.max(productBasePrice - productCost, 0)
+    const productGrossMargin = productBasePrice > 0 ? (productGrossProfit / productBasePrice) * 100 : 0
+    const productMarkup = productCost > 0 ? (productGrossProfit / productCost) * 100 : 0
+    const productProfitLabel = productGrossProfit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+    const handleBasePriceChange = (value: string) => {
+        const baseValue = Number(value || 0)
+        const pvpValue = vatMultiplier > 0 ? (baseValue * vatMultiplier) : baseValue
+        setProductForm((prev) => ({
+            ...prev,
+            price: value,
+            pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : ''
+        }))
+    }
+
+    const handlePvpPriceChange = (value: string) => {
+        const pvpValue = Number(value || 0)
+        const baseValue = vatMultiplier > 0 ? (pvpValue / vatMultiplier) : pvpValue
+        setProductForm((prev) => ({
+            ...prev,
+            pvp: value,
+            price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : ''
+        }))
+    }
 
     const updateAddressData = (type: 'billing' | 'shipping', field: string, value: string) => {
         const newAddresses = [...savedAddresses]
@@ -821,13 +1245,13 @@ const MyAccount = () => {
         setSavedAddresses(newAddresses)
     }
 
-    const handleBillingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleBillingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
         const field = id.replace('billing', '').charAt(0).toLowerCase() + id.replace('billing', '').slice(1);
         updateAddressData('billing', field, value)
     }
 
-    const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
         const field = id.replace('shipping', '').charAt(0).toLowerCase() + id.replace('shipping', '').slice(1);
         updateAddressData('shipping', field, value)
@@ -1230,14 +1654,45 @@ const MyAccount = () => {
 
             {message && (
                 <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`fixed top-5 right-5 z-[100] p-4 rounded-lg shadow-xl border ${message.type === 'success' ? 'bg-success/10 border-success text-success' : 'bg-red/10 border-red text-red'}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 px-4"
                 >
-                    <div className="flex items-center gap-3">
-                        <Icon.CheckCircle size={24} />
-                        <span className="font-semibold">{message.text}</span>
-                    </div>
+                    <motion.div
+                        initial={{ scale: 0.95, y: 10 }}
+                        animate={{ scale: 1, y: 0 }}
+                        className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${message.type === 'success' ? 'bg-white border-success text-success' : 'bg-white border-red text-red'}`}
+                    >
+                        <div className="flex items-start gap-3">
+                            {message.type === 'success' ? (
+                                <Icon.CheckCircle size={24} weight="fill" />
+                            ) : (
+                                <Icon.Warning size={24} weight="fill" />
+                            )}
+                            <div className="flex-1">
+                                <div className="text-base font-semibold">
+                                    {message.type === 'success' ? 'Listo' : 'Atención'}
+                                </div>
+                                <div className="mt-1 text-sm text-[#111827]">{message.text}</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMessage(null)}
+                                className="text-[#6b7280] hover:text-[#111827]"
+                            >
+                                <Icon.X size={18} />
+                            </button>
+                        </div>
+                        <div className="mt-5 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setMessage(null)}
+                                className="px-5 py-2 rounded-full border border-line text-sm font-semibold hover:bg-surface"
+                            >
+                                Entendido
+                            </button>
+                        </div>
+                    </motion.div>
                 </motion.div>
             )}
 
@@ -1253,6 +1708,8 @@ const MyAccount = () => {
                                             width={300}
                                             height={300}
                                             alt='Foto de perfil'
+                                            priority
+                                            loading="eager"
                                             className='md:w-[140px] w-[120px] md:h-[140px] h-[120px] rounded-full'
                                         />
                                     </div>
@@ -1273,6 +1730,26 @@ const MyAccount = () => {
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'prices' ? 'active' : ''}`} onClick={() => setActiveTab('prices')}>
                                                 <Icon.CurrencyDollar size={20} />
                                                 <strong className="heading6">Precios</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'taxes' ? 'active' : ''}`} onClick={() => setActiveTab('taxes')}>
+                                                <Icon.Percent size={20} />
+                                                <strong className="heading6">Impuestos</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'margins' ? 'active' : ''}`} onClick={() => setActiveTab('margins')}>
+                                                <Icon.TrendUp size={20} />
+                                                <strong className="heading6">Márgenes</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'calculations' ? 'active' : ''}`} onClick={() => setActiveTab('calculations')}>
+                                                <Icon.Calculator size={20} />
+                                                <strong className="heading6">Cálculos</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'pricing-rules' ? 'active' : ''}`} onClick={() => setActiveTab('pricing-rules')}>
+                                                <Icon.SlidersHorizontal size={20} />
+                                                <strong className="heading6">Reglas de Precio</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'product-page' ? 'active' : ''}`} onClick={() => setActiveTab('product-page')}>
+                                                <Icon.NotePencil size={20} />
+                                                <strong className="heading6">Ficha de Producto</strong>
                                             </Link>
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'admin-orders' ? 'active' : ''}`} onClick={() => setActiveTab('admin-orders')}>
                                                 <Icon.ListChecks size={20} />
@@ -1800,7 +2277,14 @@ const MyAccount = () => {
                                                         <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
                                                             <td className="py-4">
                                                                 <div className="w-12 h-12 bg-line rounded-lg overflow-hidden">
-                                                                    <Image src={product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png'} width={100} height={100} alt={product.name} className="w-full h-full object-cover" />
+                                                                    <Image
+                                                                        src={(product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png'))}
+                                                                        width={100}
+                                                                        height={100}
+                                                                        alt={product.name}
+                                                                        unoptimized={((product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string).startsWith('/uploads/') || ((product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string).startsWith('/images/')}
+                                                                        className="w-full h-full object-cover"
+                                                                    />
                                                                 </div>
                                                             </td>
                                                             <td className="py-4 font-semibold">{product.name}</td>
@@ -1809,7 +2293,12 @@ const MyAccount = () => {
                                                             <td className="py-4">
                                                                 <div className="flex gap-2">
                                                                     <button className="p-2 hover:bg-line rounded-full transition-colors" onClick={() => handleEditProduct(product)}><Icon.PencilSimple size={18} /></button>
-                                                                    <button className="p-2 hover:bg-line rounded-full transition-colors text-red" onClick={() => handleDeleteProduct(product.id)}><Icon.Trash size={18} /></button>
+                                                                    <button
+                                                                        className="p-2 hover:bg-line rounded-full transition-colors text-red"
+                                                                        onClick={() => handleDeleteProduct(product.internalId || product.id)}
+                                                                    >
+                                                                        <Icon.Trash size={18} />
+                                                                    </button>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -1821,13 +2310,19 @@ const MyAccount = () => {
                                         </div>
                                     </div>
 
-                                    <div className={`tab text-content w-full ${activeTab === 'prices' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-4">Gestión Inteligente de Precios</div>
-                                        <p className="text-secondary mb-6">Optimiza tus márgenes con sugerencias basadas en costos.</p>
+                                    <div className={`tab text-content w-full ${activeTab === 'taxes' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Impuestos y cargos</div>
+                                        <p className="text-secondary mb-6">Configura IVA y ajustes de envío que impactan el precio final.</p>
                                         <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
                                             <div className="flex flex-col md:flex-row md:items-end gap-4">
-                                                <div className="flex-1">
-                                                    <label htmlFor="vatRate" className="text-secondary text-xs uppercase font-bold mb-2 block">IVA (%)</label>
+                                                <div className="flex-1 group">
+                                                    <label
+                                                        htmlFor="vatRate"
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Incrementa el precio final del cliente. El IVA no cuenta como utilidad."
+                                                    >
+                                                        IVA (%)
+                                                    </label>
                                                     <input
                                                         id="vatRate"
                                                         type="number"
@@ -1839,6 +2334,9 @@ const MyAccount = () => {
                                                         disabled={vatLoading || vatSaving}
                                                     />
                                                     <p className="text-secondary text-xs mt-2">Los precios del catálogo se muestran con IVA incluido.</p>
+                                                    <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Subir el IVA aumenta el total pagado por el cliente, pero no cambia la utilidad del producto.
+                                                    </p>
                                                 </div>
                                                 <button
                                                     className="button-main py-2 px-6"
@@ -1852,8 +2350,14 @@ const MyAccount = () => {
                                         <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
                                             <div className="flex flex-col lg:flex-row lg:items-end gap-4">
                                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label htmlFor="shippingDelivery" className="text-secondary text-xs uppercase font-bold mb-2 block">Envío a domicilio ($)</label>
+                                                    <div className="group">
+                                                        <label
+                                                            htmlFor="shippingDelivery"
+                                                            className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                            title="Se suma al total del pedido cuando el cliente elige envío a domicilio."
+                                                        >
+                                                            Envío a domicilio ($)
+                                                        </label>
                                                         <input
                                                             id="shippingDelivery"
                                                             type="number"
@@ -1864,9 +2368,18 @@ const MyAccount = () => {
                                                             onChange={(e) => setShippingRates({ ...shippingRates, delivery: Number(e.target.value) })}
                                                             disabled={shippingLoading || shippingSaving}
                                                         />
+                                                        <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            Aumentar este valor incrementa el costo final del pedido para envíos a domicilio.
+                                                        </p>
                                                     </div>
-                                                    <div>
-                                                        <label htmlFor="shippingPickup" className="text-secondary text-xs uppercase font-bold mb-2 block">Retiro en tienda ($)</label>
+                                                    <div className="group">
+                                                        <label
+                                                            htmlFor="shippingPickup"
+                                                            className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                            title="Costo aplicado cuando el cliente recoge en tienda."
+                                                        >
+                                                            Retiro en tienda ($)
+                                                        </label>
                                                         <input
                                                             id="shippingPickup"
                                                             type="number"
@@ -1877,9 +2390,18 @@ const MyAccount = () => {
                                                             onChange={(e) => setShippingRates({ ...shippingRates, pickup: Number(e.target.value) })}
                                                             disabled={shippingLoading || shippingSaving}
                                                         />
+                                                        <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            Define el cargo por retiro en tienda; 0 significa retiro gratuito.
+                                                        </p>
                                                     </div>
-                                                    <div className="md:col-span-2">
-                                                        <label htmlFor="shippingTaxRate" className="text-secondary text-xs uppercase font-bold mb-2 block">IVA aplicado al envío (%)</label>
+                                                    <div className="md:col-span-2 group">
+                                                        <label
+                                                            htmlFor="shippingTaxRate"
+                                                            className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                            title="Porcentaje de IVA que se suma al costo de envío."
+                                                        >
+                                                            IVA aplicado al envío (%)
+                                                        </label>
                                                         <input
                                                             id="shippingTaxRate"
                                                             type="number"
@@ -1891,6 +2413,9 @@ const MyAccount = () => {
                                                             disabled={shippingLoading || shippingSaving}
                                                         />
                                                         <p className="text-secondary text-xs mt-2">Se suma al envío para cubrir impuestos. Ej: 15% incrementa el costo final.</p>
+                                                        <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            A mayor IVA de envío, mayor total del pedido cuando hay costos logísticos.
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <button
@@ -1900,6 +2425,30 @@ const MyAccount = () => {
                                                 >
                                                     {shippingSaving ? 'Guardando...' : 'Guardar Envío'}
                                                 </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'prices' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Gestión Inteligente de Precios</div>
+                                        <p className="text-secondary mb-6">Optimiza tus márgenes con sugerencias basadas en costos.</p>
+                                        <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="p-4 rounded-lg bg-white border border-line">
+                                                    <div className="text-xs uppercase font-bold text-secondary">Margen base</div>
+                                                    <div className="heading5">{marginSettings.baseMargin}%</div>
+                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('margins')}>Editar márgenes</button>
+                                                </div>
+                                                <div className="p-4 rounded-lg bg-white border border-line">
+                                                    <div className="text-xs uppercase font-bold text-secondary">Redondeo</div>
+                                                    <div className="heading5">${calcSettings.rounding.toFixed(2)}</div>
+                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('calculations')}>Editar cálculos</button>
+                                                </div>
+                                                <div className="p-4 rounded-lg bg-white border border-line">
+                                                    <div className="text-xs uppercase font-bold text-secondary">Descuento por volumen</div>
+                                                    <div className="heading5">{pricingRules.bulkDiscount}%</div>
+                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('pricing-rules')}>Editar reglas</button>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -2009,7 +2558,10 @@ const MyAccount = () => {
                                             </div>
                                             <div className="p-5 rounded-xl bg-surface border border-line">
                                                 <div className="text-secondary text-xs uppercase font-bold mb-1">Beneficio Potencial</div>
-                                                <div className="heading4">High</div>
+                                                <div className="heading4">
+                                                    {Math.max((marginSettings.targetMargin - (dashboardStats?.productAnalysis?.averageMargin ?? 0)), 0).toFixed(1)}%
+                                                </div>
+                                                <div className="text-secondary text-xs mt-1">Brecha vs objetivo</div>
                                             </div>
                                         </div>
 
@@ -2174,6 +2726,409 @@ const MyAccount = () => {
                                                         )}
                                                     </tbody>
                                                 </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'margins' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Márgenes y rentabilidad</div>
+                                        <p className="text-secondary mb-6">Define objetivos de margen para tus precios recomendados.</p>
+                                        <div className="p-6 rounded-xl border border-line bg-surface">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Margen usado como referencia para el precio sugerido. A mayor margen, sube el precio y la utilidad esperada."
+                                                    >
+                                                        Margen base (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={marginSettings.baseMargin}
+                                                        onChange={(e) => setMarginSettings({ ...marginSettings, baseMargin: toNumber(e.target.value, marginSettings.baseMargin) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Aumentar el margen base eleva el precio recomendado y la utilidad por venta.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Piso de rentabilidad. Si el margen configurado es menor, el sistema no sugerirá precios por debajo de este valor."
+                                                    >
+                                                        Margen mínimo (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={marginSettings.minMargin}
+                                                        onChange={(e) => setMarginSettings({ ...marginSettings, minMargin: toNumber(e.target.value, marginSettings.minMargin) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Define el margen más bajo permitido; protege la utilidad aunque el precio competitivo sea menor.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Meta principal de rentabilidad. El motor de precios intenta llegar a este margen."
+                                                    >
+                                                        Margen objetivo (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={marginSettings.targetMargin}
+                                                        onChange={(e) => setMarginSettings({ ...marginSettings, targetMargin: toNumber(e.target.value, marginSettings.targetMargin) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        A mayor margen objetivo, mayor precio sugerido para alcanzar la rentabilidad deseada.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Reserva adicional para aplicar descuentos sin romper la rentabilidad."
+                                                    >
+                                                        Buffer promociones (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={marginSettings.promoBuffer}
+                                                        onChange={(e) => setMarginSettings({ ...marginSettings, promoBuffer: toNumber(e.target.value, marginSettings.promoBuffer) })}
+                                                    />
+                                                    <p className="text-secondary text-xs mt-2">Reserva margen extra para descuentos sin afectar rentabilidad.</p>
+                                                    <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Un buffer más alto sube el precio base para absorber promociones sin perder margen.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 flex justify-end">
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={async () => {
+                                                        const normalized = normalizeMarginSettings(marginSettings)
+                                                        setMarginSettings(normalized)
+                                                        try {
+                                                            const res = await updatePricingMargins(normalized)
+                                                            setMarginSettings(normalizeMarginSettings(res.body))
+                                                            showNotification('Márgenes guardados correctamente.')
+                                                        } catch (error) {
+                                                            console.error(error)
+                                                            showNotification('No se pudieron guardar los márgenes.', 'error')
+                                                        }
+                                                    }}
+                                                >
+                                                    Guardar Márgenes
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'calculations' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Cálculos y redondeos</div>
+                                        <p className="text-secondary mb-6">Ajusta cómo se calculan los precios finales.</p>
+                                        <div className="p-6 rounded-xl border border-line bg-surface">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Define cómo se calcula el precio final y el impacto directo del margen."
+                                                    >
+                                                        Estrategia de precio
+                                                    </label>
+                                                    <select
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={calcSettings.strategy}
+                                                        onChange={(e) => setCalcSettings({ ...calcSettings, strategy: e.target.value })}
+                                                    >
+                                                        <option
+                                                            value="cost_plus"
+                                                            title="Calcula precio sumando el margen al costo. Subir el margen aumenta el precio de forma directa."
+                                                        >
+                                                            Costo + margen
+                                                        </option>
+                                                        <option
+                                                            value="target_margin"
+                                                            title="Ajusta el precio para alcanzar el margen objetivo sobre el precio de venta. A mayor margen, mayor PVP."
+                                                        >
+                                                            Margen objetivo
+                                                        </option>
+                                                        <option
+                                                            value="competitive"
+                                                            title="Prioriza precio competitivo con el mercado; el margen puede reducirse para mantener ventas."
+                                                        >
+                                                            Competitivo
+                                                        </option>
+                                                    </select>
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Pasa el mouse sobre cada opción para ver cómo impacta el margen y el precio del producto.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Define el salto de redondeo del precio final. Ej: 0,05 redondea a múltiplos de 5 centavos."
+                                                    >
+                                                        Redondeo ($)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={calcSettings.rounding}
+                                                        onChange={(e) => setCalcSettings({ ...calcSettings, rounding: toNumber(e.target.value, calcSettings.rounding) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Un redondeo mayor simplifica precios, pero puede subir o bajar el PVP final.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Indica si el precio de venta mostrado al cliente incluye IVA."
+                                                    >
+                                                        Incluir IVA en PVP
+                                                    </label>
+                                                    <select
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={calcSettings.includeVatInPvp ? 'yes' : 'no'}
+                                                        onChange={(e) => setCalcSettings({ ...calcSettings, includeVatInPvp: e.target.value === 'yes' })}
+                                                    >
+                                                        <option value="yes">Sí</option>
+                                                        <option value="no">No</option>
+                                                    </select>
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Si está en “Sí”, el PVP ya incluye IVA; si está en “No”, el IVA se suma aparte.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Porcentaje extra para cubrir variaciones de costos logísticos."
+                                                    >
+                                                        Buffer de envío (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={calcSettings.shippingBuffer}
+                                                        onChange={(e) => setCalcSettings({ ...calcSettings, shippingBuffer: toNumber(e.target.value, calcSettings.shippingBuffer) })}
+                                                    />
+                                                    <p className="text-secondary text-xs mt-2">Cubre variaciones de costos logísticos.</p>
+                                                    <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Un buffer más alto aumenta el precio para proteger el margen ante costos de envío variables.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 flex justify-end">
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={async () => {
+                                                        const normalized = normalizeCalcSettings(calcSettings)
+                                                        setCalcSettings(normalized)
+                                                        try {
+                                                            const res = await updatePricingCalc(normalized)
+                                                            setCalcSettings(normalizeCalcSettings(res.body))
+                                                            showNotification('Cálculos guardados correctamente.')
+                                                        } catch (error) {
+                                                            console.error(error)
+                                                            showNotification('No se pudieron guardar los cálculos.', 'error')
+                                                        }
+                                                    }}
+                                                >
+                                                    Guardar Cálculos
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'pricing-rules' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Reglas de precios</div>
+                                        <p className="text-secondary mb-6">Define descuentos automáticos y limpieza de inventario.</p>
+                                        <div className="p-6 rounded-xl border border-line bg-surface">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Cantidad mínima para activar el descuento por volumen."
+                                                    >
+                                                        Volumen mínimo (unidades)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        step="1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={pricingRules.bulkThreshold}
+                                                        onChange={(e) => setPricingRules({ ...pricingRules, bulkThreshold: toNumber(e.target.value, pricingRules.bulkThreshold, 1) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Al subir el umbral, el descuento se activa en compras más grandes.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Porcentaje que se descuenta cuando se cumple el volumen mínimo."
+                                                    >
+                                                        Descuento por volumen (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={pricingRules.bulkDiscount}
+                                                        onChange={(e) => setPricingRules({ ...pricingRules, bulkDiscount: toNumber(e.target.value, pricingRules.bulkDiscount, 0, 90) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Descuentos altos reducen el precio unitario y pueden bajar el margen.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Tiempo sin rotación tras el cual se activa liquidación."
+                                                    >
+                                                        Días para liquidación
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        step="1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={pricingRules.clearanceThreshold}
+                                                        onChange={(e) => setPricingRules({ ...pricingRules, clearanceThreshold: toNumber(e.target.value, pricingRules.clearanceThreshold, 1) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Menos días activan antes la liquidación para mover inventario.
+                                                    </p>
+                                                </div>
+                                                <div className="group">
+                                                    <label
+                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
+                                                        title="Porcentaje de descuento aplicado en productos en liquidación."
+                                                    >
+                                                        Descuento liquidación (%)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        className="border border-line px-4 py-2 rounded-lg w-full"
+                                                        value={pricingRules.clearanceDiscount}
+                                                        onChange={(e) => setPricingRules({ ...pricingRules, clearanceDiscount: toNumber(e.target.value, pricingRules.clearanceDiscount, 0, 90) })}
+                                                    />
+                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Descuentos altos aceleran ventas pero reducen margen y utilidad.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 flex justify-end">
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={async () => {
+                                                        const normalized = normalizePricingRules(pricingRules)
+                                                        setPricingRules(normalized)
+                                                        try {
+                                                            const res = await updatePricingRules(normalized)
+                                                            setPricingRules(normalizePricingRules(res.body))
+                                                            showNotification('Reglas de precio guardadas correctamente.')
+                                                        } catch (error) {
+                                                            console.error(error)
+                                                            showNotification('No se pudieron guardar las reglas.', 'error')
+                                                        }
+                                                    }}
+                                                >
+                                                    Guardar Reglas
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'product-page' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Ficha de producto (común)</div>
+                                        <p className="text-secondary mb-6">Configura textos que se muestran en todas las fichas.</p>
+                                        <div className="p-6 rounded-xl border border-line bg-surface">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Entrega estimada</label>
+                                                    <input
+                                                        className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productPageSettings.deliveryEstimate}
+                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, deliveryEstimate: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Personas viendo</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productPageSettings.viewerCount}
+                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, viewerCount: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Envío gratis desde ($)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productPageSettings.freeShippingThreshold}
+                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, freeShippingThreshold: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Horario de soporte</label>
+                                                    <input
+                                                        className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productPageSettings.supportHours}
+                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, supportHours: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Días de devolución</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productPageSettings.returnDays}
+                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, returnDays: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 flex justify-end">
+                                                <button
+                                                    className="button-main py-2 px-6"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await updateProductPageSettings(productPageSettings)
+                                                            setProductPageSettings(res.body)
+                                                            showNotification('Ficha de producto actualizada.')
+                                                        } catch (error) {
+                                                            console.error(error)
+                                                            showNotification('No se pudo guardar la ficha.', 'error')
+                                                        }
+                                                    }}
+                                                >
+                                                    Guardar configuración
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -2778,6 +3733,52 @@ const MyAccount = () => {
                                                     <label htmlFor="email" className='caption1 capitalize'>Correo Electrónico <span className='text-red'>*</span></label>
                                                     <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="email" type="email" defaultValue={user.email} placeholder="Correo electrónico" required disabled />
                                                 </div>
+                                                <div className="document-type">
+                                                    <label htmlFor="documentType" className='caption1 capitalize'>Tipo de identificación <span className='text-red'>*</span></label>
+                                                    <div className="select-block mt-2">
+                                                        <select
+                                                            className="border border-line px-4 py-3 w-full rounded-lg"
+                                                            id="documentType"
+                                                            name="documentType"
+                                                            value={profile.documentType || 'default'}
+                                                            onChange={(e) => setProfile({ ...profile, documentType: e.target.value })}
+                                                            disabled={profileLoading}
+                                                            required
+                                                        >
+                                                            <option value="default" disabled>Seleccionar</option>
+                                                            <option value="Cédula">Cédula</option>
+                                                            <option value="RUC">RUC</option>
+                                                            <option value="Pasaporte">Pasaporte</option>
+                                                            <option value="Otro">Otro</option>
+                                                        </select>
+                                                        <Icon.CaretDown className='arrow-down text-lg' />
+                                                    </div>
+                                                </div>
+                                                <div className="document-number">
+                                                    <label htmlFor="documentNumber" className='caption1 capitalize'>Número de identificación <span className='text-red'>*</span></label>
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="documentNumber"
+                                                        type="text"
+                                                        placeholder="Número de identificación"
+                                                        required
+                                                        value={profile.documentNumber}
+                                                        onChange={(e) => setProfile({ ...profile, documentNumber: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
+                                                </div>
+                                                <div className="business-name sm:col-span-2">
+                                                    <label htmlFor="businessName" className='caption1 capitalize'>Razón social (opcional)</label>
+                                                    <input
+                                                        className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                        id="businessName"
+                                                        type="text"
+                                                        placeholder="Razón social"
+                                                        value={profile.businessName}
+                                                        onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
+                                                        disabled={profileLoading}
+                                                    />
+                                                </div>
                                                 <div className="gender">
                                                     <label htmlFor="gender" className='caption1 capitalize'>Género <span className='text-red'>*</span></label>
                                                     <div className="select-block mt-2">
@@ -2859,6 +3860,12 @@ const MyAccount = () => {
                             <div className="info_item p-5 rounded-xl bg-surface border border-line">
                                 <strong className="text-button-uppercase text-secondary">Empresa</strong>
                                 <h6 className="heading6 order_company mt-2">{getDefaultBillingAddress()?.company || 'No aplica'}</h6>
+                            </div>
+                            <div className="info_item p-5 rounded-xl bg-surface border border-line sm:col-span-2">
+                                <strong className="text-button-uppercase text-secondary">Indicaciones del Pedido</strong>
+                                <h6 className="heading6 order_notes mt-2 text-sm leading-relaxed break-words">
+                                    {selectedOrder?.order_notes ? selectedOrder.order_notes : 'Sin indicaciones adicionales.'}
+                                </h6>
                             </div>
                             <div className="info_item p-5 rounded-xl bg-surface border border-line">
                                 <strong className="text-button-uppercase text-secondary">Dirección de Envío</strong>
@@ -2964,7 +3971,7 @@ const MyAccount = () => {
 
             {
                 isProductModalOpen && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
                         <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
                             <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
                                 <h3 className="heading4">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
@@ -2974,7 +3981,7 @@ const MyAccount = () => {
                             </div>
 
                             <div className="p-8 overflow-y-auto flex-1">
-                                <form id="product-form" onSubmit={handleSaveProduct} className="space-y-6">
+                                <form id="product-form" ref={productFormRef} onSubmit={handleSaveProduct} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
@@ -2994,11 +4001,35 @@ const MyAccount = () => {
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                                 <input type="number" step="0.01" className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
-                                                    value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} required />
+                                                    value={productForm.price} onChange={e => handleBasePriceChange(e.target.value)} required />
                                             </div>
                                             <label className="text-secondary text-xs font-bold uppercase mt-3 mb-2 block">Precio PVP (con IVA)</label>
-                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full bg-surface text-secondary" readOnly
-                                                value={vatLoading ? 'Cargando...' : `$${productPvpPriceLabel}`} />
+                                            <input type="number" step="0.01" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={productForm.pvp} onChange={e => handlePvpPriceChange(e.target.value)} />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-surface rounded-xl border border-line">
+                                                <div>
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div>
+                                                    <div className="text-lg font-bold text-success">${productProfitLabel}</div>
+                                                    <div className="text-xs text-secondary">Base sin IVA</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div>
+                                                    <div className="text-lg font-bold">{productGrossMarginLabel}%</div>
+                                                    <div className="text-xs text-secondary">Utilidad / precio base</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Markup</div>
+                                                    <div className="text-lg font-bold">{productMarkupLabel}%</div>
+                                                    <div className="text-xs text-secondary">Utilidad / costo</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Utilidad real</div>
+                                                    <div className="text-lg font-bold text-success">${productProfitLabel}</div>
+                                                    <div className="text-xs text-secondary">El IVA no es utilidad</div>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
@@ -3027,16 +4058,246 @@ const MyAccount = () => {
                                                 <option value="Accesorios">Accesorios</option>
                                             </select>
                                         </div>
+                                    </div>
+
+                                    <div className="p-5 rounded-xl border border-line bg-surface">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="text-xs uppercase font-bold text-secondary">Imágenes del producto</div>
+                                            <span className="text-xs text-secondary">Usa miniaturas para listado y fotos grandes para la ficha.</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            <div>
+                                                <div className="text-sm font-semibold mb-3">Miniaturas (listado)</div>
+                                                <div className="space-y-3">
+                                                    {(productForm.thumbImages || []).map((img: any, idx: number) => {
+                                                        const key = `thumb-${idx}`
+                                                        return (
+                                                            <div key={key} className="grid grid-cols-12 gap-2 items-center">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="border border-line rounded-lg px-3 py-2 col-span-7"
+                                                                    onChange={(e) => handleImageFileChange('thumb', idx, e.target.files?.[0])}
+                                                                />
+                                                                <div className="col-span-3 text-xs text-secondary">
+                                                                    {img.url ? 'Miniatura cargada' : 'Sin imagen'}
+                                                                    <div>{img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.thumb.width}x${requiredImageSizes.thumb.height}px`}</div>
+                                                                    {imageUploading[key] && <div>Subiendo...</div>}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-xs text-red-600 col-span-2"
+                                                                    onClick={() => removeImageEntry('thumb', idx)}
+                                                                >
+                                                                    Quitar
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="mt-3 text-sm text-primary font-semibold"
+                                                    onClick={() => addImageEntry('thumb')}
+                                                >
+                                                    + Agregar miniatura
+                                                </button>
+                                                <div className="text-xs text-secondary mt-2">Recomendado: 400x520</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-semibold mb-3">Imágenes grandes (ficha)</div>
+                                                <div className="space-y-3">
+                                                    {(productForm.galleryImages || []).map((img: any, idx: number) => {
+                                                        const key = `gallery-${idx}`
+                                                        return (
+                                                            <div key={key} className="grid grid-cols-12 gap-2 items-center">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="border border-line rounded-lg px-3 py-2 col-span-7"
+                                                                    onChange={(e) => handleImageFileChange('gallery', idx, e.target.files?.[0])}
+                                                                />
+                                                                <div className="col-span-3 text-xs text-secondary">
+                                                                    {img.url ? 'Imagen cargada' : 'Sin imagen'}
+                                                                    <div>{img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.gallery.width}x${requiredImageSizes.gallery.height}px`}</div>
+                                                                    {imageUploading[key] && <div>Subiendo...</div>}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-xs text-red-600 col-span-2"
+                                                                    onClick={() => removeImageEntry('gallery', idx)}
+                                                                >
+                                                                    Quitar
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="mt-3 text-sm text-primary font-semibold"
+                                                    onClick={() => addImageEntry('gallery')}
+                                                >
+                                                    + Agregar imagen grande
+                                                </button>
+                                                <div className="text-xs text-secondary mt-2">Recomendado: 1200x1400</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Imagen URL (Opcional)</label>
-                                            <input type="text" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                                value={productForm.image} onChange={e => setProductForm({ ...productForm, image: e.target.value })} placeholder="URL de la imagen" />
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
+                                            <select
+                                                required
+                                                className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all bg-white"
+                                                value={productForm.productType}
+                                                onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setProductForm({
+                                                        ...productForm,
+                                                        productType: value,
+                                                        attributes: getEmptyAttributes(value)
+                                                    })
+                                                }}
+                                            >
+                                                <option value="">Seleccionar</option>
+                                                <option value="comida">Comida</option>
+                                                <option value="ropa">Ropa</option>
+                                                <option value="accesorios">Accesorios</option>
+                                            </select>
+                                            <p className="text-secondary text-xs mt-2">Define qué atributos se mostrarán en la ficha.</p>
+                                        </div>
+                                    </div>
+
+                                    {productForm.productType === 'comida' && (
+                                        <div className="p-5 rounded-xl border border-line bg-surface">
+                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de comida</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Tamaño</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Peso</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.weight || ''} onChange={e => setProductAttribute('weight', e.target.value)} placeholder="Ej: 2 kg" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Sabor</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.flavor || ''} onChange={e => setProductAttribute('flavor', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Edad</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.age || ''} onChange={e => setProductAttribute('age', e.target.value)} placeholder="Ej: Adulto, Cachorro" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Ingredientes</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.ingredients || ''} onChange={e => setProductAttribute('ingredients', e.target.value)} placeholder="Ej: pollo, arroz, vegetales" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {productForm.productType === 'ropa' && (
+                                        <div className="p-5 rounded-xl border border-line bg-surface">
+                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de ropa</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Talla</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} placeholder="Ej: S, M, L" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Material</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.material || ''} onChange={e => setProductAttribute('material', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Color</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.color || ''} onChange={e => setProductAttribute('color', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Género</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.gender || ''} onChange={e => setProductAttribute('gender', e.target.value)} placeholder="Ej: Unisex" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {productForm.productType === 'accesorios' && (
+                                        <div className="p-5 rounded-xl border border-line bg-surface">
+                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de accesorios</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Material</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.material || ''} onChange={e => setProductAttribute('material', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Tamaño</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Uso</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.usage || ''} onChange={e => setProductAttribute('usage', e.target.value)} placeholder="Ej: Paseo, entrenamiento" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
+                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
+                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="p-5 rounded-xl border border-line bg-surface">
+                                        <div className="text-xs uppercase font-bold text-secondary mb-4">Datos comunes</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">SKU</label>
+                                                <input
+                                                    required
+                                                    className="border border-line rounded-lg px-4 py-2 w-full"
+                                                    value={productForm.attributes?.sku || ''}
+                                                    onChange={e => setProductAttribute('sku', e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Etiqueta</label>
+                                                <input
+                                                    required
+                                                    className="border border-line rounded-lg px-4 py-2 w-full"
+                                                    value={productForm.attributes?.tag || ''}
+                                                    onChange={e => setProductAttribute('tag', e.target.value)}
+                                                    placeholder="Ej: abrigo, premium"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción</label>
                                         <textarea className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all h-32 resize-none"
+                                            required
                                             value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} placeholder="Describe el producto..."></textarea>
                                     </div>
                                 </form>
@@ -3046,7 +4307,21 @@ const MyAccount = () => {
                                 <button type="button" className="px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold" onClick={() => setIsProductModalOpen(false)}>
                                     Cancelar
                                 </button>
-                                <button type="submit" form="product-form" className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold">
+                                <button
+                                    type="button"
+                                    className="button-main bg-black text-white px-10 py-3 rounded-full hover:bg-primary transition-all font-bold"
+                                    onClick={() => {
+                                        if (productFormRef.current?.requestSubmit) {
+                                            productFormRef.current.requestSubmit()
+                                            return
+                                        }
+                                        if (productFormRef.current) {
+                                            productFormRef.current.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+                                        } else {
+                                            showNotification('No se pudo enviar el formulario.', 'error')
+                                        }
+                                    }}
+                                >
                                     {editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
                                 </button>
                             </div>
@@ -3057,7 +4332,7 @@ const MyAccount = () => {
 
             {
                 isOrderModalOpen && selectedOrder && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
                         <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
                             <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
                                 <div>

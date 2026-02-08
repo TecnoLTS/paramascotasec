@@ -4,6 +4,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
 import { getProduct, listProducts } from '@/lib/products'
+import { getProductPageSettings } from '@/lib/api/settings'
 import { generateProductJsonLd } from '@/lib/seo'
 
 type SearchParams = {
@@ -51,11 +52,21 @@ export async function generateMetadata(
 
 const ProductDefault = async ({ searchParams }: Props) => {
     const resolvedSearchParams = await searchParams
-    const products = await listProducts()
+    const [products, pageSettings] = await Promise.all([
+        listProducts(),
+        getProductPageSettings().catch(() => ({
+            deliveryEstimate: '14 de enero - 18 de enero',
+            viewerCount: 38,
+            freeShippingThreshold: 75,
+            supportHours: '8:30 AM a 10:00 PM',
+            returnDays: 100,
+        })),
+    ])
+    const productsWithSettings = products.map((product) => ({ ...product, pageSettings }))
     const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (products[0]?.id ?? '')
 
     // Buscar por ID, legacyId o Slug para mayor robustez
-    const currentProduct = products.find(p => p.id === productId || p.slug === productId)
+    const currentProduct = productsWithSettings.find(p => p.id === productId || p.slug === productId)
 
     return (
         <>
@@ -68,10 +79,10 @@ const ProductDefault = async ({ searchParams }: Props) => {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-white" />
             </div>
-            {!products.length ? (
+            {!productsWithSettings.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
-                <Default data={products} productId={productId} />
+                <Default data={productsWithSettings} productId={productId} />
             )}
             <Footer />
         </>

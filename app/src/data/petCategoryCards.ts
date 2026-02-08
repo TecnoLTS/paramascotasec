@@ -10,10 +10,7 @@ const petCategoryCards: PetCategoryCard[] = [
     { id: 'perros', label: 'Perros', image: '/images/collection/categoria_perros.jpg' },
     { id: 'gatos', label: 'Gatos', image: '/images/collection/categoria_gatos.jpg' },
     { id: 'juguetes', label: 'Juguetes', image: '/images/collection/categoria_juguetes.jpg' },
-    { id: 'camas', label: 'Camas', image: '/images/collection/categoria_camas.jpg' },
-    { id: 'accesorios', label: 'Accesorios', image: '/images/collection/7.jpg' },
-    { id: 'comederos', label: 'Comederos', image: '/images/collection/4.jpg' },
-    { id: 'cuidado', label: 'Cuidado', image: '/images/collection/2.jpg' },
+    { id: 'camas', label: 'Camas', image: '/images/collection/categoria_camas.jpg' }
 ]
 
 const labelMap = petCategoryCards.reduce<Record<string, string>>((acc, category) => {

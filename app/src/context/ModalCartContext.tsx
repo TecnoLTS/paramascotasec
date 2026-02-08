@@ -17,6 +17,13 @@ const ModalCartContext = createContext<ModalCartContextValue | undefined>(undefi
 export const useModalCartContext = (): ModalCartContextValue => {
     const context = useContext(ModalCartContext);
     if (!context) {
+        if (typeof window === 'undefined') {
+            return {
+                isModalOpen: false,
+                openModalCart: () => {},
+                closeModalCart: () => {},
+            };
+        }
         throw new Error('useModalCartContext must be used within a ModalCartProvider');
     }
     return context;

@@ -263,6 +263,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                     alt="ParaMascotasEC"
                                     fill
                                     priority
+                                    loading="eager"
                                     className="object-contain"
                                     sizes="(min-width: 1024px) 184px, 126px"
                                 />

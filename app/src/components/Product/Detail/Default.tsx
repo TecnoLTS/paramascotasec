@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ProductType } from '@/type/ProductType'
 import Product from '../Product'
 import Rate from '@/components/Other/Rate'
@@ -14,6 +15,7 @@ import SwiperCore from 'swiper/core';
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
 import ModalSizeguide from '@/components/Modal/ModalSizeguide'
+import ShareMenu from '@/components/Product/ShareMenu'
 
 SwiperCore.use([Navigation, Thumbs]);
 
@@ -38,12 +40,67 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [quantity, setQuantity] = useState<number>(1)
   const { addToCart, updateCart, cartState } = useCart()
   const { openModalCart } = useModalCartContext()
+  const router = useRouter()
 
   let productMain = data.find(product => product.id === productId) as ProductType
   if (productMain === undefined) {
     productMain = data[0]
   }
   productMain.quantityPurchase = productMain.quantityPurchase ?? 1
+  const productType = (productMain.productType ?? '').toLowerCase()
+  const isClothing = productType === 'ropa'
+  const attributes = productMain.attributes ?? {}
+
+  const attributeLabels: Record<string, Record<string, string>> = {
+    comida: {
+      brand: 'Marca',
+      size: 'Tamaño',
+      weight: 'Peso',
+      flavor: 'Sabor',
+      age: 'Edad',
+      species: 'Especie',
+      ingredients: 'Ingredientes',
+    },
+    ropa: {
+      size: 'Talla',
+      material: 'Material',
+      color: 'Color',
+      gender: 'Género',
+      species: 'Especie',
+    },
+    accesorios: {
+      material: 'Material',
+      size: 'Tamaño',
+      usage: 'Uso',
+      species: 'Especie',
+    },
+  }
+
+  const attributeRows = (() => {
+    const labels = attributeLabels[productType]
+    if (!labels) return []
+    return Object.keys(labels).map((key) => {
+      let value: any = (attributes as any)[key]
+      if (key === 'brand' && !value) value = productMain.brand
+      if (key === 'gender' && !value) value = productMain.gender
+      return { key, label: labels[key], value }
+    }).filter((item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== '')
+  })()
+
+  const [pageSettings, setPageSettings] = useState({
+    deliveryEstimate: '14 de enero - 18 de enero',
+    viewerCount: 38,
+    freeShippingThreshold: 75,
+    supportHours: '8:30 AM a 10:00 PM',
+    returnDays: 100
+  })
+
+  useEffect(() => {
+    if ((productMain as any)?.pageSettings) {
+      setPageSettings((productMain as any).pageSettings)
+      return
+    }
+  }, [productMain?.id])
 
   const relatedCandidates = data.filter((p) => p.id !== productMain.id && p.gender === productMain.gender)
   const primaryRelated = relatedCandidates.filter((p) => p.category === productMain.category)
@@ -63,11 +120,25 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       .map((img: any) => (typeof img === 'string' ? img : img?.url ?? ''))
       .filter(Boolean)
     : []
+  const variationImages = (productMain.variation ?? [])
+    .flatMap((variation) => [variation.image, variation.colorImage])
+    .filter((img): img is string => typeof img === 'string' && img.length > 0)
 
-  // 🔧 Aquí estaba el error: tipamos img y el array resultante
-  const galleryImages: string[] = (
-    productImages.length > 0 ? productImages : sampleImages
-  ).map((img: string, idx: number) =>
+  const rawGallery = [
+    ...productImages,
+    ...variationImages
+  ]
+
+  const dedupedGallery = Array.from(new Set(rawGallery)).filter(Boolean)
+  const fallbackThumbs = Array.isArray((productMain as any)?.thumbImage)
+    ? (productMain as any).thumbImage.filter(Boolean)
+    : []
+
+  const galleryBase = dedupedGallery.length > 0
+    ? dedupedGallery
+    : (fallbackThumbs.length > 0 ? fallbackThumbs : sampleImages)
+
+  const galleryImages: string[] = galleryBase.map((img: string, idx: number) =>
     img.includes('1000x1000')
       ? sampleImages[idx % sampleImages.length]
       : img
@@ -82,6 +153,8 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       ? galleryImages[idx % galleryImages.length]
       : variation.colorImage,
   }))
+  const colorOptions = normalizedVariations.filter((item) => item.color)
+  const fallbackColor = (attributes as any)?.color
 
   const price = Number(productMain?.price ?? 0)
   const originPrice = Number(productMain?.originPrice ?? 0)
@@ -134,6 +207,20 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     openModalCart()
   };
 
+  const handleBuyNow = () => {
+    const quantityToAdd = quantity ?? 1
+    const existing = cartState.cartArray.find(item => item.id === productMain.id)
+
+    if (!existing) {
+      addToCart({ ...productMain, quantityPurchase: quantityToAdd });
+      updateCart(productMain.id, quantityToAdd, activeSize, activeColor)
+    } else {
+      const nextQty = (existing.quantity ?? 0) + quantityToAdd
+      updateCart(productMain.id, nextQty, activeSize, activeColor)
+    }
+    router.push('/cart')
+  }
+
   const handleActiveTab = (tab: string) => setActiveTab(tab)
   const enableGalleryLoop = galleryImages.length > 1
 
@@ -167,10 +254,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   >
                     <Image
                       src={item}
-                      width={1000}
-                      height={1000}
+                      width={1200}
+                      height={1400}
                       alt={`${productMain.name} - Vista ${index + 1}`}
-                      className='w-full aspect-[3/4] object-cover'
+                      sizes="(min-width: 1024px) 560px, 90vw"
+                      quality={90}
+                      unoptimized={item.startsWith('/uploads/') || item.startsWith('/images/')}
+                      className='w-full aspect-[4/5] object-contain bg-white'
                     />
                   </SwiperSlide>
                 ))}
@@ -196,10 +286,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   >
                     <Image
                       src={item}
-                      width={1000}
-                      height={1000}
+                      width={240}
+                      height={300}
                       alt={`${productMain.name} - Miniatura ${index + 1}`}
-                      className='w-full aspect-[3/4] object-cover rounded-xl'
+                      sizes="80px"
+                      quality={85}
+                      unoptimized={item.startsWith('/uploads/') || item.startsWith('/images/')}
+                      className='w-full aspect-[4/5] object-contain bg-white rounded-xl'
                     />
                   </SwiperSlide>
                 ))}
@@ -232,10 +325,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     >
                       <Image
                         src={item}
-                        width={1000}
-                        height={1000}
+                        width={1400}
+                        height={1600}
                         alt={`${productMain.name} - Zoom ${index + 1}`}
-                        className='w-full aspect-[3/4] object-cover rounded-xl'
+                        sizes="(min-width: 1024px) 70vw, 90vw"
+                        quality={92}
+                        unoptimized={item.startsWith('/uploads/') || item.startsWith('/images/')}
+                        className='w-full aspect-[4/5] object-contain bg-white rounded-xl'
                         onClick={(e) => e.stopPropagation()}
                       />
                     </SwiperSlide>
@@ -281,36 +377,58 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 <div className='desc text-secondary mt-3'>
                   {productMain.description}
                 </div>
+                {attributeRows.length > 0 && (
+                  <div className="mt-4 p-4 bg-surface border border-line rounded-xl">
+                    <div className="text-title mb-3">Detalles del producto</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      {attributeRows.map((item) => (
+                        <div key={item.key} className="flex items-center justify-between gap-3">
+                          <span className="text-secondary">{item.label}</span>
+                          <span className="font-semibold text-right">{String(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Variaciones: color */}
               <div className="list-action mt-6">
-                <div className="choose-color">
-                  <div className="text-title">
-                    Colores: <span className='text-title color'>{activeColor}</span>
+                {(colorOptions.length > 0 || fallbackColor) && (
+                  <div className="choose-color">
+                    <div className="text-title">
+                      Color: <span className='text-title color'>{activeColor || fallbackColor}</span>
+                    </div>
+                    {colorOptions.length > 0 ? (
+                      <div className="list-color flex items-center gap-2 flex-wrap mt-3">
+                        {colorOptions.map((item, index) => (
+                          <button
+                            type="button"
+                            key={index}
+                            onClick={() => handleActiveColor(item.color)}
+                            className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
+                            aria-label={`Color ${item.color}`}
+                          >
+                            <span
+                              className="w-10 h-10 rounded-full block"
+                              style={{ backgroundColor: item.colorCode || '#d9d9d9' }}
+                            />
+                            <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                              {item.color}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full border border-line text-sm">
+                        {fallbackColor}
+                      </div>
+                    )}
                   </div>
-                  <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                    {normalizedVariations.map((item, index) => (
-                      <button
-                        type="button"
-                        key={index}
-                        onClick={() => handleActiveColor(item.color)}
-                        className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
-                        aria-label={`Color ${item.color}`}
-                      >
-                        <span
-                          className="w-10 h-10 rounded-full block"
-                          style={{ backgroundColor: item.colorCode || '#d9d9d9' }}
-                        />
-                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                          {item.color}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
 
                 {/* Variaciones: talla */}
+                {isClothing && (productMain.sizes ?? []).length > 0 && (
                 <div className="choose-size mt-5">
                   <div className="heading flex items-center justify-between gap-3">
                     <div className="text-title">
@@ -340,6 +458,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Cantidad + Add to cart */}
                 <div className="text-title mt-5">Cantidad:</div>
@@ -367,17 +486,12 @@ const Default: React.FC<Props> = ({ data, productId }) => {
 
                 {/* CTA principal */}
                 <div className="button-block mt-5">
-                  <div className="button-main w-full text-center">Comprar ahora</div>
+                  <div className="button-main w-full text-center" onClick={handleBuyNow}>Comprar ahora</div>
                 </div>
 
                 {/* Acciones secundarias: compare / share */}
                 <div className="flex items-center lg:gap-20 gap-8 mt-5 pb-6 border-b border-line">
-                  <div className="share flex items-center gap-3 cursor-pointer">
-                    <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                      <Icon.ShareNetwork weight='fill' className='heading6' />
-                    </div>
-                    <span>Compartir producto</span>
-                  </div>
+                  <ShareMenu product={productMain} />
                 </div>
               </div>{/* list-action */}
             </div>
@@ -429,8 +543,9 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                       ) : (
                         <ul className="list-disc pl-5 space-y-1 max-w-3xl">
                           <li>Categoría: {productMain.category}</li>
-                          <li>Mascota: {productMain.gender}</li>
-                          <li>Etiqueta: {productMain.type}</li>
+                          <li>Mascota: {(attributes as any)?.species || productMain.gender || '-'}</li>
+                          <li>Etiqueta: {(attributes as any)?.tag || productMain.type || '-'}</li>
+                          <li>SKU: {(attributes as any)?.sku || '-'}</li>
                         </ul>
                       )}
                     </div>
@@ -450,11 +565,11 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 <div className="flex items-center gap-1 mt-3">
                   <Icon.Timer className='body1' />
                   <div className="text-title">Entrega estimada:</div>
-                  <div className="text-secondary">14 de enero - 18 de enero</div>
+                  <div className="text-secondary">{pageSettings.deliveryEstimate}</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <Icon.Eye className='body1' />
-                  <div className="text-title">38</div>
+                  <div className="text-title">{pageSettings.viewerCount}</div>
                   <div className="text-secondary">personas viendo este producto ahora mismo</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
@@ -463,15 +578,15 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <div className="text-title">SKU:</div>
-                  <div className="text-secondary">53453412</div>
+                  <div className="text-secondary">{(attributes as any)?.sku || '-'}</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <div className="text-title">Categorías:</div>
-                  <div className="text-secondary">{productMain.category}, {productMain.gender}</div>
+                  <div className="text-secondary">{productMain.category}{(attributes as any)?.species ? `, ${(attributes as any)?.species}` : ''}</div>
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <div className="text-title">Etiqueta:</div>
-                  <div className="text-secondary">{productMain.type}</div>
+                  <div className="text-secondary">{(attributes as any)?.tag || productMain.type || '-'}</div>
                 </div>
               </div>
 
@@ -501,7 +616,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <div>
                     <div className="text-title">Envío gratis</div>
                     <div className="caption1 text-secondary mt-1">
-                      Envío gratis en pedidos mayores a $75.
+                      Envío gratis en pedidos mayores a ${pageSettings.freeShippingThreshold}.
                     </div>
                   </div>
                 </div>
@@ -510,16 +625,16 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <div>
                     <div className="text-title">Soporte diario</div>
                     <div className="caption1 text-secondary mt-1">
-                      Atención de 8:30 AM a 10:00 PM todos los días
+                      Atención de {pageSettings.supportHours} todos los días
                     </div>
                   </div>
                 </div>
                 <div className="item flex items-center gap-3 mt-4">
                   <div className="icon-return text-4xl"></div>
                   <div>
-                    <div className="text-title">Devoluciones hasta 100 días</div>
+                    <div className="text-title">Devoluciones hasta {pageSettings.returnDays} días</div>
                     <div className="caption1 text-secondary mt-1">
-                      ¿No te convence? Solicita reembolso dentro de 100 días.
+                      ¿No te convence? Solicita reembolso dentro de {pageSettings.returnDays} días.
                     </div>
                   </div>
                 </div>

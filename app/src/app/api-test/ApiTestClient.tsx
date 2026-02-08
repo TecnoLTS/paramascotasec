@@ -5,6 +5,7 @@ import { requestApi } from '@/lib/apiClient'
 
 const endpoints = [
   { label: 'Productos', path: '/api/products' },
+  { label: 'Reporte: Órdenes recientes', path: '/api/reports/recent-orders?limit=5' },
   { label: 'Ejemplo', path: '/api/ejemplo' },
   { label: 'Ejemplo 2', path: '/api/ejemplo2' },
   { label: 'Health Check', path: '/api/health' },
