@@ -11,6 +11,50 @@ const buildBaseUrl = () => {
   return `http://localhost:${process.env.PORT ?? 3000}`
 }
 
+const getTenantHost = () => {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  if (!base) return null
+  try {
+    return new URL(base).host
+  } catch {
+    return null
+  }
+}
+
+const getTenantProto = () => {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  if (!base) return null
+  try {
+    return new URL(base).protocol.replace(':', '')
+  } catch {
+    return null
+  }
+}
+
+const getServerForwardedHost = async () => {
+  if (typeof window !== 'undefined') return null
+  try {
+    const mod = await import('next/headers')
+    const headerList = await mod.headers()
+    const utils = await import('@/lib/headerUtils')
+    return utils.getHostFromHeaders(headerList)
+  } catch {
+    return null
+  }
+}
+
+const getServerForwardedProto = async () => {
+  if (typeof window !== 'undefined') return null
+  try {
+    const mod = await import('next/headers')
+    const headerList = await mod.headers()
+    const utils = await import('@/lib/headerUtils')
+    return utils.getProtoFromHeaders(headerList)
+  } catch {
+    return null
+  }
+}
+
 const resolveUrl = (path: string) => {
   if (path.startsWith('http')) return path
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -78,10 +122,30 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
 
   const pathname = getPathname(path)
   if (typeof window === 'undefined') {
+    const forwardedHost = await getServerForwardedHost()
+    const forwardedProto = await getServerForwardedProto()
     if (authFreePaths.has(pathname)) {
+      const tenantHost = forwardedHost || getTenantHost()
+      const tenantProto = forwardedProto || getTenantProto()
+      if (tenantHost) {
+        headers.set('x-forwarded-host', tenantHost)
+        headers.set('host', tenantHost)
+      }
+      if (tenantProto) {
+        headers.set('x-forwarded-proto', tenantProto)
+      }
       return { ...init, headers }
     }
     const serviceToken = process.env.BACKEND_SERVICE_TOKEN
+    const tenantHost = forwardedHost || getTenantHost()
+    const tenantProto = forwardedProto || getTenantProto()
+    if (tenantHost) {
+      headers.set('x-forwarded-host', tenantHost)
+      headers.set('host', tenantHost)
+    }
+    if (tenantProto) {
+      headers.set('x-forwarded-proto', tenantProto)
+    }
     if (isPublicEcomPath(pathname, init?.method)) {
       if (serviceToken) {
         headers.set('Authorization', `Bearer ${serviceToken}`)

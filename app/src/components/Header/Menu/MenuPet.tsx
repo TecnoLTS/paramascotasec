@@ -12,12 +12,14 @@ import useMenuMobile from '@/store/useMenuMobile';
 import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
+import { useTenant } from '@/context/TenantContext'
 
 type MenuPetProps = {
     props?: string;
 };
 
 const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
+    const tenant = useTenant()
     const pathname = usePathname()
     const { openLoginPopup, handleLoginPopup } = useLoginPopup()
     const { openShopDepartmentPopup, handleShopDepartmentPopup } = useShopDepartmentPopup()
@@ -80,7 +82,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
 
     const handleCategoryClick = (category: string, gender?: string) => {
         const options = gender ? { gender } : undefined
-        router.push(getCategoryUrl(category, options));
+        router.push(getCategoryUrl(category, options, tenant.id));
     };
 
     type CategoryLink = {
@@ -103,43 +105,13 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     const isCategoryLink = (link: MegaMenuLink): link is CategoryLink =>
         (link as CategoryLink).id !== undefined
 
-    const categoriesSections: Array<{ title: string; links: CategoryLink[] }> = [
-        {
-            title: 'Categorias principales',
-            links: [
-                { id: 'descuentos' },
-                { id: 'camas' },
-                { id: 'comederos' },
-                { id: 'cuidado' },
-                { id: 'todos', labelOverride: 'Todas las categorías' },
-            ],
-        },
-        {
-            title: 'Perros',
-            links: [
-                { id: 'comida para perros' },
-                { id: 'juguetes' },
-                { id: 'accesorios', gender: 'dog', labelOverride: 'Accesorios para perros' },
-            ],
-        },
-        {
-            title: 'Gatos',
-            links: [
-                { id: 'comida para gatos' },
-                { id: 'accesorios', gender: 'cat', labelOverride: 'Accesorios para gatos' },
-            ],
-        },
-    ];
+    const categoriesSections: Array<{ title: string; links: CategoryLink[] }> =
+        tenant.menu.categorySections
 
-    const serviceLinks: MegaNavLink[] = [
-        { label: 'Envíos y devoluciones', href: '/pages/faqs' },
-        { label: 'Centro de ayuda', href: '/pages/contact' },
-    ];
+    const serviceLinks: MegaNavLink[] = tenant.menu.serviceLinks
 
     // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
-    const companyLinks: MegaNavLink[] = [
-        { label: '¿Quiénes somos?', href: '/pages/about' },
-    ];
+    const companyLinks: MegaNavLink[] = tenant.menu.companyLinks
 
     const renderMegaMenu = (
         sections: MegaMenuSection[],
@@ -161,7 +133,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                                     onClick={() => handleCategoryClick(link.id, link.gender)}
                                                     className="link text-secondary duration-300 cursor-pointer"
                                                 >
-                                                    {link.labelOverride ?? getCategoryLabel(link.id)}
+                                                    {link.labelOverride ?? getCategoryLabel(link.id, tenant.id)}
                                                 </div>
                                             ) : (
                                                 <Link
@@ -217,7 +189,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                             onClick={() => handleCategoryClick(link.id, link.gender)}
                             className="nav-item-mobile text-secondary duration-300 cursor-pointer"
                         >
-                            {link.labelOverride ?? getCategoryLabel(link.id)}
+                            {link.labelOverride ?? getCategoryLabel(link.id, tenant.id)}
                         </div>
                     ) : (
                         <Link
@@ -232,17 +204,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         </>
     )
 
-    const categoryBanner = {
-        title: ' ',
-        subtitle: ' ',
-        image: '/images/collection/14.jpg',
-    }
+    const categoryBanner = tenant.menu.banner
 
-    const servicesBanner = {
+    const servicesBanner = tenant.menu.servicesBanner ?? {
         title: ' ',
         subtitle: ' ',
         image: '/images/collection/15.jpg',
     }
+
+    const departmentLinks = tenant.menu.departmentLinks ?? []
 
     return (
         <>
@@ -259,8 +229,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                         <Link href={'/'} className='flex items-center'>
                             <div className="relative h-[55px] w-[126px] md:h-[80px] md:w-[184px]">
                                 <Image
-                                    src="/images/brand/LogoVerde150.svg"
-                                    alt="ParaMascotasEC"
+                                    src={tenant.logo.src}
+                                    alt={tenant.logo.alt}
                                     fill
                                     priority
                                     loading="eager"
@@ -332,13 +302,16 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                 <div
                                     className={`sub-menu-department absolute top-[44px] left-0 right-0 h-max bg-white rounded-b-2xl ${openShopDepartmentPopup ? 'open' : ''}`}
                                 >
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 border-b border-line whitespace-nowrap block'>Comida para perros</Link>
-                                    </div>
-                                    {/* ... resto de items ... */}
-                                    <div className="item block">
-                                        <Link href={'/shop/breadcrumb-img'} className='caption1 py-4 px-5 whitespace-nowrap block'>Servicios para mascotas</Link>
-                                    </div>
+                                    {departmentLinks.map((link, index) => (
+                                        <div className="item block" key={`${link.href}-${index}`}>
+                                            <Link
+                                                href={link.href}
+                                                className={`caption1 py-4 px-5 whitespace-nowrap block ${index < departmentLinks.length - 1 ? 'border-b border-line' : ''}`}
+                                            >
+                                                {link.label}
+                                            </Link>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="menu-main style-eight h-full pl-12 max-lg:hidden">
@@ -419,8 +392,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                 <Link href={'/'} className='logo text-3xl font-semibold text-center'>
                                     <div className="relative mx-auto h-14 w-[160px]">
                                         <Image
-                                            src="/images/brand/LogoVerde150.png"
-                                            alt="ParaMascotasEC logo"
+                                            src={tenant.logo.mobileSrc ?? tenant.logo.src}
+                                            alt={`${tenant.name} logo`}
                                             fill
                                             className="object-contain"
                                             priority

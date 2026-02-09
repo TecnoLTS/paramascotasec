@@ -40,8 +40,7 @@ const SliderPet = () => {
 
   return (
     <div
-      className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden"
-      style={{ aspectRatio: '1905 / 615' }}
+      className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden slider-height"
     >
       {/* Mientras no esté montado, mantenemos solo el contenedor (sin Swiper) */}
       {mounted && (

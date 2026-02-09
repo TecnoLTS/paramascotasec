@@ -211,6 +211,22 @@
     .section-swiper-navigation .swiper-button-next::after {
         font-size: 14px !important;
     }
+
+    .section-swiper-navigation.style-outline {
+        margin-left: 0;
+        margin-right: 0;
+        padding-left: 0;
+        padding-right: 0;
+
+        .swiper {
+            overflow: hidden;
+        }
+
+        .swiper-button-prev,
+        .swiper-button-next {
+            display: none !important;
+        }
+    }
 }
 
 @media (max-width: 576px) {

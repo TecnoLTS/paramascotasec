@@ -13,8 +13,12 @@ const buildTargetUrl = (req: NextRequest) => {
 const forward = async (req: NextRequest) => {
   const targetUrl = buildTargetUrl(req)
   const headers = new Headers(req.headers)
-  headers.delete('host')
   headers.delete('content-length')
+  const originalHost = req.headers.get('host')
+  if (originalHost) {
+    headers.set('host', originalHost)
+    headers.set('x-forwarded-host', originalHost)
+  }
 
   const pathname = req.nextUrl.pathname.replace(/^\/api/, '')
   const hasAuth = headers.has('authorization')

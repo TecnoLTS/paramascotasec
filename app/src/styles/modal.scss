@@ -92,16 +92,17 @@
     .modal-wishlist-main {
         position: absolute;
         top: 20px;
-        right: -100%;
+        right: 20px;
         width: 540px;
         height: calc(100vh - 40px);
         background-color: var(--white);
         border-radius: 32px;
         overflow: hidden;
-        transition: all ease 0.5s;
+        transition: transform ease 0.5s;
+        transform: translateX(calc(100% + 40px));
 
         &.open {
-            right: 20px;
+            transform: translateX(0);
         }
 
         .remove-cart-btn {

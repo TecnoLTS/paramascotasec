@@ -153,11 +153,24 @@ const ModalQuickview = () => {
         openModalCompare();
     };
 
+    const isOpen = selectedProduct !== null
+    const overlayStyle: React.CSSProperties = {
+        position: 'fixed',
+        pointerEvents: isOpen ? 'auto' : 'none',
+        opacity: isOpen ? 1 : 0,
+        visibility: isOpen ? 'visible' : 'hidden',
+    }
+
     return (
         <>
-            <div className={`modal-quickview-block`} onClick={closeQuickview}>
+            <div
+                className="modal-quickview-block"
+                style={overlayStyle}
+                aria-hidden={!isOpen}
+                onClick={closeQuickview}
+            >
                 <div
-                    className={`modal-quickview-main py-6 ${selectedProduct !== null ? 'open' : ''}`}
+                    className={`modal-quickview-main py-6 ${isOpen ? 'open' : ''}`}
                     onClick={(e) => { e.stopPropagation() }}
                 >
                     <div className="flex h-full max-md:flex-col gap-y-6">

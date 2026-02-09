@@ -50,7 +50,7 @@ const normalizeImageUrl = (url: string) => {
   if (url.startsWith('/')) return url
   try {
     const parsed = new URL(url)
-    if (parsed.hostname === 'api.paramascotasec.com') {
+    if (parsed.hostname.startsWith('api.')) {
       return url
     }
     const path = parsed.pathname

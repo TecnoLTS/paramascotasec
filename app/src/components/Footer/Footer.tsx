@@ -1,9 +1,16 @@
+
+'use client'
+
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { useTenant } from '@/context/TenantContext'
+import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
 const Footer = () => {
+    const tenant = useTenant()
+    const footerCategories = tenant.footerCategoryLinks
     return (
         <div id="footer" className='footer'>
             <div className="footer-main bg-surface pt-[60px] pb-[20px]">
@@ -15,8 +22,8 @@ const Footer = () => {
                             <Link href={'/'} className="logo inline-block mb-6">
                                 <div className="logo-image relative w-[150px] h-[50px]">
                                     <Image
-                                        src={'/images/brand/LogoVerde150.svg'}
-                                        alt={'ParaMascotasEC'}
+                                        src={tenant.logo.src}
+                                        alt={tenant.logo.alt}
                                         fill
                                         className="object-contain object-left"
                                         sizes="150px"
@@ -30,16 +37,16 @@ const Footer = () => {
                                     <span>WhatsApp:</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
-                                    <a href="mailto:info@paramascotasec.com" className='hover:text-green-600 transition-colors'>
-                                        info@paramascotasec.com
+                                    <a href={`mailto:${tenant.contact.email}`} className='hover:text-green-600 transition-colors'>
+                                        {tenant.contact.email}
                                     </a>
                                     <a 
-                                        href="https://wa.me/593992782126" 
+                                        href={`https://wa.me/${tenant.contact.whatsappNumber}`} 
                                         target="_blank" 
                                         rel="noopener noreferrer"
                                         className='hover:text-green-600 transition-colors'
                                     >
-                                        +593 (099) 278-21-xx
+                                        {tenant.contact.whatsappLabel}
                                     </a>
                                 </div>
                             </div>
@@ -62,10 +69,15 @@ const Footer = () => {
                                 <div className="item">
                                     <div className="text-button-uppercase pb-4 text-black font-bold">Categorías</div>
                                     <div className="flex flex-col gap-2">
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/shop/breadcrumb1'}>Todas</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/shop/breadcrumb1?category=descuentos'}>Ofertas</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/shop/breadcrumb1?category=perros&gender=dog'}>Perros</Link>
-                                        <Link className='caption1 hover:text-green-600 duration-300' href={'/shop/breadcrumb1?category=gatos&gender=cat'}>Gatos</Link>
+                                        {footerCategories.map((categoryId) => (
+                                            <Link
+                                                key={categoryId}
+                                                className='caption1 hover:text-green-600 duration-300'
+                                                href={getCategoryUrl(categoryId, undefined, tenant.id)}
+                                            >
+                                                {getCategoryLabel(categoryId, tenant.id)}
+                                            </Link>
+                                        ))}
                                     </div>
                                 </div>
 
@@ -98,16 +110,16 @@ const Footer = () => {
                                     </form>
                                 </div>
                                 <div className="list-social flex items-center gap-4 mt-6">
-                                    <Link href={'https://www.facebook.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={tenant.social.facebook ?? 'https://www.facebook.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-facebook text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={'https://www.instagram.com/paramascotas_ec/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={tenant.social.instagram ?? 'https://www.instagram.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-instagram text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={'https://www.twitter.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={tenant.social.twitter ?? 'https://www.twitter.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-twitter text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={'https://www.youtube.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={tenant.social.youtube ?? 'https://www.youtube.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-youtube text-2xl text-black"></div>
                                     </Link>
                                 </div>
@@ -119,7 +131,7 @@ const Footer = () => {
                     <div className="footer-bottom py-6 mt-8 flex items-center justify-between gap-5 max-lg:justify-center max-lg:flex-col border-t border-gray-200">
                         <div className="left flex items-center gap-8">
                             <div className="copyright caption1 text-secondary text-center">
-                                ©{new Date().getFullYear()} ParaMascotasEC - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
+                                ©{new Date().getFullYear()} {tenant.name} - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
                             </div>
                         </div>
                     </div>

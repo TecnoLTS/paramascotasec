@@ -8,7 +8,8 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
-import { getCategoryFilter, visibleProductCategoryIds, getCategoryUrl, getCategoryLabel } from '@/data/petCategoryCards';
+import { getCategoryFilter, getVisibleProductCategoryIds, getCategoryUrl, getCategoryLabel } from '@/data/petCategoryCards';
+import { useTenant } from '@/context/TenantContext';
 
 interface Props {
     data: Array<ProductType>
@@ -19,13 +20,14 @@ interface Props {
 }
 
 const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gender, category }) => {
+    const tenant = useTenant()
     const [showOnlySale, setShowOnlySale] = useState(false)
     const [sortOption, setSortOption] = useState('');
     const [type, setType] = useState<string | null | undefined>(dataType)
     const [size, setSize] = useState<string | null>()
     const [color, setColor] = useState<string | null>()
     const [brand, setBrand] = useState<string | null>()
-    const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 100 });
+    const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 500 });
     const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
     const [currentPage, setCurrentPage] = useState(0);
     const productsPerPage = 15;
@@ -75,14 +77,14 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     // Filter product
     const normalizedCategoryInput = category?.toLowerCase();
     const normalizedCategory = normalizedCategoryInput === 'ofertas' ? 'descuentos' : normalizedCategoryInput;
-    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory) : undefined;
+    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory, tenant.id) : undefined;
     const categoryToMatch = categoryFilter?.category;
     const genderToMatch = categoryFilter?.gender ?? gender;
     const isDiscountCategory = normalizedCategory === 'descuentos';
 
-    const categoryOptions = ['todos', 'descuentos', ...visibleProductCategoryIds];
+    const categoryOptions = ['todos', 'descuentos', ...getVisibleProductCategoryIds(tenant.id)];
     const categoryCounts = (categoryId: string) => {
-        const filter = getCategoryFilter(categoryId);
+        const filter = getCategoryFilter(categoryId, tenant.id);
         return data.filter((product) => {
             let matchesCategory = true;
             if (filter.category) {
@@ -277,10 +279,10 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                         return (
                                             <Link
                                                 key={index}
-                                                href={getCategoryUrl(item)}
+                                                href={getCategoryUrl(item, undefined, tenant.id)}
                                                 className={`item flex items-center cursor-pointer ${isActiveCategory ? 'active' : ''}`}
                                             >
-                                                <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
+                                                <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item, tenant.id)}</div>
                                                 <div className='text-secondary2'>
                                                     ({categoryCounts(item)})
                                                 </div>

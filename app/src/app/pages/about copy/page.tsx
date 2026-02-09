@@ -1,65 +1,28 @@
-import Image from 'next/image';
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuPet'
-import Benefit from '@/components/Pet/Benefit'
-import Instagram from '@/components/Pet/Instagram'
-import Brand from '@/components/Pet/Brand'
-import Footer from '@/components/Footer/Footer'
+import { headers } from 'next/headers'
+import { getTenantConfigFromHost } from '@/lib/tenant'
+import { getHostFromHeaders } from '@/lib/headerUtils'
+import { buildPageMetadata as buildParamascotasecMeta } from '@/tenants/paramascotasec.com/pages/meta'
+import { buildPageMetadata as buildAutorepuestosMeta } from '@/tenants/autorepuestoscore.com/pages/meta'
+import ParamascotasecPage from '@/tenants/paramascotasec.com/pages/about copy/page'
+import AutorepuestosPage from '@/tenants/autorepuestoscore.com/pages/about copy/page'
 
-const AboutUs = () => {
-    return (
-        <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" />
-            </div>
-            <div className='about md:pt-20 pt-10'>
-                <div className="about-us-block">
-                    <div className="container">
-                        <div className="text flex items-center justify-center">
-                            <div className="content md:w-5/6 w-full">
-                                <div className="heading3 text-center">I{String.raw`'m`} obsessed with the dress Pippa Middleton wore to her brother{String.raw`'s`} wedding.</div>
-                                <div className="body1 text-center md:mt-7 mt-5">Kim Kardashian West needs no introduction. In the 14 years since she first graced our screens in Keeping Up With The Kardashians, she has built her KKW beauty empire, filmed her show, wrapped her show, become a billionaire, studied law, campaigned for the rights of death row inmates, travelled the world to attend events such as Paris Fashion Week, raised four children and launched her wildly successful shapewear brand SKIMS.</div>
-                            </div>
-                        </div>
-                        <div className="list-img grid sm:grid-cols-3 gap-[30px] md:pt-20 pt-10">
-                            <div className="bg-img">
-                                <Image
-                                    src={'/images/other/about-us1.png'}
-                                    width={2000}
-                                    height={3000}
-                                    alt='bg-img'
-                                    className='w-full rounded-[30px]'
-                                />
-                            </div>
-                            <div className="bg-img">
-                                <Image
-                                    src={'/images/other/about-us2.png'}
-                                    width={2000}
-                                    height={3000}
-                                    alt='bg-img'
-                                    className='w-full rounded-[30px]'
-                                />
-                            </div>
-                            <div className="bg-img">
-                                <Image
-                                    src={'/images/other/about-us3.png'}
-                                    width={2000}
-                                    height={3000}
-                                    alt='bg-img'
-                                    className='w-full rounded-[30px]'
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <Benefit props="md:pt-20 pt-10" />
-            <Instagram />
-            <Brand />
-            <Footer />
-        </>
-    )
+const PAGE_KEY = 'about copy'
+
+export async function generateMetadata() {
+  const headerList = await headers()
+  const host = getHostFromHeaders(headerList)
+  const tenant = getTenantConfigFromHost(host)
+  return tenant.id === 'autorepuestoscore'
+    ? buildAutorepuestosMeta(PAGE_KEY, tenant.name)
+    : buildParamascotasecMeta(PAGE_KEY, tenant.name)
 }
 
-export default AboutUs
+export default async function Page() {
+  const headerList = await headers()
+  const host = getHostFromHeaders(headerList)
+  const tenant = getTenantConfigFromHost(host)
+  if (tenant.id === 'autorepuestoscore') {
+    return <AutorepuestosPage />
+  }
+  return <ParamascotasecPage />
+}

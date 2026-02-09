@@ -1,7 +1,11 @@
 import { ProductType } from '@/type/ProductType'
 
-export function generateProductJsonLd(product: ProductType) {
-    const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+export function generateProductJsonLd(
+    product: ProductType,
+    options?: { baseUrl?: string; brandName?: string }
+) {
+    const siteUrl = (options?.baseUrl ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+    const brandName = options?.brandName ?? 'ParaMascotasEC'
 
     return {
         '@context': 'https://schema.org',
@@ -11,7 +15,7 @@ export function generateProductJsonLd(product: ProductType) {
         description: product.description,
         brand: {
             '@type': 'Brand',
-            name: product.brand || 'ParaMascotasEC',
+            name: product.brand || brandName,
         },
         offers: {
             '@type': 'Offer',
@@ -29,16 +33,17 @@ export function generateProductJsonLd(product: ProductType) {
     }
 }
 
-export function generateOrganizationJsonLd() {
-    const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+export function generateOrganizationJsonLd(options?: { baseUrl?: string; name?: string; logo?: string; sameAs?: string[] }) {
+    const siteUrl = (options?.baseUrl ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+    const name = options?.name ?? 'ParaMascotasEC'
 
     return {
         '@context': 'https://schema.org',
         '@type': 'Organization',
-        name: 'ParaMascotasEC',
+        name,
         url: siteUrl,
-        logo: `${siteUrl}/images/logo.png`, // Verify path
-        sameAs: [
+        logo: options?.logo ?? `${siteUrl}/images/logo.png`, // Verify path
+        sameAs: options?.sameAs ?? [
             'https://www.facebook.com/paramascotasec',
             'https://www.instagram.com/paramascotasec',
         ],

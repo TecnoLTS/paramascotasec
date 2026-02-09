@@ -8,10 +8,12 @@ import InlineSpinner from '@/components/Other/InlineSpinner'
 import { ProductType } from '@/type/ProductType';
 import { useModalCartContext } from '@/context/ModalCartContext'
 import { useCart } from '@/context/CartContext'
+import { useTenant } from '@/context/TenantContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
+    const tenant = useTenant()
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
 
     useEffect(() => {
@@ -74,14 +76,17 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     let [discountCart, setDiscountCart] = useState<number>(0)
 
     const overlayRef = useRef<HTMLDivElement | null>(null)
-    const overlayStyle: React.CSSProperties = isModalOpen
-        ? { position: 'fixed', pointerEvents: 'auto' }
-        : { position: 'static', pointerEvents: 'none', opacity: 0, visibility: 'hidden' }
+    const overlayStyle: React.CSSProperties = {
+        position: 'fixed',
+        pointerEvents: isModalOpen ? 'auto' : 'none',
+        opacity: isModalOpen ? 1 : 0,
+        visibility: isModalOpen ? 'visible' : 'hidden',
+    }
 
     const normalizeImageSrc = (src: string) => {
         if (!src) return src
         if (src.startsWith('http://localhost:8080') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-            return src.replace('http://localhost:8080', 'https://api.paramascotasec.com')
+            return src.replace('http://localhost:8080', tenant.apiBaseUrl)
         }
         return src
     }

@@ -32,8 +32,8 @@
             background-color: var(--white);
             width: 320px;
             padding: 28px 24px;
-            margin-left: -100%;
-            transition: all ease 0.5s;
+            transform: translateX(-100%);
+            transition: transform ease 0.5s;
             overflow-x: auto;
             max-height: 100vh;
             height: 100vh;
@@ -55,7 +55,7 @@
         &.style-canvas {
 
             .sidebar-main {
-                margin-left: 0;
+                transform: translateX(0);
             }
         }
     }

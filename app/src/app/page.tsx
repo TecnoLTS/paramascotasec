@@ -1,47 +1,44 @@
 import React from 'react'
-import MenuPet from '@/components/Header/Menu/MenuPet'
-import SliderPet from '@/components/Slider/SliderPet'
-import Collection from '@/components/Pet/Collection'
-import Collection2 from '@/components/Pet/Collection2'
-import FeatureProduct from '@/components/Pet/FeatureProduct'
-import ChooseUs from '@/components/Pet/ChooseUs'
-import Banner2 from '@/components/Pet/Banner2'
-import AllProducts from '@/components/Product/AllProducts'
-import Benefit from '@/components/Pet/Benefit'
-import Brand from '@/components/Pet/Brand'
-import Footer from '@/components/Footer/Footer'
-import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
-import petCategoryCards from '@/data/petCategoryCards'
+import { getCategoryCards } from '@/data/petCategoryCards'
 import { fetchProducts } from '@/lib/products'
 import { Metadata } from 'next'
+import { headers } from 'next/headers'
+import { getTenantConfigFromHost } from '@/lib/tenant'
+import { getHostFromHeaders } from '@/lib/headerUtils'
+import ParamascotasecHome from '@/tenants/paramascotasec.com/Home'
+import AutorepuestosCoreHome from '@/tenants/autorepuestoscore.com/Home'
 
-export const metadata: Metadata = {
-    title: 'ParaMascotasEC - Tu Tienda de Mascotas en Ecuador',
-    description: 'Encuentra el mejor alimento, accesorios y cuidados para tus perros y gatos. Calidad premium con entrega en todo Ecuador.',
-    keywords: ['mascotas', 'perros', 'gatos', 'alimento para mascotas', 'Ecuador', 'tienda de mascotas online'],
+export async function generateMetadata(): Promise<Metadata> {
+    const headerList = await headers()
+    const host = getHostFromHeaders(headerList)
+    const tenant = getTenantConfigFromHost(host)
+
+    if (tenant.id === 'autorepuestoscore') {
+        return {
+            title: 'AutorepuestosCore - Repuestos y Accesorios Automotrices',
+            description: 'Compra repuestos, lubricantes y accesorios automotrices con entrega rapida en Ecuador.',
+            keywords: ['autorepuestos', 'repuestos', 'frenos', 'motor', 'suspension', 'electricos', 'Ecuador'],
+        }
+    }
+
+    return {
+        title: 'ParaMascotasEC - Tu Tienda de Mascotas en Ecuador',
+        description: 'Encuentra el mejor alimento, accesorios y cuidados para tus perros y gatos. Calidad premium con entrega en todo Ecuador.',
+        keywords: ['mascotas', 'perros', 'gatos', 'alimento para mascotas', 'Ecuador', 'tienda de mascotas online'],
+    }
 }
 
 export const dynamic = 'force-dynamic'
 
 export default async function HomePet() {
+    const headerList = await headers()
+    const host = getHostFromHeaders(headerList)
+    const tenant = getTenantConfigFromHost(host)
     const products = await fetchProducts()
+    const categories = getCategoryCards(tenant.id)
+    if (tenant.id === 'autorepuestoscore') {
+        return <AutorepuestosCoreHome products={products} categories={categories} tenant={tenant} />
+    }
 
-    return (
-        <>
-            <ScrollToTopOnMount />
-            <div id="header" className="relative w-full style-pet">
-                <MenuPet />
-                <SliderPet />
-            </div>
-            <Collection categories={petCategoryCards} />
-            <AllProducts data={products} />
-            <Benefit props="md:py-10 py-5" />
-            <Banner2 />
-            <ChooseUs />
-            <FeatureProduct data={products} start={0} limit={4} />
-            <Collection2 />
-            <Brand />
-            <Footer />
-        </>
-    )
+    return <ParamascotasecHome products={products} categories={categories} />
 }

@@ -23,7 +23,7 @@ const ModalSearch = () => {
   };
 
   const overlayStyle: React.CSSProperties = {
-    position: isModalOpen ? 'fixed' : 'static',
+    position: 'fixed',
     pointerEvents: isModalOpen ? 'auto' : 'none',
     opacity: isModalOpen ? 1 : 0,
     visibility: isModalOpen ? 'visible' : 'hidden',

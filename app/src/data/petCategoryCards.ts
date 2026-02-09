@@ -1,22 +1,10 @@
+import { TenantId, defaultTenantId, getTenantConfig } from '@/lib/tenant'
+
 export interface PetCategoryCard {
     id: string
     label: string
     image: string
 }
-
-const petCategoryCards: PetCategoryCard[] = [
-    { id: 'todos', label: 'Todas', image: '/images/collection/categoria_todas.jpg' },
-    { id: 'descuentos', label: 'Ofertas', image: '/images/collection/categoria_ofertas.jpg' },
-    { id: 'perros', label: 'Perros', image: '/images/collection/categoria_perros.jpg' },
-    { id: 'gatos', label: 'Gatos', image: '/images/collection/categoria_gatos.jpg' },
-    { id: 'juguetes', label: 'Juguetes', image: '/images/collection/categoria_juguetes.jpg' },
-    { id: 'camas', label: 'Camas', image: '/images/collection/categoria_camas.jpg' }
-]
-
-const labelMap = petCategoryCards.reduce<Record<string, string>>((acc, category) => {
-    acc[category.id.toLowerCase()] = category.label
-    return acc
-}, {})
 
 const toTitleCase = (value?: string) => {
     if (!value) return ''
@@ -27,62 +15,49 @@ const toTitleCase = (value?: string) => {
         .join(' ')
 }
 
-export const getCategoryLabel = (categoryId?: string) => {
+const getTenant = (tenantId?: TenantId) => getTenantConfig(tenantId ?? defaultTenantId)
+
+const buildLabelMap = (tenantId?: TenantId) => {
+    const categories = getTenant(tenantId).categories
+    return categories.reduce<Record<string, string>>((acc, category) => {
+        acc[category.id.toLowerCase()] = category.label
+        return acc
+    }, {})
+}
+
+export const getCategoryCards = (tenantId?: TenantId): PetCategoryCard[] => getTenant(tenantId).categories
+
+export const getCategoryLabel = (categoryId?: string, tenantId?: TenantId) => {
     if (!categoryId) return ''
 
     const normalized = categoryId.toLowerCase()
+    const labelMap = buildLabelMap(tenantId)
     return labelMap[normalized] ?? toTitleCase(normalized)
 }
 
-export const visibleProductCategoryIds = petCategoryCards
-    .map((category) => category.id.toLowerCase())
-    .filter((categoryId) =>
-        categoryId !== 'todos' &&
-        categoryId !== 'descuentos' &&
-        categoryId !== 'comida para perros' &&
-        categoryId !== 'comida para gatos'
-    )
+export const getVisibleProductCategoryIds = (tenantId?: TenantId) =>
+    getTenant(tenantId).categories
+        .map((category) => category.id.toLowerCase())
+        .filter((categoryId) => categoryId !== 'todos' && categoryId !== 'descuentos')
 
 export type CategoryFilter = {
     category?: string
     gender?: string
 }
 
-const categoryFilters: Record<string, CategoryFilter> = {
-    'comida para perros': { gender: 'dog' },
-    'comida para gatos': { gender: 'cat' },
-    perros: { gender: 'dog' },
-    gatos: { gender: 'cat' },
-    camas: { category: 'camas' },
-    accesorios: { category: 'accesorios' },
-    comederos: { category: 'comederos' },
-    cuidado: { category: 'cuidado' },
-    juguetes: { category: 'juguetes' },
-    descuentos: {},
-    todos: {},
-}
-
-export const getCategoryFilter = (categoryId: string): CategoryFilter => {
+export const getCategoryFilter = (categoryId: string, tenantId?: TenantId): CategoryFilter => {
     const normalized = categoryId.toLowerCase()
+    const categoryFilters = getTenant(tenantId).categoryFilters
     return categoryFilters[normalized] ?? { category: normalized }
 }
 
-const categoryRoutes: Record<string, string> = {
-    todos: '/shop/breadcrumb1',
-    descuentos: '/shop/breadcrumb1?category=descuentos',
-    perros: '/shop/breadcrumb1?category=perros&gender=dog',
-    gatos: '/shop/breadcrumb1?category=gatos&gender=cat',
-    juguetes: '/shop/breadcrumb1?category=juguetes',
-    'comida para perros': '/shop/breadcrumb1?category=perros&gender=dog',
-    'comida para gatos': '/shop/breadcrumb1?category=gatos&gender=cat',
-    camas: '/shop/breadcrumb1?category=camas',
-    accesorios: '/shop/breadcrumb1?category=accesorios',
-    comederos: '/shop/breadcrumb1?category=comederos',
-    cuidado: '/shop/breadcrumb1?category=cuidado',
-}
-
-export const getCategoryUrl = (categoryId: string, options?: { gender?: string }) => {
+export const getCategoryUrl = (
+    categoryId: string,
+    options?: { gender?: string },
+    tenantId?: TenantId
+) => {
     const normalized = categoryId.toLowerCase()
+    const categoryRoutes = getTenant(tenantId).categoryRoutes
     const baseUrl = categoryRoutes[normalized] ?? `/shop/breadcrumb1?category=${encodeURIComponent(normalized)}`
     if (options?.gender) {
         const separator = baseUrl.includes('?') ? '&' : '?'
@@ -93,4 +68,5 @@ export const getCategoryUrl = (categoryId: string, options?: { gender?: string }
     return baseUrl
 }
 
-export default petCategoryCards
+const defaultCategories = getCategoryCards(defaultTenantId)
+export default defaultCategories

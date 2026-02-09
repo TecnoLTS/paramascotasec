@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
-import { getCategoryLabel } from '@/data/petCategoryCards'
+import { getCategoryCards, getCategoryFilter, getCategoryLabel } from '@/data/petCategoryCards'
+import { useTenant } from '@/context/TenantContext'
 
 interface Props {
     data: Array<ProductType>;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
+    const tenant = useTenant()
     const [page, setPage] = useState<number>(1)
     const [activeCategory, setActiveCategory] = useState<string>('todos')
 
@@ -18,32 +20,45 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const productsRef = useRef<HTMLDivElement | null>(null)
 
     const categories = useMemo(() => {
-        const order = ['todos', 'descuentos', 'perros', 'gatos', 'juguetes', 'camas', 'accesorios', 'comederos', 'cuidado']
+        const order = getCategoryCards(tenant.id).map((category) => category.id.toLowerCase())
+        const uniqueOrder = Array.from(new Set(order))
 
-        const hasProductsFor = (category: string) => {
-            if (category === 'descuentos') return data.some((product) => product.sale)
-            if (category === 'perros') return data.some((product) => product.gender === 'dog')
-            if (category === 'gatos') return data.some((product) => product.gender === 'cat')
-            return data.some((product) => product.category === category)
+        const hasProductsFor = (categoryId: string) => {
+            if (categoryId === 'descuentos') return data.some((product) => product.sale)
+            const filter = getCategoryFilter(categoryId, tenant.id)
+            return data.some((product) => {
+                let matches = true
+                if (filter.category) {
+                    matches = product.category === filter.category
+                }
+                if (filter.gender) {
+                    matches = matches && product.gender === filter.gender
+                }
+                return matches
+            })
         }
 
-        return order.filter((category) => {
-            if (category === 'todos') return true
-            return hasProductsFor(category)
+        return uniqueOrder.filter((categoryId) => {
+            if (categoryId === 'todos') return true
+            return hasProductsFor(categoryId)
         })
-    }, [data])
+    }, [data, tenant.id])
 
     const filteredData = useMemo(() => {
         if (activeCategory === 'todos') return data
         if (activeCategory === 'descuentos') return data.filter(product => product.sale)
-        if (activeCategory === 'perros' || activeCategory === 'comida para perros') {
-            return data.filter(product => product.gender === 'dog')
-        }
-        if (activeCategory === 'gatos' || activeCategory === 'comida para gatos') {
-            return data.filter(product => product.gender === 'cat')
-        }
-        return data.filter(product => product.category === activeCategory)
-    }, [activeCategory, data])
+        const filter = getCategoryFilter(activeCategory, tenant.id)
+        return data.filter(product => {
+            let matches = true
+            if (filter.category) {
+                matches = product.category === filter.category
+            }
+            if (filter.gender) {
+                matches = matches && product.gender === filter.gender
+            }
+            return matches
+        })
+    }, [activeCategory, data, tenant.id])
 
     useEffect(() => {
         if (!categories.includes(activeCategory)) {
@@ -105,7 +120,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                         className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-300 rounded-2xl ${activeCategory === category ? 'bg-[var(--blue)] text-white' : ''}`}
                         onClick={() => handleCategoryChange(category)}
                     >
-                        {getCategoryLabel(category)}
+                        {getCategoryLabel(category, tenant.id)}
                     </button>
                 ))}
             </div>

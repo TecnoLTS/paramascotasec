@@ -13,7 +13,7 @@ const ModalCompare = () => {
 
     // 🔹 NUEVO: un solo objeto de estilos, tipado
     const overlayStyle: React.CSSProperties = {
-        position: isModalOpen ? 'fixed' : 'static',
+        position: 'fixed',
         pointerEvents: isModalOpen ? 'auto' : 'none',
         opacity: isModalOpen ? 1 : 0,
         visibility: isModalOpen ? 'visible' : 'hidden',

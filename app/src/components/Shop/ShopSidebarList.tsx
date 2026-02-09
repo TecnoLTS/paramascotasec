@@ -8,7 +8,8 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
-import { getCategoryFilter, getCategoryLabel, getCategoryUrl, visibleProductCategoryIds } from '@/data/petCategoryCards';
+import { getCategoryFilter, getCategoryLabel, getCategoryUrl, getVisibleProductCategoryIds } from '@/data/petCategoryCards';
+import { useTenant } from '@/context/TenantContext';
 
 interface Props {
     data: Array<ProductType>;
@@ -19,6 +20,7 @@ interface Props {
 }
 
 const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, category, gender }) => {
+    const tenant = useTenant()
     const [type, setType] = useState<string | null>(dataType)
     const [showOnlySale, setShowOnlySale] = useState(false)
     const [sortOption, setSortOption] = useState('');
@@ -32,14 +34,14 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
 
     const normalizedCategoryInput = category?.toLowerCase()
     const normalizedCategory = normalizedCategoryInput === 'ofertas' ? 'descuentos' : normalizedCategoryInput
-    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory) : undefined
+    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory, tenant.id) : undefined
     const categoryToMatch = categoryFilter?.category
     const genderToMatch = categoryFilter?.gender ?? gender
     const isDiscountCategory = normalizedCategory === 'descuentos'
 
-    const categoryOptions = ['todos', 'descuentos', ...visibleProductCategoryIds]
+    const categoryOptions = ['todos', 'descuentos', ...getVisibleProductCategoryIds(tenant.id)]
     const categoryCounts = (categoryId: string) => {
-        const filter = getCategoryFilter(categoryId)
+        const filter = getCategoryFilter(categoryId, tenant.id)
         return data.filter(product => {
             let matchesCategory = true
             if (filter.category) {
@@ -295,10 +297,10 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
                                         return (
                                             <Link
                                                 key={index}
-                                                href={getCategoryUrl(item)}
+                                                href={getCategoryUrl(item, undefined, tenant.id)}
                                                 className={`item flex items-center justify-between cursor-pointer ${isActiveCategory ? 'active' : ''}`}
                                             >
-                                                <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
+                                                    <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item, tenant.id)}</div>
                                                 <div className='text-secondary2'>
                                                     ({categoryCounts(item)})
                                                 </div>

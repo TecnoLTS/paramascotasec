@@ -1,30 +1,28 @@
-import TopNavOne from '@/components/Header/TopNav/TopNavOne'
-import MenuOne from '@/components/Header/Menu/MenuPet'
-import Breadcrumb from '@/components/Breadcrumb/Breadcrumb';
-import reviewData from '@/data/Testimonial.json'
-import TestimonialItem from '@/components/Testimonial/TestimonialItem';
-import Footer from '@/components/Footer/Footer'
+import { headers } from 'next/headers'
+import { getTenantConfigFromHost } from '@/lib/tenant'
+import { getHostFromHeaders } from '@/lib/headerUtils'
+import { buildPageMetadata as buildParamascotasecMeta } from '@/tenants/paramascotasec.com/pages/meta'
+import { buildPageMetadata as buildAutorepuestosMeta } from '@/tenants/autorepuestoscore.com/pages/meta'
+import ParamascotasecPage from '@/tenants/paramascotasec.com/pages/customer-feedbacks/page'
+import AutorepuestosPage from '@/tenants/autorepuestoscore.com/pages/customer-feedbacks/page'
 
-const CustomerFeedbacks = () => {
-    return (
-        <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" />
-                <Breadcrumb heading='Customer Feedbacks' subHeading='Customer Feedbacks' />
-            </div>
-            <div className='customer-feedbacks md:py-20 py-10'>
-                <div className="container">
-                    <div className="list-review grid lg:grid-cols-3 sm:grid-cols-2 grid-cols-1 md:gap-[30px] gap-5">
-                        {reviewData.map(item => (
-                            <TestimonialItem key={item.id} data={item} type='style-one' />
-                        ))}
-                    </div>
-                </div>
-            </div>
-            <Footer />
-        </>
-    )
+const PAGE_KEY = 'customer-feedbacks'
+
+export async function generateMetadata() {
+  const headerList = await headers()
+  const host = getHostFromHeaders(headerList)
+  const tenant = getTenantConfigFromHost(host)
+  return tenant.id === 'autorepuestoscore'
+    ? buildAutorepuestosMeta(PAGE_KEY, tenant.name)
+    : buildParamascotasecMeta(PAGE_KEY, tenant.name)
 }
 
-export default CustomerFeedbacks
+export default async function Page() {
+  const headerList = await headers()
+  const host = getHostFromHeaders(headerList)
+  const tenant = getTenantConfigFromHost(host)
+  if (tenant.id === 'autorepuestoscore') {
+    return <AutorepuestosPage />
+  }
+  return <ParamascotasecPage />
+}

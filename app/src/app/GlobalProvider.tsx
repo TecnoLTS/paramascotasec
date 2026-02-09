@@ -9,26 +9,33 @@ import { CompareProvider } from '@/context/CompareContext'
 import { ModalCompareProvider } from '@/context/ModalCompareContext'
 import { ModalSearchProvider } from '@/context/ModalSearchContext'
 import { ModalQuickviewProvider } from '@/context/ModalQuickviewContext'
+import { TenantProvider } from '@/context/TenantContext'
+import { TenantId } from '@/lib/tenant'
 
-const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const GlobalProvider: React.FC<{ children: React.ReactNode; tenantId: TenantId }> = ({
+    children,
+    tenantId,
+}) => {
     return (
-        <CartProvider>
-            <ModalCartProvider>
-                <WishlistProvider>
-                    <ModalWishlistProvider>
-                        <CompareProvider>
-                            <ModalCompareProvider>
-                                <ModalSearchProvider>
-                                    <ModalQuickviewProvider>
-                                        {children}
-                                    </ModalQuickviewProvider>
-                                </ModalSearchProvider>
-                            </ModalCompareProvider>
-                        </CompareProvider>
-                    </ModalWishlistProvider>
-                </WishlistProvider>
-            </ModalCartProvider>
-        </CartProvider>
+        <TenantProvider tenantId={tenantId}>
+            <CartProvider>
+                <ModalCartProvider>
+                    <WishlistProvider>
+                        <ModalWishlistProvider>
+                            <CompareProvider>
+                                <ModalCompareProvider>
+                                    <ModalSearchProvider>
+                                        <ModalQuickviewProvider>
+                                            {children}
+                                        </ModalQuickviewProvider>
+                                    </ModalSearchProvider>
+                                </ModalCompareProvider>
+                            </CompareProvider>
+                        </ModalWishlistProvider>
+                    </WishlistProvider>
+                </ModalCartProvider>
+            </CartProvider>
+        </TenantProvider>
     )
 }
 

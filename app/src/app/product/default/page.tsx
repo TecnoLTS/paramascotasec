@@ -6,6 +6,9 @@ import Footer from '@/components/Footer/Footer'
 import { getProduct, listProducts } from '@/lib/products'
 import { getProductPageSettings } from '@/lib/api/settings'
 import { generateProductJsonLd } from '@/lib/seo'
+import { headers } from 'next/headers'
+import { getTenantConfigFromHost } from '@/lib/tenant'
+import { getHostFromHeaders } from '@/lib/headerUtils'
 
 type SearchParams = {
     id?: string | string[]
@@ -51,6 +54,9 @@ export async function generateMetadata(
 }
 
 const ProductDefault = async ({ searchParams }: Props) => {
+    const headerList = await headers()
+    const host = getHostFromHeaders(headerList)
+    const tenant = getTenantConfigFromHost(host)
     const resolvedSearchParams = await searchParams
     const [products, pageSettings] = await Promise.all([
         listProducts(),
@@ -73,7 +79,14 @@ const ProductDefault = async ({ searchParams }: Props) => {
             {currentProduct && (
                 <script
                     type="application/ld+json"
-                    dangerouslySetInnerHTML={{ __html: JSON.stringify(generateProductJsonLd(currentProduct)) }}
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify(
+                            generateProductJsonLd(currentProduct, {
+                                baseUrl: tenant.baseUrl,
+                                brandName: tenant.name,
+                            })
+                        )
+                    }}
                 />
             )}
             <div id="header" className='relative w-full'>
