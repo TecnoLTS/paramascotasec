@@ -162,7 +162,7 @@ const AboutUs = () => {
                             />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-6">
                                 <blockquote className="text-white text-xl md:text-3xl font-medium text-center max-w-3xl italic leading-relaxed">
-                                    "Cuidamos cada detalle porque entendemos que detrás de cada compra hay una historia, una familia y una mascota que importa."
+                                    &quot;Cuidamos cada detalle porque entendemos que detrás de cada compra hay una historia, una familia y una mascota que importa.&quot;
                                 </blockquote>
                             </div>
                         </div>

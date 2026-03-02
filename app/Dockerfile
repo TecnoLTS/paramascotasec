@@ -7,9 +7,11 @@ ARG APP_ENV=production
 ENV APP_ENV=${APP_ENV}
 ENV NODE_ENV=${APP_ENV}
 
-# Instala dependencias de npm (incluye dev deps aunque APP_ENV=production)
+# Instala dependencias según ambiente (prod sin dev deps)
 COPY package*.json ./
-RUN NODE_ENV=development npm install --include=dev --legacy-peer-deps
+RUN if [ "$APP_ENV" = "production" ]; then npm ci --omit=dev --legacy-peer-deps; else NODE_ENV=development npm install --include=dev --legacy-peer-deps; fi \
+    && mkdir -p /app/node_modules \
+    && sha1sum /app/package-lock.json | awk '{print $1}' > /app/node_modules/.package-lock.hash
 
 # Copia el código de la app
 COPY . .

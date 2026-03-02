@@ -23,7 +23,6 @@ import ShareMenu from '@/components/Product/ShareMenu'
 
 import { countdownTime } from '@/store/countdownTime'
 
-SwiperCore.use([Navigation, Thumbs]);
 
 interface Props {
     data: Array<ProductType>

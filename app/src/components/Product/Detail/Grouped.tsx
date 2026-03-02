@@ -20,7 +20,6 @@ import { useCompare } from '@/context/CompareContext'
 import { useModalCompareContext } from '@/context/ModalCompareContext'
 import ShareMenu from '@/components/Product/ShareMenu'
 
-SwiperCore.use([Navigation, Thumbs]);
 
 interface Props {
     data: Array<ProductType>

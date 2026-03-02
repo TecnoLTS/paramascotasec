@@ -37,7 +37,6 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
         if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
             setActiveTab(availableTabs[0]);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [availableTabs.join(',')]);
 
     const handleTabClick = (type: string) => {

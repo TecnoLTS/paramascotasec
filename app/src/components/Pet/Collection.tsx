@@ -28,84 +28,63 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
       <div className="container">
         <div className="heading3 text-center">Categorías</div>
         <div className="list-trending section-swiper-navigation style-small-border style-outline md:mt-10 mt-6">
-          <div className="lg:hidden">
-            <Swiper
-              spaceBetween={12}
-              slidesPerView={2}
-              navigation
-              loop={enableLoop}
-              modules={[Navigation, Autoplay]}
-              breakpoints={{
-                576: {
-                  slidesPerView: 3,
-                  spaceBetween: 12,
-                },
-                768: {
-                  slidesPerView: 4,
-                  spaceBetween: 20,
-                },
-                992: {
-                  slidesPerView: 5,
-                  spaceBetween: 20,
-                },
-              }}
-              className="h-full"
-            >
-              {resolvedCategories.map((category, index) => (
-                <SwiperSlide key={category.id}>
-                  <div
-                    className="trending-item w-full relative cursor-pointer flex flex-col items-center"
-                    onClick={() => handleCategoryClick(category.id)}
-                  >
-                    <div className="bg-img mx-auto w-full max-w-[170px] sm:max-w-[190px] md:max-w-[210px] rounded-[22px] overflow-hidden relative aspect-square sm:aspect-[4/5] bg-[#f6f7f9]">
-                      <Image
-                        src={category.image}
-                        alt={category.label}
-                        fill
-                        sizes="(min-width: 992px) 18vw, (min-width: 768px) 22vw, (min-width: 576px) 28vw, 44vw"
-                        className="w-full h-full object-cover"
-                        // solo la primera imagen es prioritaria
-                        priority={index === 0}
-                        loading={index === 0 ? 'eager' : 'lazy'}
-                        placeholder="blur"
-                        blurDataURL="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-                      />
-                    </div>
-                    <div className="trending-name text-center mt-3 duration-500">
-                      <span className="heading6 text-[12px] leading-[18px] sm:text-[14px] sm:leading-[20px]">{category.label}</span>
-                    </div>
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
-          </div>
-
-          <div className="hidden lg:grid grid-cols-5 xl:grid-cols-6 gap-6 xl:gap-8">
+          <Swiper
+            spaceBetween={8}
+            slidesPerView={3}
+            centeredSlides={false}
+            navigation
+            loop={enableLoop}
+            modules={[Navigation, Autoplay]}
+            breakpoints={{
+              420: {
+                slidesPerView: 3,
+                spaceBetween: 8,
+              },
+              576: {
+                slidesPerView: 3,
+                spaceBetween: 10,
+              },
+              768: {
+                slidesPerView: 4,
+                spaceBetween: 12,
+              },
+              992: {
+                slidesPerView: 5,
+                spaceBetween: 14,
+              },
+              1200: {
+                slidesPerView: 6,
+                spaceBetween: 16,
+              },
+            }}
+            className="h-full"
+          >
             {resolvedCategories.map((category, index) => (
-              <div
-                key={category.id}
-                className="trending-item w-full relative cursor-pointer flex flex-col items-center"
-                onClick={() => handleCategoryClick(category.id)}
-              >
-                <div className="bg-img w-full rounded-[24px] overflow-hidden relative aspect-[4/5] bg-[#f6f7f9]">
-                  <Image
-                    src={category.image}
-                    alt={category.label}
-                    fill
-                    sizes="(min-width: 1536px) 10vw, (min-width: 1280px) 12vw, (min-width: 1024px) 16vw, 20vw"
-                    className="w-full h-full object-cover"
-                    priority={index === 0}
-                    loading={index === 0 ? 'eager' : 'lazy'}
-                    placeholder="blur"
-                    blurDataURL="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-                  />
+              <SwiperSlide key={category.id}>
+                <div
+                  className="trending-item w-full relative cursor-pointer flex flex-col items-center"
+                  onClick={() => handleCategoryClick(category.id)}
+                >
+                  <div className="bg-img mx-auto w-full max-w-[128px] sm:max-w-[150px] md:max-w-none rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-square sm:aspect-[4/5] bg-[#f6f7f9]">
+                    <Image
+                      src={category.image}
+                      alt={category.label}
+                      fill
+                      sizes="(min-width: 1200px) 14vw, (min-width: 992px) 17vw, (min-width: 768px) 21vw, (min-width: 576px) 30vw, 32vw"
+                      className="w-full h-full object-cover"
+                      priority={index === 0}
+                      loading={index === 0 ? 'eager' : 'lazy'}
+                      placeholder="blur"
+                      blurDataURL="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+                    />
+                  </div>
+                  <div className="trending-name text-center mt-3 sm:mt-4 duration-500">
+                    <span className="font-semibold text-[13px] leading-[18px] sm:text-[14px] sm:leading-[20px] lg:text-[15px] lg:leading-[22px] text-[var(--blue)]">{category.label}</span>
+                  </div>
                 </div>
-                <div className="trending-name text-center mt-4 duration-500">
-                  <span className="heading6 text-[14px] leading-[20px] xl:text-[16px] xl:leading-[22px]">{category.label}</span>
-                </div>
-              </div>
+              </SwiperSlide>
             ))}
-          </div>
+          </Swiper>
         </div>
       </div>
     </div>

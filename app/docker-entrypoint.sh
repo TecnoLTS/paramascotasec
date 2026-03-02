@@ -6,11 +6,18 @@ lock_hash_file="/app/node_modules/.package-lock.hash"
 current_hash="$(sha1sum /app/package-lock.json 2>/dev/null | awk '{print $1}' || true)"
 existing_hash="$(cat "$lock_hash_file" 2>/dev/null || true)"
 
-# Instala dependencias si faltan o si la versión del lock cambió o si falta el binario de Next.
-if [ ! -d /app/node_modules ] \
-  || [ -z "$(ls -A /app/node_modules 2>/dev/null)" ] \
-  || [ ! -x /app/node_modules/.bin/next ] \
-  || [ "$current_hash" != "$existing_hash" ]; then
+# En producción, las dependencias deben venir preempaquetadas en la imagen.
+if [ "$APP_ENV" = "production" ]; then
+  if [ ! -x /app/node_modules/.bin/next ]; then
+    echo "Faltan dependencias de producción dentro de la imagen (/app/node_modules/.bin/next)."
+    exit 1
+  fi
+else
+  # En desarrollo sí sincronizamos dependencias cuando cambia el lock o falta node_modules.
+  if [ ! -d /app/node_modules ] \
+    || [ -z "$(ls -A /app/node_modules 2>/dev/null)" ] \
+    || [ ! -x /app/node_modules/.bin/next ] \
+    || [ "$current_hash" != "$existing_hash" ]; then
   echo "Sincronizando dependencias (npm ci)..."
   mkdir -p /app/node_modules
   # Si el volumen impide borrar el directorio, limpiamos su contenido.
@@ -21,6 +28,7 @@ if [ ! -d /app/node_modules ] \
     npm install
   fi
   echo "$current_hash" > "$lock_hash_file"
+  fi
 fi
 
 # Build en caliente si estamos en producción y falta el build

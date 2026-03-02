@@ -9,7 +9,8 @@ import { motion } from 'framer-motion'
 
 import { useRouter } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
-import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings } from '@/lib/api/settings'
+import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateStoreStatus } from '@/lib/api/settings'
+import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
 import { mapProductsToDto } from '@/lib/productMapper'
 
 interface DashboardStats {
@@ -33,6 +34,7 @@ interface DashboardStats {
     tax?: { rate: number; multiplier: number };
     businessMetrics?: {
         averageOrderValue: number;
+        salesSummary?: { gross?: number; net?: number; vat?: number; shipping?: number };
         profitStats: { revenue: number, cost: number, shipping_cost?: number, profit: number, margin: number, roi?: number };
         inventoryValue: { market_value: number, cost_value: number, total_items: number };
         ordersByStatus: Array<{ status: string, count: number }>;
@@ -51,6 +53,104 @@ interface DashboardStats {
         };
         aovDeepDive?: {
             distribution: Array<{ bucket: string, count: number, revenue: string }>;
+        };
+        traceability?: {
+            orders: Array<{
+                id: string;
+                created_at: string;
+                status: string;
+                user_name?: string;
+                gross: number;
+                net: number;
+                vat: number;
+                shipping: number;
+            }>;
+            products: Array<{
+                product_id: string;
+                product_name: string;
+                category: string;
+                units_sold: number;
+                net_revenue: number;
+                order_refs: string[];
+            }>;
+            categories: Array<{
+                category: string;
+                net_revenue: number;
+                order_refs: string[];
+            }>;
+        };
+        productSalesRanking?: {
+            period: { start: string; end: string };
+            selectedMonth?: string;
+            historicalPeriod?: { start: string | null; end: string | null };
+            monthlyTotals: { units_sold: number; net_revenue: number };
+            monthlyFinancial?: {
+                orders_count: number;
+                gross: number;
+                net: number;
+                vat: number;
+                shipping: number;
+                cost: number;
+                profit: number;
+                margin: number;
+            };
+            historicalTotals: { units_sold: number; net_revenue: number };
+            historicalFinancial?: {
+                orders_count: number;
+                gross: number;
+                net: number;
+                vat: number;
+                shipping: number;
+                cost: number;
+                profit: number;
+                margin: number;
+            };
+            monthlyRanking: Array<{
+                product_id: string;
+                product_name: string;
+                category: string;
+                month_orders_count: number;
+                month_units_sold: number;
+                month_gross_revenue: number;
+                month_net_revenue: number;
+                month_vat_amount: number;
+                month_shipping_amount: number;
+                month_cost: number;
+                month_profit: number;
+                month_margin: number;
+                historical_orders_count: number;
+                historical_units_sold: number;
+                historical_gross_revenue: number;
+                historical_net_revenue: number;
+                historical_vat_amount: number;
+                historical_shipping_amount: number;
+                historical_cost: number;
+                historical_profit: number;
+                historical_margin: number;
+            }>;
+            historicalRanking: Array<{
+                product_id: string;
+                product_name: string;
+                category: string;
+                month_orders_count: number;
+                month_units_sold: number;
+                month_gross_revenue: number;
+                month_net_revenue: number;
+                month_vat_amount: number;
+                month_shipping_amount: number;
+                month_cost: number;
+                month_profit: number;
+                month_margin: number;
+                historical_orders_count: number;
+                historical_units_sold: number;
+                historical_gross_revenue: number;
+                historical_net_revenue: number;
+                historical_vat_amount: number;
+                historical_shipping_amount: number;
+                historical_cost: number;
+                historical_profit: number;
+                historical_margin: number;
+            }>;
         };
     };
     strategicAlerts?: Array<{ type: 'critical' | 'warning' | 'info', message: string, action: string }>;
@@ -77,6 +177,101 @@ interface ShippingProvider {
     id: number;
     name: string;
     status: string;
+}
+
+interface ShippingPickup {
+    id?: number | string;
+    provider?: string;
+    provider_name?: string;
+    status?: string;
+    scheduled_at?: string;
+    date?: string;
+    window?: string;
+    reference?: string;
+    order_id?: string | number;
+    notes?: string;
+}
+
+type DeepDiveView = 'sales' | 'profit' | 'aov' | 'inventory' | 'product-breakdown'
+type ProductDetailMetric = 'gross' | 'net' | 'vat' | 'shipping' | 'profit' | 'inventory'
+
+type ProductFormState = {
+    id: string;
+    name: string;
+    price: string;
+    pvp: string;
+    cost: string;
+    quantity: string;
+    category: string;
+    brand: string;
+    description: string;
+    productType: string;
+    attributes: Record<string, string>;
+    thumbImages: Array<{ url: string; width: string; height: string }>;
+    galleryImages: Array<{ url: string; width: string; height: string }>;
+}
+
+type AddressData = {
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+    country?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    phone?: string;
+    email?: string;
+}
+
+type SalesRankingRow = {
+    product_id: string;
+    product_name: string;
+    category: string;
+    orders_count: number;
+    units_sold: number;
+    gross_revenue: number;
+    net_revenue: number;
+    vat_amount: number;
+    shipping_amount: number;
+    cost: number;
+    profit: number;
+    margin: number;
+    month_orders_count: number;
+    month_units_sold: number;
+    month_gross_revenue: number;
+    month_net_revenue: number;
+    month_vat_amount: number;
+    month_shipping_amount: number;
+    month_cost: number;
+    month_profit: number;
+    month_margin: number;
+    historical_orders_count: number;
+    historical_units_sold: number;
+    historical_gross_revenue: number;
+    historical_net_revenue: number;
+    historical_vat_amount: number;
+    historical_shipping_amount: number;
+    historical_cost: number;
+    historical_profit: number;
+    historical_margin: number;
+}
+
+const DEFAULT_STORE_PAUSE_MESSAGE = 'Tienda temporalmente en mantenimiento. Intenta más tarde.'
+const getCurrentMonthKey = () => {
+    const now = new Date()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    return `${now.getFullYear()}-${month}`
+}
+const formatMonthKeyLabel = (monthKey: string) => {
+    const match = monthKey.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
+    if (!match) return monthKey
+    const year = Number(match[1])
+    const month = Number(match[2])
+    return new Date(year, month - 1, 1).toLocaleDateString('es-EC', {
+        month: 'long',
+        year: 'numeric'
+    })
 }
 
 const MyAccount = () => {
@@ -125,35 +320,54 @@ const MyAccount = () => {
         documentNumber: '',
         businessName: ''
     })
+    const [passwordForm, setPasswordForm] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    })
 
     // Admin Data State
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
     const [trendRange, setTrendRange] = useState<7 | 30>(7)
-    const [selectedDeepDive, setSelectedDeepDive] = useState<string | null>(null)
+    const [salesRankingView, setSalesRankingView] = useState<'month' | 'historical'>('month')
+    const [salesRankingMonth, setSalesRankingMonth] = useState<string>(getCurrentMonthKey())
+    const [selectedDeepDive, setSelectedDeepDive] = useState<DeepDiveView | null>(null)
+    const [selectedProductMetric, setSelectedProductMetric] = useState<ProductDetailMetric>('net')
+    const [adminDataLoading, setAdminDataLoading] = useState(false)
+    const [adminDataError, setAdminDataError] = useState<string | null>(null)
     const [adminOrdersList, setAdminOrdersList] = useState<Order[]>([])
     const [adminProductsList, setAdminProductsList] = useState<any[]>([])
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
+    const [shippingPickups, setShippingPickups] = useState<ShippingPickup[]>([])
     const [vatRate, setVatRate] = useState<number>(0)
     const [vatLoading, setVatLoading] = useState(false)
     const [vatSaving, setVatSaving] = useState(false)
     const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
     const [shippingLoading, setShippingLoading] = useState(false)
     const [shippingSaving, setShippingSaving] = useState(false)
-    const [marginSettings, setMarginSettings] = useState({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 })
-    const [calcSettings, setCalcSettings] = useState({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 })
-    const [pricingRules, setPricingRules] = useState({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 })
-    const [productPageSettings, setProductPageSettings] = useState({
+    const [marginSettings, setMarginSettings] = useState<PricingMargins>({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 })
+    const [calcSettings, setCalcSettings] = useState<PricingCalc>({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 })
+    const [pricingRules, setPricingRules] = useState<PricingRules>({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 })
+    const [productPageSettings, setProductPageSettings] = useState<ProductPageSettings>({
         deliveryEstimate: '14 de enero - 18 de enero',
         viewerCount: 38,
         freeShippingThreshold: 75,
         supportHours: '8:30 AM a 10:00 PM',
         returnDays: 100
     })
+    const [storeStatus, setStoreStatus] = useState<StoreStatusSettings>({
+        salesEnabled: true,
+        message: DEFAULT_STORE_PAUSE_MESSAGE,
+        updatedAt: null,
+        updatedBy: null
+    })
+    const [storeStatusLoading, setStoreStatusLoading] = useState(false)
+    const [storeStatusSaving, setStoreStatusSaving] = useState(false)
 
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<any | null>(null)
-    const [productForm, setProductForm] = useState({
+    const [productForm, setProductForm] = useState<ProductFormState>({
         id: '',
         name: '',
         price: '',
@@ -165,14 +379,16 @@ const MyAccount = () => {
         description: '',
         productType: '',
         attributes: {},
-        thumbImages: [] as Array<{ url: string; width: string; height: string }>,
-        galleryImages: [] as Array<{ url: string; width: string; height: string }>
+        thumbImages: [],
+        galleryImages: []
     })
     const [imageUploading, setImageUploading] = useState<Record<string, boolean>>({})
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
     const productFormRef = useRef<HTMLFormElement | null>(null)
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
+    const [selectedSalesProduct, setSelectedSalesProduct] = useState<SalesRankingRow | null>(null)
+    const [isSalesProductModalOpen, setIsSalesProductModalOpen] = useState(false)
     const [userOrders, setUserOrders] = useState<Order[]>([])
     const [userOrdersLoading, setUserOrdersLoading] = useState(false)
 
@@ -184,7 +400,7 @@ const MyAccount = () => {
         }
     }
 
-    const getEmptyAttributes = (type: string) => {
+    const getEmptyAttributes = (type: string): Record<string, string> => {
         if (type === 'comida') {
             return { size: '', weight: '', flavor: '', age: '', species: '', ingredients: '', sku: '', tag: '' }
         }
@@ -251,8 +467,8 @@ const MyAccount = () => {
         const required = requiredImageSizes[kind]
         return entries.map((entry) => ({
             ...entry,
-            width: entry.width && Number(entry.width) > 0 ? entry.width : required.width,
-            height: entry.height && Number(entry.height) > 0 ? entry.height : required.height
+            width: entry.width && Number(entry.width) > 0 ? String(entry.width) : String(required.width),
+            height: entry.height && Number(entry.height) > 0 ? String(entry.height) : String(required.height)
         }))
     }
     const getImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
@@ -619,16 +835,23 @@ const MyAccount = () => {
         }
     }
 
-    const parseAddress = (value: any) => {
+    const parseAddress = (value: any): AddressData | string | null => {
         if (!value) return null
         if (typeof value === 'string') {
             try {
-                return JSON.parse(value)
+                const parsed = JSON.parse(value)
+                if (parsed && typeof parsed === 'object') {
+                    return parsed as AddressData
+                }
+                return value
             } catch {
                 return value
             }
         }
-        return value
+        if (value && typeof value === 'object') {
+            return value as AddressData
+        }
+        return null
     }
 
     const formatAddress = (value: any) => {
@@ -656,7 +879,7 @@ const MyAccount = () => {
         return lines
     }
 
-    const getDefaultBillingAddress = () => {
+    const getDefaultBillingAddress = (): AddressData | null => {
         if (!savedAddresses || savedAddresses.length === 0) return null
         const primary = savedAddresses[0]
         return primary?.billing || null
@@ -665,6 +888,24 @@ const MyAccount = () => {
     const formatMoney = (value: any) => {
         const num = Number(value ?? 0)
         return `$${num.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    }
+
+    const formatDateEcuador = (
+        value: string | number | Date,
+        options: Intl.DateTimeFormatOptions = {}
+    ) => {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return '-'
+        return date.toLocaleDateString('es-EC', { timeZone: 'America/Guayaquil', ...options })
+    }
+
+    const formatDateTimeEcuador = (
+        value: string | number | Date,
+        options: Intl.DateTimeFormatOptions = {}
+    ) => {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return '-'
+        return date.toLocaleString('es-EC', { timeZone: 'America/Guayaquil', ...options })
     }
 
     const getOrderItemsGrossSubtotal = (order: any) => {
@@ -720,10 +961,12 @@ const MyAccount = () => {
 
     const getOrderContact = (order: any) => {
         if (!order) return { name: '-', email: '-', phone: '-' }
-        const shipping = parseAddress(order.shipping_address) || {}
-        const billing = parseAddress(order.billing_address) || {}
+        const shippingRaw = parseAddress(order.shipping_address)
+        const billingRaw = parseAddress(order.billing_address)
+        const shipping: AddressData = typeof shippingRaw === 'string' || !shippingRaw ? {} : shippingRaw
+        const billing: AddressData = typeof billingRaw === 'string' || !billingRaw ? {} : billingRaw
         const nameFromAddress = [shipping.firstName || billing.firstName, shipping.lastName || billing.lastName].filter(Boolean).join(' ')
-        const defaultBilling = getDefaultBillingAddress() || {}
+        const defaultBilling: AddressData = getDefaultBillingAddress() || {}
         return {
             name: order.customer_name || nameFromAddress || user?.name || '-',
             email: order.customer_email || shipping.email || billing.email || defaultBilling.email || user?.email || '-',
@@ -804,9 +1047,37 @@ const MyAccount = () => {
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
+        const wantsPasswordChange = Boolean(
+            passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword
+        )
+
+        if (wantsPasswordChange) {
+            if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+                showNotification('Para cambiar la contraseña completa los 3 campos.', 'error')
+                return
+            }
+            if (passwordForm.newPassword.length < 12) {
+                showNotification('La nueva contraseña debe tener al menos 12 caracteres.', 'error')
+                return
+            }
+            if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                showNotification('La confirmación de contraseña no coincide.', 'error')
+                return
+            }
+            if (passwordForm.currentPassword === passwordForm.newPassword) {
+                showNotification('La nueva contraseña debe ser diferente a la actual.', 'error')
+                return
+            }
+        }
+
+        let profileUpdated = false
         try {
             setProfileSaving(true)
             const token = localStorage.getItem('authToken');
+            if (!token) {
+                handleLogout()
+                return
+            }
             const name = `${profile.firstName} ${profile.lastName}`.trim()
             const res = await requestApi<{ name?: string; profile?: typeof profile }>('/api/user/profile', {
                 method: 'PUT',
@@ -816,6 +1087,7 @@ const MyAccount = () => {
                 },
                 body: JSON.stringify({ name, profile })
             });
+            profileUpdated = true
 
             if (res.body.profile) {
                 setProfile({
@@ -836,10 +1108,36 @@ const MyAccount = () => {
                 localStorage.setItem('user', JSON.stringify(updatedUser))
             }
 
-            showNotification('Información personal guardada correctamente.');
+            if (wantsPasswordChange) {
+                await requestApi('/api/user/password', {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        currentPassword: passwordForm.currentPassword,
+                        newPassword: passwordForm.newPassword
+                    })
+                })
+                setPasswordForm({
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                })
+                showNotification('Perfil y contraseña actualizados. Debes iniciar sesión nuevamente.')
+                handleLogout()
+                return
+            }
+
+            showNotification('Información personal guardada correctamente.')
         } catch (error) {
             console.error(error);
-            showNotification('Error al guardar información personal', 'error');
+            if (profileUpdated && wantsPasswordChange) {
+                showNotification('El perfil se guardó, pero no se pudo actualizar la contraseña.', 'error')
+                return
+            }
+            showNotification('Error al guardar información personal', 'error')
         } finally {
             setProfileSaving(false)
         }
@@ -912,6 +1210,59 @@ const MyAccount = () => {
             setMarginSettings(normalizeMarginSettings({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 }))
             setCalcSettings(normalizeCalcSettings({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 }))
             setPricingRules(normalizePricingRules({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 }))
+        }
+    }
+
+    const normalizeStoreStatus = (input?: Partial<StoreStatusSettings> | null): StoreStatusSettings => {
+        const salesEnabled = input?.salesEnabled !== false
+        const rawMessage = String(input?.message ?? '').trim()
+        return {
+            salesEnabled,
+            message: rawMessage || DEFAULT_STORE_PAUSE_MESSAGE,
+            updatedAt: input?.updatedAt || null,
+            updatedBy: input?.updatedBy || null
+        }
+    }
+
+    const loadStoreStatus = async () => {
+        if (!user || user.role !== 'admin') return
+        setStoreStatusLoading(true)
+        try {
+            const status = await getStoreStatus()
+            setStoreStatus(normalizeStoreStatus(status))
+        } catch (error) {
+            console.error(error)
+            setStoreStatus(normalizeStoreStatus(null))
+            showNotification('No se pudo cargar el estado de ventas.', 'error')
+        } finally {
+            setStoreStatusLoading(false)
+        }
+    }
+
+    const handleSaveStoreStatus = async (nextSalesEnabled?: boolean) => {
+        if (!user || user.role !== 'admin') return
+        const payload = normalizeStoreStatus({
+            ...storeStatus,
+            salesEnabled: typeof nextSalesEnabled === 'boolean' ? nextSalesEnabled : storeStatus.salesEnabled
+        })
+        setStoreStatusSaving(true)
+        try {
+            const res = await updateStoreStatus({
+                salesEnabled: payload.salesEnabled,
+                message: payload.message
+            })
+            const normalized = normalizeStoreStatus(res.body)
+            setStoreStatus(normalized)
+            showNotification(
+                normalized.salesEnabled
+                    ? 'Ventas en línea activadas.'
+                    : 'Ventas en línea apagadas. La tienda quedó en mantenimiento.'
+            )
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo actualizar el estado de ventas.', 'error')
+        } finally {
+            setStoreStatusSaving(false)
         }
     }
 
@@ -999,8 +1350,8 @@ const MyAccount = () => {
     }
 
     const normalizeCalcSettings = (input: typeof calcSettings) => {
-        const allowed = new Set(['cost_plus', 'target_margin', 'competitive'])
-        const strategy = allowed.has(input.strategy) ? input.strategy : 'cost_plus'
+        const allowed = new Set<PricingCalc['strategy']>(['cost_plus', 'target_margin', 'competitive'])
+        const strategy: PricingCalc['strategy'] = allowed.has(input.strategy) ? input.strategy : 'cost_plus'
         return {
             rounding: toNumber(input.rounding, 0.05),
             strategy,
@@ -1036,45 +1387,165 @@ const MyAccount = () => {
         return { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }
     }
 
+    const handleStrategicAlertAction = (alert: { type: 'critical' | 'warning' | 'info'; message: string; action: string }) => {
+        const text = `${alert.action} ${alert.message}`.toLowerCase()
+
+        if (text.includes('invent') || text.includes('stock') || text.includes('riesgo')) {
+            setActiveTab('reports')
+            setSelectedDeepDive('inventory')
+            return
+        }
+
+        if (text.includes('ticket') || text.includes('promedio')) {
+            setActiveTab('reports')
+            setSelectedDeepDive('aov')
+            return
+        }
+
+        if (text.includes('margen') || text.includes('utilidad') || text.includes('rentab')) {
+            setActiveTab('reports')
+            setSelectedDeepDive('profit')
+            return
+        }
+
+        if (text.includes('pedido') || text.includes('env') || text.includes('log')) {
+            setActiveOrders('delivery')
+            setActiveTab('admin-orders')
+            return
+        }
+
+        if (text.includes('precio') || text.includes('promoc') || text.includes('campa')) {
+            setActiveTab('prices')
+            return
+        }
+
+        setActiveTab('reports')
+        setSelectedDeepDive('sales')
+    }
+
     // Fetch Admin Data
     React.useEffect(() => {
         const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin') return
+        if (!token || !user || user.role !== 'admin' || !activeTab) {
+            setAdminDataLoading(false)
+            setAdminDataError(null)
+            return
+        }
+
+        let cancelled = false
 
         const headers = { Authorization: `Bearer ${token}` }
 
         const handleError = (err: any) => {
             console.error(err)
-            if (err.message && (err.message.includes('Error 401') || err.message.includes('Unauthenticated'))) {
+            const message = String(err?.message || '')
+            if (message.includes('Error 401') || message.includes('Unauthenticated')) {
                 handleLogout()
+                return
+            }
+            if (!cancelled) {
+                setAdminDataError('No se pudieron actualizar algunos datos del panel.')
             }
         }
 
-        if (activeTab === 'reports') {
-            requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
-                .then(res => setDashboardStats(res.body))
-                .catch(handleError)
-            loadVatRate()
-            loadShippingRates()
-        } else if (activeTab === 'products' || activeTab === 'prices' || activeTab === 'taxes') {
-            requestApi<any[]>('/api/products', { headers })
-                .then(res => setAdminProductsList(normalizeAdminProducts(res.body)))
-                .catch(handleError)
-            requestApi<DashboardStats>('/api/admin/dashboard/stats', { headers })
-                .then(res => setDashboardStats(res.body))
-                .catch(handleError)
-            loadVatRate()
-            loadShippingRates()
-        } else if (activeTab === 'admin-orders') {
-            requestApi<Order[]>('/api/orders', { headers })
-                .then(res => setAdminOrdersList(res.body))
-                .catch(handleError)
-        } else if (activeTab === 'shipments') {
-            requestApi<{ providers: ShippingProvider[] }>('/api/shipments', { headers })
-                .then(res => setShippingProviders(res.body.providers))
-                .catch(handleError)
+        const tabsWithStats = new Set([
+            'reports',
+            'sales-ranking',
+            'prices',
+            'taxes',
+            'margins',
+            'calculations',
+            'pricing-rules',
+            'product-page',
+            'balances'
+        ])
+        const tabsWithProducts = new Set(['products', 'prices'])
+        const tabsWithOrders = new Set(['admin-orders', 'shipments', 'balances'])
+        const tabsWithPricingSettings = new Set(['prices', 'margins', 'calculations', 'pricing-rules'])
+
+        const loadAdminData = async () => {
+            if (!cancelled) {
+                setAdminDataLoading(true)
+                setAdminDataError(null)
+            }
+
+            const tasks: Array<Promise<any>> = []
+
+            if (tabsWithStats.has(activeTab)) {
+                const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
+                    ? `?month=${encodeURIComponent(salesRankingMonth)}`
+                    : ''
+                tasks.push(
+                    requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers }).then((res) => {
+                        if (!cancelled) setDashboardStats(res.body)
+                    })
+                )
+                tasks.push(loadVatRate())
+                tasks.push(loadShippingRates())
+            }
+
+            if (tabsWithProducts.has(activeTab)) {
+                tasks.push(
+                    requestApi<any[]>('/api/products', { headers }).then((res) => {
+                        if (!cancelled) setAdminProductsList(normalizeAdminProducts(res.body))
+                    })
+                )
+            }
+
+            if (tabsWithOrders.has(activeTab)) {
+                tasks.push(
+                    requestApi<Order[]>('/api/orders', { headers }).then((res) => {
+                        if (!cancelled) setAdminOrdersList(res.body)
+                    })
+                )
+            }
+
+            if (tabsWithPricingSettings.has(activeTab)) {
+                tasks.push(loadPricingSettings())
+            }
+
+            if (activeTab === 'product-page') {
+                tasks.push(
+                    getProductPageSettings().then((settings) => {
+                        if (!cancelled) setProductPageSettings(settings)
+                    })
+                )
+            }
+
+            if (activeTab === 'store-status') {
+                tasks.push(loadStoreStatus())
+            }
+
+            if (activeTab === 'shipments') {
+                tasks.push(
+                    requestApi<{ providers?: ShippingProvider[]; pickups?: ShippingPickup[] }>('/api/shipments', { headers }).then((res) => {
+                        if (!cancelled) {
+                            setShippingProviders(Array.isArray(res.body.providers) ? res.body.providers : [])
+                            setShippingPickups(Array.isArray(res.body.pickups) ? res.body.pickups : [])
+                        }
+                    })
+                )
+                tasks.push(loadShippingRates())
+            }
+
+            const results = await Promise.allSettled(tasks)
+            results.forEach((result) => {
+                if (result.status === 'rejected') {
+                    handleError(result.reason)
+                }
+            })
+
+            if (!cancelled) {
+                setAdminDataLoading(false)
+            }
         }
-    }, [activeTab, user])
+
+        loadAdminData()
+
+        return () => {
+            cancelled = true
+        }
+    }, [activeTab, salesRankingMonth, user])
 
     React.useEffect(() => {
         const token = localStorage.getItem('authToken')
@@ -1114,6 +1585,7 @@ const MyAccount = () => {
     React.useEffect(() => {
         if (!user || user.role !== 'admin') return
         loadPricingSettings()
+        loadStoreStatus()
         getProductPageSettings()
             .then((settings) => setProductPageSettings(settings))
             .catch((err) => {
@@ -1137,7 +1609,7 @@ const MyAccount = () => {
             headers: { Authorization: `Bearer ${token}` }
         })
             .then(res => {
-                const apiProfile = res.body.profile || {}
+                const apiProfile: Partial<typeof profile> = res.body.profile || {}
                 const fallbackName = res.body.name || user.name || ''
                 const [firstName, ...rest] = fallbackName.split(' ')
                 setProfile({
@@ -1194,6 +1666,12 @@ const MyAccount = () => {
     }
 
     const currentAddress = savedAddresses[currentAddrIndex]
+    const currentDateLabel = formatDateEcuador(new Date(), {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    })
     const vatDisplayRate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
     const vatDisplayMultiplier = Number(dashboardStats?.tax?.multiplier ?? (1 + vatDisplayRate / 100))
     const vatRateLabel = vatDisplayRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1211,6 +1689,178 @@ const MyAccount = () => {
     const productProfitLabel = productGrossProfit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
+    const salesTrendIsPositive = salesProgressPercentage >= 0
+    const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
+    const selectedRankingMonth = productSalesRanking?.selectedMonth || salesRankingMonth
+    const selectedRankingMonthLabel = formatMonthKeyLabel(selectedRankingMonth)
+    const salesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
+        if (!productSalesRanking) return []
+        const source = salesRankingView === 'month'
+            ? productSalesRanking.monthlyRanking
+            : productSalesRanking.historicalRanking
+        return source.map((item) => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            category: item.category,
+            orders_count: salesRankingView === 'month' ? Number(item.month_orders_count ?? 0) : Number(item.historical_orders_count ?? 0),
+            units_sold: salesRankingView === 'month' ? Number(item.month_units_sold ?? 0) : Number(item.historical_units_sold ?? 0),
+            gross_revenue: salesRankingView === 'month' ? Number(item.month_gross_revenue ?? 0) : Number(item.historical_gross_revenue ?? 0),
+            net_revenue: salesRankingView === 'month' ? Number(item.month_net_revenue ?? 0) : Number(item.historical_net_revenue ?? 0),
+            vat_amount: salesRankingView === 'month' ? Number(item.month_vat_amount ?? 0) : Number(item.historical_vat_amount ?? 0),
+            shipping_amount: salesRankingView === 'month' ? Number(item.month_shipping_amount ?? 0) : Number(item.historical_shipping_amount ?? 0),
+            cost: salesRankingView === 'month' ? Number(item.month_cost ?? 0) : Number(item.historical_cost ?? 0),
+            profit: salesRankingView === 'month' ? Number(item.month_profit ?? 0) : Number(item.historical_profit ?? 0),
+            margin: salesRankingView === 'month' ? Number(item.month_margin ?? 0) : Number(item.historical_margin ?? 0),
+            month_orders_count: Number(item.month_orders_count ?? 0),
+            month_units_sold: Number(item.month_units_sold ?? 0),
+            month_gross_revenue: Number(item.month_gross_revenue ?? 0),
+            month_net_revenue: Number(item.month_net_revenue ?? 0),
+            month_vat_amount: Number(item.month_vat_amount ?? 0),
+            month_shipping_amount: Number(item.month_shipping_amount ?? 0),
+            month_cost: Number(item.month_cost ?? 0),
+            month_profit: Number(item.month_profit ?? 0),
+            month_margin: Number(item.month_margin ?? 0),
+            historical_orders_count: Number(item.historical_orders_count ?? 0),
+            historical_units_sold: Number(item.historical_units_sold ?? 0),
+            historical_gross_revenue: Number(item.historical_gross_revenue ?? 0),
+            historical_net_revenue: Number(item.historical_net_revenue ?? 0),
+            historical_vat_amount: Number(item.historical_vat_amount ?? 0),
+            historical_shipping_amount: Number(item.historical_shipping_amount ?? 0),
+            historical_cost: Number(item.historical_cost ?? 0),
+            historical_profit: Number(item.historical_profit ?? 0),
+            historical_margin: Number(item.historical_margin ?? 0)
+        }))
+    }, [productSalesRanking, salesRankingView])
+    const monthlySalesRankingTotals = productSalesRanking?.monthlyTotals
+    const historicalSalesRankingTotals = productSalesRanking?.historicalTotals
+    const salesRankingTotals = salesRankingView === 'month' ? monthlySalesRankingTotals : historicalSalesRankingTotals
+    const monthlySalesFinancial = productSalesRanking?.monthlyFinancial
+    const historicalSalesFinancial = productSalesRanking?.historicalFinancial
+    const salesRankingFinancial = salesRankingView === 'month' ? monthlySalesFinancial : historicalSalesFinancial
+    const openSalesProductDetail = (item: SalesRankingRow) => {
+        setSelectedSalesProduct(item)
+        setIsSalesProductModalOpen(true)
+    }
+
+    const openProductBreakdown = (metric: ProductDetailMetric) => {
+        setSelectedProductMetric(metric)
+        setSelectedDeepDive('product-breakdown')
+    }
+
+    const productBreakdownMeta = React.useMemo(() => {
+        switch (selectedProductMetric) {
+            case 'gross':
+                return {
+                    title: 'Venta Total por Producto',
+                    subtitle: 'Incluye IVA y prorrateo de envío según participación en ventas netas.',
+                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.gross ?? 0)
+                }
+            case 'vat':
+                return {
+                    title: 'IVA Cobrado por Producto',
+                    subtitle: 'Estimación por producto usando la tasa de IVA aplicada al catálogo.',
+                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.vat ?? 0)
+                }
+            case 'shipping':
+                return {
+                    title: 'Envío Cobrado por Producto',
+                    subtitle: 'Distribución proporcional al peso de cada producto en ventas netas.',
+                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.shipping ?? 0)
+                }
+            case 'profit':
+                return {
+                    title: 'Utilidad Bruta por Producto',
+                    subtitle: 'Utilidad estimada = venta neta del producto - costo acumulado vendido.',
+                    total: Number(dashboardStats?.businessMetrics?.profitStats?.profit ?? 0)
+                }
+            case 'inventory':
+                return {
+                    title: 'Valor de Inventario por Producto',
+                    subtitle: 'Costo inmovilizado actual por SKU (stock x costo unitario).',
+                    total: Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0)
+                }
+            case 'net':
+            default:
+                return {
+                    title: 'Venta Neta por Producto',
+                    subtitle: 'Sin IVA ni envío. Basado en pedidos no cancelados.',
+                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0)
+                }
+        }
+    }, [dashboardStats, selectedProductMetric])
+
+    const salesProductBreakdown = React.useMemo(() => {
+        const products = dashboardStats?.businessMetrics?.traceability?.products || []
+        const vatRateForBreakdown = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+        const vatMultiplierForBreakdown = 1 + (vatRateForBreakdown / 100)
+        const totalNet = products.reduce((acc, item) => acc + Number(item.net_revenue ?? 0), 0)
+        const totalShipping = Number(dashboardStats?.businessMetrics?.salesSummary?.shipping ?? 0)
+
+        const costByProductId = new Map<string, number>(
+            (adminProductsList || []).map((product: any) => {
+                const productId = String(product.id ?? '')
+                const cost = parseMoney(product.business?.cost ?? product.cost)
+                return [productId, cost]
+            })
+        )
+
+        return products
+            .map((item) => {
+                const net = Number(item.net_revenue ?? 0)
+                const gross = vatMultiplierForBreakdown > 0 ? net * vatMultiplierForBreakdown : net
+                const vat = Math.max(gross - net, 0)
+                const shipping = totalNet > 0 ? (totalShipping * net) / totalNet : 0
+                const units = Number(item.units_sold ?? 0)
+                const unitCost = costByProductId.get(String(item.product_id ?? '')) ?? 0
+                const cost = Math.max(unitCost * units, 0)
+                const profit = net - cost
+                const metricValue = selectedProductMetric === 'gross'
+                    ? gross
+                    : selectedProductMetric === 'vat'
+                        ? vat
+                        : selectedProductMetric === 'shipping'
+                            ? shipping
+                            : selectedProductMetric === 'profit'
+                                ? profit
+                                : net
+
+                return {
+                    ...item,
+                    units,
+                    net,
+                    gross,
+                    vat,
+                    shipping,
+                    cost,
+                    profit,
+                    metricValue
+                }
+            })
+            .sort((a, b) => b.metricValue - a.metricValue)
+    }, [adminProductsList, dashboardStats, parseMoney, selectedProductMetric, vatRate])
+
+    const inventoryProductBreakdown = React.useMemo(() => {
+        return (adminProductsList || [])
+            .map((product: any) => {
+                const quantity = Number(product.quantity ?? 0)
+                const unitCost = parseMoney(product.business?.cost ?? product.cost)
+                const unitPrice = parseMoney(product.price)
+                const inventoryCost = Math.max(quantity * unitCost, 0)
+                const inventoryMarket = Math.max(quantity * unitPrice, 0)
+                return {
+                    id: String(product.id ?? ''),
+                    name: String(product.name ?? 'Producto sin nombre'),
+                    category: String(product.category ?? 'Sin categoría'),
+                    quantity,
+                    unitCost,
+                    unitPrice,
+                    inventoryCost,
+                    inventoryMarket
+                }
+            })
+            .sort((a, b) => b.inventoryCost - a.inventoryCost)
+    }, [adminProductsList, parseMoney])
 
     const handleBasePriceChange = (value: string) => {
         const baseValue = Number(value || 0)
@@ -1293,23 +1943,14 @@ const MyAccount = () => {
         }
     }
 
-    const handleAddressSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        localStorage.setItem('savedAddresses', JSON.stringify(savedAddresses))
-        showNotification('¡Direcciones guardadas exitosamente!')
-    }
-
-    const handleSettingsSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        // Simulate API call
-        showNotification('Información personal guardada correctamente.')
-    }
-
     const renderDeepDive = () => {
         if (!selectedDeepDive || !dashboardStats?.businessMetrics) return null;
 
         const metrics = dashboardStats.businessMetrics;
         const salesDeepDive = metrics.salesDeepDive;
+        const isProductBreakdown = selectedDeepDive === 'product-breakdown';
+        const productMetricTotal = productBreakdownMeta.total;
+        const productMetricRows = selectedProductMetric === 'inventory' ? inventoryProductBreakdown : salesProductBreakdown;
 
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
@@ -1319,9 +1960,12 @@ const MyAccount = () => {
                             <h3 className="heading4">
                                 {selectedDeepDive === 'sales' ? 'Análisis Detallado de Ventas' :
                                     selectedDeepDive === 'profit' ? 'Detalle de Rentabilidad' :
-                                        selectedDeepDive === 'aov' ? 'Análisis de Ticket Promedio' : 'Salud de Inventario'}
+                                        selectedDeepDive === 'aov' ? 'Análisis de Ticket Promedio' :
+                                            selectedDeepDive === 'inventory' ? 'Salud de Inventario' : productBreakdownMeta.title}
                             </h3>
-                            <p className="text-secondary text-sm">Desglose comparativo y factores de crecimiento</p>
+                            <p className="text-secondary text-sm">
+                                {isProductBreakdown ? productBreakdownMeta.subtitle : 'Desglose comparativo y factores de crecimiento'}
+                            </p>
                         </div>
                         <button onClick={() => setSelectedDeepDive(null)} className="p-2 hover:bg-line rounded-full transition-colors">
                             <Icon.X size={28} />
@@ -1500,7 +2144,7 @@ const MyAccount = () => {
                                                 <Icon.Target size={20} weight="fill" /> Estrategia de Upselling
                                             </h6>
                                             <p className="text-xs text-blue-800 leading-relaxed italic">
-                                                "El {Math.round((metrics.aovDeepDive?.distribution.find(d => d.bucket.includes('Bajo'))?.count || 0) / (metrics.aovDeepDive?.distribution.reduce((acc, curr) => acc + Number(curr.count), 0) || 1) * 100)}% de tus pedidos son menores a $50. Implementar un umbral de 'Envío Gratis' en $60 podría incrementar el Ticket Promedio en un 15%."
+                                                &quot;El {Math.round((metrics.aovDeepDive?.distribution.find(d => d.bucket.includes('Bajo'))?.count || 0) / (metrics.aovDeepDive?.distribution.reduce((acc, curr) => acc + Number(curr.count), 0) || 1) * 100)}% de tus pedidos son menores a $50. Implementar un umbral de &apos;Envío Gratis&apos; en $60 podría incrementar el Ticket Promedio en un 15%.&quot;
                                             </p>
                                         </div>
                                         <div className="p-8 bg-white border border-line rounded-3xl shadow-sm">
@@ -1598,6 +2242,102 @@ const MyAccount = () => {
                                 </div>
                             </div>
                         )}
+
+                        {selectedDeepDive === 'product-breakdown' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="p-4 border border-line rounded-xl bg-surface">
+                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Métrica seleccionada</div>
+                                        <div className="text-sm font-semibold">{productBreakdownMeta.title}</div>
+                                    </div>
+                                    <div className="p-4 border border-line rounded-xl bg-surface">
+                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Total</div>
+                                        <div className="heading6">{formatMoney(productMetricTotal)}</div>
+                                    </div>
+                                    <div className="p-4 border border-line rounded-xl bg-surface">
+                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Productos</div>
+                                        <div className="heading6">{productMetricRows.length}</div>
+                                    </div>
+                                </div>
+
+                                {selectedProductMetric !== 'inventory' && (
+                                    <div className="overflow-x-auto border border-line rounded-xl">
+                                        <table className="w-full min-w-[980px] text-left">
+                                            <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                <tr>
+                                                    <th className="px-4 py-3">Producto</th>
+                                                    <th className="px-4 py-3">Categoría</th>
+                                                    <th className="px-4 py-3 text-right">Unidades</th>
+                                                    <th className="px-4 py-3 text-right">Neto</th>
+                                                    <th className="px-4 py-3 text-right">IVA Est.</th>
+                                                    <th className="px-4 py-3 text-right">Envío Est.</th>
+                                                    <th className="px-4 py-3 text-right">Total Est.</th>
+                                                    <th className="px-4 py-3 text-right">Costo</th>
+                                                    <th className="px-4 py-3 text-right">Utilidad</th>
+                                                    <th className="px-4 py-3 text-right">Pedidos</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-line">
+                                                {salesProductBreakdown.map((item: any, idx: number) => {
+                                                    const refs = Array.isArray(item.order_refs)
+                                                        ? item.order_refs
+                                                        : String(item.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
+                                                    return (
+                                                        <tr key={`${item.product_id || item.product_name}-${idx}`} className="hover:bg-surface/50">
+                                                            <td className="px-4 py-3">
+                                                                <div className="font-semibold text-sm">{item.product_name}</div>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm capitalize">{item.category || 'Sin categoría'}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{Number(item.units || 0)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right font-semibold">{formatMoney(item.net)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.vat)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.shipping)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.gross + item.shipping)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.cost)}</td>
+                                                            <td className={`px-4 py-3 text-sm text-right font-semibold ${item.profit >= 0 ? 'text-success' : 'text-red'}`}>
+                                                                {formatMoney(item.profit)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm text-right">{refs.length}</td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {selectedProductMetric === 'inventory' && (
+                                    <div className="overflow-x-auto border border-line rounded-xl">
+                                        <table className="w-full min-w-[900px] text-left">
+                                            <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                <tr>
+                                                    <th className="px-4 py-3">Producto</th>
+                                                    <th className="px-4 py-3">Categoría</th>
+                                                    <th className="px-4 py-3 text-right">Stock</th>
+                                                    <th className="px-4 py-3 text-right">Costo Unitario</th>
+                                                    <th className="px-4 py-3 text-right">Valor Inventario</th>
+                                                    <th className="px-4 py-3 text-right">PVP Unitario</th>
+                                                    <th className="px-4 py-3 text-right">Valor Mercado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-line">
+                                                {inventoryProductBreakdown.map((item) => (
+                                                    <tr key={item.id} className="hover:bg-surface/50">
+                                                        <td className="px-4 py-3 font-semibold text-sm">{item.name}</td>
+                                                        <td className="px-4 py-3 text-sm capitalize">{item.category}</td>
+                                                        <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
+                                                        <td className="px-4 py-3 text-sm text-right">{formatMoney(item.unitCost)}</td>
+                                                        <td className="px-4 py-3 text-sm text-right font-semibold">{formatMoney(item.inventoryCost)}</td>
+                                                        <td className="px-4 py-3 text-sm text-right">{formatMoney(item.unitPrice)}</td>
+                                                        <td className="px-4 py-3 text-sm text-right">{formatMoney(item.inventoryMarket)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1643,6 +2383,15 @@ const MyAccount = () => {
         })
         return counts
     }, [adminOrdersList])
+    const pickupReadyOrders = React.useMemo(() => {
+        return adminOrdersList
+            .filter((order) => ['pickup', 'ready_for_pickup', 'ready'].includes(normalizeStatus(order.status)))
+            .slice(0, 8)
+    }, [adminOrdersList])
+    const selectedOrderContact = React.useMemo(
+        () => getOrderContact(selectedOrder),
+        [selectedOrder, savedAddresses, user]
+    )
 
     if (!user) return null
 
@@ -1723,6 +2472,10 @@ const MyAccount = () => {
                                                 <Icon.ChartBar size={20} />
                                                 <strong className="heading6">Reportes</strong>
                                             </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'sales-ranking' ? 'active' : ''}`} onClick={() => setActiveTab('sales-ranking')}>
+                                                <Icon.Trophy size={20} />
+                                                <strong className="heading6">Ranking Ventas</strong>
+                                            </Link>
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>
                                                 <Icon.ShoppingBag size={20} />
                                                 <strong className="heading6">Productos</strong>
@@ -1730,6 +2483,10 @@ const MyAccount = () => {
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'prices' ? 'active' : ''}`} onClick={() => setActiveTab('prices')}>
                                                 <Icon.CurrencyDollar size={20} />
                                                 <strong className="heading6">Precios</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'store-status' ? 'active' : ''}`} onClick={() => setActiveTab('store-status')}>
+                                                <Icon.Power size={20} />
+                                                <strong className="heading6">Ventas</strong>
                                             </Link>
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'taxes' ? 'active' : ''}`} onClick={() => setActiveTab('taxes')}>
                                                 <Icon.Percent size={20} />
@@ -1794,15 +2551,25 @@ const MyAccount = () => {
                         <div className="right lg:w-3/4 xl:w-4/5 w-full lg:pl-6 pl-0 min-w-0">
                             {user.role === 'admin' && (
                                 <>
+                                    {adminDataLoading && (
+                                        <div className="mb-4 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-secondary">
+                                            Actualizando datos del panel...
+                                        </div>
+                                    )}
+                                    {adminDataError && (
+                                        <div className="mb-4 rounded-lg border border-red/30 bg-red/5 px-4 py-3 text-sm text-red">
+                                            {adminDataError}
+                                        </div>
+                                    )}
                                     <div className={`tab text-content w-full ${activeTab === 'reports' ? 'block' : 'hidden'}`}>
                                         <div className="flex items-center justify-between pb-6">
                                             <div className="heading5">Reportes de Negocio</div>
                                             <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
-                                                {new Date().toLocaleDateString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                {currentDateLabel}
                                             </div>
                                         </div>
 
-                                        <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
+                                        <div className="mb-6 p-4 rounded-xl border border-line bg-surface">
                                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                                 <div>
                                                     <div className="text-secondary text-xs uppercase font-bold mb-1">IVA configurado</div>
@@ -1836,7 +2603,11 @@ const MyAccount = () => {
                                                                     <Icon.Info size={24} weight="fill" />}
                                                             <span className="font-medium">{alert.message}</span>
                                                         </div>
-                                                        <button className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-current hover:bg-white/20 transition-colors">
+                                                        <button
+                                                            type="button"
+                                                            className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-current hover:bg-white/20 transition-colors"
+                                                            onClick={() => handleStrategicAlertAction(alert)}
+                                                        >
                                                             {alert.action}
                                                         </button>
                                                     </motion.div>
@@ -1844,97 +2615,139 @@ const MyAccount = () => {
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
                                             {(() => {
                                                 const summary = dashboardStats?.businessMetrics?.salesSummary
+                                                const ranking = dashboardStats?.businessMetrics?.productSalesRanking
                                                 const gross = Number(summary?.gross ?? 0)
                                                 const net = Number(summary?.net ?? 0)
                                                 const vat = Number(summary?.vat ?? 0)
                                                 const shipping = Number(summary?.shipping ?? 0)
+                                                const monthUnits = Number(ranking?.monthlyTotals?.units_sold ?? 0)
+                                                const histUnits = Number(ranking?.historicalTotals?.units_sold ?? 0)
                                                 return (
                                                     <>
-                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <button
+                                                            type="button"
+                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            onClick={() => openProductBreakdown('gross')}
+                                                        >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Total</div>
-                                                            <div className="heading5">${gross.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                                                            <div className="text-secondary text-xs mt-1">Incluye IVA + Envío</div>
-                                                        </div>
-                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="heading5">${gross.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Incluye IVA + Envío • Ver productos</div>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            onClick={() => openProductBreakdown('net')}
+                                                        >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Neta</div>
-                                                            <div className="heading5">${net.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                                                            <div className="text-secondary text-xs mt-1">Sin IVA ni envío</div>
-                                                        </div>
-                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="heading5">${net.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Sin IVA ni envío • Ver productos</div>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            onClick={() => openProductBreakdown('vat')}
+                                                        >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">IVA Cobrado</div>
-                                                            <div className="heading5">${vat.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                                                            <div className="text-secondary text-xs mt-1">Impuesto del cliente</div>
-                                                        </div>
-                                                        <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                            <div className="heading5">${vat.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Impuesto del cliente • Ver productos</div>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            onClick={() => openProductBreakdown('shipping')}
+                                                        >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Envío Cobrado</div>
-                                                            <div className="heading5">${shipping.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                                                            <div className="text-secondary text-xs mt-1">Cobro al cliente</div>
-                                                        </div>
+                                                            <div className="heading5">${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            <div className="text-secondary text-xs mt-1">Cobro al cliente • Ver productos</div>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            onClick={() => setActiveTab('sales-ranking')}
+                                                        >
+                                                            <div className="text-secondary text-xs uppercase font-bold mb-1">Productos Vendidos (uds)</div>
+                                                            <div className="heading5">{monthUnits.toLocaleString('es-EC')}</div>
+                                                            <div className="text-secondary text-xs mt-1">
+                                                                Mes actual • Hist: {histUnits.toLocaleString('es-EC')}
+                                                            </div>
+                                                        </button>
                                                     </>
                                                 )
                                             })()}
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
                                             <div
-                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                onClick={() => setSelectedDeepDive('sales')}
+                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => openProductBreakdown('net')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Ventas (Mes, netas)</div>
                                                     <Icon.CurrencyDollar className="text-success" size={20} />
                                                 </div>
-                                                <div className="heading4">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}</div>
-                                                <div className="text-success text-xs mt-3 font-bold flex items-center gap-1">
-                                                    <Icon.TrendUp weight="bold" />
-                                                    +{dashboardStats?.totalSales?.progress?.percentage ?? 0}%
+                                                <div className="heading5">${dashboardStats?.totalSales?.amount ? Number(dashboardStats.totalSales.amount).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</div>
+                                                <div className={`${salesTrendIsPositive ? 'text-success' : 'text-red'} text-xs mt-2 font-bold flex items-center gap-1`}>
+                                                    {salesTrendIsPositive ? <Icon.TrendUp weight="bold" /> : <Icon.TrendDown weight="bold" />}
+                                                    {salesTrendIsPositive ? '+' : ''}{salesProgressPercentage.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
                                                     <span className="text-secondary font-normal ml-1 flex items-center gap-1 underline">ver detalle <Icon.ArrowRight size={10} /></span>
                                                 </div>
                                             </div>
 
                                             <div
-                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => setSelectedDeepDive('aov')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Ticket Promedio</div>
                                                     <Icon.Receipt className="text-blue-500" size={20} />
                                                 </div>
-                                                <div className="heading4">${dashboardStats?.businessMetrics?.averageOrderValue?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
-                                                <div className="text-secondary text-xs mt-3 underline">Analizar distribución <Icon.ArrowRight size={10} className="inline ml-1" /></div>
+                                                <div className="heading5">${dashboardStats?.businessMetrics?.averageOrderValue?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-secondary text-xs mt-2 underline">Analizar distribución <Icon.ArrowRight size={10} className="inline ml-1" /></div>
                                             </div>
 
                                             <div
-                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                onClick={() => setSelectedDeepDive('profit')}
+                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => openProductBreakdown('profit')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Utilidad Bruta (sin IVA y sin envío)</div>
                                                     <Icon.HandCoins className="text-orange-500" size={20} />
                                                 </div>
-                                                <div className="heading4 text-success">${dashboardStats?.businessMetrics?.profitStats?.profit?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
-                                                <div className="text-success text-xs mt-3 font-bold">{dashboardStats?.businessMetrics?.profitStats?.margin ?? 0}% <span className="text-secondary font-normal underline">margen neto</span></div>
+                                                <div className="heading5 text-success">${dashboardStats?.businessMetrics?.profitStats?.profit?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-success text-xs mt-2 font-bold">{dashboardStats?.businessMetrics?.profitStats?.margin ?? 0}% <span className="text-secondary font-normal underline">margen neto</span></div>
                                             </div>
 
                                             <div
-                                                className="p-6 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                onClick={() => setSelectedDeepDive('inventory')}
+                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => openProductBreakdown('inventory')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Valor Inventario</div>
                                                     <Icon.Archive className="text-purple-500" size={20} />
                                                 </div>
-                                                <div className="heading4">${dashboardStats?.businessMetrics?.inventoryValue?.cost_value?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'}</div>
-                                                <div className="text-secondary text-xs mt-3">{dashboardStats?.businessMetrics?.inventoryValue?.total_items ?? 0} items <span className="underline">ver riesgos <Icon.ArrowRight size={10} className="inline ml-1" /></span></div>
+                                                <div className="heading5">${dashboardStats?.businessMetrics?.inventoryValue?.cost_value?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}</div>
+                                                <div className="text-secondary text-xs mt-2">{dashboardStats?.businessMetrics?.inventoryValue?.total_items ?? 0} items <span className="underline">ver riesgos <Icon.ArrowRight size={10} className="inline ml-1" /></span></div>
+                                            </div>
+
+                                            <div
+                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                onClick={() => setActiveTab('products')}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-secondary text-sm font-medium">Productos Activos</div>
+                                                    <Icon.ShoppingBag className="text-primary" size={20} />
+                                                </div>
+                                                <div className="heading5">{adminProductsList.length.toLocaleString('es-EC')}</div>
+                                                <div className="text-secondary text-xs mt-2 underline">Ver catálogo <Icon.ArrowRight size={10} className="inline ml-1" /></div>
                                             </div>
                                         </div>
 
-                                        <div className="mt-8">
-                                            <div className="bg-white p-8 rounded-2xl border border-line shadow-sm relative overflow-hidden">
-                                                <div className="flex items-center justify-between mb-8">
+                                        <div className="mt-6">
+                                            <div className="bg-white p-6 rounded-2xl border border-line shadow-sm relative overflow-hidden">
+                                                <div className="flex items-center justify-between mb-6">
                                                     <div>
                                                         <div className="heading6">Tendencia de Ventas</div>
                                                         <p className="text-secondary text-xs mt-1">Comparativa de ingresos diarios</p>
@@ -1955,7 +2768,7 @@ const MyAccount = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="h-80 relative mt-4">
+                                                <div className="h-64 md:h-72 relative mt-2">
                                                     {dashboardStats ? (
                                                         trendRange === 7 ? (
                                                             <div className="flex items-end gap-3 h-full justify-between pt-6 px-2">
@@ -2084,8 +2897,8 @@ const MyAccount = () => {
                                                                     {(() => {
                                                                         const data = dashboardStats.salesTrend30Days || [];
                                                                         // Show ~5 labels evenly distributed
-                                                                        const step = Math.floor(data.length / 5);
-                                                                        const labels = [];
+                                                                        const step = Math.max(1, Math.floor(data.length / 5));
+                                                                        const labels: Array<{ day: string; total: number }> = [];
                                                                         for (let i = 0; i < data.length; i += step) {
                                                                             if (labels.length < 5) labels.push(data[i]);
                                                                         }
@@ -2115,17 +2928,26 @@ const MyAccount = () => {
                                                         {dashboardStats?.businessMetrics?.ordersByStatus?.map((status, i) => {
                                                             const total = dashboardStats.businessMetrics?.ordersByStatus?.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
                                                             const perc = Math.round((Number(status.count) / total) * 100);
+                                                            const normalizedStatus = normalizeStatus(status.status)
+                                                            const barColorClass = ['completed', 'delivered'].includes(normalizedStatus)
+                                                                ? 'bg-success'
+                                                                : ['processing', 'in_process', 'in-process'].includes(normalizedStatus)
+                                                                    ? 'bg-yellow'
+                                                                    : ['pending'].includes(normalizedStatus)
+                                                                        ? 'bg-amber-400'
+                                                                        : ['canceled', 'cancelled'].includes(normalizedStatus)
+                                                                            ? 'bg-red'
+                                                                            : ['pickup', 'ready_for_pickup', 'ready'].includes(normalizedStatus)
+                                                                                ? 'bg-amber-600'
+                                                                                : 'bg-primary'
                                                             return (
                                                                 <div key={i} className="cursor-pointer group hover:bg-surface -mx-2 p-2 rounded-lg transition-colors" onClick={() => setActiveTab('admin-orders')}>
                                                                     <div className="flex justify-between text-sm mb-2">
-                                                                        <span className="capitalize font-bold text-secondary group-hover:text-black transition-colors">{status.status}</span>
+                                                                        <span className="capitalize font-bold text-secondary group-hover:text-black transition-colors">{getStatusBadge(status.status).label}</span>
                                                                         <span className="font-bold">{status.count} ({perc}%)</span>
                                                                     </div>
                                                                     <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                                                                        <div className={`h-full ${status.status === 'completed' ? 'bg-success' :
-                                                                            status.status === 'processing' ? 'bg-yellow' :
-                                                                                status.status === 'pending' ? 'bg-amber-400' :
-                                                                                    'bg-primary'}`} style={{ width: `${perc}%` }}></div>
+                                                                        <div className={`h-full ${barColorClass}`} style={{ width: `${perc}%` }}></div>
                                                                     </div>
                                                                 </div>
                                                             )
@@ -2155,7 +2977,9 @@ const MyAccount = () => {
                                                                             <td className="py-4 font-bold text-xs truncate pr-2 group-hover:text-primary transition-colors">#{order.id.split('-').pop()}</td>
                                                                             <td className="py-4 text-xs truncate pr-2">{order.user_name || 'Anónimo'}</td>
                                                                             <td className="py-4 text-right font-bold text-xs">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                            <td className="py-4 text-right text-[10px] text-secondary whitespace-nowrap">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                                                            <td className="py-4 text-right text-[10px] text-secondary whitespace-nowrap">
+                                                                                {formatDateTimeEcuador(order.created_at, { hour: '2-digit', minute: '2-digit' })}
+                                                                            </td>
                                                                         </tr>
                                                                     ))}
                                                                 </tbody>
@@ -2252,6 +3076,173 @@ const MyAccount = () => {
                                                         <div className="text-[9px] text-secondary text-center mt-2 group-hover:text-black">Diferencia entre Precio de Venta y Costo de Adquisición</div>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'sales-ranking' ? 'block' : 'hidden'}`}>
+                                        <div className="flex items-center justify-between pb-6">
+                                            <div>
+                                                <div className="heading5">Ranking de productos vendidos</div>
+                                                <p className="text-secondary text-xs mt-1">
+                                                    Ranking completo del producto más vendido al menos vendido.
+                                                </p>
+                                            </div>
+                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
+                                                {currentDateLabel}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-2xl border border-line shadow-sm mb-8">
+                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                                                <div>
+                                                    <div className="heading6">Resumen y orden de ventas</div>
+                                                    <p className="text-secondary text-xs mt-1">
+                                                        Vista activa: {salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'}.
+                                                    </p>
+                                                    <p className="text-secondary text-xs mt-1">
+                                                        Haz clic en el nombre del producto para ver su detalle (mes e histórico).
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                                                    <label className="flex flex-col gap-1 text-[10px] uppercase font-bold text-secondary">
+                                                        Mes a consultar
+                                                        <input
+                                                            type="month"
+                                                            value={salesRankingMonth}
+                                                            onChange={(event) => {
+                                                                const nextMonth = event.target.value
+                                                                setSalesRankingMonth(nextMonth || getCurrentMonthKey())
+                                                                setSalesRankingView('month')
+                                                            }}
+                                                            className="px-3 py-1.5 text-sm font-semibold rounded-md border border-line bg-white text-black focus:border-black outline-none"
+                                                        />
+                                                    </label>
+                                                    <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSalesRankingView('month')}
+                                                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'month' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                        >
+                                                            Mes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSalesRankingView('historical')}
+                                                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'historical' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                        >
+                                                            Histórico total
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Periodo activo</div>
+                                                    <div className="text-sm font-semibold">
+                                                        {salesRankingView === 'month'
+                                                            ? `${productSalesRanking?.period?.start || '-'} → ${productSalesRanking?.period?.end || '-'}`
+                                                            : `${productSalesRanking?.historicalPeriod?.start || '-'} → ${productSalesRanking?.historicalPeriod?.end || '-'}`
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
+                                                    <div className="text-lg font-bold">{Number(salesRankingFinancial?.orders_count ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
+                                                    <div className="text-lg font-bold">{Number(salesRankingTotals?.units_sold ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
+                                                    <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.gross ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
+                                                    <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
+                                                    <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.vat ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
+                                                    <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.shipping ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
+                                                    <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.cost ?? 0)}</div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
+                                                    <div className={`text-lg font-bold ${(Number(salesRankingFinancial?.profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
+                                                        {formatMoney(salesRankingFinancial?.profit ?? 0)}
+                                                    </div>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-line bg-surface">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Margen</div>
+                                                    <div className="text-lg font-bold">{Number(salesRankingFinancial?.margin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="overflow-x-auto border border-line rounded-xl">
+                                                <table className="w-full min-w-[980px] text-left">
+                                                    <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-right">#</th>
+                                                            <th className="px-4 py-3">Producto</th>
+                                                            <th className="px-4 py-3">Categoría</th>
+                                                            <th className="px-4 py-3 text-right">Pedidos ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Vendidos ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Venta bruta ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Venta neta ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">IVA ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Envío ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Costo ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Utilidad ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                            <th className="px-4 py-3 text-right">Margen ({salesRankingView === 'month' ? 'Mes' : 'Histórico'})</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-line">
+                                                        {salesRankingRows.map((item, index) => (
+                                                            <tr key={`${item.product_id}-${index}`} className="hover:bg-surface/40">
+                                                                <td className="px-4 py-3 text-right font-semibold text-sm">{index + 1}</td>
+                                                                <td className="px-4 py-3 text-sm font-semibold">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="text-left hover:underline"
+                                                                        onClick={() => openSalesProductDetail(item)}
+                                                                    >
+                                                                        {item.product_name}
+                                                                    </button>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm capitalize">{item.category || 'Sin categoría'}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{item.orders_count}</td>
+                                                                <td className="px-4 py-3 text-sm text-right font-semibold">{item.units_sold}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{formatMoney(item.gross_revenue)}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{formatMoney(item.net_revenue)}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{formatMoney(item.vat_amount)}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{formatMoney(item.shipping_amount)}</td>
+                                                                <td className="px-4 py-3 text-sm text-right">{formatMoney(item.cost)}</td>
+                                                                <td className={`px-4 py-3 text-sm text-right font-semibold ${(Number(item.profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
+                                                                    {formatMoney(item.profit)}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm text-right">
+                                                                    {Number(item.margin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {salesRankingRows.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={12} className="px-4 py-6 text-center text-secondary text-sm">
+                                                                    No hay datos de ventas para construir el ranking.
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
                                     </div>
@@ -2730,6 +3721,78 @@ const MyAccount = () => {
                                         </div>
                                     </div>
 
+                                    <div className={`tab text-content w-full ${activeTab === 'store-status' ? 'block' : 'hidden'}`}>
+                                        <div className="heading5 pb-4">Ventas en línea</div>
+                                        <p className="text-secondary mb-6">Activa o detén la tienda para mantenimiento o fallas operativas.</p>
+                                        <div className="p-6 rounded-xl border border-line bg-surface">
+                                            {storeStatusLoading ? (
+                                                <div className="text-sm text-secondary">Cargando estado de ventas...</div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className={`p-4 rounded-lg border ${storeStatus.salesEnabled ? 'bg-white border-success/30' : 'bg-red/5 border-red/30'}`}>
+                                                            <div className="text-xs uppercase font-bold text-secondary">Estado actual</div>
+                                                            <div className={`heading5 mt-1 ${storeStatus.salesEnabled ? 'text-success' : 'text-red'}`}>
+                                                                {storeStatus.salesEnabled ? 'Ventas activas' : 'Ventas apagadas'}
+                                                            </div>
+                                                            <p className="text-xs text-secondary mt-2">
+                                                                {storeStatus.salesEnabled
+                                                                    ? 'Los clientes pueden cotizar y pagar pedidos.'
+                                                                    : 'La tienda bloquea cotizaciones y compras nuevas.'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="p-4 rounded-lg bg-white border border-line">
+                                                            <div className="text-xs uppercase font-bold text-secondary">Última actualización</div>
+                                                            <div className="text-sm font-semibold mt-1">
+                                                                {storeStatus.updatedAt ? formatDateTimeEcuador(storeStatus.updatedAt) : 'Sin registro'}
+                                                            </div>
+                                                            <p className="text-xs text-secondary mt-2">
+                                                                Usuario: {storeStatus.updatedBy || 'Sin registro'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-6">
+                                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">
+                                                            Mensaje cuando las ventas estén apagadas
+                                                        </label>
+                                                        <textarea
+                                                            className="border border-line rounded-lg px-4 py-3 w-full min-h-[120px]"
+                                                            value={storeStatus.message}
+                                                            onChange={(e) => setStoreStatus((prev) => ({ ...prev, message: e.target.value }))}
+                                                            placeholder={DEFAULT_STORE_PAUSE_MESSAGE}
+                                                            disabled={storeStatusSaving}
+                                                        />
+                                                        <p className="text-[11px] text-secondary mt-2">
+                                                            Este texto se devuelve al cliente cuando intenta comprar con la tienda detenida.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="mt-6 flex flex-wrap gap-3">
+                                                        <button
+                                                            className={`py-2 px-6 rounded-lg font-semibold ${storeStatus.salesEnabled ? 'bg-red text-white' : 'bg-success text-white'}`}
+                                                            onClick={() => handleSaveStoreStatus(!storeStatus.salesEnabled)}
+                                                            disabled={storeStatusSaving}
+                                                        >
+                                                            {storeStatusSaving
+                                                                ? 'Guardando...'
+                                                                : storeStatus.salesEnabled
+                                                                    ? 'Apagar ventas ahora'
+                                                                    : 'Reactivar ventas'}
+                                                        </button>
+                                                        <button
+                                                            className="py-2 px-6 rounded-lg font-semibold border border-line bg-white hover:bg-surface"
+                                                            onClick={() => handleSaveStoreStatus()}
+                                                            disabled={storeStatusSaving}
+                                                        >
+                                                            Guardar mensaje
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     <div className={`tab text-content w-full ${activeTab === 'margins' ? 'block' : 'hidden'}`}>
                                         <div className="heading5 pb-4">Márgenes y rentabilidad</div>
                                         <p className="text-secondary mb-6">Define objetivos de margen para tus precios recomendados.</p>
@@ -2850,7 +3913,10 @@ const MyAccount = () => {
                                                     <select
                                                         className="border border-line px-4 py-2 rounded-lg w-full"
                                                         value={calcSettings.strategy}
-                                                        onChange={(e) => setCalcSettings({ ...calcSettings, strategy: e.target.value })}
+                                                        onChange={(e) => {
+                                                            const nextStrategy = e.target.value as PricingCalc['strategy']
+                                                            setCalcSettings({ ...calcSettings, strategy: nextStrategy })
+                                                        }}
                                                     >
                                                         <option
                                                             value="cost_plus"
@@ -3175,7 +4241,7 @@ const MyAccount = () => {
                                                         <tr key={order.id} className="border-b border-line last:border-0 hover:bg-surface duration-300 text-sm">
                                                             <td className="py-4 font-bold">#{order.id}</td>
                                                             <td className="py-4">{order.user_name || 'Cliente'}</td>
-                                                            <td className="py-4">{new Date(order.created_at).toLocaleDateString()}</td>
+                                                            <td className="py-4">{formatDateEcuador(order.created_at)}</td>
                                                             <td className="py-4 font-bold">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                             <td className="py-4">
                                                                 <span className={`tag px-3 py-1 rounded-full text-xs font-semibold bg-opacity-10 ${badge.className}`}>
@@ -3198,27 +4264,119 @@ const MyAccount = () => {
 
                                     <div className={`tab text-content w-full ${activeTab === 'shipments' ? 'block' : 'hidden'}`}>
                                         <div className="heading5 pb-4">Gestión de Envíos</div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="p-6 bg-surface rounded-xl border border-line">
-                                                <h6 className="heading6 mb-4">Proveedores de Envío</h6>
+                                        <p className="text-secondary mb-6">Controla costos logísticos, proveedores activos y pedidos en recojo.</p>
+                                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                                            <div className="xl:col-span-2 p-6 bg-surface rounded-xl border border-line">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h6 className="heading6">Proveedores de Envío</h6>
+                                                    <span className="text-xs text-secondary font-bold uppercase">{shippingProviders.length} activos</span>
+                                                </div>
                                                 <div className="flex flex-col gap-3">
                                                     {shippingProviders.length > 0 ? shippingProviders.map((prov) => (
                                                         <div key={prov.id} className="flex items-center justify-between p-3 bg-white rounded border border-line">
-                                                            <span>{prov.name}</span>
-                                                            <span className="text-success text-xs font-bold">{prov.status}</span>
+                                                            <span className="font-semibold">{prov.name}</span>
+                                                            <span className="text-success text-xs font-bold uppercase">{prov.status}</span>
                                                         </div>
                                                     )) : (
-                                                        <div className="p-3 text-sm text-secondary">Cargando proveedores...</div>
+                                                        <div className="p-3 text-sm text-secondary">No hay proveedores configurados.</div>
                                                     )}
                                                 </div>
                                             </div>
-                                            <button className="mt-4 text-sm underline font-bold" onClick={() => showNotification('Configurar métodos de envío')}>Configurar Metodos</button>
+                                            <div className="p-6 bg-surface rounded-xl border border-line">
+                                                <h6 className="heading6 mb-3">Operación logística</h6>
+                                                <div className="space-y-2 text-sm mb-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-secondary">Domicilio</span>
+                                                        <span className="font-semibold">{formatMoney(shippingRates.delivery)}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-secondary">Retiro</span>
+                                                        <span className="font-semibold">{formatMoney(shippingRates.pickup)}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-secondary">IVA envío</span>
+                                                        <span className="font-semibold">{shippingRates.taxRate.toFixed(1)}%</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
+                                                        onClick={() => setActiveTab('taxes')}
+                                                    >
+                                                        Configurar costos e IVA
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
+                                                        onClick={() => {
+                                                            setActiveTab('admin-orders')
+                                                            setActiveOrders('delivery')
+                                                        }}
+                                                    >
+                                                        Ver pedidos en ruta
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="p-6 bg-surface rounded-xl border border-line">
                                             <h6 className="heading6 mb-4">Próximas Recogidas</h6>
-                                            <div className="text-center py-6 text-secondary text-sm">
-                                                No hay recogidas programadas para hoy.
-                                            </div>
+                                            {shippingPickups.length > 0 ? (
+                                                <div className="flex flex-col gap-3">
+                                                    {shippingPickups.map((pickup, index) => {
+                                                        const pickupDateRaw = pickup.scheduled_at || pickup.date || ''
+                                                        const pickupProvider = pickup.provider || pickup.provider_name || 'Proveedor'
+                                                        const pickupReference = pickup.reference || pickup.order_id || pickup.id || '-'
+                                                        return (
+                                                            <div key={`${pickupReference}-${index}`} className="p-4 bg-white rounded-lg border border-line flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                <div>
+                                                                    <div className="font-semibold">{pickupProvider}</div>
+                                                                    <div className="text-xs text-secondary mt-1">Ref: {pickupReference}</div>
+                                                                    {pickup.notes ? <div className="text-xs text-secondary mt-1">{pickup.notes}</div> : null}
+                                                                </div>
+                                                                <div className="text-sm text-right">
+                                                                    <div className="font-semibold">
+                                                                        {pickupDateRaw ? formatDateEcuador(pickupDateRaw, { weekday: 'short', day: '2-digit', month: 'short' }) : 'Fecha pendiente'}
+                                                                    </div>
+                                                                    <div className="text-secondary">
+                                                                        {pickupDateRaw ? formatDateTimeEcuador(pickupDateRaw, { hour: '2-digit', minute: '2-digit' }) : (pickup.window || 'Hora pendiente')}
+                                                                    </div>
+                                                                    <div className="text-xs mt-1 uppercase font-bold text-primary">{pickup.status || 'Pendiente'}</div>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            ) : pickupReadyOrders.length > 0 ? (
+                                                <div className="flex flex-col gap-3">
+                                                    {pickupReadyOrders.map((order) => {
+                                                        const badge = getStatusBadge(order.status)
+                                                        return (
+                                                            <div key={order.id} className="p-4 bg-white rounded-lg border border-line flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                <div>
+                                                                    <div className="font-semibold">Pedido #{order.id}</div>
+                                                                    <div className="text-xs text-secondary mt-1">Cliente: {order.user_name || 'Cliente'}</div>
+                                                                    <div className="text-xs text-secondary mt-1">Creado: {formatDateEcuador(order.created_at)}</div>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${badge.className}`}>{badge.label}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold hover:bg-surface"
+                                                                        onClick={() => handleViewOrder(order.id)}
+                                                                    >
+                                                                        Ver pedido
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-6 text-secondary text-sm">
+                                                    No hay recogidas programadas ni pedidos listos para retiro.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -3286,6 +4444,46 @@ const MyAccount = () => {
                                             )
                                         })()}
 
+                                        <div className="mt-8 p-5 bg-surface rounded-xl border border-line">
+                                            <div className="text-xs uppercase text-secondary font-bold mb-3">Acciones recomendadas</div>
+                                            <div className="flex flex-wrap gap-3">
+                                                <button
+                                                    type="button"
+                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                    onClick={() => {
+                                                        setActiveTab('reports')
+                                                        setSelectedDeepDive('profit')
+                                                    }}
+                                                >
+                                                    Analizar rentabilidad
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                    onClick={() => setActiveTab('margins')}
+                                                >
+                                                    Ajustar márgenes
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                    onClick={() => {
+                                                        setActiveTab('admin-orders')
+                                                        setActiveOrders('all')
+                                                    }}
+                                                >
+                                                    Revisar pedidos
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                    onClick={() => setActiveTab('taxes')}
+                                                >
+                                                    IVA y costos de envío
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div className="heading6 mb-4 mt-10">Movimientos recientes (neto, IVA, envío)</div>
                                         <div className="flex flex-col gap-4">
                                             {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 6).map((order: any) => {
@@ -3300,7 +4498,7 @@ const MyAccount = () => {
                                                         </div>
                                                         <div>
                                                             <div className="font-bold">Pedido #{order.id}</div>
-                                                            <div className="text-secondary text-xs">{new Date(order.created_at).toLocaleDateString()}</div>
+                                                            <div className="text-secondary text-xs">{formatDateEcuador(order.created_at)}</div>
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-3 gap-4 text-right text-sm md:w-[340px]">
@@ -3317,12 +4515,95 @@ const MyAccount = () => {
                                                             <div className="font-bold tabular-nums">{formatMoney(shipping)}</div>
                                                         </div>
                                                     </div>
+                                                    <button
+                                                        type="button"
+                                                        className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold hover:bg-white"
+                                                        onClick={() => handleViewOrder(order.id)}
+                                                    >
+                                                        Ver pedido
+                                                    </button>
                                                 </div>
                                                 )
                                             })}
                                             {(dashboardStats?.businessMetrics?.recentOrders || []).length === 0 && (
                                                 <div className="text-center py-4 text-secondary">No hay transacciones recientes.</div>
                                             )}
+                                        </div>
+
+                                        <div className="mt-10 p-5 bg-surface rounded-xl border border-line">
+                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
+                                                <h6 className="heading6">Trazabilidad de cifras</h6>
+                                                <span className="text-xs text-secondary font-semibold">Fuente: pedidos no cancelados + productos vendidos</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                                                <div className="bg-white border border-line rounded-lg p-4">
+                                                    <div className="text-xs uppercase font-bold text-secondary mb-3">Pedidos que componen las ventas</div>
+                                                    <div className="flex flex-col gap-2">
+                                                        {(dashboardStats?.businessMetrics?.traceability?.orders || []).slice(0, 6).map((order: any) => (
+                                                            <button
+                                                                key={order.id}
+                                                                type="button"
+                                                                className="text-left p-3 rounded-lg border border-line hover:bg-surface transition-colors"
+                                                                onClick={() => handleViewOrder(order.id)}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <span className="font-bold text-sm">#{order.id}</span>
+                                                                    <span className="text-xs text-secondary">{formatDateEcuador(order.created_at)}</span>
+                                                                </div>
+                                                                <div className="grid grid-cols-4 gap-2 mt-2 text-[11px]">
+                                                                    <div>
+                                                                        <div className="text-secondary uppercase">Neto</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(order.net)}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-secondary uppercase">IVA</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(order.vat)}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-secondary uppercase">Envío</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(order.shipping)}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-secondary uppercase">Total</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(order.gross)}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                        {(dashboardStats?.businessMetrics?.traceability?.orders || []).length === 0 && (
+                                                            <div className="text-sm text-secondary">Sin pedidos para trazabilidad.</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white border border-line rounded-lg p-4">
+                                                    <div className="text-xs uppercase font-bold text-secondary mb-3">Productos que explican las ventas netas</div>
+                                                    <div className="flex flex-col gap-3">
+                                                        {(dashboardStats?.businessMetrics?.traceability?.products || []).slice(0, 6).map((product: any, idx: number) => {
+                                                            const refs = Array.isArray(product.order_refs)
+                                                                ? product.order_refs
+                                                                : String(product.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
+                                                            return (
+                                                                <div key={`${product.product_id || product.product_name}-${idx}`} className="p-3 rounded-lg border border-line">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <div className="font-semibold text-sm">{product.product_name}</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(product.net_revenue)}</div>
+                                                                    </div>
+                                                                    <div className="text-xs text-secondary mt-1">
+                                                                        Categoría: <span className="font-semibold capitalize">{product.category || 'Sin categoría'}</span> | Unidades: <span className="font-semibold">{Number(product.units_sold || 0)}</span>
+                                                                    </div>
+                                                                    <div className="text-xs text-secondary mt-1 break-words">
+                                                                        Pedidos: {refs.length > 0 ? refs.join(', ') : 'Sin referencia'}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                        {(dashboardStats?.businessMetrics?.traceability?.products || []).length === 0 && (
+                                                            <div className="text-sm text-secondary">Sin productos vendidos para trazabilidad.</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </>
@@ -3479,7 +4760,7 @@ const MyAccount = () => {
                                                                         <div className='text-title'>
                                                                             <span className="prd_quantity">{item.quantity}</span>
                                                                             <span> X </span>
-                                                                            <span className="prd_price">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                            <span className="prd_price">${Number(getItemNetPrice(item, order)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))
@@ -3814,17 +5095,45 @@ const MyAccount = () => {
                                                 </div>
                                             </div>
                                             <div className="heading5 pb-4 lg:mt-10 mt-6">Cambiar Contraseña</div>
+                                            <p className="text-secondary text-sm mb-4">Opcional. Si cambias tu contraseña, se cerrará la sesión por seguridad.</p>
                                             <div className="pass">
-                                                <label htmlFor="password-setting" className='caption1'>Contraseña actual <span className='text-red'>*</span></label>
-                                                <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="password-setting" type="password" placeholder="Contraseña *" />
+                                                <label htmlFor="password-setting" className='caption1'>Contraseña actual</label>
+                                                <input
+                                                    className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                    id="password-setting"
+                                                    type="password"
+                                                    placeholder="Contraseña actual"
+                                                    autoComplete="current-password"
+                                                    value={passwordForm.currentPassword}
+                                                    onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                                                    disabled={profileSaving || profileLoading}
+                                                />
                                             </div>
                                             <div className="new-pass mt-5">
-                                                <label htmlFor="newPassword" className='caption1'>Nueva contraseña <span className='text-red'>*</span></label>
-                                                <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="newPassword" type="password" placeholder="Nueva Contraseña *" />
+                                                <label htmlFor="newPassword" className='caption1'>Nueva contraseña</label>
+                                                <input
+                                                    className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                    id="newPassword"
+                                                    type="password"
+                                                    placeholder="Mínimo 12 caracteres"
+                                                    autoComplete="new-password"
+                                                    value={passwordForm.newPassword}
+                                                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                                                    disabled={profileSaving || profileLoading}
+                                                />
                                             </div>
                                             <div className="confirm-pass mt-5">
-                                                <label htmlFor="confirmPassword" className='caption1'>Confirmar nueva contraseña <span className='text-red'>*</span></label>
-                                                <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="confirmPassword" type="password" placeholder="Confirmar Contraseña *" />
+                                                <label htmlFor="confirmPassword" className='caption1'>Confirmar nueva contraseña</label>
+                                                <input
+                                                    className="border-line mt-2 px-4 py-3 w-full rounded-lg"
+                                                    id="confirmPassword"
+                                                    type="password"
+                                                    placeholder="Confirmar nueva contraseña"
+                                                    autoComplete="new-password"
+                                                    value={passwordForm.confirmPassword}
+                                                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                                                    disabled={profileSaving || profileLoading}
+                                                />
                                             </div>
                                             <div className="block-button lg:mt-10 mt-6 flex justify-end">
                                                 <button className="button-main py-3 px-10 rounded-full font-bold bg-black text-white hover:bg-primary transition-all disabled:opacity-60 disabled:cursor-not-allowed" disabled={profileSaving || profileLoading}>
@@ -3847,11 +5156,11 @@ const MyAccount = () => {
                         <div className="list_info grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
                             <div className="info_item p-5 rounded-xl bg-surface border border-line sm:col-span-2">
                                 <strong className="text-button-uppercase text-secondary">Información de Contacto</strong>
-                                <h6 className="heading6 order_name mt-2">{getOrderContact(selectedOrder).name}</h6>
-                                {getOrderContact(selectedOrder).phone ? (
-                                    <h6 className="heading6 order_phone mt-2">{getOrderContact(selectedOrder).phone}</h6>
+                                <h6 className="heading6 order_name mt-2">{selectedOrderContact.name}</h6>
+                                {selectedOrderContact.phone && selectedOrderContact.phone !== '-' ? (
+                                    <h6 className="heading6 order_phone mt-2">{selectedOrderContact.phone}</h6>
                                 ) : null}
-                                <h6 className="heading6 normal-case order_email mt-2 text-sm">{getOrderContact(selectedOrder).email}</h6>
+                                <h6 className="heading6 normal-case order_email mt-2 text-sm">{selectedOrderContact.email}</h6>
                             </div>
                             <div className="info_item p-5 rounded-xl bg-surface border border-line">
                                 <strong className="text-button-uppercase text-secondary">Método de Pago</strong>
@@ -4331,13 +5640,166 @@ const MyAccount = () => {
             }
 
             {
+                isSalesProductModalOpen && selectedSalesProduct && (
+                    <div
+                        className="fixed inset-0 z-[210] flex items-center justify-center bg-black bg-opacity-50 p-4"
+                        onClick={() => {
+                            setIsSalesProductModalOpen(false)
+                            setSelectedSalesProduct(null)
+                        }}
+                    >
+                        <div
+                            className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        >
+                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
+                                <div>
+                                    <h4 className="heading4">{selectedSalesProduct.product_name}</h4>
+                                    <div className="text-secondary text-sm mt-1 capitalize">
+                                        Categoría: {selectedSalesProduct.category || 'Sin categoría'}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setIsSalesProductModalOpen(false)
+                                        setSelectedSalesProduct(null)
+                                    }}
+                                    className="text-secondary hover:text-black"
+                                >
+                                    <Icon.X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto flex-1">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                                    <div className="p-5 rounded-xl border border-line bg-surface">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="text-xs uppercase font-bold text-secondary">Detalle mes seleccionado</div>
+                                            <div className="text-xs font-semibold text-secondary">
+                                                {productSalesRanking?.period?.start || '-'} → {productSalesRanking?.period?.end || '-'}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
+                                                <div className="text-lg font-bold">{selectedSalesProduct.month_orders_count}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
+                                                <div className="text-lg font-bold">{selectedSalesProduct.month_units_sold}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_gross_revenue)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_net_revenue)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_vat_amount)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_shipping_amount)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_cost)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
+                                                <div className={`text-lg font-bold ${selectedSalesProduct.month_profit >= 0 ? 'text-success' : 'text-red'}`}>
+                                                    {formatMoney(selectedSalesProduct.month_profit)}
+                                                </div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white col-span-2">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Margen neto</div>
+                                                <div className="text-lg font-bold">
+                                                    {Number(selectedSalesProduct.month_margin).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-5 rounded-xl border border-line bg-surface">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="text-xs uppercase font-bold text-secondary">Detalle histórico total</div>
+                                            <div className="text-xs font-semibold text-secondary">
+                                                {productSalesRanking?.historicalPeriod?.start || '-'} → {productSalesRanking?.historicalPeriod?.end || '-'}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
+                                                <div className="text-lg font-bold">{selectedSalesProduct.historical_orders_count}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
+                                                <div className="text-lg font-bold">{selectedSalesProduct.historical_units_sold}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_gross_revenue)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_net_revenue)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_vat_amount)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_shipping_amount)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
+                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_cost)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
+                                                <div className={`text-lg font-bold ${selectedSalesProduct.historical_profit >= 0 ? 'text-success' : 'text-red'}`}>
+                                                    {formatMoney(selectedSalesProduct.historical_profit)}
+                                                </div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-white col-span-2">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Margen neto</div>
+                                                <div className="text-lg font-bold">
+                                                    {Number(selectedSalesProduct.historical_margin).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-5 border-t border-line flex justify-end bg-white rounded-b-2xl">
+                                <button
+                                    className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold"
+                                    onClick={() => {
+                                        setIsSalesProductModalOpen(false)
+                                        setSelectedSalesProduct(null)
+                                    }}
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
                 isOrderModalOpen && selectedOrder && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
                         <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
                             <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
                                 <div>
                                     <h4 className="heading4">Pedido #{selectedOrder.id}</h4>
-                                    <div className="text-secondary text-sm mt-1">{new Date(selectedOrder.created_at).toLocaleString()}</div>
+                                    <div className="text-secondary text-sm mt-1">{formatDateTimeEcuador(selectedOrder.created_at)}</div>
                                 </div>
                                 <button onClick={() => setIsOrderModalOpen(false)} className="text-secondary hover:text-black">
                                     <Icon.X size={24} />
@@ -4351,9 +5813,9 @@ const MyAccount = () => {
                                             <Icon.User size={20} /> Cliente
                                         </h6>
                                         <div className="space-y-2">
-                                            <div className="font-bold text-lg">{selectedOrder.user_name || 'Invitado'}</div>
-                                            <div className="text-secondary">{selectedOrder.user_email}</div>
-                                            <div className="text-secondary">{selectedOrder.user_phone || 'Sin teléfono'}</div>
+                                            <div className="font-bold text-lg">{selectedOrderContact.name}</div>
+                                            <div className="text-secondary">{selectedOrderContact.email}</div>
+                                            <div className="text-secondary">{selectedOrderContact.phone !== '-' ? selectedOrderContact.phone : 'Sin teléfono'}</div>
                                         </div>
                                     </div>
                                     <div className="bg-surface rounded-xl p-6 border border-line flex flex-col justify-between">

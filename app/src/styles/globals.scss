@@ -144,19 +144,23 @@ input[type="file"] {
 
 /* Alturas del slider por rango: cambia solo al cruzar cada breakpoint */
 .slider-height {
-  height: 220px;
+  height: 180px;
+}
+
+@media (min-width: 480px) { /* xs+ */
+  .slider-height { height: 210px; }
 }
 
 @media (min-width: 640px) { /* sm */
-  .slider-height { height: 300px; }
+  .slider-height { height: 250px; }
 }
 
 @media (min-width: 768px) { /* md */
-  .slider-height { height: 380px; }
+  .slider-height { height: 320px; }
 }
 
 @media (min-width: 1024px) { /* lg */
-  .slider-height { height: 480px; }
+  .slider-height { height: 460px; }
 }
 
 @media (min-width: 1280px) { /* xl */

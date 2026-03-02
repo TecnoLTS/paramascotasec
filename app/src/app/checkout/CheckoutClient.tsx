@@ -5,7 +5,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { Package, Truck, CreditCard, Building2, Banknote } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { createOrder, getQuote } from '@/lib/api'
 import { login, register, requestOtp, verifyOtp } from '@/lib/api/auth'
@@ -73,9 +73,6 @@ const fallbackItems = [
 const fallbackSubtotal = fallbackItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
 
 const Checkout = () => {
-    const searchParams = useSearchParams()
-    const discountParam = Number(searchParams.get('discount') ?? 0)
-    const safeDiscount = Number.isNaN(discountParam) ? 0 : discountParam
     const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
     const [shippingRatesLoaded, setShippingRatesLoaded] = useState(false)
 
@@ -195,12 +192,13 @@ const Checkout = () => {
                 const profile = res.body.profile || {}
                 const fullName = res.body.name || name || ''
                 const [firstName, ...rest] = fullName.split(' ')
-                setContactInfo({
+                setContactInfo((prev) => ({
+                    ...prev,
                     firstName: profile.firstName || firstName || '',
                     lastName: profile.lastName || rest.join(' ') || '',
                     email: email || '',
                     phone: profile.phone || ''
-                })
+                }))
                 setBillingAddress((prev) => mergeAddressFields(prev, {
                     documentType: profile.documentType,
                     documentNumber: profile.documentNumber,
@@ -438,7 +436,7 @@ const Checkout = () => {
         try {
             const fullName = `${contactInfo.firstName} ${contactInfo.lastName}`.trim()
             const newAddress: SavedAddress = {
-                id: Date.now(),
+                id: String(Date.now()),
                 title: 'Dirección principal',
                 billing: {
                     ...billingAddress,
@@ -612,7 +610,15 @@ const Checkout = () => {
         setCurrentStep(2)
     }
 
-    const [quote, setQuote] = useState<{ subtotal: number, shipping: number, total: number } | null>(null)
+    const [quote, setQuote] = useState<{
+        subtotal: number
+        shipping: number
+        total: number
+        vat_rate?: number
+        vat_subtotal?: number
+        vat_amount?: number
+        discount_total?: number
+    } | null>(null)
 
     const normalizedCart = useMemo(
         () =>
@@ -657,11 +663,19 @@ const Checkout = () => {
                     items: normalizedCart.map(i => ({ product_id: i.id, quantity: i.quantity })),
                     delivery_method: deliveryMethod
                 });
+                if (res?.storeDisabled) {
+                    setQuote(null)
+                    setMessage({
+                        text: String(res?.message || 'Tienda temporalmente en mantenimiento. Intenta más tarde.'),
+                        type: 'error'
+                    })
+                    return
+                }
                 setQuote(res);
             } catch (err) {
-                const message = err instanceof Error ? err.message : ''
-                if (message.includes('Producto no encontrado')) {
-                    const missingId = message.split(':').pop()?.trim()
+                const backendMessage = err instanceof Error ? err.message.trim() : ''
+                if (backendMessage.includes('Producto no encontrado')) {
+                    const missingId = backendMessage.split(':').pop()?.trim()
                     if (missingId) {
                         removeFromCart(String(missingId))
                         setMessage({
@@ -670,6 +684,10 @@ const Checkout = () => {
                         })
                         return
                     }
+                }
+                if (backendMessage && backendMessage !== 'Error interno del servidor') {
+                    setMessage({ text: backendMessage, type: 'error' })
+                    return
                 }
                 console.error("Error fetching quote", err);
                 setMessage({ text: 'No se pudo calcular el total del pedido.', type: 'error' })
@@ -688,6 +706,7 @@ const Checkout = () => {
     const vatRateValue = Number(quote?.vat_rate ?? 0)
     const vatNetSubtotal = Number(quote?.vat_subtotal ?? 0)
     const vatAmount = Number(quote?.vat_amount ?? 0)
+    const discountTotal = Number(quote?.discount_total ?? 0)
 
     useEffect(() => {
         if (normalizedCart.length === 0) {
@@ -1572,10 +1591,10 @@ const Checkout = () => {
                                             <span className="text-[#111827] text-right tabular-nums">${vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
-                                    {safeDiscount > 0 && (
+                                    {discountTotal > 0 && (
                                         <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                             <span className="text-[#6b7280]">Descuento</span>
-                                            <span className="text-green-600 text-right tabular-nums">-${safeDiscount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-green-600 text-right tabular-nums">-${discountTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
                                     <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">

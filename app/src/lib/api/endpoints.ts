@@ -14,6 +14,8 @@ export const apiEndpoints = {
     pricingMargins: '/api/admin/settings/pricing-margins',
     pricingCalc: '/api/admin/settings/pricing-calc',
     pricingRules: '/api/admin/settings/pricing-rules',
+    storeStatus: '/api/admin/settings/store-status',
+    publicStoreStatus: '/api/settings/store-status',
   },
   reports: {
     recentOrders: '/api/reports/recent-orders',

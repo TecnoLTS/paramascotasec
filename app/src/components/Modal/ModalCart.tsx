@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from 'next/navigation'
 import InlineSpinner from '@/components/Other/InlineSpinner'
 import { ProductType } from '@/type/ProductType';
 import { useModalCartContext } from '@/context/ModalCartContext'
@@ -11,8 +12,10 @@ import { useCart } from '@/context/CartContext'
 import { useTenant } from '@/context/TenantContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
+import { getPublicStoreStatus } from '@/lib/api/settings'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
+    const router = useRouter()
     const tenant = useTenant()
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
 
@@ -30,6 +33,20 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const [suggested, setSuggested] = useState<ProductType[]>([])
     const [loadingSuggested, setLoadingSuggested] = useState<boolean>(false)
     const [errorSuggested, setErrorSuggested] = useState<string | null>(null)
+    const [salesEnabled, setSalesEnabled] = useState(true)
+    const [salesDisabledMessage, setSalesDisabledMessage] = useState('Tienda temporalmente en mantenimiento. Intenta más tarde.')
+
+    useEffect(() => {
+        getPublicStoreStatus()
+            .then((status) => {
+                setSalesEnabled(status?.salesEnabled !== false)
+                const nextMessage = String(status?.message || '').trim()
+                if (nextMessage) {
+                    setSalesDisabledMessage(nextMessage)
+                }
+            })
+            .catch(() => {})
+    }, [])
 
     useEffect(() => {
         const loadSuggested = async () => {
@@ -68,6 +85,16 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const handleActiveTab = (tab: string) => {
         setActiveTab(tab)
     }
+
+    const handleGoToCheckout = () => {
+        if (!canCheckout) return
+        closeModalCart()
+        router.push('/checkout')
+    }
+    const canCheckout = salesEnabled && cartState.cartArray.length > 0
+    const checkoutButtonStyle: React.CSSProperties = canCheckout
+        ? { backgroundColor: '#1f3b3b', color: '#ffffff', opacity: 1 }
+        : { backgroundColor: '#7f8f90', color: '#ffffff', opacity: 1 }
 
     const totalCart = cartState.cartArray.reduce(
         (acc, item) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1),
@@ -281,14 +308,21 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                     >
                                         Ver carrito
                                     </Link>
-                                    <Link
-                                        href={'/checkout'}
-                                        className='button-main basis-1/2 text-center uppercase'
-                                        onClick={closeModalCart}
+                                    <button
+                                        type="button"
+                                        className={`button-main basis-1/2 text-center uppercase ${!canCheckout ? 'cursor-not-allowed' : ''}`}
+                                        onClick={handleGoToCheckout}
+                                        aria-disabled={!canCheckout}
+                                        style={checkoutButtonStyle}
                                     >
                                         Pagar
-                                    </Link>
+                                    </button>
                                 </div>
+                                {!salesEnabled && (
+                                    <div className="mt-3 rounded-lg border border-red/30 bg-red/5 px-3 py-2 text-xs text-red text-left">
+                                        {salesDisabledMessage}
+                                    </div>
+                                )}
                                 <div onClick={closeModalCart} className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block">O seguir comprando</div>
                             </div>
                             <div className={`tab-item note-block ${activeTab === 'note' ? 'active' : ''}`}>

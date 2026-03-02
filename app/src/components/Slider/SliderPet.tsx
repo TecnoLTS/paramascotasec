@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -8,27 +8,95 @@ import { Autoplay, Pagination } from 'swiper/modules'
 import 'swiper/css/bundle'
 import 'swiper/css/effect-fade'
 
-const getSuffixByHeight = (h: number) => {
-  if (h >= 840) return '4k'
-  if (h >= 700) return '2k'
-  if (h >= 620) return '1920'
-  if (h >= 580) return '1080'
-  if (h >= 453) return '720'
-  if (h >= 243) return '720'
-  return 'mobile'
+type SliderSuffix =
+  | 'mobile-xs'
+  | 'mobile'
+  | 'mobile-wide'
+  | 'tablet'
+  | 'laptop'
+  | 'desktop'
+  | 'fhd'
+  | 'qhd'
+  | 'uhd'
+
+type LegacySuffix = '243' | '720' | '1080' | '1920' | '2k' | '4k'
+
+const getSuffixByWidth = (w: number): SliderSuffix => {
+  if (w >= 3840) return 'uhd'
+  if (w >= 2560) return 'qhd'
+  if (w >= 1920) return 'fhd'
+  if (w >= 1280) return 'desktop'
+  if (w >= 1024) return 'laptop'
+  if (w >= 768) return 'tablet'
+  if (w >= 640) return 'mobile-wide'
+  if (w >= 480) return 'mobile'
+  return 'mobile-xs'
 }
 
-type Suffix = '4k' | '2k' | '1920' | '1080' | '720' | '243' | 'mobile'
+const legacyFallbackBySuffix: Record<SliderSuffix, LegacySuffix[]> = {
+  'mobile-xs': ['243', '720'],
+  mobile: ['243', '720'],
+  'mobile-wide': ['720', '243'],
+  tablet: ['720', '1080'],
+  laptop: ['1080', '720'],
+  desktop: ['1080', '1920'],
+  fhd: ['1920', '1080'],
+  qhd: ['2k', '1920'],
+  uhd: ['4k', '2k'],
+}
+
+const buildCandidateSources = (slide: 1 | 2 | 3, suffix: SliderSuffix) => {
+  const sources = [
+    `/images/slider/slade${slide}-${suffix}.jpg`,
+    ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.jpg`),
+  ]
+  return Array.from(new Set(sources))
+}
+
+type SliderImageProps = {
+  alt: string
+  slide: 1 | 2 | 3
+  suffix: SliderSuffix
+  priority?: boolean
+}
+
+const SliderImage = ({ alt, slide, suffix, priority }: SliderImageProps) => {
+  const candidates = useMemo(() => buildCandidateSources(slide, suffix), [slide, suffix])
+  const [candidateIndex, setCandidateIndex] = useState(0)
+
+  useEffect(() => {
+    setCandidateIndex(0)
+  }, [slide, suffix])
+
+  const src = candidates[Math.min(candidateIndex, candidates.length - 1)]
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      priority={priority}
+      unoptimized
+      sizes="100vw"
+      onError={() => {
+        setCandidateIndex((prev) => {
+          if (prev >= candidates.length - 1) return prev
+          return prev + 1
+        })
+      }}
+      className="absolute left-0 top-0 h-full w-full object-cover object-right sm:object-center"
+    />
+  )
+}
 
 const SliderPet = () => {
-  const [suffix, setSuffix] = useState<Suffix>('mobile')
+  const [suffix, setSuffix] = useState<SliderSuffix>('mobile-xs')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     const update = () => {
       const width = window.innerWidth || 1920
-      const height = Math.round(width * (620 / 1920))
-      setSuffix(getSuffixByHeight(height))
+      setSuffix(getSuffixByWidth(width))
     }
 
     update()              // calculamos el sufijo correcto
@@ -57,14 +125,7 @@ const SliderPet = () => {
           >
             <SwiperSlide>
               <div className="slider-item h-full w-full relative overflow-hidden">
-                <Image
-                  src={`/images/slider/slade1-${suffix}.jpg`}
-                  alt="bg-pet1-1"
-                  fill
-                  priority
-                  sizes="100vw"
-                  className="absolute left-0 top-0 h-full w-full object-cover object-center"
-                />
+                <SliderImage alt="bg-pet1-1" slide={1} suffix={suffix} priority />
                 <div className="container w-full h-full flex items-center relative">
                   <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
                     <div className="text-sub-display slider-text-sub normal-case">
@@ -86,13 +147,7 @@ const SliderPet = () => {
 
             <SwiperSlide>
               <div className="slider-item h-full w-full relative overflow-hidden">
-                <Image
-                  src={`/images/slider/slade2-${suffix}.jpg`}
-                  alt="bg-pet1-2"
-                  fill
-                  sizes="100vw"
-                  className="absolute left-0 top-0 h-full w-full object-cover object-center"
-                />
+                <SliderImage alt="bg-pet1-2" slide={2} suffix={suffix} />
                 <div className="container w-full h-full flex items-center relative">
                   <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
                     <div className="text-sub-display slider-text-sub normal-case">
@@ -114,13 +169,7 @@ const SliderPet = () => {
 
             <SwiperSlide>
               <div className="slider-item h-full w-full relative overflow-hidden">
-                <Image
-                  src={`/images/slider/slade3-${suffix}.jpg`}
-                  alt="bg-pet1-3"
-                  fill
-                  sizes="100vw"
-                  className="absolute left-0 top-0 h-full w-full object-cover object-center"
-                />
+                <SliderImage alt="bg-pet1-3" slide={3} suffix={suffix} />
                 <div className="container w-full h-full flex items-center relative">
                   <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
                     <div className="text-sub-display slider-text-sub normal-case">

@@ -30,6 +30,13 @@ export type PricingRules = {
   clearanceDiscount: number
 }
 
+export type StoreStatusSettings = {
+  salesEnabled: boolean
+  message: string
+  updatedAt?: string | null
+  updatedBy?: string | null
+}
+
 export const getProductPageSettings = () =>
   fetchJson<ProductPageSettings>(apiEndpoints.settings.productPage)
 
@@ -69,3 +76,16 @@ export const updatePricingRules = (payload: PricingRules) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+
+export const getStoreStatus = () =>
+  fetchJson<StoreStatusSettings>(apiEndpoints.settings.storeStatus)
+
+export const updateStoreStatus = (payload: StoreStatusSettings) =>
+  requestApi<StoreStatusSettings>(apiEndpoints.settings.storeStatus, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const getPublicStoreStatus = () =>
+  fetchJson<StoreStatusSettings>(apiEndpoints.settings.publicStoreStatus)

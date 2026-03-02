@@ -8,12 +8,15 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useRouter } from 'next/navigation'
 import { getQuote } from '@/lib/api'
+import { getPublicStoreStatus } from '@/lib/api/settings'
 
 const Cart = () => {
 
 
     const router = useRouter()
     const { cartState, updateCart, removeFromCart } = useCart();
+    const [salesEnabled, setSalesEnabled] = useState(true)
+    const [salesDisabledMessage, setSalesDisabledMessage] = useState('Tienda temporalmente en mantenimiento. Intenta más tarde.')
 
     const handleQuantityChange = (productId: string, newQuantity: number) => {
         // Tìm sản phẩm trong giỏ hàng
@@ -33,27 +36,23 @@ const Cart = () => {
     const [vatRate, setVatRate] = useState(0)
     const [vatSubtotal, setVatSubtotal] = useState(0)
     const [vatAmount, setVatAmount] = useState(0)
-    let [discountCart, setDiscountCart] = useState<number>(0)
-    let [applyCode, setApplyCode] = useState<number>(0)
-    const formattedSubtotal = totalCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const discountCart = 0
     const formattedDiscount = discountCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const formattedCartTotal = (totalCart - discountCart).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formattedCartTotal = totalCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const formattedVatSubtotal = vatSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const formattedVatAmount = vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-    const handleApplyCode = (minValue: number, discount: number) => {
-        if (totalCart > minValue) {
-            setApplyCode(minValue)
-            setDiscountCart(discount)
-        } else {
-            alert(`Minimum order must be ${minValue}$`)
-        }
-    }
-
-    if (totalCart < applyCode) {
-        applyCode = 0
-        discountCart = 0
-    }
+    useEffect(() => {
+        getPublicStoreStatus()
+            .then((status) => {
+                setSalesEnabled(status?.salesEnabled !== false)
+                const nextMessage = String(status?.message || '').trim()
+                if (nextMessage) {
+                    setSalesDisabledMessage(nextMessage)
+                }
+            })
+            .catch(() => {})
+    }, [])
 
     useEffect(() => {
         const items = cartState.cartArray.map((item) => ({
@@ -68,12 +67,21 @@ const Cart = () => {
         }
         getQuote({ items, delivery_method: 'pickup' })
             .then((res: any) => {
+                if (res?.storeDisabled) {
+                    setVatRate(0)
+                    setVatSubtotal(0)
+                    setVatAmount(0)
+                    return
+                }
                 setVatRate(Number(res?.vat_rate ?? 0))
                 setVatSubtotal(Number(res?.vat_subtotal ?? 0))
                 setVatAmount(Number(res?.vat_amount ?? 0))
             })
             .catch((err) => {
-                console.error('No se pudo calcular IVA del carrito', err)
+                const backendMessage = err instanceof Error ? err.message.trim() : ''
+                if (!backendMessage || backendMessage === 'Error interno del servidor') {
+                    console.error('No se pudo calcular IVA del carrito', err)
+                }
                 setVatRate(0)
                 setVatSubtotal(0)
                 setVatAmount(0)
@@ -81,8 +89,13 @@ const Cart = () => {
     }, [cartState.cartArray])
 
     const redirectToCheckout = () => {
-        router.push(`/checkout?discount=${discountCart}&ship=0`)
+        if (!canCheckout) return
+        router.push('/checkout')
     }
+    const canCheckout = salesEnabled && cartState.cartArray.length > 0
+    const checkoutButtonStyle: React.CSSProperties = canCheckout
+        ? { backgroundColor: '#1f3b3b', color: '#ffffff', opacity: 1 }
+        : { backgroundColor: '#7f8f90', color: '#ffffff', opacity: 1 }
 
     return (
         <>
@@ -210,7 +223,20 @@ const Cart = () => {
                                     <div className="heading5">$<span className="total-cart heading5">{formattedCartTotal}</span></div>
                                 </div>
                                 <div className="block-button flex flex-col items-center gap-y-4 mt-5">
-                                    <div className="checkout-btn button-main text-center w-full" onClick={redirectToCheckout}>Continuar al pago</div>
+                                    <button
+                                        type="button"
+                                        className={`checkout-btn button-main text-center w-full ${!canCheckout ? 'cursor-not-allowed' : ''}`}
+                                        onClick={redirectToCheckout}
+                                        aria-disabled={!canCheckout}
+                                        style={checkoutButtonStyle}
+                                    >
+                                        Continuar al pago
+                                    </button>
+                                    {!salesEnabled && (
+                                        <div className="w-full rounded-lg border border-red/30 bg-red/5 px-3 py-2 text-xs text-red text-left">
+                                            {salesDisabledMessage}
+                                        </div>
+                                    )}
                                     <Link className="text-button hover-underline" href={"/shop/breadcrumb1"}>Seguir comprando</Link>
                                 </div>
                             </div>

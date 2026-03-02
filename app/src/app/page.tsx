@@ -34,7 +34,12 @@ export default async function HomePet() {
     const headerList = await headers()
     const host = getHostFromHeaders(headerList)
     const tenant = getTenantConfigFromHost(host)
-    const products = await fetchProducts()
+    let products = [] as Awaited<ReturnType<typeof fetchProducts>>
+    try {
+        products = await fetchProducts()
+    } catch (error) {
+        console.error('No se pudieron cargar productos en HomePet:', error)
+    }
     const categories = getCategoryCards(tenant.id)
     if (tenant.id === 'autorepuestoscore') {
         return <AutorepuestosCoreHome products={products} categories={categories} tenant={tenant} />

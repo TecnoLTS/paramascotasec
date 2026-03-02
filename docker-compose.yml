@@ -5,19 +5,19 @@ services:
       context: ./app
       dockerfile: Dockerfile
       args:
-        APP_ENV: ${APP_ENV:-production}
-    container_name: next-test-app
-    hostname: next-test-app
+        APP_ENV: production
+    container_name: paramascotasec-app
+    hostname: paramascotasec-app
     restart: unless-stopped
     environment:
       TZ: America/Bogota
-      NODE_ENV: ${APP_ENV:-production}
-      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: production
+      APP_ENV: production
       PORT: ${PORT:-3000}
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
-      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL}
+      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
       BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
     working_dir: /app
     command: npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}
@@ -35,18 +35,19 @@ services:
       context: ./app
       dockerfile: Dockerfile
       args:
-        APP_ENV: ${APP_ENV:-development}
-    container_name: next-test-app-dev
-    hostname: next-test-app-dev
+        APP_ENV: development
+    container_name: paramascotasec-app-dev
+    hostname: paramascotasec-app-dev
     restart: unless-stopped
     environment:
       TZ: America/Bogota
-      NODE_ENV: ${APP_ENV:-development}
-      APP_ENV: ${APP_ENV:-development}
+      NODE_ENV: development
+      APP_ENV: development
       PORT: ${PORT:-3000}
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
       BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
     working_dir: /app
     command: npm run dev -- --hostname 0.0.0.0 --port ${PORT:-3000}

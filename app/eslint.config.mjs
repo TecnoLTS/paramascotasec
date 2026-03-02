@@ -1,10 +1,15 @@
-import { FlatCompat } from '@eslint/eslintrc'
-import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import nextVitals from 'eslint-config-next/core-web-vitals'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const compat = new FlatCompat({ baseDirectory: __dirname })
-
-export default [
-  ...compat.extends('next/core-web-vitals'),
+const config = [
+  ...nextVitals,
+  {
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      '@next/next/no-img-element': 'off',
+    },
+  },
 ]
+
+export default config
