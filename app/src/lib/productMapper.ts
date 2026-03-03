@@ -27,6 +27,7 @@ type ProductWithRelations = {
   brand?: string | null
   sold: number
   quantity: number
+  cost?: any
   description: string
   action?: string | null
   slug: string
@@ -43,6 +44,19 @@ type ProductWithRelations = {
   thumbImage?: ({ url: string } | string)[]
   imageMeta?: { url?: string; kind?: string }[]
   variations?: Variation[]
+  business?: {
+    cost?: number
+    margin?: number
+    profit?: number
+    suggestions?: {
+      min_price?: number
+      recommended_price?: number
+      max_price?: number
+      min_price_pvp?: number
+      recommended_price_pvp?: number
+      max_price_pvp?: number
+    }
+  } | null
 }
 
 const normalizeImageUrl = (url: string) => {
@@ -102,6 +116,8 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     brand: product.brand ?? '',
     sold: product.sold,
     quantity: product.quantity,
+    cost: Number(product.cost ?? product.business?.cost ?? 0),
+    business: product.business ?? undefined,
     quantityPurchase: Number(product.quantityPurchase ?? 1),
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
     attributes: product.attributes ?? {},

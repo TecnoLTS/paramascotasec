@@ -291,12 +291,12 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
             </div>
 
             <div
-                className={`top-nav-menu relative bg-white h-[44px] max-lg:hidden z-10 ${fixedHeader ? 'fixed' : ''}`}
+                className={`top-nav-menu relative bg-white h-[44px] max-lg:hidden ${fixedHeader ? 'fixed' : ''}`}
                 style={fixedHeader ? { top: headerHeight } : undefined}
             >
                 <div className="container h-full">
-                    <div className="top-nav-menu-main flex items-center justify-between h-full">
-                        <div className="left flex items-center h-full">
+                    <div className="top-nav-menu-main flex items-center justify-center h-full">
+                        <div className="left flex items-center justify-center h-full w-full">
                             <div className="menu-department-block relative h-full">
 
                                 <div
@@ -314,7 +314,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                     ))}
                                 </div>
                             </div>
-                            <div className="menu-main style-eight h-full pl-12 max-lg:hidden">
+                            <div className="menu-main style-eight h-full max-lg:hidden">
                                 <ul className='flex items-center gap-8 h-full'>
                                     <li className='h-full'>
                                         <Link

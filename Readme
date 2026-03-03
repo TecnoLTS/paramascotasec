@@ -43,3 +43,230 @@ docker compose logs -f app
 ## Notas
 - El backend debe estar arriba en `http://paramascotasec-backend-web/api` dentro de la red Docker `edge`.
 - `BACKEND_SERVICE_TOKEN` debe generarse desde `paramascotasec-backend/scripts/generate_service_token.php`.
+
+
+
+## Ambientes con una sola variable
+
+1. Copia `.env.example` a `.env` en la raíz de `next-test/`.
+2. Cambia **solo** `APP_ENV` en `.env` (`development` o `production`).
+3. Ejecuta siempre el mismo comando: `docker compose up -d --build` (desde `next-test/`).
+
+Notas:
+- `APP_ENV` controla build y runtime (Dockerfile y comando de arranque usan esa misma variable).
+- En `development` se monta el código y corre `npm run dev`; en `production` corre `npm run start`.
+- `DATABASE_URL` viene en `.env.example`; ajusta host/credenciales si usas otra DB.
+- Logs: `docker compose logs -f app`.
+
+----------------------------Docker----------------------------------
+------------Reiniciar
+docker compose restart
+
+------------Detener
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null || true
+
+------------Eliminar
+docker rm -f $(docker ps -aq)
+docker rmi -f $(docker images -q)
+
+------------Limpiar
+sudo docker volume prune -f
+sudo docker builder prune -af
+sudo docker system prune -af
+
+------------Levantar
+sudo docker compose up -d --build
+
+----------------------------Permisos----------------------------------
+sudo chown -R $(whoami):$(whoami) /opt
+
+sudo chown -R 999:999 pgdata
+sudo chmod 700 pgdata
+sudo chown -R $USER:$USER /opt/mascotasDB
+chmod -R 777 /opt/mascotasDB
+
+
+------------Borrar carpeta
+rm -rf ./mascotasDB
+
+------------Crear carpeta
+mkdir -p pgdata
+
+
+------------Clomar repositorio
+git clone https://github.com/Evasquez09/mascotasDB.git
+git clone https://github.com/Dnavas-28/next-test.git
+git clone https://github.com/Dnavas-28/gateway.git
+
+
+git remote set-url origin https://github.com/Evasquez09/paramascotasec.git
+
+
+
+Evasquez09
+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
+
+Dnavas - Evasquez09
+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
+
+----------------------------Limpiar todo Docker----------------------------------
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null || true
+sudo docker rm -f $(sudo docker ps -aq) 2>/dev/null || true
+sudo docker rmi -f $(sudo docker images -q) 2>/dev/null || true
+sudo docker volume prune -f
+sudo docker builder prune -af
+sudo docker system prune -af --volumes
+sudo docker network prune -f
+
+
+
+
+
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null || true
+sudo docker volume prune -f
+sudo docker builder prune -af
+sudo docker system prune -af --volumes
+sudo docker network prune -f
+sudo docker compose up -d --build
+
+
+
+git log --oneline --decorate -10
+git reset --hard 361ec1c
+git push origin main --force
+git log --oneline --decorate -3
+git status
+
+
+git revert --no-commit 31cac353ed68923985a9015f87c693e52b68d4c4..HEAD
+git commit -m "Rollback al estado del commit 31cac35"
+git push
+git push --force
+
+
+
+
+
+
+docker compose down -v
+docker stop $(docker ps -aq) || true
+docker rm $(docker ps -aq) || true
+docker network prune -f
+docker compose up -d
+docker compose up -d --build
+
+
+
+
+docker exec next-test-db pg_dump -U postgres -d paramascotasec > backups/backup.sql
+
+
+
+
+
+
+
+# Dev (default)
+docker compose up -d --build
+
+# Prod
+APP_ENV=production docker compose up -d --build
+
+
+cd /home/admincenter/contenedores/next-test
+APP_ENV=production docker compose down
+APP_ENV=production docker compose up -d --build
+
+
+
+
+
+
+
+APP_ENV=production docker compose logs app --tail=80
+docker exec next-test-app wget -qO- http://127.0.0.1:3000
+
+
+
+
+
+
+APP_ENV=production docker compose logs app -f
+
+docker compose logs app -f
+
+
+
+
+docker compose exec app sh -c 'echo APP_ENV=$APP_ENV NODE_ENV=$NODE_ENV'
+docker compose exec app ps -ef | grep "npm run"
+docker inspect -f '{{.Config.Env}}' next-test-app-${APP_ENV}
+
+
+
+
+docker rm -f 1a9e653c1847e471cdb95585829252431ad9e90544203b72392ff801d6350f48
+
+
+
+docker compose down
+COMPOSE_PROFILES=development APP_ENV=development docker compose up -d --build
+
+
+docker compose down
+COMPOSE_PROFILES=production APP_ENV=production docker compose up -d --build
+
+
+
+
+
+
+
+
+COMPOSE_PROFILES=production APP_ENV=production docker compose down
+COMPOSE_PROFILES=development APP_ENV=development docker compose up -d --build
+
+
+COMPOSE_PROFILES=development APP_ENV=development docker compose down
+COMPOSE_PROFILES=production APP_ENV=production docker compose up -d --build
+
+
+
+(docker exec next-test-app sh -c 'echo APP_ENV=$APP_ENV NODE_ENV=$NODE_ENV && ps -ef | grep "npm run"') \
+  || docker exec next-test-app-dev sh -c 'echo APP_ENV=$APP_ENV NODE_ENV=$NODE_ENV && ps -ef | grep "npm run"'
+
+
+
+
+
+
+
+sudo docker restart nginx-gateway
+
+
+Prueba de Funcionamiento:
+He creado un usuario de prueba para que puedas verificarlo inmediatamente:
+
+
+cliente@example.com
+
+Email: admin@example.com
+
+Contraseña: password123
+
+docker system prune -a
+
+
+
+
+Sigue AGENT_RULES.md.
+No hagas preguntas.
+Implementa la tarea end-to-end.
+Ejecuta tests y corrige fallos.
+Al final, resume cambios y comandos ejecutados.
+
+Tarea:
+<describe aquí lo que quieres>
+
+
+

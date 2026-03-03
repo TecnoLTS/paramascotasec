@@ -257,6 +257,84 @@ type SalesRankingRow = {
     historical_margin: number;
 }
 
+type LocalSaleLineItem = {
+    productId: string;
+    internalId: string;
+    name: string;
+    category: string;
+    sku: string;
+    image: string;
+    stock: number;
+    quantity: number;
+    price: number;
+    cost: number;
+}
+
+type LocalSaleQuote = {
+    subtotal: number;
+    items_subtotal_before_discount?: number;
+    vat_rate: number;
+    vat_subtotal: number;
+    vat_amount: number;
+    shipping: number;
+    shipping_base?: number;
+    shipping_tax_rate?: number;
+    shipping_tax_amount?: number;
+    discount_code?: string | null;
+    discount_total?: number;
+    discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>;
+    discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>;
+    total: number;
+    items?: Array<{ product_id: string; quantity: number; price: number; total: number }>;
+}
+
+type PosShiftSummary = {
+    orders_count: number;
+    sales_total: number;
+    cash_sales: number;
+    electronic_sales: number;
+    sales_by_payment: {
+        cash: number;
+        card: number;
+        transfer: number;
+        mixed: number;
+        other: number;
+    };
+    movement_income: number;
+    movement_expense: number;
+    movement_adjustments: number;
+    expected_cash: number;
+    closing_cash: number | null;
+    difference_cash: number | null;
+    period: { start: string | null; end: string | null };
+}
+
+type PosShift = {
+    id: string;
+    opened_by_user_id: string;
+    opened_at: string;
+    opening_cash: number;
+    status: 'open' | 'closed';
+    open_notes?: string | null;
+    closed_by_user_id?: string | null;
+    closed_at?: string | null;
+    closing_cash?: number | null;
+    close_notes?: string | null;
+    expected_cash?: number | null;
+    difference_cash?: number | null;
+    summary?: PosShiftSummary;
+}
+
+type PosMovement = {
+    id: number;
+    shift_id: string;
+    type: 'income' | 'expense' | 'withdrawal' | 'deposit' | 'adjustment';
+    amount: number;
+    description?: string | null;
+    created_by_user_id: string;
+    created_at: string;
+}
+
 const DEFAULT_STORE_PAUSE_MESSAGE = 'Tienda temporalmente en mantenimiento. Intenta más tarde.'
 const getCurrentMonthKey = () => {
     const now = new Date()
@@ -280,6 +358,7 @@ const MyAccount = () => {
     const [activeAddress, setActiveAddress] = useState<string | null>('billing')
     const [activeOrders, setActiveOrders] = useState<string | undefined>('all')
     const [openDetail, setOpenDetail] = useState<boolean | undefined>(false)
+    const [authBootstrapping, setAuthBootstrapping] = useState(true)
     const [user, setUser] = useState<{ id: string, name: string, email: string, role?: 'customer' | 'admin' } | null>(null)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
 
@@ -363,6 +442,41 @@ const MyAccount = () => {
     })
     const [storeStatusLoading, setStoreStatusLoading] = useState(false)
     const [storeStatusSaving, setStoreStatusSaving] = useState(false)
+    const [localSaleSearch, setLocalSaleSearch] = useState('')
+    const [localSaleDiscountCode, setLocalSaleDiscountCode] = useState('')
+    const [localSalePaymentMethod, setLocalSalePaymentMethod] = useState('cash')
+    const [localSaleCustomerName, setLocalSaleCustomerName] = useState('')
+    const [localSaleCustomerPhone, setLocalSaleCustomerPhone] = useState('')
+    const [localSaleCustomerEmail, setLocalSaleCustomerEmail] = useState('')
+    const [localSaleCustomerStreet, setLocalSaleCustomerStreet] = useState('')
+    const [localSaleCustomerCity, setLocalSaleCustomerCity] = useState('')
+    const [localSaleCustomerDocumentType, setLocalSaleCustomerDocumentType] = useState<'cedula' | 'ruc' | 'pasaporte' | 'consumidor_final'>('cedula')
+    const [localSaleCustomerDocumentNumber, setLocalSaleCustomerDocumentNumber] = useState('')
+    const [localSaleNotes, setLocalSaleNotes] = useState('')
+    const [localSaleItems, setLocalSaleItems] = useState<LocalSaleLineItem[]>([])
+    const [localSaleQuote, setLocalSaleQuote] = useState<LocalSaleQuote | null>(null)
+    const [localSaleQuoteLoading, setLocalSaleQuoteLoading] = useState(false)
+    const [localSaleSaving, setLocalSaleSaving] = useState(false)
+    const [localSaleError, setLocalSaleError] = useState<string | null>(null)
+    const [localSalePaymentReference, setLocalSalePaymentReference] = useState('')
+    const [localSaleCashReceived, setLocalSaleCashReceived] = useState('')
+    const [localSaleElectronicAmount, setLocalSaleElectronicAmount] = useState('')
+    const [localSaleAutoPrint, setLocalSaleAutoPrint] = useState(true)
+    const [localSaleLastOrderId, setLocalSaleLastOrderId] = useState<string | null>(null)
+    const [localSaleCustomerLookupLoading, setLocalSaleCustomerLookupLoading] = useState(false)
+    const [localSaleCustomerLookupMessage, setLocalSaleCustomerLookupMessage] = useState<string | null>(null)
+    const [posActiveShift, setPosActiveShift] = useState<PosShift | null>(null)
+    const [posShiftHistory, setPosShiftHistory] = useState<PosShift[]>([])
+    const [posMovements, setPosMovements] = useState<PosMovement[]>([])
+    const [posLoading, setPosLoading] = useState(false)
+    const [posActionLoading, setPosActionLoading] = useState(false)
+    const [posOpeningCash, setPosOpeningCash] = useState('')
+    const [posOpenNotes, setPosOpenNotes] = useState('')
+    const [posClosingCash, setPosClosingCash] = useState('')
+    const [posCloseNotes, setPosCloseNotes] = useState('')
+    const [posMovementType, setPosMovementType] = useState<PosMovement['type']>('expense')
+    const [posMovementAmount, setPosMovementAmount] = useState('')
+    const [posMovementDescription, setPosMovementDescription] = useState('')
 
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
@@ -973,11 +1087,10 @@ const MyAccount = () => {
             phone: order.customer_phone || shipping.phone || billing.phone || defaultBilling.phone || '-'
         }
     }
-    const handleGenerateInvoice = async () => {
-        if (!selectedOrder) return
+    const printOrderInvoiceById = async (orderId: string) => {
         try {
             const token = localStorage.getItem('authToken')
-            const res = await fetch(`/api/orders/${selectedOrder.id}/invoice`, {
+            const res = await fetch(`/api/orders/${orderId}/invoice`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             if (!res.ok) {
@@ -1014,10 +1127,16 @@ const MyAccount = () => {
                     }
                 }, 300)
             }
+            return true
         } catch (error) {
             console.error(error)
             showNotification('No se pudo abrir la factura.', 'error')
+            return false
         }
+    }
+    const handleGenerateInvoice = async () => {
+        if (!selectedOrder?.id) return
+        await printOrderInvoiceById(String(selectedOrder.id))
     }
     const handleSaveAddresses = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1330,6 +1449,10 @@ const MyAccount = () => {
         const parsed = Number(value)
         return Number.isFinite(parsed) ? parsed : 0
     }
+    const parseDecimalInput = (value: string) => {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+    }
 
     const toNumber = (value: any, fallback = 0, min = 0, max?: number) => {
         const parsed = Number(value)
@@ -1423,6 +1546,29 @@ const MyAccount = () => {
         setSelectedDeepDive('sales')
     }
 
+    const syncPosState = (payload: any) => {
+        const shift = payload?.shift ? payload.shift as PosShift : null
+        const movements = Array.isArray(payload?.movements) ? payload.movements as PosMovement[] : []
+        const history = Array.isArray(payload?.history) ? payload.history as PosShift[] : []
+        setPosActiveShift(shift)
+        setPosMovements(movements)
+        setPosShiftHistory(history)
+        if (shift?.status === 'open') {
+            setPosClosingCash(String(Number(shift.summary?.expected_cash ?? 0).toFixed(2)))
+        } else {
+            setPosClosingCash('')
+        }
+    }
+
+    const loadPosSnapshot = async (token?: string) => {
+        const authToken = token || localStorage.getItem('authToken')
+        if (!authToken) return
+        const res = await requestApi<any>('/api/admin/pos/shift/active', {
+            headers: { Authorization: `Bearer ${authToken}` }
+        })
+        syncPosState(res.body)
+    }
+
     // Fetch Admin Data
     React.useEffect(() => {
         const token = localStorage.getItem('authToken')
@@ -1459,8 +1605,8 @@ const MyAccount = () => {
             'product-page',
             'balances'
         ])
-        const tabsWithProducts = new Set(['products', 'prices'])
-        const tabsWithOrders = new Set(['admin-orders', 'shipments', 'balances'])
+        const tabsWithProducts = new Set(['products', 'prices', 'local-sales'])
+        const tabsWithOrders = new Set(['admin-orders', 'shipments', 'balances', 'local-sales'])
         const tabsWithPricingSettings = new Set(['prices', 'margins', 'calculations', 'pricing-rules'])
 
         const loadAdminData = async () => {
@@ -1516,6 +1662,17 @@ const MyAccount = () => {
                 tasks.push(loadStoreStatus())
             }
 
+            if (activeTab === 'local-sales') {
+                if (!cancelled) setPosLoading(true)
+                tasks.push(
+                    requestApi<any>('/api/admin/pos/shift/active', { headers }).then((res) => {
+                        if (!cancelled) syncPosState(res.body)
+                    }).finally(() => {
+                        if (!cancelled) setPosLoading(false)
+                    })
+                )
+            }
+
             if (activeTab === 'shipments') {
                 tasks.push(
                     requestApi<{ providers?: ShippingProvider[]; pickups?: ShippingPickup[] }>('/api/shipments', { headers }).then((res) => {
@@ -1548,6 +1705,52 @@ const MyAccount = () => {
     }, [activeTab, salesRankingMonth, user])
 
     React.useEffect(() => {
+        if (activeTab !== 'local-sales') return
+        if (!user || user.role !== 'admin') return
+        if (localSaleItems.length === 0) {
+            setLocalSaleQuote(null)
+            setLocalSaleError(null)
+            setLocalSaleQuoteLoading(false)
+            return
+        }
+
+        let cancelled = false
+        setLocalSaleQuoteLoading(true)
+        setLocalSaleError(null)
+
+        const normalizedDiscountCode = localSaleDiscountCode.trim().toUpperCase() || null
+        requestApi<LocalSaleQuote>('/api/orders/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                delivery_method: 'pickup',
+                discount_code: normalizedDiscountCode,
+                items: localSaleItems.map((item) => ({
+                    product_id: item.productId,
+                    quantity: item.quantity
+                }))
+            })
+        })
+            .then((res) => {
+                if (cancelled) return
+                setLocalSaleQuote(res.body)
+            })
+            .catch((error: any) => {
+                if (cancelled) return
+                console.error(error)
+                setLocalSaleQuote(null)
+                setLocalSaleError(String(error?.message || 'No se pudo calcular la venta local.'))
+            })
+            .finally(() => {
+                if (!cancelled) setLocalSaleQuoteLoading(false)
+            })
+
+        return () => {
+            cancelled = true
+        }
+    }, [activeTab, localSaleDiscountCode, localSaleItems, user])
+
+    React.useEffect(() => {
         const token = localStorage.getItem('authToken')
         if (!token || !user || user.role === 'admin') return
 
@@ -1569,16 +1772,38 @@ const MyAccount = () => {
     React.useEffect(() => {
         const token = localStorage.getItem('authToken')
         const userData = localStorage.getItem('user')
+
         if (!token) {
-            router.push('/login')
-        } else if (userData) {
+            setAuthBootstrapping(false)
+            router.replace('/login')
+            return
+        }
+
+        if (!userData) {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('user')
+            setAuthBootstrapping(false)
+            router.replace('/login')
+            return
+        }
+
+        try {
             const parsedUser = JSON.parse(userData)
+            if (!parsedUser?.id || !parsedUser?.name || !parsedUser?.email) {
+                throw new Error('Usuario local inválido')
+            }
             setUser(parsedUser)
             if (parsedUser.role === 'admin') {
                 setActiveTab('reports')
             } else {
                 setActiveTab('dashboard')
             }
+        } catch {
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('user')
+            router.replace('/login')
+        } finally {
+            setAuthBootstrapping(false)
         }
     }, [router])
 
@@ -1741,6 +1966,548 @@ const MyAccount = () => {
     const openSalesProductDetail = (item: SalesRankingRow) => {
         setSelectedSalesProduct(item)
         setIsSalesProductModalOpen(true)
+    }
+    const localSaleCatalog = React.useMemo(() => {
+        const query = localSaleSearch.trim().toLowerCase()
+        return (adminProductsList || [])
+            .map((product: any) => {
+                const internalId = String(product.internalId || product.id || '').trim()
+                const legacyId = String(product.id || internalId).trim()
+                const stock = Math.max(0, Number(product.quantity ?? 0))
+                const sku = String(product.attributes?.sku || '').trim()
+                const image = (Array.isArray(product.thumbImage) && product.thumbImage[0])
+                    || (Array.isArray(product.images) && product.images[0])
+                    || '/images/product/1000x1000.png'
+                return {
+                    internalId,
+                    legacyId,
+                    name: String(product.name || 'Producto sin nombre'),
+                    category: String(product.category || 'Sin categoría'),
+                    sku,
+                    stock,
+                    price: parseMoney(product.price),
+                    cost: parseMoney(product.business?.cost ?? product.cost),
+                    image: String(image),
+                    searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${legacyId}`.toLowerCase()
+                }
+            })
+            .filter((product) => {
+                if (!product.internalId) return false
+                if (!query) return true
+                return product.searchText.includes(query)
+            })
+            .sort((a, b) => {
+                if (b.stock !== a.stock) return b.stock - a.stock
+                return a.name.localeCompare(b.name, 'es')
+            })
+    }, [adminProductsList, localSaleSearch, parseMoney])
+    const localSaleUnits = localSaleItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0)
+    const localSaleNet = Number(localSaleQuote?.vat_subtotal ?? 0)
+    const localSaleVat = Number(localSaleQuote?.vat_amount ?? 0)
+    const localSaleGross = Number(localSaleQuote?.subtotal ?? 0)
+    const localSaleShipping = Number(localSaleQuote?.shipping ?? 0)
+    const localSaleTotal = Number(localSaleQuote?.total ?? 0)
+    const localSaleDiscount = Number(localSaleQuote?.discount_total ?? 0)
+    const localSaleCost = localSaleItems.reduce((acc, item) => acc + (Number(item.cost || 0) * Number(item.quantity || 0)), 0)
+    const localSaleProfit = localSaleNet - localSaleCost
+    const localSaleCashReceivedValue = parseDecimalInput(localSaleCashReceived)
+    const localSaleElectronicAmountValue = parseDecimalInput(localSaleElectronicAmount)
+    const localSalePaidAmount = localSalePaymentMethod === 'cash'
+        ? localSaleCashReceivedValue
+        : (localSalePaymentMethod === 'mixed' ? (localSaleCashReceivedValue + localSaleElectronicAmountValue) : localSaleTotal)
+    const localSalePendingAmount = Math.max(0, localSaleTotal - localSalePaidAmount)
+    const localSaleChange = Math.max(0, localSalePaidAmount - localSaleTotal)
+    const localSalePaymentReferenceValue = localSalePaymentReference.trim()
+    const localSaleDocumentNumberValue = localSaleCustomerDocumentNumber.trim()
+    const localSaleCustomerStreetValue = localSaleCustomerStreet.trim()
+    const localSaleCustomerCityValue = localSaleCustomerCity.trim()
+    const localSaleAddressReady = localSaleCustomerStreetValue.length >= 5
+    const localSalePaymentIssues = React.useMemo(() => {
+        const issues: string[] = []
+        if (localSalePaymentMethod === 'cash') {
+            if (localSaleCashReceivedValue <= 0) {
+                issues.push('Ingresa el efectivo recibido.')
+            } else if (localSaleCashReceivedValue < localSaleTotal) {
+                issues.push('El efectivo recibido no cubre el total de la venta.')
+            }
+            return issues
+        }
+        if (localSalePaymentMethod === 'transfer') {
+            if (localSalePaymentReferenceValue.length < 4) {
+                issues.push('Ingresa la referencia de la transferencia.')
+            }
+            return issues
+        }
+        if (localSalePaymentMethod === 'mixed') {
+            if (localSaleCashReceivedValue <= 0) {
+                issues.push('Ingresa el valor en efectivo para pago mixto.')
+            }
+            if (localSaleElectronicAmountValue <= 0) {
+                issues.push('Ingresa el monto electrónico para pago mixto.')
+            }
+            if (localSalePaymentReferenceValue.length < 4) {
+                issues.push('Ingresa la referencia del pago electrónico.')
+            }
+            if (localSalePendingAmount > 0.009) {
+                issues.push('El pago mixto aún no cubre el total de la venta.')
+            }
+            return issues
+        }
+        return issues
+    }, [
+        localSaleCashReceivedValue,
+        localSaleElectronicAmountValue,
+        localSalePaymentMethod,
+        localSalePaymentReferenceValue,
+        localSalePendingAmount,
+        localSaleTotal
+    ])
+    const localSalePaymentReady = localSalePaymentIssues.length === 0
+    const localSaleMissingInfo = React.useMemo(() => {
+        const issues: string[] = []
+        if (!storeStatus.salesEnabled) {
+            issues.push(storeStatus.message || DEFAULT_STORE_PAUSE_MESSAGE)
+        }
+        if (!(posActiveShift && posActiveShift.status === 'open')) {
+            issues.push('Debes abrir la caja del turno antes de registrar la venta.')
+        }
+        if (localSaleItems.length === 0) {
+            issues.push('Agrega al menos un producto a la compra.')
+        }
+        if (localSaleQuoteLoading) {
+            issues.push('Espera que termine el cálculo del total.')
+        }
+        if (localSaleError) {
+            issues.push(localSaleError)
+        }
+        if (localSaleCustomerLookupLoading) {
+            issues.push('Esperando resultado de búsqueda de cliente por documento.')
+        }
+        if (localSaleCustomerDocumentType !== 'consumidor_final' && localSaleDocumentNumberValue.length < 6) {
+            issues.push('Número de documento inválido para facturación.')
+        }
+        if (!localSaleAddressReady) {
+            issues.push('Dirección del cliente obligatoria para registrar la venta.')
+        }
+        issues.push(...localSalePaymentIssues)
+        return issues
+    }, [
+        localSaleAddressReady,
+        localSaleCustomerDocumentType,
+        localSaleDocumentNumberValue.length,
+        localSaleError,
+        localSaleItems.length,
+        localSaleCustomerLookupLoading,
+        localSalePaymentIssues,
+        localSaleQuoteLoading,
+        posActiveShift,
+        storeStatus.message,
+        storeStatus.salesEnabled
+    ])
+    const localSalePaymentStatusText = localSalePaymentReady
+        ? 'Listo para cobrar'
+        : (localSalePaymentIssues[0] || 'Falta completar datos')
+    const isLocalSaleSubmitDisabled = localSaleSaving || localSaleMissingInfo.length > 0
+    const localSaleDocumentReady = localSaleCustomerDocumentType === 'consumidor_final' || localSaleDocumentNumberValue.length >= 6
+    const localSaleQuoteReady = !localSaleQuoteLoading && !localSaleError && localSaleTotal > 0
+    const localSaleQuickChecks = React.useMemo(() => ([
+        {
+            key: 'caja',
+            label: 'Caja',
+            ok: Boolean(posActiveShift && posActiveShift.status === 'open'),
+            detail: (posActiveShift && posActiveShift.status === 'open') ? 'Abierta' : 'Cerrada'
+        },
+        {
+            key: 'items',
+            label: 'Productos',
+            ok: localSaleItems.length > 0,
+            detail: localSaleItems.length > 0 ? `${localSaleUnits} uds` : 'Sin items'
+        },
+        {
+            key: 'doc',
+            label: 'Cliente',
+            ok: localSaleDocumentReady && localSaleAddressReady,
+            detail: !localSaleDocumentReady
+                ? 'Doc. incompleto'
+                : (localSaleAddressReady ? 'OK' : 'Sin dirección')
+        },
+        {
+            key: 'pago',
+            label: 'Pago',
+            ok: localSalePaymentReady,
+            detail: localSalePaymentReady ? 'Completo' : 'Pendiente'
+        },
+        {
+            key: 'total',
+            label: 'Total',
+            ok: localSaleQuoteReady,
+            detail: localSaleQuoteReady ? formatMoney(localSaleTotal) : 'Sin cálculo'
+        }
+    ]), [
+        formatMoney,
+        localSaleAddressReady,
+        localSaleDocumentReady,
+        localSaleItems.length,
+        localSalePaymentReady,
+        localSaleQuoteReady,
+        localSaleTotal,
+        localSaleUnits,
+        posActiveShift
+    ])
+    const localSalePrimaryMissing = localSaleMissingInfo[0] || null
+    const posSummary = posActiveShift?.summary
+    const posExpectedCash = Number(posSummary?.expected_cash ?? 0)
+    const posCashSales = Number(posSummary?.cash_sales ?? 0)
+    const posElectronicSales = Number(posSummary?.electronic_sales ?? 0)
+    const posMovementIncome = Number(posSummary?.movement_income ?? 0)
+    const posMovementExpense = Number(posSummary?.movement_expense ?? 0)
+    const posMovementAdjustments = Number(posSummary?.movement_adjustments ?? 0)
+    const posOrdersCount = Number(posSummary?.orders_count ?? 0)
+    const posSalesTotal = Number(posSummary?.sales_total ?? 0)
+    const posCanRegisterSale = Boolean(posActiveShift && posActiveShift.status === 'open')
+    const posFieldLabelClass = 'text-[10px] uppercase font-bold text-[#475569] mb-1'
+    const posFieldClass = 'w-full px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
+    const posFieldFlexClass = 'flex-1 px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
+    const posTextareaClass = 'w-full px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm resize-none focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
+
+    const handleAddLocalSaleProduct = (product: {
+        internalId: string;
+        name: string;
+        category: string;
+        sku: string;
+        stock: number;
+        price: number;
+        cost: number;
+        image: string;
+    }) => {
+        if (product.stock <= 0) {
+            showNotification(`"${product.name}" no tiene stock disponible.`, 'error')
+            return
+        }
+        setLocalSaleItems((prev) => {
+            const existing = prev.find((item) => item.internalId === product.internalId)
+            if (existing) {
+                if (existing.quantity >= product.stock) {
+                    showNotification(`Stock máximo alcanzado para "${product.name}".`, 'error')
+                    return prev
+                }
+                return prev.map((item) => item.internalId === product.internalId
+                    ? { ...item, quantity: item.quantity + 1, stock: product.stock, price: product.price, cost: product.cost }
+                    : item
+                )
+            }
+            return [
+                ...prev,
+                {
+                    productId: product.internalId,
+                    internalId: product.internalId,
+                    name: product.name,
+                    category: product.category,
+                    sku: product.sku,
+                    image: product.image,
+                    stock: product.stock,
+                    quantity: 1,
+                    price: product.price,
+                    cost: product.cost
+                }
+            ]
+        })
+        setLocalSaleError(null)
+    }
+
+    const handleUpdateLocalSaleQuantity = (internalId: string, quantity: number) => {
+        setLocalSaleItems((prev) => prev
+            .map((item) => {
+                if (item.internalId !== internalId) return item
+                const maxStock = Math.max(0, Number(item.stock || 0))
+                const nextQty = Math.min(Math.max(0, quantity), maxStock)
+                return { ...item, quantity: nextQty }
+            })
+            .filter((item) => item.quantity > 0)
+        )
+    }
+
+    const handleRemoveLocalSaleItem = (internalId: string) => {
+        setLocalSaleItems((prev) => prev.filter((item) => item.internalId !== internalId))
+    }
+
+    const handleClearLocalSale = () => {
+        setLocalSaleItems([])
+        setLocalSaleDiscountCode('')
+        setLocalSaleNotes('')
+        setLocalSaleCustomerName('')
+        setLocalSaleCustomerPhone('')
+        setLocalSaleCustomerEmail('')
+        setLocalSaleCustomerStreet('')
+        setLocalSaleCustomerCity('')
+        setLocalSaleCustomerDocumentType('cedula')
+        setLocalSaleCustomerDocumentNumber('')
+        setLocalSalePaymentMethod('cash')
+        setLocalSalePaymentReference('')
+        setLocalSaleCashReceived('')
+        setLocalSaleElectronicAmount('')
+        setLocalSaleQuote(null)
+        setLocalSaleError(null)
+        setLocalSaleCustomerLookupMessage(null)
+    }
+    const handleOpenLastLocalSaleOrder = async () => {
+        if (!localSaleLastOrderId) return
+        await handleViewOrder(localSaleLastOrderId)
+    }
+    const handlePrintLastLocalSaleInvoice = async () => {
+        if (!localSaleLastOrderId) return
+        await printOrderInvoiceById(localSaleLastOrderId)
+    }
+    const handleLookupCustomerByDocument = async (documentOverride?: string) => {
+        const rawDoc = (documentOverride ?? localSaleCustomerDocumentNumber).trim()
+        if (rawDoc.length < 6) {
+            setLocalSaleCustomerLookupMessage('Ingresa una cédula/documento válido para buscar cliente.')
+            return
+        }
+        try {
+            setLocalSaleCustomerLookupLoading(true)
+            const res = await requestApi<{ found?: boolean; customer?: any }>(`/api/admin/pos/customer-by-document?document=${encodeURIComponent(rawDoc)}`)
+            const found = Boolean(res.body?.found && res.body?.customer)
+            if (!found) {
+                setLocalSaleCustomerLookupMessage('Cliente no encontrado. Completa los datos manualmente.')
+                return
+            }
+
+            const customer = res.body.customer || {}
+            const firstName = String(customer.firstName || '').trim()
+            const lastName = String(customer.lastName || '').trim()
+            const fullName = String(customer.name || `${firstName} ${lastName}`).trim()
+            if (fullName) setLocalSaleCustomerName(fullName)
+            if (customer.phone) setLocalSaleCustomerPhone(String(customer.phone))
+            if (customer.email) setLocalSaleCustomerEmail(String(customer.email))
+            const customerAddress = customer.address && typeof customer.address === 'object' ? customer.address : {}
+            const customerStreet = String(customerAddress.street || '').trim()
+            const customerCity = String(customerAddress.city || '').trim()
+            if (customerStreet) setLocalSaleCustomerStreet(customerStreet)
+            if (customerCity) setLocalSaleCustomerCity(customerCity)
+            if (customer.documentType && ['cedula', 'ruc', 'pasaporte', 'consumidor_final'].includes(String(customer.documentType))) {
+                setLocalSaleCustomerDocumentType(String(customer.documentType) as 'cedula' | 'ruc' | 'pasaporte' | 'consumidor_final')
+            }
+            if (customer.documentNumber) setLocalSaleCustomerDocumentNumber(String(customer.documentNumber))
+
+            const source = customer.source || {}
+            const sourceText = source.type === 'order'
+                ? `Cliente encontrado (${Number(source.orders_count ?? 1)} compra${Number(source.orders_count ?? 1) === 1 ? '' : 's'}).`
+                : 'Cliente encontrado en perfil.'
+            const addressText = customerStreet
+                ? ' Dirección cargada.'
+                : ' Falta dirección registrada.'
+            setLocalSaleCustomerLookupMessage(`${sourceText}${addressText}`)
+        } catch (error: any) {
+            console.error(error)
+            setLocalSaleCustomerLookupMessage(String(error?.message || 'No se pudo buscar el cliente por cédula/documento.'))
+        } finally {
+            setLocalSaleCustomerLookupLoading(false)
+        }
+    }
+    const handleSetCashExact = () => {
+        setLocalSaleCashReceived(localSaleTotal > 0 ? localSaleTotal.toFixed(2) : '')
+    }
+    const handleCompleteMixedWithElectronic = () => {
+        const remaining = Math.max(0, localSaleTotal - localSaleCashReceivedValue)
+        setLocalSaleElectronicAmount(remaining > 0 ? remaining.toFixed(2) : '0.00')
+    }
+
+    const handleOpenPosShift = async () => {
+        const openingCash = parseDecimalInput(posOpeningCash)
+        if (openingCash < 0) {
+            showNotification('El monto inicial de caja no puede ser negativo.', 'error')
+            return
+        }
+        try {
+            setPosActionLoading(true)
+            const res = await requestApi<any>('/api/admin/pos/shift/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    opening_cash: openingCash,
+                    notes: posOpenNotes.trim() || null
+                })
+            })
+            syncPosState(res.body)
+            setPosOpeningCash('')
+            setPosOpenNotes('')
+            showNotification('Caja abierta correctamente.')
+        } catch (error: any) {
+            console.error(error)
+            showNotification(String(error?.message || 'No se pudo abrir la caja.'), 'error')
+        } finally {
+            setPosActionLoading(false)
+        }
+    }
+
+    const handleClosePosShift = async () => {
+        if (!posActiveShift || posActiveShift.status !== 'open') {
+            showNotification('No hay una caja abierta para cerrar.', 'error')
+            return
+        }
+        const closingCash = parseDecimalInput(posClosingCash)
+        if (closingCash < 0) {
+            showNotification('El monto de cierre no puede ser negativo.', 'error')
+            return
+        }
+        try {
+            setPosActionLoading(true)
+            const res = await requestApi<any>('/api/admin/pos/shift/close', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    closing_cash: closingCash,
+                    notes: posCloseNotes.trim() || null
+                })
+            })
+            syncPosState(res.body)
+            setPosCloseNotes('')
+            showNotification('Caja cerrada correctamente.')
+        } catch (error: any) {
+            console.error(error)
+            showNotification(String(error?.message || 'No se pudo cerrar la caja.'), 'error')
+        } finally {
+            setPosActionLoading(false)
+        }
+    }
+
+    const handleAddPosMovement = async () => {
+        const amount = parseDecimalInput(posMovementAmount)
+        if (posMovementType !== 'adjustment' && amount <= 0) {
+            showNotification('El monto debe ser mayor a cero.', 'error')
+            return
+        }
+        if (posMovementType === 'adjustment' && Math.abs(amount) < 0.01) {
+            showNotification('El ajuste no puede ser cero.', 'error')
+            return
+        }
+        try {
+            setPosActionLoading(true)
+            const res = await requestApi<any>('/api/admin/pos/movements', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: posMovementType,
+                    amount,
+                    description: posMovementDescription.trim() || null
+                })
+            })
+            syncPosState(res.body)
+            setPosMovementAmount('')
+            setPosMovementDescription('')
+            showNotification('Movimiento de caja registrado.')
+        } catch (error: any) {
+            console.error(error)
+            showNotification(String(error?.message || 'No se pudo registrar el movimiento.'), 'error')
+        } finally {
+            setPosActionLoading(false)
+        }
+    }
+
+    const handleCreateLocalSale = async () => {
+        if (localSaleMissingInfo.length > 0) {
+            const firstIssue = localSaleMissingInfo[0]
+            const suffix = localSaleMissingInfo.length > 1 ? ` (+${localSaleMissingInfo.length - 1} pendiente${localSaleMissingInfo.length - 1 === 1 ? '' : 's'})` : ''
+            showNotification(`${firstIssue}${suffix}`, 'error')
+            return
+        }
+
+        const customerName = localSaleCustomerName.trim() || 'Cliente local'
+        const nameParts = customerName.split(/\s+/).filter(Boolean)
+        const firstName = nameParts[0] || 'Cliente'
+        const lastName = nameParts.slice(1).join(' ') || 'Local'
+        const normalizedDiscountCode = localSaleDiscountCode.trim().toUpperCase() || null
+        const paymentDetails = {
+            channel: 'local_pos',
+            shift_id: posActiveShift?.id || null,
+            cashier_user_id: user?.id || null,
+            reference: localSalePaymentReferenceValue || null,
+            cash_received: localSalePaymentMethod === 'cash' || localSalePaymentMethod === 'mixed' ? Number(localSaleCashReceivedValue.toFixed(2)) : 0,
+            electronic_amount: localSalePaymentMethod === 'mixed' ? Number(localSaleElectronicAmountValue.toFixed(2)) : (localSalePaymentMethod === 'cash' ? 0 : Number(localSaleTotal.toFixed(2))),
+            paid_amount: Number(localSalePaidAmount.toFixed(2)),
+            pending_amount: Number(localSalePendingAmount.toFixed(2)),
+            change_due: Number(localSaleChange.toFixed(2))
+        }
+
+        const customerAddress = {
+            firstName,
+            lastName,
+            phone: localSaleCustomerPhone.trim() || null,
+            email: localSaleCustomerEmail.trim() || null,
+            street: localSaleCustomerStreetValue,
+            city: localSaleCustomerCityValue || null,
+            state: null,
+            country: 'EC',
+            zip: null,
+            documentType: localSaleCustomerDocumentType,
+            documentNumber: localSaleDocumentNumberValue || null
+        }
+
+        try {
+            setLocalSaleSaving(true)
+            setLocalSaleError(null)
+            const payload = {
+                total: localSaleTotal,
+                status: 'completed',
+                delivery_method: 'pickup',
+                payment_method: localSalePaymentMethod,
+                shipping_address: customerAddress,
+                billing_address: customerAddress,
+                order_notes: localSaleNotes.trim() || 'Venta en local (POS)',
+                coupon_code: normalizedDiscountCode,
+                payment_details: paymentDetails,
+                items: localSaleItems.map((item) => ({
+                    product_id: item.productId,
+                    quantity: item.quantity
+                }))
+            }
+            const created = await requestApi<any>('/api/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+
+            const createdOrderId = created.body?.id ? String(created.body.id) : ''
+            showNotification(createdOrderId ? `Venta local registrada: ${createdOrderId}` : 'Venta local registrada.')
+            if (createdOrderId) {
+                setLocalSaleLastOrderId(createdOrderId)
+            }
+            handleClearLocalSale()
+            if (localSaleAutoPrint && createdOrderId) {
+                await printOrderInvoiceById(createdOrderId)
+            }
+
+            const token = localStorage.getItem('authToken')
+            if (token) {
+                const headers = { Authorization: `Bearer ${token}` }
+                const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
+                    ? `?month=${encodeURIComponent(salesRankingMonth)}`
+                    : ''
+                const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
+                    requestApi<any[]>('/api/products', { headers }),
+                    requestApi<Order[]>('/api/orders', { headers }),
+                    requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })
+                ])
+                if (productsResult.status === 'fulfilled') {
+                    setAdminProductsList(normalizeAdminProducts(productsResult.value.body))
+                }
+                if (ordersResult.status === 'fulfilled') {
+                    setAdminOrdersList(ordersResult.value.body)
+                }
+                if (statsResult.status === 'fulfilled') {
+                    setDashboardStats(statsResult.value.body)
+                }
+                await loadPosSnapshot(token)
+            }
+        } catch (error: any) {
+            console.error(error)
+            const message = String(error?.message || 'No se pudo registrar la venta local.')
+            setLocalSaleError(message)
+            showNotification(message, 'error')
+        } finally {
+            setLocalSaleSaving(false)
+        }
     }
 
     const openProductBreakdown = (metric: ProductDetailMetric) => {
@@ -2393,7 +3160,34 @@ const MyAccount = () => {
         [selectedOrder, savedAddresses, user]
     )
 
-    if (!user) return null
+    if (!user) {
+        return (
+            <>
+                <div id="header" className='relative w-full'>
+                    <MenuOne props="bg-transparent" />
+                </div>
+                <div className="profile-block md:py-20 py-10">
+                    <div className="w-full max-w-[1200px] mx-auto px-6 md:px-10">
+                        <div className="bg-surface rounded-[20px] p-8 md:p-10 text-center">
+                            <div className="heading5 text-title">
+                                {authBootstrapping ? 'Cargando tu cuenta...' : 'Sesión no disponible'}
+                            </div>
+                            <p className="text-secondary mt-3">
+                                {authBootstrapping
+                                    ? 'Estamos validando tus datos.'
+                                    : 'Inicia sesión para continuar en tu panel.'}
+                            </p>
+                            {!authBootstrapping && (
+                                <Link href="/login" className="button-main inline-block mt-5">
+                                    Ir a iniciar sesión
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </>
+        )
+    }
 
     return (
         <>
@@ -2487,6 +3281,10 @@ const MyAccount = () => {
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'store-status' ? 'active' : ''}`} onClick={() => setActiveTab('store-status')}>
                                                 <Icon.Power size={20} />
                                                 <strong className="heading6">Ventas</strong>
+                                            </Link>
+                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'local-sales' ? 'active' : ''}`} onClick={() => setActiveTab('local-sales')}>
+                                                <Icon.ShoppingBag size={20} />
+                                                <strong className="heading6">Venta en local</strong>
                                             </Link>
                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'taxes' ? 'active' : ''}`} onClick={() => setActiveTab('taxes')}>
                                                 <Icon.Percent size={20} />
@@ -3245,6 +4043,825 @@ const MyAccount = () => {
                                                 </table>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <div className={`tab text-content w-full ${activeTab === 'local-sales' ? '!flex !flex-col' : 'hidden'}`}>
+                                        <div className="flex items-center justify-between pb-6">
+                                            <div>
+                                                <div className="heading5">Venta en local (POS)</div>
+                                                <p className="text-secondary text-xs mt-1">
+                                                    Busca artículos, verifica existencia/costo y registra ventas directas en mostrador.
+                                                </p>
+                                            </div>
+                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
+                                                {currentDateLabel}
+                                            </div>
+                                        </div>
+
+                                        {!storeStatus.salesEnabled && (
+                                            <div className="mb-5 p-4 rounded-xl border border-red/30 bg-red/5 text-red text-sm">
+                                                {storeStatus.message || DEFAULT_STORE_PAUSE_MESSAGE}
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                                            <div className="p-3 rounded-lg border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos disponibles</div>
+                                                <div className="text-lg font-bold">{localSaleCatalog.length}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades en inventario</div>
+                                                <div className="text-lg font-bold">{localSaleCatalog.reduce((acc, item) => acc + item.stock, 0)}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades en la venta</div>
+                                                <div className="text-lg font-bold">{localSaleUnits}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 2xl:grid-cols-12 gap-5">
+                                            <div className="2xl:col-span-6 border border-line rounded-2xl bg-white p-5">
+                                                <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+                                                    <label className="flex-1">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Buscar artículo</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleSearch}
+                                                            onChange={(event) => setLocalSaleSearch(event.target.value)}
+                                                            placeholder="Nombre, categoría, SKU o ID"
+                                                            className="w-full px-3 py-2 rounded-lg border border-line bg-white text-black text-sm focus:border-black outline-none"
+                                                        />
+                                                    </label>
+                                                    <div className="text-xs text-secondary">
+                                                        {localSaleCatalog.length} resultado{localSaleCatalog.length === 1 ? '' : 's'}
+                                                    </div>
+                                                </div>
+
+                                                <div className="overflow-y-auto overflow-x-hidden max-h-[560px] border border-line rounded-xl">
+                                                    <table className="w-full table-fixed">
+                                                        <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                            <tr>
+                                                                <th className="px-3 py-2 text-left w-[46%]">Producto</th>
+                                                                <th className="px-3 py-2 text-left w-[18%] hidden xl:table-cell">Categoría</th>
+                                                                <th className="px-3 py-2 text-right w-[10%]">Existencia</th>
+                                                                <th className="px-3 py-2 text-right w-[10%]">Costo</th>
+                                                                <th className="px-3 py-2 text-right w-[10%]">Precio</th>
+                                                                <th className="px-3 py-2 text-right w-[14%]">Acción</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-line">
+                                                            {localSaleCatalog.map((product) => {
+                                                                const cartQty = localSaleItems.find((item) => item.internalId === product.internalId)?.quantity ?? 0
+                                                                const noStock = product.stock <= 0
+                                                                const missingFields: string[] = []
+                                                                if (!product.sku) missingFields.push('SKU')
+                                                                if (!product.category || product.category.toLowerCase().includes('sin categoría')) missingFields.push('categoría')
+                                                                if (product.cost <= 0) missingFields.push('costo')
+                                                                return (
+                                                                    <tr key={product.internalId} className="hover:bg-surface/40">
+                                                                        <td className="px-3 py-2">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <Image
+                                                                                    src={product.image}
+                                                                                    width={44}
+                                                                                    height={44}
+                                                                                    alt={product.name}
+                                                                                    unoptimized={product.image.startsWith('/uploads/') || product.image.startsWith('/images/')}
+                                                                                    className="w-11 h-11 rounded-md object-cover border border-line"
+                                                                                />
+                                                                                <div className="min-w-0">
+                                                                                    <div className="font-semibold text-sm leading-tight truncate" title={product.name}>{product.name}</div>
+                                                                                    <div className="text-[11px] text-secondary">{product.sku ? `SKU: ${product.sku}` : `ID: ${product.legacyId}`}</div>
+                                                                                    {missingFields.length > 0 && (
+                                                                                        <div className="text-[10px] text-yellow mt-0.5 truncate" title={`Falta: ${missingFields.join(', ')}`}>
+                                                                                            Falta: {missingFields.join(', ')}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-2 text-sm hidden xl:table-cell truncate" title={product.category}>{product.category}</td>
+                                                                        <td className={`px-3 py-2 text-sm text-right font-semibold ${noStock ? 'text-red' : ''}`}>
+                                                                            {product.stock}
+                                                                        </td>
+                                                                        <td className="px-3 py-2 text-sm text-right">{formatMoney(product.cost)}</td>
+                                                                        <td className="px-3 py-2 text-sm text-right font-semibold">{formatMoney(product.price)}</td>
+                                                                        <td className="px-3 py-2 text-right">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleAddLocalSaleProduct(product)}
+                                                                                disabled={noStock || cartQty >= product.stock}
+                                                                                className={`px-2.5 py-1.5 rounded-md text-xs font-bold border transition-all whitespace-nowrap ${(noStock || cartQty >= product.stock)
+                                                                                    ? 'border-line text-secondary bg-surface cursor-not-allowed'
+                                                                                    : 'border-black text-black hover:bg-black hover:text-white'
+                                                                                    }`}
+                                                                            >
+                                                                                {noStock ? 'Sin stock' : (cartQty > 0 ? `Agregar (${cartQty})` : 'Agregar')}
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                )
+                                                            })}
+                                                            {localSaleCatalog.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-secondary">
+                                                                        No se encontraron artículos para la búsqueda actual.
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div className="2xl:col-span-6 border border-line rounded-2xl bg-white p-5">
+                                                <div className="flex items-start justify-between gap-3 mb-4">
+                                                    <div>
+                                                        <div className="heading6">Compra local</div>
+                                                        <p className="text-xs text-secondary mt-1">Resumen de productos, costos y cobro final.</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleClearLocalSale}
+                                                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-surface"
+                                                    >
+                                                        Limpiar
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+                                                    {localSaleQuickChecks.map((check) => (
+                                                        <div key={check.key} className={`rounded-lg border p-2 ${check.ok ? 'border-success/30 bg-success/10' : 'border-yellow/40 bg-yellow/10'}`}>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">{check.label}</div>
+                                                            <div className={`text-xs font-semibold mt-1 ${check.ok ? 'text-success' : 'text-yellow'}`}>{check.detail}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                                    <div className="sm:col-span-2 text-[11px] font-semibold text-[#516074]">
+                                                        Paso 1: ingresa la cédula/documento para autocompletar el cliente.
+                                                    </div>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Tipo documento</div>
+                                                        <select
+                                                            value={localSaleCustomerDocumentType}
+                                                            onChange={(event) => setLocalSaleCustomerDocumentType(event.target.value as 'cedula' | 'ruc' | 'pasaporte' | 'consumidor_final')}
+                                                            className={posFieldClass}
+                                                        >
+                                                            <option value="cedula">Cédula</option>
+                                                            <option value="ruc">RUC</option>
+                                                            <option value="pasaporte">Pasaporte</option>
+                                                            <option value="consumidor_final">Consumidor final</option>
+                                                        </select>
+                                                    </label>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>
+                                                            Número de documento {localSaleCustomerDocumentType === 'consumidor_final' ? '(opcional)' : '(obligatorio)'}
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={localSaleCustomerDocumentNumber}
+                                                                onChange={(event) => {
+                                                                    setLocalSaleCustomerDocumentNumber(event.target.value)
+                                                                    setLocalSaleCustomerLookupMessage(null)
+                                                                }}
+                                                                onBlur={() => {
+                                                                    const trimmed = localSaleCustomerDocumentNumber.trim()
+                                                                    if (localSaleCustomerDocumentType !== 'consumidor_final' && trimmed.length >= 6) {
+                                                                        handleLookupCustomerByDocument(trimmed)
+                                                                    }
+                                                                }}
+                                                                onKeyDown={(event) => {
+                                                                    if (event.key !== 'Enter') return
+                                                                    event.preventDefault()
+                                                                    if (localSaleCustomerDocumentNumber.trim().length >= 6) {
+                                                                        handleLookupCustomerByDocument()
+                                                                    }
+                                                                }}
+                                                                placeholder={localSaleCustomerDocumentType === 'consumidor_final' ? 'No requerido' : 'Ingresa cédula/documento'}
+                                                                className={posFieldFlexClass}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleLookupCustomerByDocument()}
+                                                                disabled={localSaleCustomerLookupLoading || localSaleCustomerDocumentNumber.trim().length < 6}
+                                                                className={`px-3 py-2 rounded-lg text-xs font-semibold ${(localSaleCustomerLookupLoading || localSaleCustomerDocumentNumber.trim().length < 6)
+                                                                    ? 'bg-surface text-secondary border border-line cursor-not-allowed'
+                                                                    : 'bg-black text-white hover:opacity-90'
+                                                                    }`}
+                                                            >
+                                                                {localSaleCustomerLookupLoading ? 'Buscando...' : 'Buscar'}
+                                                            </button>
+                                                        </div>
+                                                    </label>
+                                                    {localSaleCustomerLookupMessage && (
+                                                        <div className={`sm:col-span-2 -mt-1 text-xs ${localSaleCustomerLookupMessage.toLowerCase().includes('encontrado') ? 'text-success' : 'text-secondary'}`}>
+                                                            {localSaleCustomerLookupMessage}
+                                                        </div>
+                                                    )}
+                                                    <div className="sm:col-span-2 mt-1 text-[11px] font-semibold text-[#516074]">
+                                                        Paso 2: verifica o completa los datos del cliente.
+                                                    </div>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Cliente</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleCustomerName}
+                                                            onChange={(event) => setLocalSaleCustomerName(event.target.value)}
+                                                            placeholder="Nombre del cliente"
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Teléfono</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleCustomerPhone}
+                                                            onChange={(event) => setLocalSaleCustomerPhone(event.target.value)}
+                                                            placeholder="099..."
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    <label className="sm:col-span-2">
+                                                        <div className={posFieldLabelClass}>Correo</div>
+                                                        <input
+                                                            type="email"
+                                                            value={localSaleCustomerEmail}
+                                                            onChange={(event) => setLocalSaleCustomerEmail(event.target.value)}
+                                                            placeholder="cliente@correo.com"
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    <label className="sm:col-span-2">
+                                                        <div className={posFieldLabelClass}>Dirección (obligatoria)</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleCustomerStreet}
+                                                            onChange={(event) => setLocalSaleCustomerStreet(event.target.value)}
+                                                            placeholder="Dirección del cliente"
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Ciudad</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleCustomerCity}
+                                                            onChange={(event) => setLocalSaleCustomerCity(event.target.value)}
+                                                            placeholder="Ciudad (opcional)"
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Pago</div>
+                                                        <select
+                                                            value={localSalePaymentMethod}
+                                                            onChange={(event) => {
+                                                                const method = event.target.value
+                                                                setLocalSalePaymentMethod(method)
+                                                                if (method !== 'cash' && method !== 'mixed') {
+                                                                    setLocalSaleCashReceived('')
+                                                                }
+                                                                if (method !== 'mixed') {
+                                                                    setLocalSaleElectronicAmount('')
+                                                                }
+                                                                if (method === 'cash') {
+                                                                    setLocalSalePaymentReference('')
+                                                                }
+                                                            }}
+                                                            className={posFieldClass}
+                                                        >
+                                                            <option value="cash">Efectivo</option>
+                                                            <option value="card">Tarjeta</option>
+                                                            <option value="transfer">Transferencia</option>
+                                                            <option value="mixed">Mixto</option>
+                                                        </select>
+                                                    </label>
+                                                    <label>
+                                                        <div className={posFieldLabelClass}>Código descuento</div>
+                                                        <input
+                                                            type="text"
+                                                            value={localSaleDiscountCode}
+                                                            onChange={(event) => setLocalSaleDiscountCode(event.target.value.toUpperCase())}
+                                                            placeholder="Opcional y registrado"
+                                                            className={posFieldClass}
+                                                        />
+                                                    </label>
+                                                    {(localSalePaymentMethod === 'cash' || localSalePaymentMethod === 'mixed') && (
+                                                        <label>
+                                                            <div className={posFieldLabelClass}>Efectivo recibido</div>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                step="0.01"
+                                                                value={localSaleCashReceived}
+                                                                onChange={(event) => setLocalSaleCashReceived(event.target.value)}
+                                                                placeholder="0.00"
+                                                                className={posFieldClass}
+                                                            />
+                                                            <div className="mt-1.5 flex gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleSetCashExact}
+                                                                    className="px-2 py-1 rounded border border-line text-[11px] font-semibold hover:bg-surface"
+                                                                >
+                                                                    Exacto
+                                                                </button>
+                                                                {localSalePaymentMethod === 'mixed' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={handleCompleteMixedWithElectronic}
+                                                                        className="px-2 py-1 rounded border border-line text-[11px] font-semibold hover:bg-surface"
+                                                                    >
+                                                                        Completar mixto
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    )}
+                                                    {localSalePaymentMethod === 'mixed' && (
+                                                        <label>
+                                                            <div className={posFieldLabelClass}>Monto electrónico</div>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                step="0.01"
+                                                                value={localSaleElectronicAmount}
+                                                                onChange={(event) => setLocalSaleElectronicAmount(event.target.value)}
+                                                                placeholder="0.00"
+                                                                className={posFieldClass}
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    {(localSalePaymentMethod === 'transfer' || localSalePaymentMethod === 'mixed' || localSalePaymentMethod === 'card') && (
+                                                        <label className={localSalePaymentMethod === 'card' ? '' : 'sm:col-span-2'}>
+                                                            <div className={posFieldLabelClass}>Referencia de pago</div>
+                                                            <input
+                                                                type="text"
+                                                                value={localSalePaymentReference}
+                                                                onChange={(event) => setLocalSalePaymentReference(event.target.value)}
+                                                                placeholder={localSalePaymentMethod === 'card' ? 'Voucher (opcional)' : 'Referencia obligatoria'}
+                                                                className={posFieldClass}
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    <label className="sm:col-span-2">
+                                                        <div className={posFieldLabelClass}>Notas</div>
+                                                        <textarea
+                                                            value={localSaleNotes}
+                                                            onChange={(event) => setLocalSaleNotes(event.target.value)}
+                                                            rows={2}
+                                                            placeholder="Observaciones de la venta"
+                                                            className={posTextareaClass}
+                                                        />
+                                                    </label>
+                                                    <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={localSaleAutoPrint}
+                                                            onChange={(event) => setLocalSaleAutoPrint(event.target.checked)}
+                                                            className="w-4 h-4 accent-black"
+                                                        />
+                                                        <span>Imprimir factura automáticamente al registrar la venta</span>
+                                                    </label>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Pagado</div>
+                                                        <div className="font-bold">{formatMoney(localSalePaidAmount)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Vuelto</div>
+                                                        <div className={`font-bold ${localSaleChange > 0 ? 'text-success' : ''}`}>{formatMoney(localSaleChange)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Pendiente de cobro</div>
+                                                        <div className={`font-bold ${localSalePendingAmount > 0 ? 'text-red' : 'text-success'}`}>{formatMoney(localSalePendingAmount)}</div>
+                                                    </div>
+                                                    <div className={`p-2 rounded border ${localSalePaymentReady ? 'border-success/30 bg-success/10' : 'border-yellow/30 bg-yellow/10'}`}>
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Estado de pago</div>
+                                                        <div className={`font-bold ${localSalePaymentReady ? 'text-success' : 'text-yellow'}`}>
+                                                            {localSalePaymentStatusText}
+                                                        </div>
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mt-2">Monto a cobrar</div>
+                                                        <div className="font-bold">{formatMoney(localSaleTotal)}</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="max-h-[300px] overflow-y-auto border border-line rounded-xl mb-4 p-2 space-y-2">
+                                                    {localSaleItems.map((item) => (
+                                                        <div key={item.internalId} className="rounded-lg border border-line bg-surface p-3">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm font-semibold leading-tight break-words">{item.name}</div>
+                                                                    <div className="text-[11px] text-secondary mt-1">
+                                                                        Costo: {formatMoney(item.cost * item.quantity)} | Unitario: {formatMoney(item.price)}
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveLocalSaleItem(item.internalId)}
+                                                                    className="text-red hover:underline text-xs font-semibold whitespace-nowrap"
+                                                                >
+                                                                    Quitar
+                                                                </button>
+                                                            </div>
+                                                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                                <div className="inline-flex items-center gap-1">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="w-7 h-7 rounded border border-line text-xs"
+                                                                        onClick={() => handleUpdateLocalSaleQuantity(item.internalId, item.quantity - 1)}
+                                                                    >
+                                                                        -
+                                                                    </button>
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        max={item.stock}
+                                                                        value={item.quantity}
+                                                                        onChange={(event) => handleUpdateLocalSaleQuantity(item.internalId, Number(event.target.value || 0))}
+                                                                        className="w-16 text-center text-xs border border-line rounded py-1"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        className="w-7 h-7 rounded border border-line text-xs"
+                                                                        onClick={() => handleUpdateLocalSaleQuantity(item.internalId, item.quantity + 1)}
+                                                                    >
+                                                                        +
+                                                                    </button>
+                                                                </div>
+                                                                <div className="text-sm font-bold">
+                                                                    Total: {formatMoney(item.price * item.quantity)}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {localSaleItems.length === 0 && (
+                                                        <div className="px-3 py-5 text-center text-sm text-secondary">
+                                                            Sin artículos agregados.
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
+                                                        <div className="font-bold">{formatMoney(localSaleNet)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
+                                                        <div className="font-bold">{formatMoney(localSaleVat)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
+                                                        <div className="font-bold">{formatMoney(localSaleGross)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
+                                                        <div className="font-bold">{formatMoney(localSaleShipping)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
+                                                        <div className={`font-bold ${localSaleProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(localSaleProfit)}</div>
+                                                    </div>
+                                                    <div className="p-2 rounded border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Descuento</div>
+                                                        <div className="font-bold">{formatMoney(localSaleDiscount)}</div>
+                                                    </div>
+                                                </div>
+
+                                                {localSaleQuote?.discount_rejections && localSaleQuote.discount_rejections.length > 0 && (
+                                                    <div className="mb-3 p-3 rounded-lg border border-yellow/40 bg-yellow/10 text-yellow text-xs">
+                                                        {localSaleQuote.discount_rejections.map((item, index) => (
+                                                            <div key={`${item.code || 'code'}-${index}`}>
+                                                                {item.message || item.reason || 'Descuento rechazado por reglas de validación.'}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {localSaleMissingInfo.length > 0 && (
+                                                    <div className="mb-3 p-3 rounded-lg border border-yellow/40 bg-yellow/10 text-yellow text-xs">
+                                                        <div className="font-semibold mb-1">Pendiente principal: {localSalePrimaryMissing}</div>
+                                                        {localSaleMissingInfo.length > 1 && (
+                                                            <details>
+                                                                <summary className="cursor-pointer font-medium">
+                                                                    Ver {localSaleMissingInfo.length - 1} pendiente{localSaleMissingInfo.length - 1 === 1 ? '' : 's'} adicional{localSaleMissingInfo.length - 1 === 1 ? '' : 'es'}
+                                                                </summary>
+                                                                <ul className="list-disc pl-4 space-y-0.5 mt-1">
+                                                                    {localSaleMissingInfo.slice(1).map((issue, idx) => (
+                                                                        <li key={`${issue}-${idx}`}>{issue}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </details>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Total a cobrar</div>
+                                                        <div className="text-2xl font-bold">{formatMoney(localSaleTotal)}</div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleCreateLocalSale}
+                                                        disabled={isLocalSaleSubmitDisabled}
+                                                        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${(isLocalSaleSubmitDisabled)
+                                                            ? 'bg-surface text-secondary cursor-not-allowed border border-line'
+                                                            : 'bg-black text-white hover:opacity-90'
+                                                            }`}
+                                                    >
+                                                        {localSaleSaving ? 'Registrando...' : (localSaleQuoteLoading ? 'Calculando...' : 'Registrar venta local')}
+                                                    </button>
+                                                </div>
+                                                {localSaleLastOrderId && (
+                                                    <div className="mt-4 p-3 rounded-lg border border-line bg-surface">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Última venta registrada</div>
+                                                        <div className="font-semibold text-sm mt-1">{localSaleLastOrderId}</div>
+                                                        <div className="flex gap-2 mt-3">
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
+                                                                onClick={handleOpenLastLocalSaleOrder}
+                                                            >
+                                                                Ver pedido
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
+                                                                onClick={handlePrintLastLocalSaleInvoice}
+                                                            >
+                                                                Imprimir factura
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-5">
+                                            <div className="xl:col-span-7 border border-line rounded-2xl bg-white p-5">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div>
+                                                        <div className="heading6">Caja del turno</div>
+                                                        <p className="text-xs text-secondary mt-1">
+                                                            {posCanRegisterSale
+                                                                ? `Turno activo: ${posActiveShift?.id || '-'}`
+                                                                : 'No hay turno activo. Abre caja para vender.'}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => loadPosSnapshot()}
+                                                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-surface"
+                                                        disabled={posLoading || posActionLoading}
+                                                    >
+                                                        {posLoading ? 'Cargando...' : 'Actualizar'}
+                                                    </button>
+                                                </div>
+
+                                                {posCanRegisterSale && posActiveShift ? (
+                                                    <div className="space-y-4">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Apertura</div>
+                                                                <div className="font-bold">{formatMoney(posActiveShift.opening_cash)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Esperado en caja</div>
+                                                                <div className="font-bold">{formatMoney(posExpectedCash)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos POS</div>
+                                                                <div className="font-bold">{posOrdersCount}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas turno</div>
+                                                                <div className="font-bold">{formatMoney(posSalesTotal)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas efectivo</div>
+                                                                <div className="font-bold">{formatMoney(posCashSales)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas electrónicas</div>
+                                                                <div className="font-bold">{formatMoney(posElectronicSales)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ingresos caja</div>
+                                                                <div className="font-bold">{formatMoney(posMovementIncome)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Egresos caja</div>
+                                                                <div className="font-bold">{formatMoney(posMovementExpense)}</div>
+                                                            </div>
+                                                            <div className="p-2 rounded border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ajustes</div>
+                                                                <div className="font-bold">{formatMoney(posMovementAdjustments)}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                            <label>
+                                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Efectivo contado al cierre</div>
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    step="0.01"
+                                                                    value={posClosingCash}
+                                                                    onChange={(event) => setPosClosingCash(event.target.value)}
+                                                                    className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                                />
+                                                            </label>
+                                                            <label>
+                                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Nota de cierre</div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={posCloseNotes}
+                                                                    onChange={(event) => setPosCloseNotes(event.target.value)}
+                                                                    placeholder="Observación del turno"
+                                                                    className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                                />
+                                                            </label>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleClosePosShift}
+                                                            disabled={posActionLoading || posLoading}
+                                                            className={`px-4 py-2 rounded-lg text-sm font-semibold ${(posActionLoading || posLoading)
+                                                                ? 'bg-surface text-secondary cursor-not-allowed border border-line'
+                                                                : 'bg-black text-white hover:opacity-90'
+                                                                }`}
+                                                        >
+                                                            {posActionLoading ? 'Procesando...' : 'Cerrar caja'}
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <label>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Monto inicial</div>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                step="0.01"
+                                                                value={posOpeningCash}
+                                                                onChange={(event) => setPosOpeningCash(event.target.value)}
+                                                                placeholder="0.00"
+                                                                className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                            />
+                                                        </label>
+                                                        <label>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Nota de apertura</div>
+                                                            <input
+                                                                type="text"
+                                                                value={posOpenNotes}
+                                                                onChange={(event) => setPosOpenNotes(event.target.value)}
+                                                                placeholder="Observación inicial"
+                                                                className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                            />
+                                                        </label>
+                                                        <div className="sm:col-span-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleOpenPosShift}
+                                                                disabled={posActionLoading || posLoading}
+                                                                className={`px-4 py-2 rounded-lg text-sm font-semibold ${(posActionLoading || posLoading)
+                                                                    ? 'bg-surface text-secondary cursor-not-allowed border border-line'
+                                                                    : 'bg-black text-white hover:opacity-90'
+                                                                    }`}
+                                                            >
+                                                                {posActionLoading ? 'Procesando...' : 'Abrir caja'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="xl:col-span-5 border border-line rounded-2xl bg-white p-5">
+                                                <div className="heading6 mb-3">Movimientos de caja</div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                                                    <select
+                                                        value={posMovementType}
+                                                        onChange={(event) => setPosMovementType(event.target.value as PosMovement['type'])}
+                                                        className="px-3 py-2 rounded-lg border border-line text-sm bg-white focus:border-black outline-none"
+                                                    >
+                                                        <option value="expense">Egreso</option>
+                                                        <option value="income">Ingreso</option>
+                                                        <option value="withdrawal">Retiro</option>
+                                                        <option value="deposit">Depósito</option>
+                                                        <option value="adjustment">Ajuste (+/-)</option>
+                                                    </select>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={posMovementAmount}
+                                                        onChange={(event) => setPosMovementAmount(event.target.value)}
+                                                        placeholder={posMovementType === 'adjustment' ? 'Puede ser negativo' : 'Monto'}
+                                                        className="px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddPosMovement}
+                                                        disabled={!posCanRegisterSale || posActionLoading || posLoading}
+                                                        className={`px-3 py-2 rounded-lg text-sm font-semibold ${(posCanRegisterSale && !posActionLoading && !posLoading)
+                                                            ? 'bg-black text-white hover:opacity-90'
+                                                            : 'bg-surface text-secondary border border-line cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={posMovementDescription}
+                                                    onChange={(event) => setPosMovementDescription(event.target.value)}
+                                                    placeholder="Descripción del movimiento"
+                                                    className="w-full mb-3 px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
+                                                />
+                                                <div className="overflow-auto max-h-[210px] border border-line rounded-xl">
+                                                    <table className="w-full min-w-[540px]">
+                                                        <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                            <tr>
+                                                                <th className="px-3 py-2 text-left">Fecha</th>
+                                                                <th className="px-3 py-2 text-left">Tipo</th>
+                                                                <th className="px-3 py-2 text-right">Monto</th>
+                                                                <th className="px-3 py-2 text-left">Detalle</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-line">
+                                                            {posMovements.map((movement) => (
+                                                                <tr key={movement.id}>
+                                                                    <td className="px-3 py-2 text-xs">{formatDateTimeEcuador(movement.created_at)}</td>
+                                                                    <td className="px-3 py-2 text-xs uppercase">{movement.type}</td>
+                                                                    <td className={`px-3 py-2 text-xs text-right font-semibold ${movement.type === 'expense' || movement.type === 'withdrawal' ? 'text-red' : 'text-success'}`}>
+                                                                        {formatMoney(movement.amount)}
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-xs">{movement.description || '-'}</td>
+                                                                </tr>
+                                                            ))}
+                                                            {posMovements.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan={4} className="px-3 py-5 text-center text-xs text-secondary">
+                                                                        Sin movimientos registrados en el turno.
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="border border-line rounded-2xl bg-white p-5 mb-5">
+                                            <div className="heading6 mb-3">Histórico de turnos de caja</div>
+                                            <div className="overflow-auto max-h-[220px] border border-line rounded-xl">
+                                                <table className="w-full min-w-[880px]">
+                                                    <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-left">Turno</th>
+                                                            <th className="px-3 py-2 text-left">Estado</th>
+                                                            <th className="px-3 py-2 text-left">Inicio</th>
+                                                            <th className="px-3 py-2 text-left">Fin</th>
+                                                            <th className="px-3 py-2 text-right">Apertura</th>
+                                                            <th className="px-3 py-2 text-right">Esperado</th>
+                                                            <th className="px-3 py-2 text-right">Cierre</th>
+                                                            <th className="px-3 py-2 text-right">Diferencia</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-line">
+                                                        {posShiftHistory.map((shift) => (
+                                                            <tr key={shift.id} className="hover:bg-surface/40">
+                                                                <td className="px-3 py-2 text-xs font-semibold">{shift.id}</td>
+                                                                <td className="px-3 py-2 text-xs">
+                                                                    <span className={`px-2 py-0.5 rounded-full ${shift.status === 'open' ? 'bg-success/15 text-success' : 'bg-surface text-secondary'}`}>
+                                                                        {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-xs">{formatDateTimeEcuador(shift.opened_at)}</td>
+                                                                <td className="px-3 py-2 text-xs">{shift.closed_at ? formatDateTimeEcuador(shift.closed_at) : '-'}</td>
+                                                                <td className="px-3 py-2 text-xs text-right">{formatMoney(shift.opening_cash)}</td>
+                                                                <td className="px-3 py-2 text-xs text-right">{formatMoney(shift.summary?.expected_cash ?? shift.expected_cash ?? 0)}</td>
+                                                                <td className="px-3 py-2 text-xs text-right">{shift.closing_cash !== null && shift.closing_cash !== undefined ? formatMoney(shift.closing_cash) : '-'}</td>
+                                                                <td className={`px-3 py-2 text-xs text-right font-semibold ${Number(shift.summary?.difference_cash ?? shift.difference_cash ?? 0) < 0 ? 'text-red' : 'text-success'}`}>
+                                                                    {shift.status === 'closed' ? formatMoney(shift.summary?.difference_cash ?? shift.difference_cash ?? 0) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {posShiftHistory.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={8} className="px-3 py-5 text-center text-xs text-secondary">
+                                                                    Aún no hay turnos de caja registrados.
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
                                     </div>
 
                                     <div className={`tab text-content w-full ${activeTab === 'products' ? 'block' : 'hidden'}`}>

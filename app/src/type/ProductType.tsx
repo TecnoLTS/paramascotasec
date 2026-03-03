@@ -10,6 +10,20 @@ export interface ProductType {
     internalId?: string,
     category: string,
     productType?: string,
+    cost?: number,
+    business?: {
+        cost?: number,
+        margin?: number,
+        profit?: number,
+        suggestions?: {
+            min_price?: number,
+            recommended_price?: number,
+            max_price?: number,
+            min_price_pvp?: number,
+            recommended_price_pvp?: number,
+            max_price_pvp?: number
+        }
+    },
     attributes?: Record<string, string>,
     pageSettings?: {
         deliveryEstimate: string,
