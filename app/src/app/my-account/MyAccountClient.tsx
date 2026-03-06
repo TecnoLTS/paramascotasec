@@ -2258,6 +2258,7 @@ const MyAccount = () => {
         if (!localSaleLastOrderId) return
         await printOrderInvoiceById(localSaleLastOrderId)
     }
+    
     const handleLookupCustomerByDocument = async (documentOverride?: string) => {
         const rawDoc = (documentOverride ?? localSaleCustomerDocumentNumber).trim()
         if (rawDoc.length < 6) {
@@ -2479,6 +2480,10 @@ const MyAccount = () => {
             }
 
             const token = localStorage.getItem('authToken')
+
+            // El XML del SRI se genera automáticamente en el backend
+            // No es necesario hacer una llamada adicional
+            
             if (token) {
                 const headers = { Authorization: `Bearer ${token}` }
                 const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
@@ -4582,7 +4587,7 @@ const MyAccount = () => {
                                                     <div className="mt-4 p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Última venta registrada</div>
                                                         <div className="font-semibold text-sm mt-1">{localSaleLastOrderId}</div>
-                                                        <div className="flex gap-2 mt-3">
+                                                        <div className="flex gap-2 mt-3 flex-wrap">
                                                             <button
                                                                 type="button"
                                                                 className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
