@@ -135,7 +135,7 @@ const SliderPet = () => {
                       La tienda perfecta para tu mascota
                     </div>
                     <Link
-                      href="/shop/breadcrumb-img"
+                      href="/shop/breadcrumb1"
                       className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora
@@ -157,7 +157,7 @@ const SliderPet = () => {
                       Alimenta el apetito de tu mascota
                     </div>
                     <Link
-                      href="/shop/breadcrumb-img"
+                      href="/shop/breadcrumb1"
                       className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora
@@ -179,7 +179,7 @@ const SliderPet = () => {
                       Alimenta el apetito de tu mascota
                     </div>
                     <Link
-                      href="/shop/breadcrumb-img"
+                      href="/shop/breadcrumb1"
                       className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
                     >
                       Compra ahora

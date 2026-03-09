@@ -1,67 +1,71 @@
 import React from 'react'
-import Image from 'next/image'
 
 const ChooseUs = () => {
+    const features = [
+        {
+            icon: 'icon-foot',
+            title: 'Productos de alta calidad',
+            description: 'Seleccionamos productos confiables y de excelente calidad para su bienestar y felicidad.',
+        },
+        {
+            icon: 'icon-food',
+            title: 'Te acompañamos',
+            description: 'Estamos aquí para ayudarte a cuidar mejor en cada etapa.',
+        },
+        {
+            icon: 'icon-comb',
+            title: 'Elección pensada para cada mascota',
+            description: 'Cada mascota es única. Te ayudamos a elegir lo más adecuado según sus necesidades.',
+        },
+    ]
+
     return (
-        <>
-            <div className="choose-us-block md:pt-20 pt-14">
-                <div className="container flex max-lg:flex-col max-lg:gap-y-8 items-center justify-between">
-                    <div className="bg-img lg:w-7/12 lg:pr-[45px] md:w-1/2 w-5/6">
-                        <Image
-                            src={'/images/banner/5.jpg'}
-                            width={1200}
-                            height={1200}
-                            alt='bg-img'
-                            priority={true}
-                            className='w-full'
-                        />
+        <div className="choose-us-block pt-14 md:pt-16 xl:pt-20">
+            <div className="container">
+                <div className="flex flex-col gap-8 sm:gap-9 md:flex-row md:items-center md:gap-8 lg:gap-10 xl:gap-12">
+                    <div className="w-full md:w-[48%] xl:w-[45%]">
+                        <picture className="block w-full">
+                            <source media="(min-width: 1536px)" srcSet="/images/banner/choose-us-pet-2040x1884.jpg" />
+                            <source media="(min-width: 1280px)" srcSet="/images/banner/choose-us-pet-1360x1256.jpg" />
+                            <source media="(min-width: 1024px)" srcSet="/images/banner/choose-us-pet-1120x1034.jpg" />
+                            <source media="(min-width: 640px)" srcSet="/images/banner/choose-us-pet-900x831.jpg" />
+                            <img
+                                src="/images/banner/choose-us-pet-640x591.jpg"
+                                width={640}
+                                height={591}
+                                alt="Perro mirando un corazón de juguete"
+                                loading="eager"
+                                decoding="async"
+                                fetchPriority="high"
+                                className="h-auto w-full rounded-2xl object-cover object-center max-md:h-[58vw] max-md:min-h-[220px] max-md:max-h-[320px]"
+                            />
+                        </picture>
                     </div>
-                    <div className="content lg:w-5/12 lg:pl-[45px]">
-                        <div className="heading3">Las mejores razones para elegirnos para tu tienda de mascotas</div>
-                        <div className="heading6 font-normal text-secondary mt-3">Cuidamos a los animales como parte de la familia, ofreciendo productos confiables y una atención cercana en cada visita.</div>
-                        <div className="list-feature lg:mt-10 mt-6">
-                            
-                            {/* Ítem 1 */}
-                            <div className="item flex items-center gap-5">
-                                {/* CORRECCIÓN AQUÍ: Clases movidas al padre y flex-shrink-0 agregado */}
-                                <div className="icon bg-[#D1D0F9] rounded-full flex-shrink-0 flex items-center justify-center md:w-[68px] md:h-[68px] w-14 h-14">
-                                    <i className="icon-foot md:text-3xl text-2xl"></i>
+                    <div className="content w-full md:w-[52%] xl:w-[55%] md:pt-1">
+                        <div className="heading3 max-w-[680px]">Las mejores razones para elegirnos para tu tienda de mascotas</div>
+                        <div className="heading6 mt-3 max-w-[680px] font-normal text-secondary">
+                            Cuidamos a los animales como parte de la familia, ofreciendo productos confiables y una atención cercana en cada visita.
+                        </div>
+                        <div className="list-feature mt-6 md:mt-8 lg:mt-10">
+                            {features.map((feature, index) => (
+                                <div
+                                    key={feature.title}
+                                    className={`item flex items-start gap-3 sm:gap-5 ${index > 0 ? 'mt-4 md:mt-6 lg:mt-8' : ''}`}
+                                >
+                                    <div className="icon flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#D1D0F9] sm:h-[68px] sm:w-[68px]">
+                                        <i className={`${feature.icon} text-[22px] sm:text-3xl`} />
+                                    </div>
+                                    <div className="text-content">
+                                        <div className="heading6 leading-tight">{feature.title}</div>
+                                        <div className="caption1 mt-1.5 text-secondary sm:mt-2">{feature.description}</div>
+                                    </div>
                                 </div>
-                                <div className="text-content">
-                                    <div className="heading6">Productos de alta calidad</div>
-                                    <div className="caption1 text-secondary mt-2">Seleccionamos productos confiables y de excelente calidad para su bienestar y felicidad.</div>
-                                </div>
-                            </div>
-
-                            {/* Ítem 2 */}
-                            <div className="item flex items-center gap-5 lg:mt-8 mt-4">
-                                {/* CORRECCIÓN AQUÍ */}
-                                <div className="icon bg-[#D1D0F9] rounded-full flex-shrink-0 flex items-center justify-center md:w-[68px] md:h-[68px] w-14 h-14">
-                                    <i className="icon-food md:text-3xl text-2xl"></i>
-                                </div>
-                                <div className="text-content">
-                                    <div className="heading6">Te acompañamos</div>
-                                    <div className="caption1 text-secondary mt-2">Estamos aquí para ayudarte a cuidar mejor en cada etapa.</div>
-                                </div>
-                            </div>
-
-                            {/* Ítem 3 */}
-                            <div className="item flex items-center gap-5 lg:mt-8 mt-4">
-                                {/* CORRECCIÓN AQUÍ */}
-                                <div className="icon bg-[#D1D0F9] rounded-full flex-shrink-0 flex items-center justify-center md:w-[68px] md:h-[68px] w-14 h-14">
-                                    <i className="icon-comb md:text-3xl text-2xl"></i>
-                                </div>
-                                <div className="text-content">
-                                    <div className="heading6">Elección pensada para cada mascota</div>
-                                    <div className="caption1 text-secondary mt-2">Cada mascota es única. Te ayudamos a elegir lo más adecuado según sus necesidades.</div>
-                                </div>
-                            </div>
-
+                            ))}
                         </div>
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     )
 }
 

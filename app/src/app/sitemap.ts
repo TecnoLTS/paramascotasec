@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { listProducts } from '@/lib/products'
 
 const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+const isBuild = process.env.NEXT_PHASE === 'phase-production-build'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -20,6 +21,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: path === '' ? 'daily' : 'weekly',
     priority: path === '' ? 1 : 0.8,
   }))
+
+  if (isBuild) {
+    return staticRoutes
+  }
 
   try {
     const products = await listProducts()

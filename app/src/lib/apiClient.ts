@@ -1,3 +1,5 @@
+import { getConfiguredTenantProto, resolveTenantHost } from '@/lib/requestHost'
+
 const buildBaseUrl = () => {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
   if (backendUrl) return backendUrl.replace(/\/$/, '').replace(/\/api$/, '')
@@ -9,26 +11,6 @@ const buildBaseUrl = () => {
   if (vercelUrl) return `https://${vercelUrl.replace(/\/$/, '')}`
 
   return `http://localhost:${process.env.PORT ?? 3000}`
-}
-
-const getTenantHost = () => {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
-  if (!base) return null
-  try {
-    return new URL(base).hostname
-  } catch {
-    return null
-  }
-}
-
-const getTenantProto = () => {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
-  if (!base) return null
-  try {
-    return new URL(base).protocol.replace(':', '')
-  } catch {
-    return null
-  }
 }
 
 const getServerForwardedHost = async () => {
@@ -55,32 +37,8 @@ const getServerForwardedProto = async () => {
   }
 }
 
-const normalizeHost = (host?: string | null) => {
-  if (!host) return ''
-  const trimmed = host.toLowerCase().replace(/^https?:\/\//, '').split('/')[0]
-  if (!trimmed) return ''
-  if (trimmed.startsWith('[')) {
-    const end = trimmed.indexOf(']')
-    if (end !== -1) return trimmed.slice(1, end)
-  }
-  return trimmed.replace(/:\d+$/, '')
-}
-
-const isLocalOrIpHost = (host: string) => {
-  if (!host) return true
-  if (host === 'localhost' || host.endsWith('.local')) return true
-  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return true
-  // IPv6 simple detection
-  if (host.includes(':') && /^[0-9a-f:]+$/i.test(host)) return true
-  return false
-}
-
 const resolveForwardedHost = (forwardedHost?: string | null) => {
-  const normalizedForwarded = normalizeHost(forwardedHost)
-  if (normalizedForwarded && !isLocalOrIpHost(normalizedForwarded)) {
-    return normalizedForwarded
-  }
-  return getTenantHost()
+  return resolveTenantHost(forwardedHost)
 }
 
 const resolveUrl = (path: string) => {
@@ -155,7 +113,7 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
     const forwardedProto = await getServerForwardedProto()
     if (authFreePaths.has(pathname)) {
       const tenantHost = resolveForwardedHost(forwardedHost)
-      const tenantProto = forwardedProto || getTenantProto()
+      const tenantProto = forwardedProto || getConfiguredTenantProto()
       if (tenantHost) {
         headers.set('x-forwarded-host', tenantHost)
         headers.set('host', tenantHost)
@@ -167,7 +125,7 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
     }
     const serviceToken = process.env.BACKEND_SERVICE_TOKEN
     const tenantHost = resolveForwardedHost(forwardedHost)
-    const tenantProto = forwardedProto || getTenantProto()
+    const tenantProto = forwardedProto || getConfiguredTenantProto()
     if (tenantHost) {
       headers.set('x-forwarded-host', tenantHost)
       headers.set('host', tenantHost)
@@ -268,6 +226,48 @@ const readResponseBody = async (res: Response): Promise<{ body: unknown; isJson:
   }
 }
 
+const getFetchTimeoutMs = () => {
+  const fromEnv = Number(process.env.API_FETCH_TIMEOUT_MS)
+  if (Number.isFinite(fromEnv) && fromEnv > 0) {
+    return fromEnv
+  }
+  return 15000
+}
+
+const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
+  const timeoutMs = getFetchTimeoutMs()
+  const controller = new AbortController()
+  let didTimeout = false
+  const timeoutId = setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, timeoutMs)
+
+  const parentSignal = init?.signal
+  const onParentAbort = () => controller.abort()
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort()
+    } else {
+      parentSignal.addEventListener('abort', onParentAbort, { once: true })
+    }
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (didTimeout) {
+      throw new Error(`Tiempo de espera agotado (${timeoutMs}ms) al consultar ${url}`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+    if (parentSignal) {
+      parentSignal.removeEventListener('abort', onParentAbort)
+    }
+  }
+}
+
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = resolveUrl(path)
   const authedInit = await withAuth(path, init)
@@ -282,7 +282,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   if (nextOptions) {
     fetchOptions.next = nextOptions
   }
-  const res = await fetch(url, fetchOptions)
+  const res = await fetchWithTimeout(url, fetchOptions)
   const { body, isJson } = await readResponseBody(res)
 
   const envelope = isJson && isEnvelope(body) ? (body as ApiEnvelope<T>) : null
@@ -292,7 +292,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
     if (token) {
       clearStoredToken()
       const retryInit = await withAuth(path, { ...init, headers: undefined })
-      const retryRes = await fetch(url, { cache: 'no-store', ...retryInit })
+      const retryRes = await fetchWithTimeout(url, { cache: 'no-store', ...retryInit })
       const { body: retryBody, isJson: retryIsJson } = await readResponseBody(retryRes)
       if (retryRes.ok) {
         const retryEnvelope = retryIsJson && isEnvelope(retryBody) ? (retryBody as ApiEnvelope<T>) : null
@@ -341,7 +341,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T }> {
   const url = resolveUrl(path)
   const authedInit = await withAuth(path, init)
-  const res = await fetch(url, { cache: 'no-store', ...authedInit })
+  const res = await fetchWithTimeout(url, { cache: 'no-store', ...authedInit })
   const { body, isJson } = await readResponseBody(res)
 
   const envelope = isJson && isEnvelope(body) ? (body as ApiEnvelope<T>) : null

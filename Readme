@@ -270,3 +270,30 @@ Tarea:
 
 
 
+# DESPLIEGUE DEV
+docker compose --env-file .env.development up -d --build
+
+
+# Ir al proyecto
+cd /home/admincenter/contenedores/paramascotasec
+bash
+
+# DESPLIEGUE DEV
+docker compose --env-file .env.development up -d --build
+bash
+
+# DESPLIEGUE PRODUCCIÓN
+docker compose up -d --build
+bash
+
+# (Opcional) Ver logs DEV
+docker compose --env-file .env.development logs -f app-dev
+bash
+
+# (Opcional) Ver logs PRD
+docker compose logs -f app
+bash
+
+# (Opcional) Bajar stack actual antes de cambiar de modo
+docker compose down
+docker compose --env-file .env.development down
