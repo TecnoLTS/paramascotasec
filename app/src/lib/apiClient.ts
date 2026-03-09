@@ -226,6 +226,57 @@ const readResponseBody = async (res: Response): Promise<{ body: unknown; isJson:
   }
 }
 
+const compactWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim()
+
+const extractTextFromHtml = (value: string) => {
+  const withoutScripts = value.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+  const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  const withoutTags = withoutStyles.replace(/<[^>]+>/g, ' ')
+  return compactWhitespace(withoutTags)
+}
+
+const normalizeHttpErrorMessage = (
+  status: number,
+  url: string,
+  body: unknown,
+  envelopeMessage?: string | null
+) => {
+  const fallbackMessage = `Error ${status} al consultar ${url}`
+  const envelopeText = String(envelopeMessage || '').trim()
+  if (envelopeText) return envelopeText
+
+  if (typeof body === 'object' && body !== null) {
+    const rawError = (body as any).error
+    const rawMessage = (body as any).message
+    const objectMessage = typeof rawError === 'string'
+      ? rawError.trim()
+      : typeof rawMessage === 'string'
+        ? rawMessage.trim()
+        : ''
+    if (objectMessage) return objectMessage
+  }
+
+  if (typeof body === 'string' && body.trim().length > 0) {
+    const raw = body.trim()
+    const looksLikeHtml = /<\/?[a-z][^>]*>/i.test(raw)
+    const text = looksLikeHtml ? extractTextFromHtml(raw) : compactWhitespace(raw)
+    if (/bad gateway/i.test(text)) {
+      return 'Error 502: servicio temporalmente no disponible. Intenta nuevamente en unos segundos.'
+    }
+    if (/gateway timeout/i.test(text)) {
+      return 'Error 504: el servidor tardó demasiado en responder. Intenta nuevamente.'
+    }
+    if (/service unavailable/i.test(text)) {
+      return 'Error 503: servicio temporalmente no disponible. Intenta nuevamente.'
+    }
+    if (text) {
+      return text.length > 240 ? fallbackMessage : text
+    }
+  }
+
+  return fallbackMessage
+}
+
 const getFetchTimeoutMs = () => {
   const fromEnv = Number(process.env.API_FETCH_TIMEOUT_MS)
   if (Number.isFinite(fromEnv) && fromEnv > 0) {
@@ -305,26 +356,14 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
         return retryBody as T
       }
       handleAuthFailure(retryRes.status, retryBody)
-      let message = `Error ${retryRes.status} al consultar ${url}`
-      if (typeof retryBody === 'string' && retryBody.length > 0) {
-        message = retryBody
-      } else if (typeof retryBody === 'object' && retryBody !== null) {
-        message = (retryBody as any).error || (retryBody as any).message || message
-      }
+      const message = normalizeHttpErrorMessage(retryRes.status, url, retryBody)
       throw new Error(message)
     }
   }
 
   if (!res.ok) {
     handleAuthFailure(res.status, body)
-    let message = `Error ${res.status} al consultar ${url}`
-    if (envelope?.error?.message) {
-      message = envelope.error.message
-    } else if (typeof body === 'string' && body.length > 0) {
-      message = body
-    } else if (typeof body === 'object' && body !== null) {
-      message = (body as any).error || (body as any).message || message
-    }
+    const message = normalizeHttpErrorMessage(res.status, url, body, envelope?.error?.message)
     throw new Error(message)
   }
 
@@ -348,8 +387,7 @@ export async function requestApi<T>(path: string, init?: RequestInit): Promise<{
 
   if (!res.ok) {
     handleAuthFailure(res.status, body)
-    const message = envelope?.error?.message
-      || (typeof body === 'string' && body.length > 0 ? body : `Error ${res.status} al consultar ${url}`)
+    const message = normalizeHttpErrorMessage(res.status, url, body, envelope?.error?.message)
     throw new Error(message)
   }
 

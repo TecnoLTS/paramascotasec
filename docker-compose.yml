@@ -28,7 +28,6 @@ services:
       edge:
         aliases:
           - next-test-app
-          - app
 
   app-dev:
     profiles: ["development"]
@@ -62,7 +61,6 @@ services:
       edge:
         aliases:
           - next-test-app
-          - app
 
 networks:
   edge:

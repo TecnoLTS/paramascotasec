@@ -25,6 +25,10 @@ export interface ProductType {
         }
     },
     attributes?: Record<string, string>,
+    expirationDate?: string | null,
+    expirationAlertDays?: number,
+    daysToExpire?: number | null,
+    expirationStatus?: 'none' | 'ok' | 'expiring' | 'expired',
     pageSettings?: {
         deliveryEstimate: string,
         viewerCount: number,

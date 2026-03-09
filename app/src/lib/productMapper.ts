@@ -38,6 +38,10 @@ type ProductWithRelations = {
   sizes?: string[] | null
   type?: string | null
   attributes?: Record<string, string> | null
+  expirationDate?: string | null
+  expirationAlertDays?: number | string | null
+  daysToExpire?: number | string | null
+  expirationStatus?: 'none' | 'ok' | 'expiring' | 'expired' | null
 
   // relaciones
   images?: ({ url: string } | string)[]
@@ -121,6 +125,12 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     quantityPurchase: Number(product.quantityPurchase ?? 1),
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
     attributes: product.attributes ?? {},
+    expirationDate: product.expirationDate ?? null,
+    expirationAlertDays: Number(product.expirationAlertDays ?? 30),
+    daysToExpire: product.daysToExpire === null || product.daysToExpire === undefined
+      ? null
+      : Number(product.daysToExpire),
+    expirationStatus: (product.expirationStatus ?? 'none') as ProductType['expirationStatus'],
     variation: variations,
     thumbImage: resolvedThumbs,
     images: resolvedGallery,
