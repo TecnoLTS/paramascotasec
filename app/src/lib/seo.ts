@@ -1,4 +1,5 @@
 import { ProductType } from '@/type/ProductType'
+import { getProductReviewCount } from '@/lib/catalog'
 
 export function generateProductJsonLd(
     product: ProductType,
@@ -6,6 +7,8 @@ export function generateProductJsonLd(
 ) {
     const siteUrl = (options?.baseUrl ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
     const brandName = options?.brandName ?? 'ParaMascotasEC'
+
+    const reviewCount = getProductReviewCount(product)
 
     return {
         '@context': 'https://schema.org',
@@ -25,10 +28,10 @@ export function generateProductJsonLd(
             availability: product.quantity > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
             itemCondition: 'https://schema.org/NewCondition',
         },
-        aggregateRating: product.rate > 0 ? {
+        aggregateRating: product.rate > 0 && reviewCount > 0 ? {
             '@type': 'AggregateRating',
             ratingValue: product.rate,
-            reviewCount: product.sold || 1,
+            reviewCount,
         } : undefined,
     }
 }

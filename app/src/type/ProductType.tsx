@@ -5,6 +5,32 @@ interface Variation {
     image: string;
 }
 
+interface PurchaseInvoiceSummary {
+    id?: string | null;
+    invoiceNumber?: string | null;
+    supplierName?: string | null;
+    supplierDocument?: string | null;
+    issuedAt?: string | null;
+    receivedAt?: string | null;
+    quantity?: number;
+    unitCost?: number;
+    lineTotal?: number;
+}
+
+export interface ProductVariantOption {
+    id: string;
+    internalId?: string;
+    slug: string;
+    name: string;
+    label: string;
+    presentation?: string;
+    price: number;
+    originPrice: number;
+    quantity: number;
+    sold: number;
+    product: ProductType;
+}
+
 export interface ProductType {
     id: string,
     internalId?: string,
@@ -25,6 +51,47 @@ export interface ProductType {
         }
     },
     attributes?: Record<string, string>,
+    inventory?: {
+        onHand?: number,
+        reserved?: number,
+        available?: number,
+        soldHistorical?: number,
+        reorderPoint?: number,
+        criticalPoint?: number,
+        overstockThreshold?: number,
+        stockMax?: number,
+        status?: string,
+        coverage?: {
+            days?: number | null,
+            avgMonthlySales?: number,
+            windowMonths?: number,
+            confidence?: string
+        },
+        valuation?: {
+            costTotal?: number,
+            saleTotalNet?: number,
+            saleTotalGross?: number
+        },
+        lot?: {
+            code?: string | null,
+            location?: string | null,
+            supplier?: string | null
+        },
+        expiration?: {
+            date?: string | null,
+            alertDays?: number,
+            daysToExpire?: number | null,
+            status?: 'none' | 'ok' | 'expiring' | 'expired' | string
+        },
+        purchaseHistory?: {
+            entriesCount?: number,
+            purchasedUnits?: number,
+            remainingUnits?: number,
+            lastPurchaseAt?: string | null
+        },
+        lastPurchaseInvoice?: PurchaseInvoiceSummary | null
+    },
+    lastPurchaseInvoice?: PurchaseInvoiceSummary | null,
     expirationDate?: string | null,
     expirationAlertDays?: number,
     daysToExpire?: number | null,
@@ -38,9 +105,22 @@ export interface ProductType {
     },
     type: string,
     name: string,
+    reviewCount?: number,
+    variantLabel?: string,
+    variantBaseName?: string,
+    variantGroupKey?: string,
+    variantAxis?: string,
+    variantCount?: number,
+    variantPresentation?: string,
+    variantOptions?: Array<ProductVariantOption>,
+    priceMin?: number,
+    priceMax?: number,
+    originPriceMin?: number,
+    originPriceMax?: number,
     gender: string,
     new: boolean,
     sale: boolean,
+    published?: boolean,
     rate: number,
     price: number,
     originPrice: number,

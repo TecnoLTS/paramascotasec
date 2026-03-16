@@ -1,8 +1,6 @@
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb';
-import reviewData from '@/data/Testimonial.json'
-import TestimonialItem from '@/components/Testimonial/TestimonialItem';
 import Footer from '@/components/Footer/Footer'
 
 const CustomerFeedbacks = () => {
@@ -15,10 +13,11 @@ const CustomerFeedbacks = () => {
             </div>
             <div className='customer-feedbacks md:py-20 py-10'>
                 <div className="container">
-                    <div className="list-review grid lg:grid-cols-3 sm:grid-cols-2 grid-cols-1 md:gap-[30px] gap-5">
-                        {reviewData.map(item => (
-                            <TestimonialItem key={item.id} data={item} type='style-one' />
-                        ))}
+                    <div className="max-w-3xl mx-auto rounded-3xl border border-line bg-surface p-8 md:p-12 text-center">
+                        <div className="heading4">Aun no hay resenas verificadas publicadas</div>
+                        <p className="text-secondary mt-4 leading-7">
+                            Cuando existan comentarios reales de clientes, se mostraran aqui. Preferimos no publicar opiniones simuladas.
+                        </p>
                     </div>
                 </div>
             </div>

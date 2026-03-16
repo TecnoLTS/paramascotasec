@@ -34,8 +34,8 @@ const ParamascotasecHome = ({
       <Banner2 />
       <ChooseUs />
       <FeatureProduct data={products} start={0} limit={4} />
-      <Collection2 />
-      <Brand />
+      <Collection2 categories={categories} />
+      <Brand products={products} />
       <Footer />
     </>
   )

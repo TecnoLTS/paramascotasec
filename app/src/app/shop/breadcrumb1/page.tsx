@@ -6,7 +6,7 @@ import { getHostFromHeaders } from '@/lib/headerUtils'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumb1 from '@/components/Shop/ShopBreadCrumb1'
 import Footer from '@/components/Footer/Footer'
-import { getProduct, listProducts } from '@/lib/products'
+import { fetchProducts } from '@/lib/products'
 import { ProductType } from '@/type/ProductType'
 
 type SearchParams = {
@@ -46,7 +46,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
     let products: ProductType[] = []
     let error: string | null = null
     try {
-        products = await listProducts()
+        products = await fetchProducts()
     } catch (e: any) {
         error = e.message || 'Error al cargar productos'
     }

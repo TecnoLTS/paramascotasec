@@ -8,8 +8,9 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
-import { getCategoryFilter, getCategoryLabel, getCategoryUrl, getVisibleProductCategoryIds } from '@/data/petCategoryCards';
+import { getCategoryFilter, getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards';
 import { useTenant } from '@/context/TenantContext';
+import { getCatalogCategoryIds } from '@/lib/catalog';
 
 interface Props {
     data: Array<ProductType>;
@@ -39,7 +40,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
     const genderToMatch = categoryFilter?.gender ?? gender
     const isDiscountCategory = normalizedCategory === 'descuentos'
 
-    const categoryOptions = ['todos', 'descuentos', ...getVisibleProductCategoryIds(tenant.id)]
+    const categoryOptions = ['todos', ...(data.some((product) => product.sale) ? ['descuentos'] : []), ...getCatalogCategoryIds(data, tenant.id)]
     const categoryCounts = (categoryId: string) => {
         const filter = getCategoryFilter(categoryId, tenant.id)
         return data.filter(product => {
@@ -58,9 +59,9 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
         }).length
     }
 
-    const uniqueSizes = Array.from(new Set(data.flatMap(product => product.sizes))).sort()
-    const uniqueColors = Array.from(new Set(data.flatMap(product => product.variation.map(variation => variation.color)))).sort()
-    const uniqueBrands = Array.from(new Set(data.map(product => product.brand))).sort()
+    const uniqueSizes = Array.from(new Set(data.flatMap((product) => product.sizes ?? []).filter(Boolean))).sort()
+    const uniqueColors = Array.from(new Set(data.flatMap((product) => (product.variation ?? []).map((variation) => variation.color)).filter(Boolean))).sort()
+    const uniqueBrands = Array.from(new Set(data.map((product) => product.brand).filter(Boolean))).sort()
     const brandCounts = (brandValue: string) => data.filter(product => product.brand === brandValue).length
 
     const handleType = (type: string) => {

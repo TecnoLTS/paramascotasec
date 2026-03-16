@@ -19,6 +19,7 @@ type ProductWithRelations = {
   gender?: string | null
   new: boolean
   sale: boolean
+  published?: boolean | null
 
   // Prisma usa Decimal para precios → aquí lo dejamos amplio
   price: any
@@ -38,10 +39,51 @@ type ProductWithRelations = {
   sizes?: string[] | null
   type?: string | null
   attributes?: Record<string, string> | null
+  inventory?: {
+    onHand?: number | string | null
+    reserved?: number | string | null
+    available?: number | string | null
+    soldHistorical?: number | string | null
+    reorderPoint?: number | string | null
+    criticalPoint?: number | string | null
+    overstockThreshold?: number | string | null
+    stockMax?: number | string | null
+    status?: string | null
+    coverage?: {
+      days?: number | string | null
+      avgMonthlySales?: number | string | null
+      windowMonths?: number | string | null
+      confidence?: string | null
+    } | null
+    valuation?: {
+      costTotal?: number | string | null
+      saleTotalNet?: number | string | null
+      saleTotalGross?: number | string | null
+    } | null
+    lot?: {
+      code?: string | null
+      location?: string | null
+      supplier?: string | null
+    } | null
+    expiration?: {
+      date?: string | null
+      alertDays?: number | string | null
+      daysToExpire?: number | string | null
+      status?: 'none' | 'ok' | 'expiring' | 'expired' | string | null
+    } | null
+    purchaseHistory?: {
+      entriesCount?: number | string | null
+      purchasedUnits?: number | string | null
+      remainingUnits?: number | string | null
+      lastPurchaseAt?: string | null
+    } | null
+    lastPurchaseInvoice?: PurchaseInvoiceSummary | null
+  } | null
   expirationDate?: string | null
   expirationAlertDays?: number | string | null
   daysToExpire?: number | string | null
   expirationStatus?: 'none' | 'ok' | 'expiring' | 'expired' | null
+  lastPurchaseInvoice?: PurchaseInvoiceSummary | null
 
   // relaciones
   images?: ({ url: string } | string)[]
@@ -61,6 +103,18 @@ type ProductWithRelations = {
       max_price_pvp?: number
     }
   } | null
+}
+
+type PurchaseInvoiceSummary = {
+  id?: string | null
+  invoiceNumber?: string | null
+  supplierName?: string | null
+  supplierDocument?: string | null
+  issuedAt?: string | null
+  receivedAt?: string | null
+  quantity?: number | string | null
+  unitCost?: number | string | null
+  lineTotal?: number | string | null
 }
 
 const normalizeImageUrl = (url: string) => {
@@ -88,7 +142,23 @@ const mapVariation = (variation: Variation) => ({
   image: variation.image ? normalizeImageUrl(variation.image) : '',
 })
 
+const mapPurchaseInvoiceSummary = (invoice?: PurchaseInvoiceSummary | null) => {
+  if (!invoice) return null
+  return {
+    id: invoice.id ?? null,
+    invoiceNumber: invoice.invoiceNumber ?? null,
+    supplierName: invoice.supplierName ?? null,
+    supplierDocument: invoice.supplierDocument ?? null,
+    issuedAt: invoice.issuedAt ?? null,
+    receivedAt: invoice.receivedAt ?? null,
+    quantity: Number(invoice.quantity ?? 0),
+    unitCost: Number(invoice.unitCost ?? 0),
+    lineTotal: Number(invoice.lineTotal ?? 0),
+  }
+}
+
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
+  const attributes = product.attributes ?? {}
   const images =
     product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean).map(normalizeImageUrl) ?? []
   const thumbImages =
@@ -100,6 +170,19 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const resolvedThumbs = thumbImages.length > 0 ? thumbImages : (thumbFromMeta.length > 0 ? thumbFromMeta : images)
   const resolvedGallery = images.length > 0 ? images : (galleryFromMeta.length > 0 ? galleryFromMeta : images)
   const variations = product.variations?.map(mapVariation) ?? []
+  const lastPurchaseInvoice = mapPurchaseInvoiceSummary(product.lastPurchaseInvoice ?? product.inventory?.lastPurchaseInvoice)
+  const variantLabel = [
+    attributes.variantLabel,
+    attributes.size,
+    attributes.weight,
+    attributes.presentation,
+    attributes.packaging,
+    attributes.dosage,
+  ].find((value) => typeof value === 'string' && value.trim().length > 0)
+  const resolvedSizes = Array.isArray(product.sizes) && product.sizes.length > 0
+    ? product.sizes
+    : (variantLabel ? [String(variantLabel)] : [])
+  const reviewCountRaw = attributes.reviewCount ?? attributes.reviewsCount ?? 0
 
   return {
     id: product.legacyId ?? product.id,
@@ -111,6 +194,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     gender: product.gender ?? '',
     new: product.new,
     sale: product.sale,
+    published: product.published ?? true,
     rate: Number(product.rate ?? 0),
 
     // Aquí normalizamos a number, venga de Decimal, string o lo que sea
@@ -123,8 +207,59 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     cost: Number(product.cost ?? product.business?.cost ?? 0),
     business: product.business ?? undefined,
     quantityPurchase: Number(product.quantityPurchase ?? 1),
-    sizes: Array.isArray(product.sizes) ? product.sizes : [],
-    attributes: product.attributes ?? {},
+    sizes: resolvedSizes,
+    attributes,
+    reviewCount: Number(reviewCountRaw ?? 0),
+    variantLabel: typeof variantLabel === 'string' ? variantLabel : '',
+    variantBaseName: typeof attributes.variantBaseName === 'string' ? attributes.variantBaseName : '',
+    variantGroupKey: typeof attributes.variantGroupKey === 'string' ? attributes.variantGroupKey : '',
+    variantAxis: typeof attributes.variantAxis === 'string' ? attributes.variantAxis : '',
+    variantPresentation: typeof attributes.presentation === 'string' ? attributes.presentation : '',
+    inventory: product.inventory ? {
+      onHand: Number(product.inventory.onHand ?? product.quantity ?? 0),
+      reserved: Number(product.inventory.reserved ?? 0),
+      available: Number(product.inventory.available ?? product.quantity ?? 0),
+      soldHistorical: Number(product.inventory.soldHistorical ?? product.sold ?? 0),
+      reorderPoint: Number(product.inventory.reorderPoint ?? 0),
+      criticalPoint: Number(product.inventory.criticalPoint ?? 0),
+      overstockThreshold: Number(product.inventory.overstockThreshold ?? 0),
+      stockMax: Number(product.inventory.stockMax ?? 0),
+      status: product.inventory.status ?? undefined,
+      coverage: product.inventory.coverage ? {
+        days: product.inventory.coverage.days === null || product.inventory.coverage.days === undefined
+          ? null
+          : Number(product.inventory.coverage.days),
+        avgMonthlySales: Number(product.inventory.coverage.avgMonthlySales ?? 0),
+        windowMonths: Number(product.inventory.coverage.windowMonths ?? 0),
+        confidence: product.inventory.coverage.confidence ?? undefined,
+      } : undefined,
+      valuation: product.inventory.valuation ? {
+        costTotal: Number(product.inventory.valuation.costTotal ?? 0),
+        saleTotalNet: Number(product.inventory.valuation.saleTotalNet ?? 0),
+        saleTotalGross: Number(product.inventory.valuation.saleTotalGross ?? 0),
+      } : undefined,
+      lot: product.inventory.lot ? {
+        code: product.inventory.lot.code ?? null,
+        location: product.inventory.lot.location ?? null,
+        supplier: product.inventory.lot.supplier ?? null,
+      } : undefined,
+      expiration: product.inventory.expiration ? {
+        date: product.inventory.expiration.date ?? null,
+        alertDays: Number(product.inventory.expiration.alertDays ?? 30),
+        daysToExpire: product.inventory.expiration.daysToExpire === null || product.inventory.expiration.daysToExpire === undefined
+          ? null
+          : Number(product.inventory.expiration.daysToExpire),
+        status: product.inventory.expiration.status ?? undefined,
+      } : undefined,
+      purchaseHistory: product.inventory.purchaseHistory ? {
+        entriesCount: Number(product.inventory.purchaseHistory.entriesCount ?? 0),
+        purchasedUnits: Number(product.inventory.purchaseHistory.purchasedUnits ?? 0),
+        remainingUnits: Number(product.inventory.purchaseHistory.remainingUnits ?? 0),
+        lastPurchaseAt: product.inventory.purchaseHistory.lastPurchaseAt ?? null,
+      } : undefined,
+      lastPurchaseInvoice,
+    } : undefined,
+    lastPurchaseInvoice,
     expirationDate: product.expirationDate ?? null,
     expirationAlertDays: Number(product.expirationAlertDays ?? 30),
     daysToExpire: product.daysToExpire === null || product.daysToExpire === undefined

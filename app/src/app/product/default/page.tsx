@@ -3,9 +3,10 @@ import { Metadata, ResolvingMetadata } from 'next'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
-import { getProduct, listProducts } from '@/lib/products'
+import { listProducts } from '@/lib/products'
 import { getProductPageSettings } from '@/lib/api/settings'
 import { generateProductJsonLd } from '@/lib/seo'
+import { findCatalogProduct, groupCatalogProducts } from '@/lib/catalog'
 import { headers } from 'next/headers'
 import { getTenantConfigFromHost } from '@/lib/tenant'
 import { getHostFromHeaders } from '@/lib/headerUtils'
@@ -27,7 +28,8 @@ export async function generateMetadata(
 
     if (!id) return {}
 
-    const product = await getProduct(id)
+    const groupedProducts = groupCatalogProducts(await listProducts())
+    const product = findCatalogProduct(groupedProducts, id)
     if (!product) return { title: 'Producto no encontrado' }
 
     const previousImages = (await parent).openGraph?.images || []
@@ -58,7 +60,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
     const host = getHostFromHeaders(headerList)
     const tenant = getTenantConfigFromHost(host)
     const resolvedSearchParams = await searchParams
-    const [products, pageSettings] = await Promise.all([
+    const [rawProducts, pageSettings] = await Promise.all([
         listProducts(),
         getProductPageSettings().catch(() => ({
             deliveryEstimate: '14 de enero - 18 de enero',
@@ -68,11 +70,10 @@ const ProductDefault = async ({ searchParams }: Props) => {
             returnDays: 100,
         })),
     ])
-    const productsWithSettings = products.map((product) => ({ ...product, pageSettings }))
-    const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (products[0]?.id ?? '')
-
-    // Buscar por ID, legacyId o Slug para mayor robustez
-    const currentProduct = productsWithSettings.find(p => p.id === productId || p.slug === productId)
+    const groupedProducts = groupCatalogProducts(rawProducts)
+    const productsWithSettings = groupedProducts.map((product) => ({ ...product, pageSettings }))
+    const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (productsWithSettings[0]?.id ?? '')
+    const currentProduct = findCatalogProduct(productsWithSettings, productId)
 
     return (
         <>

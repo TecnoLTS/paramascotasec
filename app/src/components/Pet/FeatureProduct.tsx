@@ -4,6 +4,8 @@ import React, { useState } from 'react'
 import Product from '../Product/Product'
 import { ProductType } from '@/type/ProductType'
 import { motion } from 'framer-motion'
+import { useTenant } from '@/context/TenantContext'
+import { getCategoryLabel } from '@/data/petCategoryCards'
 
 interface Props {
     data: Array<ProductType>;
@@ -12,38 +14,22 @@ interface Props {
 }
 
 const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
-    const [activeTab, setActiveTab] = useState<string>('juguetes');
-    const tabLabels: Record<string, string> = {
-        'juguetes': 'Juguetes',
-        'comida perro': 'Comida (Perros)',
-        'comida gato': 'Comida (Gatos)',
-        'camas': 'Camas',
-        'comederos': 'Comederos',
-        'accesorios': 'Accesorios',
-        'cuidado': 'Cuidado',
-    };
+    const tenant = useTenant()
+    const [activeTab, setActiveTab] = useState<string>('');
 
     const newProducts = data.filter((product) => product.new);
+    const availableTabs = Array.from(new Set(newProducts.map((product: ProductType) => product.category))).filter(Boolean);
 
-    // Orden preferido de pestañas. Usaremos este orden pero solo mostraremos
-    // las categorías que realmente tengan productos nuevos en `data`.
-    const tabOrder: string[] = ['juguetes', 'comida perro', 'comida gato', 'camas', 'comederos', 'accesorios', 'cuidado'];
-
-    // Computar pestañas disponibles dinámicamente (sin categorías vacías)
-    const availableTabs = tabOrder.filter((cat) => newProducts.some((product: ProductType) => product.category === cat));
-
-    // Si la pestaña activa no está entre las disponibles, seleccionar la primera disponible
     React.useEffect(() => {
         if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
             setActiveTab(availableTabs[0]);
         }
-    }, [availableTabs.join(',')]);
+    }, [activeTab, availableTabs]);
 
     const handleTabClick = (type: string) => {
         setActiveTab(type);
     };
 
-    // Filtrar por la categoría (ahora en español) que seleccionó el usuario
     const filteredProducts = newProducts.filter((product: ProductType) => product.category === activeTab);
 
     return (
@@ -63,7 +49,7 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                                         <motion.div layoutId='active-pill' className='absolute inset-0 rounded-2xl bg-black'></motion.div>
                                     )}
                                     <span className='relative text-button-uppercase z-[1]'>
-                                        {tabLabels[type] ?? type}
+                                        {getCategoryLabel(type, tenant.id)}
                                     </span>
                                 </div>
                             ))}

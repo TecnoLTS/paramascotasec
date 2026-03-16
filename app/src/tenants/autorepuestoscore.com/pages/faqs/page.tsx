@@ -1,8 +1,1 @@
-import SimplePage from '../_shared/SimplePage'
-import { pageMetadata } from '../meta'
-
-const meta = pageMetadata['faqs']
-
-export default function Page() {
-  return <SimplePage title={meta.title} description={meta.description} />
-}
+export { default } from '@/tenants/paramascotasec.com/pages/faqs/page'

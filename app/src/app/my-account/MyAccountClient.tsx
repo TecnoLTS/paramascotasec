@@ -240,7 +240,63 @@ interface AdminUserSummary {
 
 type DeepDiveView = 'sales' | 'profit' | 'aov' | 'inventory' | 'product-breakdown'
 type ProductDetailMetric = 'gross' | 'net' | 'vat' | 'shipping' | 'profit' | 'inventory'
-type AdminMenuGroupKey = 'monitoring' | 'catalog' | 'operations' | 'finance'
+type AdminReportSection = 'general' | 'sales' | 'balance' | 'inventory' | 'traceability'
+type AdminMenuGroupKey = 'monitoring' | 'reporting' | 'catalog' | 'operations' | 'finance'
+type ProductPublicationFilter = 'all' | 'published' | 'hidden'
+const ADMIN_PRODUCTS_ENDPOINT = '/api/products?scope=admin'
+
+type PurchaseInvoiceFormState = {
+    invoiceNumber: string;
+    supplierName: string;
+    supplierDocument: string;
+    issuedAt: string;
+    notes: string;
+}
+
+type PurchaseInvoiceSummary = {
+    id: string;
+    invoice_number: string;
+    supplier_name: string;
+    supplier_document?: string | null;
+    issued_at: string;
+    subtotal: number;
+    tax_total: number;
+    total: number;
+    notes?: string | null;
+    created_at: string;
+    items_count: number;
+    units_total: number;
+    products_count: number;
+}
+
+type PurchaseInvoiceDetailItem = {
+    id: string;
+    product_id: string;
+    product_name_snapshot?: string | null;
+    quantity: number;
+    unit_cost: number;
+    line_total: number;
+    created_at?: string | null;
+    category?: string | null;
+    brand?: string | null;
+    metadata?: Record<string, any> | null;
+}
+
+type PurchaseInvoiceDetail = {
+    id: string;
+    invoice_number: string;
+    supplier_name: string;
+    supplier_document?: string | null;
+    issued_at: string;
+    subtotal: number;
+    tax_total: number;
+    total: number;
+    notes?: string | null;
+    metadata?: Record<string, any> | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+    items: PurchaseInvoiceDetailItem[];
+}
 
 type ProductFormState = {
     id: string;
@@ -253,7 +309,9 @@ type ProductFormState = {
     brand: string;
     description: string;
     productType: string;
+    published: boolean;
     attributes: Record<string, string>;
+    purchaseInvoice: PurchaseInvoiceFormState;
     thumbImages: Array<{ url: string; width: string; height: string }>;
     galleryImages: Array<{ url: string; width: string; height: string }>;
 }
@@ -477,6 +535,7 @@ const MyAccount = () => {
     const [trendRange, setTrendRange] = useState<7 | 30>(7)
     const [salesRankingView, setSalesRankingView] = useState<'month' | 'historical'>('month')
     const [salesRankingMonth, setSalesRankingMonth] = useState<string>(getCurrentMonthKey())
+    const [adminReportSection, setAdminReportSection] = useState<AdminReportSection>('general')
     const [selectedDeepDive, setSelectedDeepDive] = useState<DeepDiveView | null>(null)
     const [selectedProductMetric, setSelectedProductMetric] = useState<ProductDetailMetric>('net')
     const [adminDataLoading, setAdminDataLoading] = useState(false)
@@ -493,12 +552,18 @@ const MyAccount = () => {
     const [alertsSeverityFilter, setAlertsSeverityFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all')
     const [adminMenuExpanded, setAdminMenuExpanded] = useState<Record<AdminMenuGroupKey, boolean>>({
         monitoring: true,
+        reporting: true,
         catalog: true,
         operations: false,
         finance: false
     })
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
     const [shippingPickups, setShippingPickups] = useState<ShippingPickup[]>([])
+    const [recentPurchaseInvoices, setRecentPurchaseInvoices] = useState<PurchaseInvoiceSummary[]>([])
+    const [purchaseInvoicesLoading, setPurchaseInvoicesLoading] = useState(false)
+    const [selectedPurchaseInvoice, setSelectedPurchaseInvoice] = useState<PurchaseInvoiceDetail | null>(null)
+    const [purchaseInvoiceDetailLoading, setPurchaseInvoiceDetailLoading] = useState(false)
+    const [isPurchaseInvoiceModalOpen, setIsPurchaseInvoiceModalOpen] = useState(false)
     const [vatRate, setVatRate] = useState<number>(0)
     const [vatLoading, setVatLoading] = useState(false)
     const [vatSaving, setVatSaving] = useState(false)
@@ -573,13 +638,16 @@ const MyAccount = () => {
         brand: 'Generico',
         description: '',
         productType: '',
+        published: true,
         attributes: {},
+        purchaseInvoice: createEmptyPurchaseInvoice(),
         thumbImages: [],
         galleryImages: []
     })
     const [imageUploading, setImageUploading] = useState<Record<string, boolean>>({})
     const [productSaving, setProductSaving] = useState(false)
     const [productFormErrors, setProductFormErrors] = useState<Record<string, string>>({})
+    const [productPublicationFilter, setProductPublicationFilter] = useState<ProductPublicationFilter>('all')
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
     const productFormRef = useRef<HTMLFormElement | null>(null)
@@ -676,6 +744,20 @@ const MyAccount = () => {
             }
         })
         return cleaned
+    }
+
+    function getTodayDateInputValue() {
+        return new Date().toISOString().slice(0, 10)
+    }
+
+    function createEmptyPurchaseInvoice(supplierName = ''): PurchaseInvoiceFormState {
+        return {
+            invoiceNumber: '',
+            supplierName: supplierName.trim(),
+            supplierDocument: '',
+            issuedAt: getTodayDateInputValue(),
+            notes: ''
+        }
     }
 
     const clearProductErrors = (...fields: string[]) => {
@@ -873,7 +955,9 @@ const MyAccount = () => {
             brand: 'Generico',
             description: '',
             productType: '',
+            published: true,
             attributes: {},
+            purchaseInvoice: createEmptyPurchaseInvoice(),
             thumbImages: [createImageEntry()],
             galleryImages: [createImageEntry()]
         })
@@ -906,6 +990,7 @@ const MyAccount = () => {
             : (Array.isArray(product.images) ? product.images : []).map((url: string) => ({ url, width: '', height: '' }))
         const filledThumbs = applyDefaultSizes(thumbImages, 'thumb')
         const filledGallery = applyDefaultSizes(galleryImages, 'gallery')
+        const defaultSupplierName = String(attributes?.supplier || '').trim()
         setProductFormErrors({})
         setImageUploading({})
         setProductSaving(false)
@@ -921,7 +1006,9 @@ const MyAccount = () => {
             brand: product.brand || 'Generico',
             description: product.description || '',
             productType: productType,
+            published: product.published !== false,
             attributes,
+            purchaseInvoice: createEmptyPurchaseInvoice(defaultSupplierName),
             thumbImages: filledThumbs.length > 0 ? filledThumbs : [createImageEntry()],
             galleryImages: filledGallery.length > 0 ? filledGallery : [createImageEntry()]
         })
@@ -939,7 +1026,7 @@ const MyAccount = () => {
             });
             showNotification('Producto eliminado correctamente');
             // Refresh list
-            const res = await requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } });
             setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
@@ -971,6 +1058,8 @@ const MyAccount = () => {
             const basePrice = Number(productForm.price)
             const productCost = Number(productForm.cost)
             const quantity = Number(productForm.quantity)
+            const previousQuantity = Number(editingProduct?.quantity ?? 0)
+            const stockIncrease = editingProduct ? Math.max(0, quantity - previousQuantity) : Math.max(0, quantity)
 
             if (name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
@@ -992,8 +1081,9 @@ const MyAccount = () => {
             const expirationDateRaw = String(normalizedAttributes.expirationDate || '').trim()
             const alertDaysRaw = String(normalizedAttributes.expirationAlertDays || '').trim()
             const isPerishableProduct = productForm.productType === 'comida'
+            const requiresExpirationDate = isPerishableProduct && quantity > 0
             if (isPerishableProduct) {
-                if (!expirationDateRaw) {
+                if (requiresExpirationDate && !expirationDateRaw) {
                     nextErrors.expirationDate = 'La fecha de vencimiento es obligatoria para comida.'
                 }
                 if (expirationDateRaw) {
@@ -1009,14 +1099,36 @@ const MyAccount = () => {
                     } else {
                         normalizedAttributes.expirationAlertDays = String(Math.min(3650, Math.max(0, Number(alertDaysRaw))))
                     }
-                } else if (alertDaysRaw !== '') {
+                } else if (requiresExpirationDate && alertDaysRaw !== '') {
                     nextErrors.expirationDate = 'Si defines días de alerta, también debes definir fecha de vencimiento.'
+                } else {
+                    delete normalizedAttributes.expirationDate
+                    delete normalizedAttributes.expiryDate
+                    delete normalizedAttributes.expirationAlertDays
+                    delete normalizedAttributes.expiryAlertDays
                 }
             } else {
                 delete normalizedAttributes.expirationDate
                 delete normalizedAttributes.expiryDate
                 delete normalizedAttributes.expirationAlertDays
                 delete normalizedAttributes.expiryAlertDays
+            }
+            const purchaseInvoice = {
+                invoiceNumber: String(productForm.purchaseInvoice?.invoiceNumber || '').trim(),
+                supplierName: String(productForm.purchaseInvoice?.supplierName || '').trim(),
+                supplierDocument: String(productForm.purchaseInvoice?.supplierDocument || '').trim(),
+                issuedAt: String(productForm.purchaseInvoice?.issuedAt || '').trim(),
+                notes: String(productForm.purchaseInvoice?.notes || '').trim()
+            }
+            if (stockIncrease > 0) {
+                if (!purchaseInvoice.invoiceNumber) nextErrors.purchaseInvoiceNumber = 'El número de factura de compra es obligatorio para ingresar stock.'
+                if (!purchaseInvoice.supplierName) nextErrors.purchaseInvoiceSupplierName = 'El proveedor es obligatorio para ingresar stock.'
+                if (!purchaseInvoice.issuedAt || !/^\d{4}-\d{2}-\d{2}$/.test(purchaseInvoice.issuedAt)) {
+                    nextErrors.purchaseInvoiceIssuedAt = 'La fecha de la factura de compra es obligatoria y debe usar formato YYYY-MM-DD.'
+                }
+                if (!normalizedAttributes.supplier && purchaseInvoice.supplierName) {
+                    normalizedAttributes.supplier = purchaseInvoice.supplierName
+                }
             }
             const thumbEntries = applyDefaultSizes(
                 (productForm.thumbImages || []).filter((img: any) => img.url && img.url.trim()),
@@ -1064,9 +1176,11 @@ const MyAccount = () => {
                 quantity,
                 category,
                 productType: productForm.productType,
+                published: !!productForm.published,
                 attributes: normalizedAttributes,
                 brand,
                 description,
+                purchaseInvoice: stockIncrease > 0 ? purchaseInvoice : undefined,
                 images: galleryEntries.map((img: any) => ({
                     url: img.url.trim(),
                     width: Number(img.width),
@@ -1104,8 +1218,11 @@ const MyAccount = () => {
             }
             setIsProductModalOpen(false);
             // Refresh list
-            const res = await withTransientRetry(() => requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } }));
+            const res = await withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } }));
             setAdminProductsList(normalizeAdminProducts(res.body));
+            if (activeTab === 'inventory') {
+                await loadRecentPurchaseInvoices({ silent: true })
+            }
         } catch (error) {
             console.error(error);
             const message = String((error as any)?.message || '').trim()
@@ -1133,7 +1250,7 @@ const MyAccount = () => {
             });
             showNotification(`Precio optimizado a $${newPrice}`);
             // Refresh list
-            const res = await requestApi<any[]>('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } });
             setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
@@ -1637,6 +1754,118 @@ const MyAccount = () => {
         }
     }
 
+    const normalizePurchaseInvoiceSummary = (input: any): PurchaseInvoiceSummary => ({
+        id: String(input?.id || ''),
+        invoice_number: String(input?.invoice_number || ''),
+        supplier_name: String(input?.supplier_name || ''),
+        supplier_document: input?.supplier_document ? String(input.supplier_document) : null,
+        issued_at: String(input?.issued_at || ''),
+        subtotal: Number(input?.subtotal ?? 0),
+        tax_total: Number(input?.tax_total ?? 0),
+        total: Number(input?.total ?? 0),
+        notes: input?.notes ? String(input.notes) : null,
+        created_at: String(input?.created_at || ''),
+        items_count: Number(input?.items_count ?? 0),
+        units_total: Number(input?.units_total ?? 0),
+        products_count: Number(input?.products_count ?? 0)
+    })
+
+    const normalizePurchaseInvoiceDetail = (input: any): PurchaseInvoiceDetail => ({
+        id: String(input?.id || ''),
+        invoice_number: String(input?.invoice_number || ''),
+        supplier_name: String(input?.supplier_name || ''),
+        supplier_document: input?.supplier_document ? String(input.supplier_document) : null,
+        issued_at: String(input?.issued_at || ''),
+        subtotal: Number(input?.subtotal ?? 0),
+        tax_total: Number(input?.tax_total ?? 0),
+        total: Number(input?.total ?? 0),
+        notes: input?.notes ? String(input.notes) : null,
+        metadata: (() => {
+            const parsed = parseJsonValue(input?.metadata)
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null
+        })(),
+        created_at: input?.created_at ? String(input.created_at) : null,
+        updated_at: input?.updated_at ? String(input.updated_at) : null,
+        items: Array.isArray(input?.items) ? input.items.map((item: any) => ({
+            id: String(item?.id || ''),
+            product_id: String(item?.product_id || ''),
+            product_name_snapshot: item?.product_name_snapshot ? String(item.product_name_snapshot) : null,
+            quantity: Number(item?.quantity ?? 0),
+            unit_cost: Number(item?.unit_cost ?? 0),
+            line_total: Number(item?.line_total ?? 0),
+            created_at: item?.created_at ? String(item.created_at) : null,
+            category: item?.category ? String(item.category) : null,
+            brand: item?.brand ? String(item.brand) : null,
+            metadata: (() => {
+                const parsed = parseJsonValue(item?.metadata)
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null
+            })()
+        })) : []
+    })
+
+    const loadRecentPurchaseInvoices = async (options?: { silent?: boolean }) => {
+        const silent = options?.silent === true
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role !== 'admin') return
+        setPurchaseInvoicesLoading(true)
+        try {
+            const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=15', {
+                headers: { Authorization: `Bearer ${token}` }
+            }))
+            const rows = Array.isArray(res.body) ? res.body.map(normalizePurchaseInvoiceSummary) : []
+            setRecentPurchaseInvoices(rows)
+        } catch (error) {
+            console.error(error)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
+            if (!silent) {
+                showNotification('No se pudieron cargar las facturas de compra.', 'error')
+            }
+        } finally {
+            setPurchaseInvoicesLoading(false)
+        }
+    }
+
+    const handleOpenPurchaseInvoice = async (invoiceId: string) => {
+        const normalizedId = String(invoiceId || '').trim()
+        if (!normalizedId) {
+            showNotification('La factura de compra no tiene un identificador válido.', 'error')
+            return
+        }
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+            handleLogout()
+            return
+        }
+        setIsPurchaseInvoiceModalOpen(true)
+        setPurchaseInvoiceDetailLoading(true)
+        try {
+            const res = await withTransientRetry(() => requestApi<any>(`/api/admin/purchase-invoices/${encodeURIComponent(normalizedId)}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }))
+            setSelectedPurchaseInvoice(normalizePurchaseInvoiceDetail(res.body))
+        } catch (error) {
+            console.error(error)
+            setIsPurchaseInvoiceModalOpen(false)
+            setSelectedPurchaseInvoice(null)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
+            showNotification(String((error as any)?.message || 'No se pudo abrir la factura de compra.'), 'error')
+        } finally {
+            setPurchaseInvoiceDetailLoading(false)
+        }
+    }
+
+    const closePurchaseInvoiceModal = () => {
+        if (purchaseInvoiceDetailLoading) return
+        setIsPurchaseInvoiceModalOpen(false)
+        setSelectedPurchaseInvoice(null)
+    }
+
     const loadPricingSettings = async () => {
         if (!user || user.role !== 'admin') return
         try {
@@ -1807,6 +2036,87 @@ const MyAccount = () => {
         }
     }
 
+    const roundPriceIncrement = (value: number, increment: number) => {
+        if (!Number.isFinite(value)) return 0
+        if (increment <= 0) return value
+        return Math.round(value / increment) * increment
+    }
+
+    const applyPricingAdjustmentsPreview = (
+        priceNet: number,
+        taxMultiplier: number,
+        rounding: number,
+        includeVatInPvp: boolean,
+        shippingBuffer: number
+    ) => {
+        let adjusted = priceNet * (1 + (Math.max(0, shippingBuffer) / 100))
+        if (rounding > 0) {
+            if (includeVatInPvp && taxMultiplier > 0) {
+                const pvp = roundPriceIncrement(adjusted * taxMultiplier, rounding)
+                adjusted = taxMultiplier > 0 ? (pvp / taxMultiplier) : pvp
+            } else {
+                adjusted = roundPriceIncrement(adjusted, rounding)
+            }
+        }
+        return Math.max(0, adjusted)
+    }
+
+    const getSuggestedBasePriceForCostPreview = (
+        cost: number,
+        taxMultiplier: number,
+        margins: PricingMargins,
+        calc: PricingCalc
+    ) => {
+        const normalizedCost = Math.max(0, Number(cost || 0))
+        if (!Number.isFinite(normalizedCost) || normalizedCost <= 0) return 0
+
+        const minMargin = Math.max(0, Number(margins.minMargin || 0))
+        const baseMargin = Math.max(minMargin, Number(margins.baseMargin || 0))
+        const targetMargin = Math.max(baseMargin, Number(margins.targetMargin || 0))
+        const promoBuffer = Math.max(0, Number(margins.promoBuffer || 0))
+        const strategy: PricingCalc['strategy'] = ['cost_plus', 'target_margin', 'competitive'].includes(calc.strategy)
+            ? calc.strategy
+            : 'cost_plus'
+
+        const priceFromMargin = (baseCost: number, marginPct: number) => {
+            const margin = Math.max(0, Math.min(95, marginPct))
+            const denom = 1 - (margin / 100)
+            if (denom <= 0) return baseCost
+            return baseCost / denom
+        }
+
+        const minPrice = priceFromMargin(normalizedCost, minMargin)
+        let recommended = minPrice
+        if (strategy === 'target_margin') {
+            recommended = priceFromMargin(normalizedCost, targetMargin + promoBuffer)
+        } else if (strategy === 'competitive') {
+            recommended = priceFromMargin(normalizedCost, minMargin)
+        } else {
+            recommended = normalizedCost * (1 + ((baseMargin + promoBuffer) / 100))
+        }
+
+        if (recommended < minPrice) {
+            recommended = minPrice
+        }
+
+        const adjustedRecommended = applyPricingAdjustmentsPreview(
+            recommended,
+            taxMultiplier,
+            Math.max(0, Number(calc.rounding || 0)),
+            Boolean(calc.includeVatInPvp),
+            Math.max(0, Number(calc.shippingBuffer || 0))
+        )
+        const adjustedMin = applyPricingAdjustmentsPreview(
+            minPrice,
+            taxMultiplier,
+            Math.max(0, Number(calc.rounding || 0)),
+            Boolean(calc.includeVatInPvp),
+            Math.max(0, Number(calc.shippingBuffer || 0))
+        )
+
+        return Math.max(adjustedRecommended, adjustedMin)
+    }
+
     const normalizePricingRules = (input: typeof pricingRules) => ({
         bulkThreshold: Math.round(toNumber(input.bulkThreshold, 10, 1)),
         bulkDiscount: toNumber(input.bulkDiscount, 5, 0, 90),
@@ -1927,7 +2237,8 @@ const MyAccount = () => {
     }
 
     const adminTabGroups: Record<AdminMenuGroupKey, string[]> = {
-        monitoring: ['alerts', 'reports', 'sales-ranking'],
+        monitoring: ['alerts'],
+        reporting: ['reports', 'sales-ranking'],
         catalog: ['products', 'inventory', 'users', 'product-page'],
         operations: ['store-status', 'local-sales', 'admin-orders', 'shipments', 'balances'],
         finance: ['prices', 'taxes', 'margins', 'calculations', 'pricing-rules']
@@ -1944,6 +2255,12 @@ const MyAccount = () => {
 
     const toggleAdminMenuGroup = (groupKey: AdminMenuGroupKey) => {
         setAdminMenuExpanded((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))
+    }
+
+    const openAdminReportSection = (section: AdminReportSection) => {
+        setAdminReportSection(section)
+        setSelectedDeepDive(null)
+        setActiveTab('reports')
     }
 
     React.useEffect(() => {
@@ -1982,12 +2299,14 @@ const MyAccount = () => {
         }
 
         if (text.includes('ticket') || text.includes('promedio')) {
+            setAdminReportSection('general')
             setActiveTab('reports')
             setSelectedDeepDive('aov')
             return
         }
 
         if (text.includes('margen') || text.includes('utilidad') || text.includes('rentab')) {
+            setAdminReportSection('balance')
             setActiveTab('reports')
             setSelectedDeepDive('profit')
             return
@@ -2004,6 +2323,7 @@ const MyAccount = () => {
             return
         }
 
+        setAdminReportSection('sales')
         setActiveTab('reports')
         setSelectedDeepDive('sales')
     }
@@ -2126,10 +2446,14 @@ const MyAccount = () => {
 
             if (tabsWithProducts.has(activeTab)) {
                 tasks.push(
-                    withTransientRetry(() => requestApi<any[]>('/api/products', { headers })).then((res) => {
+                    withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers })).then((res) => {
                         if (!cancelled) setAdminProductsList(normalizeAdminProducts(res.body))
                     })
                 )
+            }
+
+            if (activeTab === 'inventory') {
+                tasks.push(loadRecentPurchaseInvoices({ silent: true }))
             }
 
             if (tabsWithUsers.has(activeTab)) {
@@ -2305,6 +2629,7 @@ const MyAccount = () => {
             }
             setUser(parsedUser)
             if (parsedUser.role === 'admin') {
+                setAdminReportSection('general')
                 setActiveTab('reports')
             } else {
                 setActiveTab('dashboard')
@@ -2398,6 +2723,17 @@ const MyAccount = () => {
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [isProductModalOpen, productSaving])
 
+    React.useEffect(() => {
+        if (!isPurchaseInvoiceModalOpen) return
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !purchaseInvoiceDetailLoading) {
+                closePurchaseInvoiceModal()
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [isPurchaseInvoiceModalOpen, purchaseInvoiceDetailLoading])
+
     const handleLogout = () => {
         localStorage.removeItem('authToken')
         localStorage.removeItem('user')
@@ -2426,6 +2762,8 @@ const MyAccount = () => {
     const vatExampleTotal = (100 * vatDisplayMultiplier).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const vatRateValue = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
     const vatMultiplier = 1 + vatRateValue / 100
+    const normalizedProductMargins = normalizeMarginSettings(marginSettings)
+    const normalizedProductCalc = normalizeCalcSettings(calcSettings)
     const productBasePrice = Number(productForm.price || 0)
     const productCost = Number(productForm.cost || 0)
     const productPvpPrice = Number(productForm.pvp || 0) || (productBasePrice * vatMultiplier)
@@ -2436,6 +2774,36 @@ const MyAccount = () => {
     const productProfitLabel = productGrossProfit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const persistedProductPvpPrice = Number(editingProduct?.price ?? 0)
+    const persistedProductBasePrice = vatMultiplier > 0 ? (persistedProductPvpPrice / vatMultiplier) : persistedProductPvpPrice
+    const persistedProductCost = Number(editingProduct?.business?.cost ?? editingProduct?.cost ?? 0)
+    const persistedProductQuantity = Number(editingProduct?.quantity ?? 0)
+    const requestedProductQuantity = Number(productForm.quantity || 0)
+    const stockEntryDelta = editingProduct
+        ? Math.max(0, requestedProductQuantity - persistedProductQuantity)
+        : Math.max(0, requestedProductQuantity)
+    const requiresPurchaseInvoice = stockEntryDelta > 0
+    const purchaseInvoiceTitle = editingProduct
+        ? `Factura para ingreso de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
+        : `Factura para stock inicial de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
+    const hasProductCostPreview = Number.isFinite(productCost) && productCost > 0
+    const suggestedBasePricePreview = hasProductCostPreview
+        ? getSuggestedBasePriceForCostPreview(productCost, vatMultiplier, normalizedProductMargins, normalizedProductCalc)
+        : 0
+    const suggestedPvpPricePreview = suggestedBasePricePreview * vatMultiplier
+    const costChangedForAutoPricing = Boolean(editingProduct)
+        && Number.isFinite(productCost)
+        && Math.abs(productCost - persistedProductCost) > 0.00001
+    const automaticAppliedBasePrice = costChangedForAutoPricing
+        ? Math.max(suggestedBasePricePreview, persistedProductBasePrice, Number.isFinite(productBasePrice) ? productBasePrice : 0)
+        : (Number.isFinite(productBasePrice) ? productBasePrice : 0)
+    const automaticAppliedPvpPrice = automaticAppliedBasePrice * vatMultiplier
+    const automaticPriceWillIncrease = costChangedForAutoPricing
+        && automaticAppliedBasePrice > (Number.isFinite(productBasePrice) ? productBasePrice : 0) + 0.00001
+    const suggestedBasePriceLabel = suggestedBasePricePreview.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const suggestedPvpPriceLabel = suggestedPvpPricePreview.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const automaticAppliedBasePriceLabel = automaticAppliedBasePrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const automaticAppliedPvpPriceLabel = automaticAppliedPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const isUploadingProductImages = Object.values(imageUploading).some(Boolean)
     const productFormErrorEntries = Object.entries(productFormErrors)
     const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
@@ -2487,6 +2855,55 @@ const MyAccount = () => {
     const monthlySalesFinancial = productSalesRanking?.monthlyFinancial
     const historicalSalesFinancial = productSalesRanking?.historicalFinancial
     const salesRankingFinancial = salesRankingView === 'month' ? monthlySalesFinancial : historicalSalesFinancial
+    const reportSectionMeta: Record<AdminReportSection, { title: string; subtitle: string }> = {
+        general: {
+            title: 'Reporte general',
+            subtitle: 'Resumen ejecutivo del negocio con ventas, utilidad, inventario y señales de operación.'
+        },
+        sales: {
+            title: 'Reporte de ventas',
+            subtitle: 'Comportamiento comercial, mix por categoría y ranking de productos vendidos.'
+        },
+        balance: {
+            title: 'Balance general',
+            subtitle: 'Lectura financiera de ingresos, IVA, costos, utilidad y margen operativo.'
+        },
+        inventory: {
+            title: 'Reporte de inventario',
+            subtitle: 'Capital inmovilizado, riesgos de stock y productos críticos para reposición.'
+        },
+        traceability: {
+            title: 'Reporte de trazabilidad',
+            subtitle: 'Soporte de cifras por pedido, producto y categoría para auditar resultados.'
+        }
+    }
+    const activeReportMeta = reportSectionMeta[adminReportSection]
+    const salesSummary = dashboardStats?.businessMetrics?.salesSummary
+    const profitStats = dashboardStats?.businessMetrics?.profitStats
+    const inventoryValue = dashboardStats?.businessMetrics?.inventoryValue
+    const inventoryDeepDive = dashboardStats?.businessMetrics?.inventoryDeepDive
+    const inventoryHealth = inventoryDeepDive?.health
+    const traceabilityData = dashboardStats?.businessMetrics?.traceability
+    const traceabilityOrders = traceabilityData?.orders ?? []
+    const traceabilityProducts = traceabilityData?.products ?? []
+    const traceabilityCategories = traceabilityData?.categories ?? []
+    const salesCategories = dashboardStats?.salesByCategory ?? []
+    const salesCategoriesTotal = salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0)
+    const salesTrendRows = dashboardStats?.salesTrend30Days ?? []
+    const salesTrendPreview = salesTrendRows.slice(-8)
+    const salesTrendPreviewMax = Math.max(...salesTrendPreview.map((item) => Number(item.total ?? 0)), 1)
+    const highValueInventoryItems = inventoryDeepDive?.highValueItems ?? []
+    const riskInventoryItems = inventoryDeepDive?.riskItems ?? []
+    const expiringInventoryItems = inventoryDeepDive?.expiringItems ?? []
+    const expiredInventoryItems = inventoryDeepDive?.expiredItems ?? []
+    const reportBalanceNet = Number(salesSummary?.net ?? 0)
+    const reportBalanceGross = Number(salesSummary?.gross ?? 0)
+    const reportBalanceVat = Number(salesSummary?.vat ?? 0)
+    const reportBalanceShipping = Number(salesSummary?.shipping ?? 0)
+    const reportBalanceCost = Number(profitStats?.cost ?? 0)
+    const reportBalanceProfit = Number(profitStats?.profit ?? 0)
+    const reportBalanceMargin = Number(profitStats?.margin ?? 0)
+    const reportBalanceRoi = Number(profitStats?.roi ?? 0)
     const openSalesProductDetail = (item: SalesRankingRow) => {
         setSelectedSalesProduct(item)
         setIsSalesProductModalOpen(true)
@@ -2541,9 +2958,21 @@ const MyAccount = () => {
                 const expirationMeta = getProductExpirationMeta(product)
                 const stock = Math.max(0, Number(product.quantity ?? 0))
                 const sku = String(product.attributes?.sku || '').trim()
-                const lotCode = String(product.attributes?.lotCode || '').trim()
-                const storageLocation = String(product.attributes?.storageLocation || '').trim()
-                const supplier = String(product.attributes?.supplier || '').trim()
+                const lotCode = String(product.inventory?.lot?.code || product.attributes?.lotCode || '').trim()
+                const storageLocation = String(product.inventory?.lot?.location || product.attributes?.storageLocation || '').trim()
+                const manualSupplier = String(product.inventory?.lot?.supplier || product.attributes?.supplier || '').trim()
+                const lastPurchaseInvoice = product.lastPurchaseInvoice || product.inventory?.lastPurchaseInvoice || null
+                const lastPurchaseInvoiceId = String(lastPurchaseInvoice?.id || '').trim()
+                const lastPurchaseInvoiceNumber = String(lastPurchaseInvoice?.invoiceNumber || '').trim()
+                const lastPurchaseSupplier = String(lastPurchaseInvoice?.supplierName || '').trim()
+                const lastPurchaseIssuedAt = String(lastPurchaseInvoice?.issuedAt || '').trim()
+                const lastPurchaseReceivedAt = String(lastPurchaseInvoice?.receivedAt || '').trim()
+                const lastPurchaseQuantity = Math.max(0, Number(lastPurchaseInvoice?.quantity ?? 0))
+                const lastPurchaseUnitCost = parseMoney(lastPurchaseInvoice?.unitCost)
+                const purchaseEntriesCount = Math.max(0, Number(product.inventory?.purchaseHistory?.entriesCount ?? 0))
+                const purchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.purchasedUnits ?? 0))
+                const remainingPurchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.remainingUnits ?? 0))
+                const supplier = lastPurchaseSupplier || manualSupplier
                 const unitPrice = parseMoney(product.price)
                 const unitCost = parseMoney(product.business?.cost ?? product.cost)
                 const inventoryCost = Math.max(stock * unitCost, 0)
@@ -2575,8 +3004,17 @@ const MyAccount = () => {
                     lotCode,
                     storageLocation,
                     supplier,
+                    lastPurchaseInvoiceId,
+                    lastPurchaseInvoiceNumber,
+                    lastPurchaseIssuedAt,
+                    lastPurchaseReceivedAt,
+                    lastPurchaseQuantity,
+                    lastPurchaseUnitCost,
+                    purchaseEntriesCount,
+                    purchasedUnits,
+                    remainingPurchasedUnits,
                     source: product,
-                    searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${lotCode} ${storageLocation} ${supplier} ${legacyId}`.toLowerCase()
+                    searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${lotCode} ${storageLocation} ${supplier} ${lastPurchaseInvoiceNumber} ${legacyId}`.toLowerCase()
                 }
             })
             .filter((item) => item.internalId)
@@ -2610,7 +3048,45 @@ const MyAccount = () => {
             return acc
         }, { totalSkus: 0, totalUnits: 0, totalCost: 0, totalMarket: 0, out: 0, low: 0, expiring: 0, expired: 0 })
     }, [inventoryManagementRows])
+    const purchaseInvoicesSummary = React.useMemo(() => {
+        return recentPurchaseInvoices.reduce((acc, invoice) => {
+            acc.totalInvoices += 1
+            acc.totalUnits += Number(invoice.units_total ?? 0)
+            acc.totalAmount += Number(invoice.total ?? 0)
+            if (invoice.supplier_name) {
+                acc.suppliers.add(String(invoice.supplier_name).trim().toUpperCase())
+            }
+            return acc
+        }, {
+            totalInvoices: 0,
+            totalUnits: 0,
+            totalAmount: 0,
+            suppliers: new Set<string>()
+        })
+    }, [recentPurchaseInvoices])
     const hasPerishableProducts = inventoryManagementRows.some((row) => row.isPerishable)
+    const productPublicationSummary = React.useMemo(() => {
+        return (adminProductsList || []).reduce((acc, product: any) => {
+            acc.all += 1
+            if (product?.published === false) {
+                acc.hidden += 1
+            } else {
+                acc.published += 1
+            }
+            return acc
+        }, { all: 0, published: 0, hidden: 0 })
+    }, [adminProductsList])
+    const filteredAdminProductsList = React.useMemo(() => {
+        return (adminProductsList || []).filter((product: any) => {
+            if (productPublicationFilter === 'published') {
+                return product?.published !== false
+            }
+            if (productPublicationFilter === 'hidden') {
+                return product?.published === false
+            }
+            return true
+        })
+    }, [adminProductsList, productPublicationFilter])
     const localSaleUnits = localSaleItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0)
     const localSaleNet = Number(localSaleQuote?.vat_subtotal ?? 0)
     const localSaleVat = Number(localSaleQuote?.vat_amount ?? 0)
@@ -3105,7 +3581,7 @@ const MyAccount = () => {
                     ? `?month=${encodeURIComponent(salesRankingMonth)}`
                     : ''
                 const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
-                    requestApi<any[]>('/api/products', { headers }),
+                    requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers }),
                     requestApi<Order[]>('/api/orders', { headers }),
                     requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })
                 ])
@@ -4041,13 +4517,47 @@ const MyAccount = () => {
                                                                     </span>
                                                                 )}
                                                             </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
+                                                    <button
+                                                        type="button"
+                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
+                                                        onClick={() => toggleAdminMenuGroup('reporting')}
+                                                    >
+                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
+                                                            <Icon.ChartPieSlice size={16} />
+                                                            <span>Reportes</span>
+                                                        </div>
+                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.reporting ? 'rotate-180' : ''}`} />
+                                                    </button>
+                                                    {adminMenuExpanded.reporting && (
+                                                        <div className="pb-2 px-2 space-y-1.5">
+                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'general') ? 'active' : ''}`} onClick={() => openAdminReportSection('general')}>
                                                                 <Icon.ChartPieSlice size={18} />
-                                                                <strong className="heading6">Reportes</strong>
+                                                                <strong className="heading6">General</strong>
+                                                            </Link>
+                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'sales') ? 'active' : ''}`} onClick={() => openAdminReportSection('sales')}>
+                                                                <Icon.ChartLineUp size={18} />
+                                                                <strong className="heading6">Ventas</strong>
+                                                            </Link>
+                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'balance') ? 'active' : ''}`} onClick={() => openAdminReportSection('balance')}>
+                                                                <Icon.Bank size={18} />
+                                                                <strong className="heading6">Balance General</strong>
+                                                            </Link>
+                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'inventory') ? 'active' : ''}`} onClick={() => openAdminReportSection('inventory')}>
+                                                                <Icon.Archive size={18} />
+                                                                <strong className="heading6">Inventario</strong>
+                                                            </Link>
+                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'traceability') ? 'active' : ''}`} onClick={() => openAdminReportSection('traceability')}>
+                                                                <Icon.Files size={18} />
+                                                                <strong className="heading6">Trazabilidad</strong>
                                                             </Link>
                                                             <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'sales-ranking' ? 'active' : ''}`} onClick={() => setActiveTab('sales-ranking')}>
                                                                 <Icon.Trophy size={18} />
-                                                                <strong className="heading6">Ranking ventas</strong>
+                                                                <strong className="heading6">Ranking Productos</strong>
                                                             </Link>
                                                         </div>
                                                     )}
@@ -4336,13 +4846,66 @@ const MyAccount = () => {
                                         )}
                                     </div>
                                     <div className={`tab text-content w-full ${activeTab === 'reports' ? 'block' : 'hidden'}`}>
-                                        <div className="flex items-center justify-between pb-6">
-                                            <div className="heading5">Reportes de Negocio</div>
+                                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 pb-6">
+                                            <div>
+                                                <div className="heading5">{activeReportMeta.title}</div>
+                                                <p className="text-secondary text-xs mt-1">{activeReportMeta.subtitle}</p>
+                                            </div>
                                             <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
                                                 {currentDateLabel}
                                             </div>
                                         </div>
 
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'general') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                onClick={() => openAdminReportSection('general')}
+                                            >
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">General</div>
+                                                <div className="text-lg font-bold">{formatMoney(reportBalanceNet)}</div>
+                                                <div className="text-xs text-secondary mt-1">Vista ejecutiva del negocio</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'sales') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                onClick={() => openAdminReportSection('sales')}
+                                            >
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas</div>
+                                                <div className="text-lg font-bold">{Number(salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')} uds</div>
+                                                <div className="text-xs text-secondary mt-1">{formatMoney(Number(salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0))} netos</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'balance') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                onClick={() => openAdminReportSection('balance')}
+                                            >
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Balance</div>
+                                                <div className={`text-lg font-bold ${reportBalanceProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(reportBalanceProfit)}</div>
+                                                <div className="text-xs text-secondary mt-1">Margen {reportBalanceMargin.toFixed(1)}% • ROI {reportBalanceRoi.toFixed(1)}%</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'inventory') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                onClick={() => openAdminReportSection('inventory')}
+                                            >
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Inventario</div>
+                                                <div className="text-lg font-bold">{formatMoney(Number(inventoryValue?.cost_value ?? 0))}</div>
+                                                <div className="text-xs text-secondary mt-1">{Number(inventoryHealth?.low_stock ?? 0)} bajo stock • {Number(inventoryHealth?.out_of_stock ?? 0)} sin stock</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'traceability') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                onClick={() => openAdminReportSection('traceability')}
+                                            >
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Trazabilidad</div>
+                                                <div className="text-lg font-bold">{traceabilityOrders.length.toLocaleString('es-EC')} pedidos</div>
+                                                <div className="text-xs text-secondary mt-1">{traceabilityProducts.length.toLocaleString('es-EC')} productos • {traceabilityCategories.length.toLocaleString('es-EC')} categorías</div>
+                                            </button>
+                                        </div>
+
+                                        {adminReportSection === 'general' && (
+                                            <>
                                         <button
                                             type="button"
                                             className="mb-6 p-4 rounded-xl border border-line bg-surface w-full text-left transition-all hover:border-black"
@@ -4413,7 +4976,7 @@ const MyAccount = () => {
                                                         <button
                                                             type="button"
                                                             className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => setActiveTab('sales-ranking')}
+                                                            onClick={() => openAdminReportSection('sales')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Productos Vendidos (uds)</div>
                                                             <div className="heading5">{monthUnits.toLocaleString('es-EC')}</div>
@@ -4469,7 +5032,7 @@ const MyAccount = () => {
 
                                             <div
                                                 className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                onClick={() => setActiveTab('inventory')}
+                                                onClick={() => openAdminReportSection('inventory')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Valor Inventario</div>
@@ -4487,7 +5050,7 @@ const MyAccount = () => {
                                                     <div className="text-secondary text-sm font-medium">Productos Activos</div>
                                                     <Icon.ShoppingBag className="text-primary" size={20} />
                                                 </div>
-                                                <div className="heading5">{adminProductsList.length.toLocaleString('es-EC')}</div>
+                                                <div className="heading5">{Number(dashboardStats?.productAnalysis?.totalMonitored ?? 0).toLocaleString('es-EC')}</div>
                                                 <div className="text-secondary text-xs mt-2 underline">Ver catálogo <Icon.ArrowRight size={10} className="inline ml-1" /></div>
                                             </div>
                                         </div>
@@ -4740,10 +5303,7 @@ const MyAccount = () => {
                                                             {dashboardStats?.topProducts?.map((prod, i) => (
                                                                 <div key={i}
                                                                     className="flex items-center gap-4 p-3 bg-surface rounded-xl hover:shadow-md transition-all cursor-pointer hover:bg-white border border-transparent hover:border-line"
-                                                                    onClick={() => {
-                                                                        const found = adminProductsList.find(p => p.name === prod.name);
-                                                                        if (found) handleEditProduct(found);
-                                                                    }}
+                                                                    onClick={() => openAdminReportSection('sales')}
                                                                 >
                                                                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">{i + 1}</div>
                                                                     <div className="flex-1 min-w-0">
@@ -4791,14 +5351,14 @@ const MyAccount = () => {
                                                     <div className="space-y-3">
                                                         <div
                                                             className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
-                                                            onClick={() => setActiveTab('inventory')}
+                                                            onClick={() => openAdminReportSection('inventory')}
                                                         >
                                                             <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Valor de Mercado</div>
                                                             <div className="text-lg font-bold">${Number(dashboardStats?.businessMetrics?.inventoryValue?.market_value ?? 0).toLocaleString()}</div>
                                                         </div>
                                                         <div
                                                             className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
-                                                            onClick={() => setActiveTab('inventory')}
+                                                            onClick={() => openAdminReportSection('inventory')}
                                                         >
                                                             <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Inversión en Almacén</div>
                                                             <div className="text-lg font-bold">${Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0).toLocaleString()}</div>
@@ -4825,8 +5385,635 @@ const MyAccount = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                            </>
+                                        )}
 
+                                        {adminReportSection === 'sales' && (
+                                            <>
+                                                <div className="bg-white p-6 rounded-2xl border border-line shadow-sm mb-6">
+                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                                                        <div>
+                                                            <div className="heading6">Corte comercial</div>
+                                                            <p className="text-secondary text-xs mt-1">
+                                                                Vista activa: {salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'}.
+                                                            </p>
+                                                            <p className="text-secondary text-xs mt-1">
+                                                                Periodo: {salesRankingView === 'month'
+                                                                    ? `${productSalesRanking?.period?.start || '-'} → ${productSalesRanking?.period?.end || '-'}`
+                                                                    : `${productSalesRanking?.historicalPeriod?.start || '-'} → ${productSalesRanking?.historicalPeriod?.end || '-'}`}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                                                            <label className="flex flex-col gap-1 text-[10px] uppercase font-bold text-secondary">
+                                                                Mes a consultar
+                                                                <input
+                                                                    type="month"
+                                                                    value={salesRankingMonth}
+                                                                    onChange={(event) => {
+                                                                        const nextMonth = event.target.value
+                                                                        setSalesRankingMonth(nextMonth || getCurrentMonthKey())
+                                                                        setSalesRankingView('month')
+                                                                    }}
+                                                                    className="px-3 py-1.5 text-sm font-semibold rounded-md border border-line bg-white text-black focus:border-black outline-none"
+                                                                />
+                                                            </label>
+                                                            <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSalesRankingView('month')}
+                                                                    className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'month' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                                >
+                                                                    Mes
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSalesRankingView('historical')}
+                                                                    className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'historical' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                                >
+                                                                    Histórico
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 xl:grid-cols-8 gap-3">
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
+                                                            <div className="text-lg font-bold">{Number(salesRankingFinancial?.orders_count ?? 0).toLocaleString('es-EC')}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
+                                                            <div className="text-lg font-bold">{Number(salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Bruto</div>
+                                                            <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.gross ?? 0))}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Neto</div>
+                                                            <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0))}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
+                                                            <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.vat ?? 0))}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
+                                                            <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.shipping ?? 0))}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
+                                                            <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.cost ?? 0))}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg border border-line bg-surface">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Margen</div>
+                                                            <div className="text-lg font-bold">{Number(salesRankingFinancial?.margin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 xl:grid-cols-[1.2fr,0.8fr] gap-6 mb-6">
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div>
+                                                                <div className="heading6">Tendencia reciente</div>
+                                                                <p className="text-secondary text-xs mt-1">Últimos {salesTrendPreview.length} cortes diarios disponibles.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
+                                                                onClick={() => setSelectedDeepDive('sales')}
+                                                            >
+                                                                Abrir análisis
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                            {salesTrendPreview.map((item, index) => {
+                                                                const ratio = Math.max((Number(item.total ?? 0) / salesTrendPreviewMax) * 100, 8)
+                                                                return (
+                                                                    <div key={`${item.day}-${index}`} className="rounded-xl border border-line bg-surface p-3">
+                                                                        <div className="text-[10px] uppercase font-bold text-secondary">{item.day}</div>
+                                                                        <div className="font-bold mt-2">{formatMoney(Number(item.total ?? 0))}</div>
+                                                                        <div className="mt-3 h-2 rounded-full bg-white overflow-hidden">
+                                                                            <div className="h-full bg-black rounded-full" style={{ width: `${ratio}%` }}></div>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            {salesTrendPreview.length === 0 && (
+                                                                <div className="col-span-full text-sm text-secondary">Sin datos suficientes para tendencia reciente.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="heading6 mb-4">Mix por categoría</div>
+                                                        <div className="space-y-4">
+                                                            {salesCategories.slice(0, 6).map((cat, index) => {
+                                                                const value = Number(cat.total ?? 0)
+                                                                const ratio = salesCategoriesTotal > 0 ? Math.max((value / salesCategoriesTotal) * 100, 4) : 0
+                                                                return (
+                                                                    <div key={`${cat.category}-${index}`}>
+                                                                        <div className="flex items-center justify-between gap-3 text-sm mb-1">
+                                                                            <span className="font-semibold capitalize">{cat.category || 'Sin categoría'}</span>
+                                                                            <span className="font-bold">{formatMoney(value)}</span>
+                                                                        </div>
+                                                                        <div className="h-2 rounded-full bg-surface overflow-hidden">
+                                                                            <div className="h-full bg-primary rounded-full" style={{ width: `${ratio}%` }}></div>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            {salesCategories.length === 0 && (
+                                                                <div className="text-sm text-secondary">No hay categorías con ventas registradas.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+                                                        <div>
+                                                            <div className="heading6">Productos líderes del periodo</div>
+                                                            <p className="text-secondary text-xs mt-1">Resumen compacto de lo más vendido y su rentabilidad.</p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-surface"
+                                                            onClick={() => setActiveTab('sales-ranking')}
+                                                        >
+                                                            Ver ranking detallado
+                                                        </button>
+                                                    </div>
+                                                    <div className="overflow-x-auto border border-line rounded-xl">
+                                                        <table className="w-full min-w-[900px] text-left">
+                                                            <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 text-right">#</th>
+                                                                    <th className="px-4 py-3">Producto</th>
+                                                                    <th className="px-4 py-3">Categoría</th>
+                                                                    <th className="px-4 py-3 text-right">Pedidos</th>
+                                                                    <th className="px-4 py-3 text-right">Unidades</th>
+                                                                    <th className="px-4 py-3 text-right">Venta neta</th>
+                                                                    <th className="px-4 py-3 text-right">Costo</th>
+                                                                    <th className="px-4 py-3 text-right">Utilidad</th>
+                                                                    <th className="px-4 py-3 text-right">Margen</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-line">
+                                                                {salesRankingRows.slice(0, 10).map((item, index) => (
+                                                                    <tr key={`${item.product_id}-${index}`} className="hover:bg-surface/40">
+                                                                        <td className="px-4 py-3 text-right font-semibold text-sm">{index + 1}</td>
+                                                                        <td className="px-4 py-3 text-sm font-semibold">
+                                                                            <button type="button" className="text-left hover:underline" onClick={() => openSalesProductDetail(item)}>
+                                                                                {item.product_name}
+                                                                            </button>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm capitalize">{item.category || 'Sin categoría'}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right">{item.orders_count}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right font-semibold">{item.units_sold}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right">{formatMoney(item.net_revenue)}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right">{formatMoney(item.cost)}</td>
+                                                                        <td className={`px-4 py-3 text-sm text-right font-semibold ${item.profit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(item.profit)}</td>
+                                                                        <td className="px-4 py-3 text-sm text-right">{item.margin.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</td>
+                                                                    </tr>
+                                                                ))}
+                                                                {salesRankingRows.length === 0 && (
+                                                                    <tr>
+                                                                        <td colSpan={9} className="px-4 py-6 text-center text-secondary text-sm">
+                                                                            No hay datos de ventas para construir el reporte.
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {adminReportSection === 'balance' && (
+                                            <>
+                                                <div className="text-gray-400 text-sm">Balance general consolidado para decisiones operativas y financieras.</div>
+                                                <div className="heading2 mt-2">{formatMoney(reportBalanceNet)}</div>
+                                                <div className="text-secondary text-sm mt-1">Ventas netas acumuladas (sin IVA ni envío)</div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-6">
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Venta total</div>
+                                                        <div className="heading5">{formatMoney(reportBalanceGross)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Incluye IVA + envío</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">IVA por pagar</div>
+                                                        <div className="heading5">{formatMoney(reportBalanceVat)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Impuesto cobrado al cliente</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Envío cobrado</div>
+                                                        <div className="heading5">{formatMoney(reportBalanceShipping)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Ingreso operativo recuperado</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Costo (COGS)</div>
+                                                        <div className="heading5 text-orange-600">-{formatMoney(reportBalanceCost)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Costo histórico vendido</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Utilidad bruta</div>
+                                                        <div className={`heading5 ${reportBalanceProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(reportBalanceProfit)}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Sin IVA ni envío</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Margen neto</div>
+                                                        <div className="heading5">{reportBalanceMargin.toFixed(1)}%</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / ventas netas</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">ROI</div>
+                                                        <div className="heading5">{reportBalanceRoi.toFixed(1)}%</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / costo</div>
+                                                    </div>
+                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
+                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Promedio por pedido</div>
+                                                        <div className="heading5">{formatMoney(Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0))}</div>
+                                                        <div className="text-[11px] text-secondary mt-1">Ticket promedio actual</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-8 grid grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-6">
+                                                    <div className="p-6 rounded-2xl border border-line bg-white shadow-sm">
+                                                        <div className="heading6 mb-4">Lectura del balance</div>
+                                                        <div className="space-y-3 text-sm">
+                                                            <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-line">
+                                                                <span>Venta bruta facturada</span>
+                                                                <strong>{formatMoney(reportBalanceGross)}</strong>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-line">
+                                                                <span>Menos IVA comprometido</span>
+                                                                <strong className="text-orange-600">-{formatMoney(reportBalanceVat)}</strong>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-line">
+                                                                <span>Base neta del negocio</span>
+                                                                <strong>{formatMoney(reportBalanceNet)}</strong>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-line">
+                                                                <span>Menos costo histórico vendido</span>
+                                                                <strong className="text-orange-600">-{formatMoney(reportBalanceCost)}</strong>
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-3 rounded-lg bg-black text-white">
+                                                                <span>Resultado bruto</span>
+                                                                <strong>{formatMoney(reportBalanceProfit)}</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="p-6 rounded-2xl border border-line bg-white shadow-sm">
+                                                        <div className="heading6 mb-4">Acciones recomendadas</div>
+                                                        <div className="flex flex-wrap gap-3">
+                                                            <button
+                                                                type="button"
+                                                                className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                                onClick={() => {
+                                                                    setSelectedDeepDive('profit')
+                                                                    openAdminReportSection('general')
+                                                                }}
+                                                            >
+                                                                Analizar rentabilidad
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                                onClick={() => setActiveTab('margins')}
+                                                            >
+                                                                Ajustar márgenes
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                                onClick={() => openAdminReportSection('sales')}
+                                                            >
+                                                                Abrir reporte de ventas
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
+                                                                onClick={() => setActiveTab('taxes')}
+                                                            >
+                                                                IVA y costos de envío
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="heading6 mb-4 mt-10">Movimientos recientes (neto, IVA, envío)</div>
+                                                <div className="flex flex-col gap-4">
+                                                    {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 6).map((order: any) => {
+                                                        const net = Number(order.vat_subtotal ?? (Number(order.total ?? 0) - Number(order.vat_amount ?? 0) - Number(order.shipping ?? 0)))
+                                                        const vat = Number(order.vat_amount ?? 0)
+                                                        const shipping = Number(order.shipping ?? 0)
+                                                        return (
+                                                            <div key={order.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-surface rounded-xl border border-line">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="w-10 h-10 bg-success bg-opacity-10 text-success rounded-full flex items-center justify-center">
+                                                                        <Icon.ArrowDownLeft weight="bold" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-bold">Pedido #{order.id}</div>
+                                                                        <div className="text-secondary text-xs">{formatDateEcuador(order.created_at)}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-4 text-right text-sm md:w-[340px]">
+                                                                    <div>
+                                                                        <div className="text-[10px] uppercase text-secondary">Neto</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(net)}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-[10px] uppercase text-secondary">IVA</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(vat)}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-[10px] uppercase text-secondary">Envío</div>
+                                                                        <div className="font-bold tabular-nums">{formatMoney(shipping)}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold hover:bg-white"
+                                                                    onClick={() => handleViewOrder(order.id)}
+                                                                >
+                                                                    Ver pedido
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    {(dashboardStats?.businessMetrics?.recentOrders || []).length === 0 && (
+                                                        <div className="text-center py-4 text-secondary">No hay transacciones recientes.</div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {adminReportSection === 'inventory' && (
+                                            <>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-6">
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Valor costo</div>
+                                                        <div className="text-2xl font-bold">{formatMoney(Number(inventoryValue?.cost_value ?? 0))}</div>
+                                                        <div className="text-xs text-secondary mt-1">Capital comprometido</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Valor mercado</div>
+                                                        <div className="text-2xl font-bold">{formatMoney(Number(inventoryValue?.market_value ?? 0))}</div>
+                                                        <div className="text-xs text-secondary mt-1">Potencial bruto de venta</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Items monitoreados</div>
+                                                        <div className="text-2xl font-bold">{Number(inventoryValue?.total_items ?? 0).toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Catálogo con stock</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Sin stock</div>
+                                                        <div className="text-2xl font-bold text-red">{Number(inventoryHealth?.out_of_stock ?? 0)}</div>
+                                                        <div className="text-xs text-secondary mt-1">Reposición urgente</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
+                                                        <div className="text-2xl font-bold text-amber-700">{Number(inventoryHealth?.low_stock ?? 0)}</div>
+                                                        <div className="text-xs text-secondary mt-1">Atención preventiva</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Riesgo sanitario</div>
+                                                        <div className="text-2xl font-bold text-red">{Number(inventoryHealth?.expired_products ?? 0) + Number(inventoryHealth?.expiring_products ?? 0)}</div>
+                                                        <div className="text-xs text-secondary mt-1">Vencidos + por vencer</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div>
+                                                                <div className="heading6">Productos de mayor inversión</div>
+                                                                <p className="text-secondary text-xs mt-1">Stock que concentra más capital en bodega.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
+                                                                onClick={() => setActiveTab('inventory')}
+                                                            >
+                                                                Abrir inventario
+                                                            </button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            {highValueInventoryItems.slice(0, 8).map((item, index) => (
+                                                                <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-line bg-surface">
+                                                                    <div>
+                                                                        <div className="font-semibold text-sm">{item.name}</div>
+                                                                        <div className="text-xs text-secondary">Stock: {Number(item.quantity ?? 0).toLocaleString('es-EC')} • Costo unitario: {formatMoney(Number(item.cost ?? 0))}</div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <div className="text-xs text-secondary uppercase">Valor</div>
+                                                                        <div className="font-bold">{formatMoney(Number(item.total_cost ?? 0))}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {highValueInventoryItems.length === 0 && (
+                                                                <div className="text-sm text-secondary">No hay productos valorizados para este reporte.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="heading6 mb-4">Riesgos de stock</div>
+                                                        <div className="space-y-3">
+                                                            {riskInventoryItems.slice(0, 8).map((item, index) => (
+                                                                <div key={`${item.name}-${index}`} className="p-3 rounded-xl border border-line bg-surface">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <div className="font-semibold text-sm">{item.name}</div>
+                                                                        <div className="text-sm font-bold text-red">{Number(item.quantity ?? 0)} uds</div>
+                                                                    </div>
+                                                                    <div className="text-xs text-secondary mt-1">
+                                                                        Cobertura estimada: {Number((item as any).estimated_days_left ?? 0)} día(s)
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {riskInventoryItems.length === 0 && (
+                                                                <div className="text-sm text-secondary">No hay productos en riesgo inmediato de desabastecimiento.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="heading6 mb-4">Próximos a vencer</div>
+                                                        <div className="space-y-3">
+                                                            {expiringInventoryItems.slice(0, 8).map((item, index) => (
+                                                                <div key={`${item.name}-${index}`} className="p-3 rounded-xl border border-line bg-surface">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <div className="font-semibold text-sm">{item.name}</div>
+                                                                        <div className="text-sm font-bold text-amber-700">{Number(item.quantity ?? 0)} uds</div>
+                                                                    </div>
+                                                                    <div className="text-xs text-secondary mt-1">
+                                                                        Vence: {formatIsoDate(String(item.expiration_date || ''))} • En {Number(item.days_to_expire ?? 0)} día(s)
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {expiringInventoryItems.length === 0 && (
+                                                                <div className="text-sm text-secondary">No hay productos próximos a vencer.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
+                                                        <div className="heading6 mb-4">Productos vencidos</div>
+                                                        <div className="space-y-3">
+                                                            {expiredInventoryItems.slice(0, 8).map((item, index) => (
+                                                                <div key={`${item.name}-${index}`} className="p-3 rounded-xl border border-line bg-surface">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <div className="font-semibold text-sm">{item.name}</div>
+                                                                        <div className="text-sm font-bold text-red">{Number(item.quantity ?? 0)} uds</div>
+                                                                    </div>
+                                                                    <div className="text-xs text-secondary mt-1">
+                                                                        Vencido desde: {formatIsoDate(String(item.expiration_date || ''))} • Hace {Number(item.days_expired ?? 0)} día(s)
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {expiredInventoryItems.length === 0 && (
+                                                                <div className="text-sm text-secondary">No hay productos vencidos en inventario.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {adminReportSection === 'traceability' && (
+                                            <>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Pedidos trazados</div>
+                                                        <div className="text-2xl font-bold">{traceabilityOrders.length.toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Pedidos que explican la venta</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Productos con venta</div>
+                                                        <div className="text-2xl font-bold">{traceabilityProducts.length.toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Ítems ligados a ingresos netos</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl border border-line bg-white">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Categorías auditadas</div>
+                                                        <div className="text-2xl font-bold">{traceabilityCategories.length.toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Agrupaciones que soportan el resultado</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                                                    <div className="bg-white border border-line rounded-2xl p-5">
+                                                        <div className="flex items-center justify-between gap-3 mb-4">
+                                                            <div className="heading6">Pedidos fuente</div>
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
+                                                                onClick={() => setActiveTab('admin-orders')}
+                                                            >
+                                                                Ver todos
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex flex-col gap-3">
+                                                            {traceabilityOrders.slice(0, 8).map((order) => (
+                                                                <button
+                                                                    key={order.id}
+                                                                    type="button"
+                                                                    className="text-left p-3 rounded-lg border border-line hover:bg-surface transition-colors"
+                                                                    onClick={() => handleViewOrder(order.id)}
+                                                                >
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <span className="font-bold text-sm">#{order.id}</span>
+                                                                        <span className="text-xs text-secondary">{formatDateEcuador(order.created_at)}</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-4 gap-2 mt-2 text-[11px]">
+                                                                        <div>
+                                                                            <div className="text-secondary uppercase">Neto</div>
+                                                                            <div className="font-bold tabular-nums">{formatMoney(order.net)}</div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-secondary uppercase">IVA</div>
+                                                                            <div className="font-bold tabular-nums">{formatMoney(order.vat)}</div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-secondary uppercase">Envío</div>
+                                                                            <div className="font-bold tabular-nums">{formatMoney(order.shipping)}</div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-secondary uppercase">Total</div>
+                                                                            <div className="font-bold tabular-nums">{formatMoney(order.gross)}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                            {traceabilityOrders.length === 0 && (
+                                                                <div className="text-sm text-secondary">Sin pedidos para trazabilidad.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white border border-line rounded-2xl p-5">
+                                                        <div className="heading6 mb-4">Productos explicativos</div>
+                                                        <div className="flex flex-col gap-3">
+                                                            {traceabilityProducts.slice(0, 8).map((product, idx) => {
+                                                                const refs = Array.isArray(product.order_refs)
+                                                                    ? product.order_refs
+                                                                    : String(product.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
+                                                                return (
+                                                                    <div key={`${product.product_id || product.product_name}-${idx}`} className="p-3 rounded-lg border border-line">
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <div className="font-semibold text-sm">{product.product_name}</div>
+                                                                            <div className="font-bold tabular-nums">{formatMoney(product.net_revenue)}</div>
+                                                                        </div>
+                                                                        <div className="text-xs text-secondary mt-1">
+                                                                            Categoría: <span className="font-semibold capitalize">{product.category || 'Sin categoría'}</span> | Unidades: <span className="font-semibold">{Number(product.units_sold || 0)}</span>
+                                                                        </div>
+                                                                        <div className="text-xs text-secondary mt-1 break-words">
+                                                                            Pedidos: {refs.length > 0 ? refs.join(', ') : 'Sin referencia'}
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            {traceabilityProducts.length === 0 && (
+                                                                <div className="text-sm text-secondary">Sin productos vendidos para trazabilidad.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white border border-line rounded-2xl p-5">
+                                                        <div className="heading6 mb-4">Categorías auditadas</div>
+                                                        <div className="flex flex-col gap-3">
+                                                            {traceabilityCategories.slice(0, 8).map((category, idx) => {
+                                                                const refs = Array.isArray(category.order_refs)
+                                                                    ? category.order_refs
+                                                                    : String(category.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
+                                                                return (
+                                                                    <div key={`${category.category}-${idx}`} className="p-3 rounded-lg border border-line bg-surface">
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <div className="font-semibold text-sm capitalize">{category.category || 'Sin categoría'}</div>
+                                                                            <div className="font-bold">{formatMoney(category.net_revenue)}</div>
+                                                                        </div>
+                                                                        <div className="text-xs text-secondary mt-1 break-words">
+                                                                            Pedidos asociados: {refs.length > 0 ? refs.join(', ') : 'Sin referencia'}
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            {traceabilityCategories.length === 0 && (
+                                                                <div className="text-sm text-secondary">Sin categorías para la trazabilidad.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                     <div className={`tab text-content w-full ${activeTab === 'sales-ranking' ? 'block' : 'hidden'}`}>
                                         <div className="flex items-center justify-between pb-6">
                                             <div>
@@ -5912,7 +7099,7 @@ const MyAccount = () => {
                                                 <input
                                                     type="text"
                                                     className="border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-black"
-                                                    placeholder="Buscar por nombre, SKU, lote, proveedor..."
+                                                    placeholder="Buscar por nombre, SKU, lote, proveedor o factura..."
                                                     value={inventorySearch}
                                                     onChange={(event) => setInventorySearch(event.target.value)}
                                                 />
@@ -5951,8 +7138,111 @@ const MyAccount = () => {
                                             </div>
                                         </div>
 
+                                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+                                            <div className="xl:col-span-2 p-5 rounded-2xl border border-line bg-white">
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                                                    <div>
+                                                        <div className="heading6">Últimas facturas de compra</div>
+                                                        <p className="text-sm text-secondary mt-1">
+                                                            Trazabilidad reciente de ingresos de inventario y costos de compra.
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-surface transition-all"
+                                                        onClick={() => loadRecentPurchaseInvoices()}
+                                                        disabled={purchaseInvoicesLoading}
+                                                    >
+                                                        {purchaseInvoicesLoading ? 'Actualizando...' : 'Actualizar facturas'}
+                                                    </button>
+                                                </div>
+                                                <div className="overflow-x-auto rounded-xl border border-line">
+                                                    <table className="w-full min-w-[760px] text-left">
+                                                        <thead className="bg-surface border-b border-line">
+                                                            <tr className="text-[11px] uppercase font-bold text-secondary">
+                                                                <th className="px-3 py-3">Factura</th>
+                                                                <th className="px-3 py-3">Proveedor</th>
+                                                                <th className="px-3 py-3">Fecha</th>
+                                                                <th className="px-3 py-3 text-right">Productos</th>
+                                                                <th className="px-3 py-3 text-right">Unidades</th>
+                                                                <th className="px-3 py-3 text-right">Total</th>
+                                                                <th className="px-3 py-3">Acción</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-line">
+                                                            {recentPurchaseInvoices.map((invoice) => (
+                                                                <tr key={invoice.id} className="hover:bg-surface/40">
+                                                                    <td className="px-3 py-3">
+                                                                        <div className="text-sm font-semibold">{invoice.invoice_number || '-'}</div>
+                                                                        <div className="text-xs text-secondary">{invoice.notes || 'Sin observaciones'}</div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3">
+                                                                        <div className="text-sm">{invoice.supplier_name || '-'}</div>
+                                                                        <div className="text-xs text-secondary">{invoice.supplier_document || 'Sin documento'}</div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 text-sm">
+                                                                        <div>{formatIsoDate(invoice.issued_at)}</div>
+                                                                        <div className="text-xs text-secondary">{formatDateTimeEcuador(invoice.created_at, { hour: '2-digit', minute: '2-digit' })}</div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 text-right text-sm">{Number(invoice.products_count ?? 0).toLocaleString('es-EC')}</td>
+                                                                    <td className="px-3 py-3 text-right text-sm">{Number(invoice.units_total ?? 0).toLocaleString('es-EC')}</td>
+                                                                    <td className="px-3 py-3 text-right text-sm font-semibold">{formatMoney(invoice.total)}</td>
+                                                                    <td className="px-3 py-3">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
+                                                                            onClick={() => handleOpenPurchaseInvoice(invoice.id)}
+                                                                        >
+                                                                            Ver detalle
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                            {!purchaseInvoicesLoading && recentPurchaseInvoices.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-secondary">
+                                                                        Aún no hay facturas de compra registradas para este tenant.
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                            {purchaseInvoicesLoading && (
+                                                                <tr>
+                                                                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-secondary">
+                                                                        Cargando facturas de compra...
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-5 rounded-2xl border border-line bg-white">
+                                                <div className="heading6 mb-4">Resumen de compras</div>
+                                                <div className="space-y-4">
+                                                    <div className="p-4 rounded-xl bg-surface border border-line">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Facturas recientes</div>
+                                                        <div className="text-2xl font-bold mt-1">{purchaseInvoicesSummary.totalInvoices.toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Cargadas en este panel</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl bg-surface border border-line">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Unidades compradas</div>
+                                                        <div className="text-2xl font-bold mt-1">{purchaseInvoicesSummary.totalUnits.toLocaleString('es-EC')}</div>
+                                                        <div className="text-xs text-secondary mt-1">Suma de las facturas listadas</div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl bg-surface border border-line">
+                                                        <div className="text-[10px] uppercase font-bold text-secondary">Monto comprado</div>
+                                                        <div className="text-2xl font-bold mt-1">{formatMoney(purchaseInvoicesSummary.totalAmount)}</div>
+                                                        <div className="text-xs text-secondary mt-1">
+                                                            {purchaseInvoicesSummary.suppliers.size.toLocaleString('es-EC')} proveedor(es) registrados
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div className="overflow-x-auto rounded-xl border border-line bg-white">
-                                            <table className="w-full min-w-[1500px] text-left">
+                                            <table className="w-full min-w-[1720px] text-left">
                                                 <thead className="border-b border-line bg-surface">
                                                     <tr className="text-[11px] uppercase font-bold text-secondary">
                                                         <th className="px-3 py-3">Producto</th>
@@ -5964,6 +7254,7 @@ const MyAccount = () => {
                                                         <th className="px-3 py-3">Lote</th>
                                                         <th className="px-3 py-3">Ubicación</th>
                                                         <th className="px-3 py-3">Proveedor</th>
+                                                        <th className="px-3 py-3">Factura compra</th>
                                                         <th className="px-3 py-3 text-right">Costo</th>
                                                         <th className="px-3 py-3 text-right">PVP</th>
                                                         <th className="px-3 py-3 text-right">Valor costo</th>
@@ -6009,25 +7300,65 @@ const MyAccount = () => {
                                                                 </td>
                                                                 <td className="px-3 py-3 text-sm">{row.lotCode || '-'}</td>
                                                                 <td className="px-3 py-3 text-sm">{row.storageLocation || '-'}</td>
-                                                                <td className="px-3 py-3 text-sm">{row.supplier || '-'}</td>
+                                                                <td className="px-3 py-3">
+                                                                    <div className="text-sm">{row.supplier || '-'}</div>
+                                                                    <div className="text-xs text-secondary">
+                                                                        Entradas: {Number(row.purchaseEntriesCount ?? 0).toLocaleString('es-EC')} • Comprado: {Number(row.purchasedUnits ?? 0).toLocaleString('es-EC')}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-3 py-3">
+                                                                    {row.lastPurchaseInvoiceNumber ? (
+                                                                        <div className="space-y-1">
+                                                                            {row.lastPurchaseInvoiceId ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="text-sm font-semibold text-left underline underline-offset-2"
+                                                                                    onClick={() => handleOpenPurchaseInvoice(row.lastPurchaseInvoiceId)}
+                                                                                >
+                                                                                    {row.lastPurchaseInvoiceNumber}
+                                                                                </button>
+                                                                            ) : (
+                                                                                <div className="text-sm font-semibold">{row.lastPurchaseInvoiceNumber}</div>
+                                                                            )}
+                                                                            <div className="text-xs text-secondary">
+                                                                                {row.lastPurchaseIssuedAt
+                                                                                    ? formatIsoDate(row.lastPurchaseIssuedAt)
+                                                                                    : formatDateEcuador(row.lastPurchaseReceivedAt)} • {formatMoney(row.lastPurchaseUnitCost)} x {Number(row.lastPurchaseQuantity ?? 0).toLocaleString('es-EC')}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-secondary">Sin factura enlazada</span>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-3 py-3 text-right text-sm">{formatMoney(row.unitCost)}</td>
                                                                 <td className="px-3 py-3 text-right text-sm">{formatMoney(row.unitPrice)}</td>
                                                                 <td className="px-3 py-3 text-right text-sm font-semibold">{formatMoney(row.inventoryCost)}</td>
                                                                 <td className="px-3 py-3">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
-                                                                        onClick={() => handleEditProduct(row.source)}
-                                                                    >
-                                                                        Editar
-                                                                    </button>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
+                                                                            onClick={() => handleEditProduct(row.source)}
+                                                                        >
+                                                                            Editar
+                                                                        </button>
+                                                                        {row.lastPurchaseInvoiceId && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
+                                                                                onClick={() => handleOpenPurchaseInvoice(row.lastPurchaseInvoiceId)}
+                                                                            >
+                                                                                Factura
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         )
                                                     })}
                                                     {filteredInventoryRows.length === 0 && (
                                                         <tr>
-                                                            <td colSpan={13} className="px-3 py-8 text-center text-sm text-secondary">
+                                                            <td colSpan={14} className="px-3 py-8 text-center text-sm text-secondary">
                                                                 No hay productos para los filtros actuales.
                                                             </td>
                                                         </tr>
@@ -6039,8 +7370,35 @@ const MyAccount = () => {
 
                                     <div className={`tab text-content w-full ${activeTab === 'products' ? 'block' : 'hidden'}`}>
                                         <div className="flex items-center justify-between mb-6">
-                                            <div className="heading5">Gestión de Productos</div>
+                                            <div>
+                                                <div className="heading5">Gestión de Productos</div>
+                                                <p className="text-sm text-secondary mt-1">
+                                                    Mostrando {filteredAdminProductsList.length} de {productPublicationSummary.all} productos.
+                                                </p>
+                                            </div>
                                             <button className="button-main py-2 px-6" onClick={handleNewProduct}>Nuevo Producto</button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mb-6">
+                                            {[
+                                                { key: 'all', label: 'Todos', count: productPublicationSummary.all },
+                                                { key: 'published', label: 'Publicados', count: productPublicationSummary.published },
+                                                { key: 'hidden', label: 'Ocultos', count: productPublicationSummary.hidden }
+                                            ].map((option) => {
+                                                const isActive = productPublicationFilter === option.key
+                                                return (
+                                                    <button
+                                                        key={option.key}
+                                                        type="button"
+                                                        className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${isActive ? 'bg-black text-white' : 'border border-line bg-white text-black hover:bg-surface'}`}
+                                                        onClick={() => setProductPublicationFilter(option.key as ProductPublicationFilter)}
+                                                    >
+                                                        <span>{option.label}</span>
+                                                        <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/15 text-white' : 'bg-surface text-secondary'}`}>
+                                                            {option.count}
+                                                        </span>
+                                                    </button>
+                                                )
+                                            })}
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse">
@@ -6052,12 +7410,13 @@ const MyAccount = () => {
                                                         {hasPerishableProducts && (
                                                             <th className="pb-4 font-bold text-secondary">Vencimiento</th>
                                                         )}
+                                                        <th className="pb-4 font-bold text-secondary">Publicado</th>
                                                         <th className="pb-4 font-bold text-secondary">Precio</th>
                                                         <th className="pb-4 font-bold text-secondary">Acciones</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {adminProductsList.length > 0 ? adminProductsList.map((product) => {
+                                                    {filteredAdminProductsList.length > 0 ? filteredAdminProductsList.map((product) => {
                                                         const expirationMeta = getProductExpirationMeta(product)
                                                         return (
                                                         <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
@@ -6089,6 +7448,11 @@ const MyAccount = () => {
                                                                     )}
                                                                 </td>
                                                             )}
+                                                            <td className="py-4">
+                                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${product.published !== false ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'}`}>
+                                                                    {product.published !== false ? 'Sí' : 'No'}
+                                                                </span>
+                                                            </td>
                                                             <td className="py-4 font-bold">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                             <td className="py-4">
                                                                 <div className="flex gap-2">
@@ -6104,7 +7468,7 @@ const MyAccount = () => {
                                                         </tr>
                                                         )
                                                     }) : (
-                                                        <tr><td colSpan={hasPerishableProducts ? 6 : 5} className="py-8 text-center text-secondary">No se encontraron productos.</td></tr>
+                                                        <tr><td colSpan={hasPerishableProducts ? 7 : 6} className="py-8 text-center text-secondary">No se encontraron productos para este filtro.</td></tr>
                                                     )}
                                                 </tbody>
                                             </table>
@@ -7477,6 +8841,7 @@ const MyAccount = () => {
                                                     type="button"
                                                     className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
                                                     onClick={() => {
+                                                        setAdminReportSection('balance')
                                                         setActiveTab('reports')
                                                         setSelectedDeepDive('profit')
                                                     }}
@@ -8395,6 +9760,38 @@ const MyAccount = () => {
                                                 disabled={productSaving}
                                             />
                                             <p className="text-secondary text-xs mt-1">PVP estimado actual: ${productPvpPriceLabel}</p>
+                                            {hasProductCostPreview && (
+                                                <div className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 space-y-2">
+                                                    <div className="text-[10px] uppercase font-bold text-secondary">Vista previa por costo</div>
+                                                    <p className="text-xs text-secondary">
+                                                        Sugerido por costo: <span className="font-semibold text-black">${suggestedBasePriceLabel}</span> base
+                                                        {' / '}
+                                                        <span className="font-semibold text-black">${suggestedPvpPriceLabel}</span> PVP
+                                                    </p>
+                                                    {costChangedForAutoPricing && (
+                                                        <p className={`text-xs ${automaticPriceWillIncrease ? 'text-orange-600' : 'text-green-700'}`}>
+                                                            Precio aplicado al guardar: <span className="font-semibold">${automaticAppliedBasePriceLabel}</span> base
+                                                            {' / '}
+                                                            <span className="font-semibold">${automaticAppliedPvpPriceLabel}</span> PVP
+                                                        </p>
+                                                    )}
+                                                    {costChangedForAutoPricing && automaticPriceWillIncrease && (
+                                                        <p className="text-[11px] text-orange-700">
+                                                            El backend subirá el precio al guardar para no quedar por debajo del piso calculado por costo.
+                                                        </p>
+                                                    )}
+                                                    {costChangedForAutoPricing && !automaticPriceWillIncrease && (
+                                                        <p className="text-[11px] text-green-700">
+                                                            Tu precio actual ya está por encima del piso automático. El backend no lo bajará.
+                                                        </p>
+                                                    )}
+                                                    {!editingProduct && (
+                                                        <p className="text-[11px] text-secondary">
+                                                            En productos nuevos esto se muestra como referencia; si quieres usarlo, copia ese precio antes de guardar.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="md:col-span-2">
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-surface rounded-xl border border-line">
@@ -8460,6 +9857,107 @@ const MyAccount = () => {
                                         </div>
                                     </div>
 
+                                    <div className="p-5 rounded-xl border border-line bg-surface">
+                                        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-4">
+                                            <div>
+                                                <div className="text-xs uppercase font-bold text-secondary">Factura de compra</div>
+                                                <div className="text-sm font-semibold">
+                                                    {requiresPurchaseInvoice ? purchaseInvoiceTitle : 'Sin ingreso de stock nuevo'}
+                                                </div>
+                                            </div>
+                                            <span className={`text-xs font-semibold ${requiresPurchaseInvoice ? 'text-orange-700' : 'text-secondary'}`}>
+                                                {requiresPurchaseInvoice
+                                                    ? 'Obligatoria para registrar el movimiento de inventario.'
+                                                    : 'Solo se exige cuando el stock aumenta.'}
+                                            </span>
+                                        </div>
+                                        {requiresPurchaseInvoice ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Número de factura</label>
+                                                    <input
+                                                        className={getProductInputClass('purchaseInvoiceNumber', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                                        value={productForm.purchaseInvoice.invoiceNumber}
+                                                        onChange={e => {
+                                                            setProductForm({
+                                                                ...productForm,
+                                                                purchaseInvoice: { ...productForm.purchaseInvoice, invoiceNumber: e.target.value }
+                                                            })
+                                                            clearProductErrors('purchaseInvoiceNumber')
+                                                        }}
+                                                        disabled={productSaving}
+                                                    />
+                                                    {productFormErrors.purchaseInvoiceNumber && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceNumber}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor</label>
+                                                    <input
+                                                        className={getProductInputClass('purchaseInvoiceSupplierName', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                                        value={productForm.purchaseInvoice.supplierName}
+                                                        onChange={e => {
+                                                            setProductForm({
+                                                                ...productForm,
+                                                                purchaseInvoice: { ...productForm.purchaseInvoice, supplierName: e.target.value }
+                                                            })
+                                                            clearProductErrors('purchaseInvoiceSupplierName')
+                                                        }}
+                                                        disabled={productSaving}
+                                                    />
+                                                    {productFormErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceSupplierName}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">RUC o documento</label>
+                                                    <input
+                                                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all"
+                                                        value={productForm.purchaseInvoice.supplierDocument}
+                                                        onChange={e => {
+                                                            setProductForm({
+                                                                ...productForm,
+                                                                purchaseInvoice: { ...productForm.purchaseInvoice, supplierDocument: e.target.value }
+                                                            })
+                                                        }}
+                                                        disabled={productSaving}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label>
+                                                    <input
+                                                        type="date"
+                                                        className={getProductInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                                        value={productForm.purchaseInvoice.issuedAt}
+                                                        onChange={e => {
+                                                            setProductForm({
+                                                                ...productForm,
+                                                                purchaseInvoice: { ...productForm.purchaseInvoice, issuedAt: e.target.value }
+                                                            })
+                                                            clearProductErrors('purchaseInvoiceIssuedAt')
+                                                        }}
+                                                        disabled={productSaving}
+                                                    />
+                                                    {productFormErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceIssuedAt}</p>}
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Notas de compra</label>
+                                                    <textarea
+                                                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[96px]"
+                                                        value={productForm.purchaseInvoice.notes}
+                                                        onChange={e => {
+                                                            setProductForm({
+                                                                ...productForm,
+                                                                purchaseInvoice: { ...productForm.purchaseInvoice, notes: e.target.value }
+                                                            })
+                                                        }}
+                                                        disabled={productSaving}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-secondary">
+                                                Puedes editar precio, costo o contenido del producto sin capturar factura, siempre que no aumentes el stock disponible.
+                                            </p>
+                                        )}
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría</label>
@@ -8478,6 +9976,19 @@ const MyAccount = () => {
                                                 <option value="Accesorios">Accesorios</option>
                                             </select>
                                             {productFormErrors.category && <p className="text-xs text-red mt-1">{productFormErrors.category}</p>}
+                                        </div>
+                                        <div>
+                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Publicado en tienda web</label>
+                                            <select
+                                                className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                                value={productForm.published ? 'yes' : 'no'}
+                                                onChange={e => setProductForm({ ...productForm, published: e.target.value === 'yes' })}
+                                                disabled={productSaving}
+                                            >
+                                                <option value="yes">Sí, mostrar en el sitio</option>
+                                                <option value="no">No, ocultar del sitio</option>
+                                            </select>
+                                            <p className="text-secondary text-xs mt-2">Si está en no, el producto seguirá en el panel pero no aparecerá en la web pública.</p>
                                         </div>
                                     </div>
 
@@ -8888,6 +10399,140 @@ const MyAccount = () => {
                                         : isUploadingProductImages
                                             ? 'Subiendo imágenes...'
                                             : (editingProduct ? 'Guardar Cambios' : 'Crear Producto')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                isPurchaseInvoiceModalOpen && (
+                    <div
+                        className="fixed inset-0 z-[215] flex items-center justify-center bg-black bg-opacity-50 p-4"
+                        onClick={closePurchaseInvoiceModal}
+                    >
+                        <div
+                            className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        >
+                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
+                                <div>
+                                    <h4 className="heading4">
+                                        {selectedPurchaseInvoice?.invoice_number
+                                            ? `Factura ${selectedPurchaseInvoice.invoice_number}`
+                                            : 'Factura de compra'}
+                                    </h4>
+                                    <div className="text-secondary text-sm mt-1">
+                                        {selectedPurchaseInvoice?.supplier_name || 'Cargando detalle...'}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={closePurchaseInvoiceModal}
+                                    className="text-secondary hover:text-black disabled:opacity-50"
+                                    disabled={purchaseInvoiceDetailLoading}
+                                >
+                                    <Icon.X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto flex-1">
+                                {purchaseInvoiceDetailLoading && !selectedPurchaseInvoice ? (
+                                    <div className="py-16 text-center text-sm text-secondary">
+                                        Cargando detalle de la factura de compra...
+                                    </div>
+                                ) : selectedPurchaseInvoice ? (
+                                    <>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                            <div className="p-4 rounded-xl border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Proveedor</div>
+                                                <div className="text-sm font-semibold mt-1">{selectedPurchaseInvoice.supplier_name || '-'}</div>
+                                                <div className="text-xs text-secondary mt-1">{selectedPurchaseInvoice.supplier_document || 'Sin documento'}</div>
+                                            </div>
+                                            <div className="p-4 rounded-xl border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Fecha factura</div>
+                                                <div className="text-sm font-semibold mt-1">{formatIsoDate(selectedPurchaseInvoice.issued_at)}</div>
+                                                <div className="text-xs text-secondary mt-1">
+                                                    Registro: {selectedPurchaseInvoice.created_at ? formatDateTimeEcuador(selectedPurchaseInvoice.created_at, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                </div>
+                                            </div>
+                                            <div className="p-4 rounded-xl border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos</div>
+                                                <div className="text-sm font-semibold mt-1">{selectedPurchaseInvoice.items.length.toLocaleString('es-EC')} líneas</div>
+                                                <div className="text-xs text-secondary mt-1">
+                                                    {selectedPurchaseInvoice.items.reduce((acc, item) => acc + Number(item.quantity ?? 0), 0).toLocaleString('es-EC')} unidades
+                                                </div>
+                                            </div>
+                                            <div className="p-4 rounded-xl border border-line bg-surface">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Total compra</div>
+                                                <div className="text-sm font-semibold mt-1">{formatMoney(selectedPurchaseInvoice.total)}</div>
+                                                <div className="text-xs text-secondary mt-1">Subtotal: {formatMoney(selectedPurchaseInvoice.subtotal)}</div>
+                                            </div>
+                                        </div>
+
+                                        {(selectedPurchaseInvoice.notes || selectedPurchaseInvoice.metadata) && (
+                                            <div className="p-4 rounded-xl border border-line bg-white mb-6">
+                                                <div className="text-[10px] uppercase font-bold text-secondary mb-2">Observaciones</div>
+                                                {selectedPurchaseInvoice.notes && (
+                                                    <p className="text-sm text-black whitespace-pre-wrap">{selectedPurchaseInvoice.notes}</p>
+                                                )}
+                                                {selectedPurchaseInvoice.metadata && Object.keys(selectedPurchaseInvoice.metadata).length > 0 && (
+                                                    <div className="text-xs text-secondary mt-3">
+                                                        Metadata: {JSON.stringify(selectedPurchaseInvoice.metadata)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="overflow-x-auto rounded-xl border border-line">
+                                            <table className="w-full min-w-[760px] text-left">
+                                                <thead className="bg-surface border-b border-line">
+                                                    <tr className="text-[11px] uppercase font-bold text-secondary">
+                                                        <th className="px-4 py-3">Producto</th>
+                                                        <th className="px-4 py-3">Categoría</th>
+                                                        <th className="px-4 py-3 text-right">Cantidad</th>
+                                                        <th className="px-4 py-3 text-right">Costo unitario</th>
+                                                        <th className="px-4 py-3 text-right">Total línea</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-line">
+                                                    {selectedPurchaseInvoice.items.map((item) => (
+                                                        <tr key={item.id} className="hover:bg-surface/40">
+                                                            <td className="px-4 py-3">
+                                                                <div className="text-sm font-semibold">{item.product_name_snapshot || item.product_id || 'Producto sin nombre'}</div>
+                                                                <div className="text-xs text-secondary">{item.brand || 'Sin marca'}</div>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm">{item.category || '-'}</td>
+                                                            <td className="px-4 py-3 text-right text-sm">{Number(item.quantity ?? 0).toLocaleString('es-EC')}</td>
+                                                            <td className="px-4 py-3 text-right text-sm">{formatMoney(item.unit_cost)}</td>
+                                                            <td className="px-4 py-3 text-right text-sm font-semibold">{formatMoney(item.line_total)}</td>
+                                                        </tr>
+                                                    ))}
+                                                    {selectedPurchaseInvoice.items.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan={5} className="px-4 py-8 text-center text-sm text-secondary">
+                                                                Esta factura no tiene líneas registradas.
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="py-16 text-center text-sm text-secondary">
+                                        No se encontró el detalle de la factura seleccionada.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-5 border-t border-line flex justify-end bg-white rounded-b-2xl">
+                                <button
+                                    className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold"
+                                    onClick={closePurchaseInvoiceModal}
+                                    disabled={purchaseInvoiceDetailLoading}
+                                >
+                                    Cerrar
                                 </button>
                             </div>
                         </div>

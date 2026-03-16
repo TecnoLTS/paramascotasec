@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { listProducts } from '@/lib/products'
+import { fetchProducts } from '@/lib/products'
 
 const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const isBuild = process.env.NEXT_PHASE === 'phase-production-build'
@@ -27,7 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   try {
-    const products = await listProducts()
+    const products = await fetchProducts()
     const productRoutes: MetadataRoute.Sitemap = products.map((product) => ({
       url: `${baseUrl}/product/default?id=${product.id}`,
       lastModified: new Date(), // Ideally we'd have a updatedAt field

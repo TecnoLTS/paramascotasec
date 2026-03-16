@@ -1,6 +1,6 @@
 import React from 'react'
-import { getCategoryCards } from '@/data/petCategoryCards'
 import { fetchProducts } from '@/lib/products'
+import { buildCatalogCategoryCards } from '@/lib/catalog'
 import { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { getTenantConfigFromHost } from '@/lib/tenant'
@@ -40,7 +40,7 @@ export default async function HomePet() {
     } catch (error) {
         console.error('No se pudieron cargar productos en HomePet:', error)
     }
-    const categories = getCategoryCards(tenant.id)
+    const categories = buildCatalogCategoryCards(products, tenant.id)
     if (tenant.id === 'autorepuestoscore') {
         return <AutorepuestosCoreHome products={products} categories={categories} tenant={tenant} />
     }

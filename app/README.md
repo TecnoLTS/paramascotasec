@@ -2,6 +2,22 @@
 
 Este directorio contiene la aplicacion Next.js. Para despliegues con Docker, ejecutar comandos desde la raiz del repositorio `paramascotasec/`.
 
+## Comandos exactos
+
+Desarrollo:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/deploy-development.sh
+```
+
+Produccion:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/deploy-production.sh
+```
+
 ## Desarrollo (local)
 Desde `paramascotasec/app`:
 
@@ -14,7 +30,7 @@ npm run dev
 Desde `paramascotasec/`:
 
 ```bash
-docker compose --profile development up -d --build
+./scripts/deploy-development.sh
 ```
 
 Servicio esperado: `paramascotasec-app-dev`.
@@ -23,10 +39,19 @@ Servicio esperado: `paramascotasec-app-dev`.
 Desde `paramascotasec/`:
 
 ```bash
-docker compose --profile production up -d --build
+./scripts/deploy-production.sh
 ```
 
 Servicio esperado: `paramascotasec-app`.
+
+Si prefieres cambiar por archivo:
+
+```bash
+docker compose --env-file .env.development up -d --build
+docker compose --env-file .env up -d --build
+```
+
+En ambos casos `COMPOSE_PROFILES` del archivo debe coincidir con `APP_ENV`.
 
 ## Logs y estado
 Desde `paramascotasec/`:

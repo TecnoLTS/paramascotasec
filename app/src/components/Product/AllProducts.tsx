@@ -3,8 +3,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
-import { getCategoryCards, getCategoryFilter, getCategoryLabel } from '@/data/petCategoryCards'
+import { getCategoryFilter, getCategoryLabel } from '@/data/petCategoryCards'
 import { useTenant } from '@/context/TenantContext'
+import { getCatalogCategoryIds } from '@/lib/catalog'
 
 interface Props {
     data: Array<ProductType>;
@@ -20,8 +21,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const productsRef = useRef<HTMLDivElement | null>(null)
 
     const categories = useMemo(() => {
-        const order = getCategoryCards(tenant.id).map((category) => category.id.toLowerCase())
-        const uniqueOrder = Array.from(new Set(order))
+        const uniqueOrder = ['todos', ...(data.some((product) => product.sale) ? ['descuentos'] : []), ...getCatalogCategoryIds(data, tenant.id)]
 
         const hasProductsFor = (categoryId: string) => {
             if (categoryId === 'descuentos') return data.some((product) => product.sale)

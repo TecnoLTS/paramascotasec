@@ -13,6 +13,13 @@ import { useModalCompareContext } from '@/context/ModalCompareContext'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useRouter } from 'next/navigation'
 import Rate from '../Other/Rate'
+import {
+    getProductReviewCount,
+    getProductVariantLabel,
+    getProductVariants,
+    hasRealReviews,
+    resolveSelectedVariant,
+} from '@/lib/catalog'
 
 interface ProductProps {
     data: ProductType
@@ -33,6 +40,12 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const { openModalCompare } = useModalCompareContext()
     const { openQuickview } = useModalQuickviewContext()
     const router = useRouter()
+    const variantProducts = getProductVariants(data)
+    const hasVariantChoices = variantProducts.length > 1
+    const defaultVariant = resolveSelectedVariant(data)
+    const selectedVariant = variantProducts.find((product) => getProductVariantLabel(product) === activeSize) ?? defaultVariant
+    const reviewCount = getProductReviewCount(data)
+    const showReviewSummary = hasRealReviews(data)
 
     const handleActiveColor = (item: string) => {
         setActiveColor(item)
@@ -43,15 +56,22 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     }
 
     const handleAddToCart = () => {
-        const existingItem = cartState.cartArray.find((item: any) => item.id === data.id)
-        const qtyToAdd = data.quantityPurchase ?? 1
+        if (hasVariantChoices && !activeSize) {
+            handleQuickviewOpen()
+            return
+        }
+
+        const cartProduct = selectedVariant
+        const selectedSizeLabel = activeSize || getProductVariantLabel(cartProduct)
+        const existingItem = cartState.cartArray.find((item: any) => item.id === cartProduct.id)
+        const qtyToAdd = cartProduct.quantityPurchase ?? data.quantityPurchase ?? 1
 
         if (existingItem) {
             const nextQuantity = (existingItem.quantity ?? 0) + qtyToAdd
-            updateCart(data.id, nextQuantity, activeSize, activeColor)
+            updateCart(cartProduct.id, nextQuantity, selectedSizeLabel, activeColor)
         } else {
-            addToCart({ ...data });
-            updateCart(data.id, qtyToAdd, activeSize, activeColor)
+            addToCart({ ...cartProduct, quantityPurchase: qtyToAdd });
+            updateCart(cartProduct.id, qtyToAdd, selectedSizeLabel, activeColor)
         }
         openModalCart()
     };
@@ -88,17 +108,24 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     }
 
     const handleDetailProduct = (productId: string) => {
-        // redirect to shop with category selected
         router.push(`/product/default?id=${productId}`);
     };
 
+    useEffect(() => {
+        if (hasVariantChoices) {
+            setActiveSize('')
+        } else {
+            setActiveSize('')
+        }
+    }, [data.id, defaultVariant.id, hasVariantChoices])
+
     const thumbImages: string[] =
-        Array.isArray((data as any)?.thumbImage) && (data as any)?.thumbImage.length
-            ? (data as any).thumbImage
+        Array.isArray((selectedVariant as any)?.thumbImage) && (selectedVariant as any)?.thumbImage.length
+            ? (selectedVariant as any).thumbImage
             : [];
     const fullImages: string[] =
-        Array.isArray((data as any)?.images)
-            ? (data as any).images
+        Array.isArray((selectedVariant as any)?.images)
+            ? (selectedVariant as any).images
                 .map((img: any) => img?.url ?? img)
                 .filter(Boolean)
             : []
@@ -106,17 +133,18 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const shouldBypassOptimizer = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
 
     const sizes: string[] = data.sizes ?? []
-    const variations = data.variation ?? []
+    const variations = selectedVariant.variation ?? []
     const productType = (data.productType ?? '').toLowerCase()
     const showSizes = productType === 'ropa' && sizes.length > 0
 
-    const price = Number(data.price ?? 0)
-    const originPrice = Number(data.originPrice ?? 0)
+    const price = Number(data.priceMin ?? data.price ?? 0)
+    const originPrice = Number(data.originPriceMax ?? data.originPrice ?? 0)
     const hasSale = (data.sale || originPrice > price) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
     const percentSold = data.quantity > 0
         ? Math.floor((data.sold / data.quantity) * 100)
         : 0
+    const showFromPrice = hasVariantChoices && Number(data.priceMax ?? price) > price
 
     return (
         <>
@@ -311,17 +339,20 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     </div>
                                     <div className="text-button-uppercase">
                                         <span className='text-secondary2 max-sm:text-xs'>Disponibles: </span>
-                                        <span className='max-sm:text-xs'>{data.quantity - data.sold}</span>
+                                        <span className='max-sm:text-xs'>{data.quantity}</span>
                                     </div>
                                 </div>
                             </div>
                             <div className="product-name text-title duration-300">{data.name}</div>
+                            {hasVariantChoices && (
+                                <div className="caption1 text-secondary mt-1">Presentaciones: {sizes.join(', ')}</div>
+                            )}
                             <div className="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
-                                <div className="product-price text-title">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                <div className="product-price text-title">{showFromPrice ? 'Desde ' : ''}${price.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                 {hasSale && (
                                     <>
                                         <div className="product-origin-price caption1 text-secondary2">
-                                            <del>${Number(data.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
+                                            <del>${originPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
                                         </div>
                                         <div className="product-sale caption1 font-medium bg-[var(--bluefor)] px-3 py-0.5 inline-block rounded-full">
                                             -{percentSale}%
@@ -426,12 +457,15 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                 <div className='flex items-start gap-7 max-lg:gap-4 max-lg:flex-wrap max-lg:w-full max-sm:flex-col max-sm:w-full'>
                                     <div className="product-infor max-sm:w-full flex-1 min-w-[260px]">
                                         <div onClick={() => handleDetailProduct(data.id)} className="product-name heading6 inline-block duration-300">{data.name}</div>
+                                        {hasVariantChoices && (
+                                            <div className="caption1 text-secondary mt-1">Presentaciones: {sizes.join(', ')}</div>
+                                        )}
                                         <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
-                                            <div className="product-price text-title">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                            <div className="product-price text-title">{showFromPrice ? 'Desde ' : ''}${price.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                             {hasSale && (
                                                 <>
                                                     <div className="product-origin-price caption1 text-secondary2">
-                                                        <del>${Number(data.originPrice ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
+                                                        <del>${originPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</del>
                                                     </div>
                                                     <div className="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
                                                         -{percentSale}%
@@ -570,10 +604,16 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                     </div>
                     <div className="product-infor mt-4">
                         <span className="text-title">{data.name}</span>
-                        <div className="flex gap-0.5 mt-1">
-                            <Rate currentRate={data.rate} size={16} />
-                        </div>
-                        <span className="text-title inline-block mt-1">${Number(data.price ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {hasVariantChoices && (
+                            <div className="caption1 text-secondary mt-1">Presentaciones: {sizes.join(', ')}</div>
+                        )}
+                        {showReviewSummary && (
+                            <div className="flex items-center gap-1 mt-1">
+                                <Rate currentRate={data.rate} size={16} />
+                                <span className="caption2 text-secondary">({reviewCount})</span>
+                            </div>
+                        )}
+                        <span className="text-title inline-block mt-1">{showFromPrice ? 'Desde ' : ''}${price.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
             ) : null}

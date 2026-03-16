@@ -2,6 +2,29 @@
 
 Guia operativa para desplegar el frontend sin confundir desarrollo y produccion.
 
+## Comandos exactos
+
+Desarrollo:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/deploy-development.sh
+```
+
+Produccion:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/deploy-production.sh
+```
+
+## Regla simple
+- Si quieres dejar un ambiente fijo por archivo, usa `.env` para produccion y `.env.development` para desarrollo.
+- Si quieres cambiar por comando, usa:
+  - `./scripts/deploy-development.sh`
+  - `./scripts/deploy-production.sh`
+- Los scripts ya usan `--remove-orphans`, asi que al cambiar de ambiente retiran el contenedor del perfil opuesto.
+
 ## Requisitos
 - Docker y Docker Compose.
 - Red Docker `edge` creada:
@@ -21,23 +44,37 @@ docker network create edge || true
 - `BACKEND_URL_INTERNAL`: URL interna Docker del backend (recomendado `http://paramascotasec-backend-web/api`).
 - `BACKEND_SERVICE_TOKEN`: token SSR generado desde backend.
 
+Para desarrollo local persistente puedes usar `.env.development`.
+
 ## Despliegue en desarrollo
 Desde `/home/admincenter/contenedores/paramascotasec`:
 
 ```bash
-docker compose --profile development up -d --build
+./scripts/deploy-development.sh
 ```
 
 Contenedor esperado: `paramascotasec-app-dev`.
+
+Comando equivalente sin script:
+
+```bash
+docker compose --env-file .env.development --profile development up -d --build --remove-orphans
+```
 
 ## Despliegue en produccion
 Desde `/home/admincenter/contenedores/paramascotasec`:
 
 ```bash
-docker compose --profile production up -d --build
+./scripts/deploy-production.sh
 ```
 
 Contenedor esperado: `paramascotasec-app`.
+
+Comando equivalente sin script:
+
+```bash
+docker compose --env-file .env --profile production up -d --build --remove-orphans
+```
 
 ## Comandos de operacion
 Ver estado:
@@ -61,13 +98,13 @@ docker compose logs -f app
 Detener ambiente desarrollo:
 
 ```bash
-docker compose --profile development down
+docker compose --env-file .env.development --profile development down --remove-orphans
 ```
 
 Detener ambiente produccion:
 
 ```bash
-docker compose --profile production down
+docker compose --env-file .env --profile production down --remove-orphans
 ```
 
 ## Dependencias
@@ -76,3 +113,36 @@ docker compose --profile production down
 
 ## Nota de seguridad
 - No guardar tokens, contrasenas ni llaves en este archivo.
+
+
+
+
+Workspace completo en /home/admincenter/contenedores:
+
+cd /home/admincenter/contenedores
+./scripts/deploy-workspace.sh development
+./scripts/deploy-workspace.sh production
+paramascotasec:
+
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/deploy-development.sh
+./scripts/deploy-production.sh
+paramascotasec-backend:
+
+cd /home/admincenter/contenedores/paramascotasec-backend
+./scripts/deploy-development.sh
+./scripts/deploy-production.sh
+RUN_COMPOSER_INSTALL=1 RUN_DB_BOOTSTRAP=1 ./scripts/deploy-development.sh
+RUN_COMPOSER_INSTALL=1 RUN_DB_BOOTSTRAP=1 ./scripts/deploy-production.sh
+tecnolts:
+
+cd /home/admincenter/contenedores/tecnolts
+./scripts/deploy-development.sh
+./scripts/deploy-production.sh
+gateway:
+
+cd /home/admincenter/contenedores/gateway
+./scripts/setup-ssl-local.sh
+./scripts/deploy-gateway-production.sh
+./scripts/renew-letsencrypt.sh
+
