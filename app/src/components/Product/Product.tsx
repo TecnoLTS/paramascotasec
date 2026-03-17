@@ -157,7 +157,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     Nuevo
                                 </div>
                             )}
-                            {data.sale && (
+                            {hasSale && (
                                 <div className="product-tag text-button-uppercase text-white bg-red px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                                     Oferta
                                 </div>

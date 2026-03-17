@@ -1,11 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import Product from '../Product/Product'
 import { ProductType } from '@/type/ProductType'
 import { motion } from 'framer-motion'
-import { useTenant } from '@/context/TenantContext'
-import { getCategoryLabel } from '@/data/petCategoryCards'
+import { getCatalogBrandStats, isProductOnSale } from '@/lib/catalog'
 
 interface Props {
     data: Array<ProductType>;
@@ -13,12 +12,67 @@ interface Props {
     limit: number;
 }
 
-const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
-    const tenant = useTenant()
-    const [activeTab, setActiveTab] = useState<string>('');
+const toTimestamp = (value?: string) => {
+    const parsed = Date.parse(value ?? '')
+    return Number.isFinite(parsed) ? parsed : 0
+}
 
-    const newProducts = data.filter((product) => product.new);
-    const availableTabs = Array.from(new Set(newProducts.map((product: ProductType) => product.category))).filter(Boolean);
+const getTabLabel = (tabId: string, offersFilterId: string) => {
+    if (tabId === 'todas') return 'Todas'
+    if (tabId === offersFilterId) return 'Ofertas'
+    return tabId
+}
+
+const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
+    const offersFilterId = '__offers__'
+    const [activeTab, setActiveTab] = useState<string>('');
+    const newestFirst = useMemo(
+        () =>
+            data.slice().sort((left, right) => {
+                const createdDiff = toTimestamp(right.createdAt) - toTimestamp(left.createdAt)
+                if (createdDiff !== 0) return createdDiff
+
+                const updatedDiff = toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt)
+                if (updatedDiff !== 0) return updatedDiff
+
+                return String(right.id).localeCompare(String(left.id))
+            }),
+        [data]
+    )
+    const explicitNewProducts = useMemo(
+        () => newestFirst.filter((product) => product.new),
+        [newestFirst]
+    )
+    const hasExplicitNew = explicitNewProducts.length > 0
+    const featuredPool = useMemo(() => {
+        if (hasExplicitNew) {
+            return explicitNewProducts
+        }
+
+        const fallbackLimit = Math.max(limit * 4, 16)
+        return newestFirst.slice(0, fallbackLimit)
+    }, [explicitNewProducts, hasExplicitNew, limit, newestFirst])
+    const matchesTab = React.useCallback((product: ProductType, tabId: string) => {
+        if (tabId === 'todas') {
+            return true
+        }
+
+        if (tabId === offersFilterId) {
+            return isProductOnSale(product)
+        }
+
+        return (product.brand ?? '').trim() === tabId
+    }, [offersFilterId])
+    const availableTabs = useMemo(() => {
+        const brandTabs = getCatalogBrandStats(featuredPool).map((item) => item.brand)
+
+        return [
+            'todas',
+            ...(featuredPool.some((product) => isProductOnSale(product)) ? [offersFilterId] : []),
+            ...brandTabs,
+        ]
+    }, [featuredPool, offersFilterId])
+    const resolvedActiveTab = availableTabs.includes(activeTab) ? activeTab : (availableTabs[0] ?? '')
 
     React.useEffect(() => {
         if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
@@ -30,7 +84,23 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
         setActiveTab(type);
     };
 
-    const filteredProducts = newProducts.filter((product: ProductType) => product.category === activeTab);
+    const filteredProducts = useMemo(
+        () =>
+            featuredPool.filter((product: ProductType) => matchesTab(product, resolvedActiveTab)),
+        [featuredPool, matchesTab, resolvedActiveTab]
+    )
+    const visibleProducts = useMemo(
+        () =>
+            filteredProducts.slice(start, start + limit).map((product) => ({
+                ...product,
+                new: true,
+            })),
+        [filteredProducts, limit, start]
+    )
+
+    if (availableTabs.length === 0 || featuredPool.length === 0) {
+        return null
+    }
 
     return (
         <>
@@ -42,14 +112,14 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                             {availableTabs.map((type: string) => (
                                 <div
                                     key={type}
-                                    className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-500 ${activeTab === type ? 'active text-white' : 'hover:text-black'}`}
+                                    className={`tab-item relative text-secondary text-button-uppercase py-2 px-5 cursor-pointer duration-500 ${resolvedActiveTab === type ? 'active text-white' : 'hover:text-black'}`}
                                     onClick={() => handleTabClick(type)}
                                 >
-                                    {activeTab === type && (
+                                    {resolvedActiveTab === type && (
                                         <motion.div layoutId='active-pill' className='absolute inset-0 rounded-2xl bg-black'></motion.div>
                                     )}
                                     <span className='relative text-button-uppercase z-[1]'>
-                                        {getCategoryLabel(type, tenant.id)}
+                                        {getTabLabel(type, offersFilterId)}
                                     </span>
                                 </div>
                             ))}
@@ -57,9 +127,15 @@ const FeatureProduct: React.FC<Props> = ({ data, start, limit }) => {
                     </div>
 
                     <div className="list-product hide-product-sold grid lg:grid-cols-4 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
-                        {filteredProducts.slice(start, limit).map((prd: ProductType) => (
-                            <Product data={prd} type='grid' key={prd.id} style='style-1' />
-                        ))}
+                        {visibleProducts.length > 0 ? (
+                            visibleProducts.map((prd: ProductType) => (
+                                <Product data={prd} type='grid' key={prd.id} style='style-1' />
+                            ))
+                        ) : (
+                            <div className="col-span-full rounded-2xl bg-surface px-6 py-10 text-center text-secondary">
+                                Aun no hay novedades en esta categoria.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

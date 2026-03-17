@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Product from '../Product/Product'
 import { ProductType } from '@/type/ProductType'
 import { motion } from 'framer-motion'
+import { isProductOnSale } from '@/lib/catalog'
 
 interface Props {
     data: Array<ProductType>;
@@ -19,9 +20,9 @@ const TabFeatures: React.FC<Props> = ({ data, start, limit }) => {
         setActiveTab(item)
     }
 
-    const getFilterData = () => {
+        const getFilterData = () => {
         if (activeTab === 'on sale') {
-            return data.filter((product) => product.sale && (product.category === 'pet'))
+            return data.filter((product) => isProductOnSale(product) && (product.category === 'pet'))
         }
 
         if (activeTab === 'new arrivals') {

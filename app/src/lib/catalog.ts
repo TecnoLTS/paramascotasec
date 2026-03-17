@@ -1,5 +1,6 @@
 import { CategoryCard, TenantId, getTenantConfig } from '@/lib/tenant'
 import { ProductType, ProductVariantOption } from '@/type/ProductType'
+import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
 
 const normalizeText = (value?: string | null) =>
   (value ?? '').trim().toLowerCase()
@@ -49,7 +50,7 @@ export const hasRealReviews = (product: ProductType) =>
 export const getProductSku = (product: ProductType) =>
   getAttributeValue(product, ['sku', 'SKU', 'code', 'codigo'])
 
-export const getProductVariantLabel = (product: ProductType) => {
+const extractProductVariantLabel = (product: ProductType) => {
   const explicit = (product.variantLabel ?? '').trim()
   if (explicit) return explicit
 
@@ -65,9 +66,9 @@ export const getProductVariantLabel = (product: ProductType) => {
   if (attributeLabel) return attributeLabel
 
   const normalizedName = (product.name ?? '').trim()
-  const sizeMatch = normalizedName.match(/(?:^|\s)(\d+(?:[.,]\d+)?\s?(?:KG|KGS|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ))$/i)
+  const sizeMatch = normalizedName.match(/(?:^|\s)(\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ))$/i)
   if (sizeMatch) {
-    return sizeMatch[1].replace(/\s+/g, '').toUpperCase()
+    return sizeMatch[1].replace(/\s+/g, '')
   }
 
   const countMatch = normalizedName.match(/(?:^|\s)(X\d+)$/i)
@@ -78,8 +79,11 @@ export const getProductVariantLabel = (product: ProductType) => {
   return ''
 }
 
+export const getProductVariantLabel = (product: ProductType) =>
+  normalizeMeasurementLabel(extractProductVariantLabel(product))
+
 export const getProductVariantPresentation = (product: ProductType) =>
-  getAttributeValue(product, ['presentation', 'packaging'])
+  normalizeMeasurementLabel(getAttributeValue(product, ['presentation', 'packaging']))
 
 export const getProductVariantBaseName = (product: ProductType) => {
   const explicit = (product.variantBaseName ?? '').trim()
@@ -88,12 +92,19 @@ export const getProductVariantBaseName = (product: ProductType) => {
   const attributeBase = getAttributeValue(product, ['variantBaseName'])
   if (attributeBase) return attributeBase
 
-  const variantLabel = getProductVariantLabel(product)
+  const rawVariantLabel = extractProductVariantLabel(product)
+  const variantLabel = normalizeMeasurementLabel(rawVariantLabel)
   const normalizedName = (product.name ?? '').trim()
-  if (!variantLabel) return normalizedName
+  if (!rawVariantLabel && !variantLabel) return normalizedName
 
-  const escapedLabel = escapeRegExp(variantLabel).replace(/\s+/g, '\\s*')
-  const strippedName = normalizedName.replace(new RegExp(`(?:\\s+|-)?${escapedLabel}$`, 'i'), '').trim()
+  const candidateLabels = Array.from(new Set([rawVariantLabel, variantLabel].filter(Boolean)))
+  let strippedName = normalizedName
+
+  candidateLabels.forEach((label) => {
+    const escapedLabel = escapeRegExp(label).replace(/\s+/g, '\\s*')
+    strippedName = strippedName.replace(new RegExp(`(?:\\s+|-)?${escapedLabel}$`, 'i'), '').trim()
+  })
+
   return strippedName || normalizedName
 }
 
@@ -128,7 +139,7 @@ const parseVariantSortValue = (label: string) => {
     return Number(countMatch[1])
   }
 
-  const amountMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(KG|KGS|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ)/)
+  const amountMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ)/)
   if (!amountMatch) {
     return Number.MAX_SAFE_INTEGER
   }
@@ -142,6 +153,7 @@ const parseVariantSortValue = (label: string) => {
   switch (unit) {
     case 'KG':
     case 'KGS':
+    case 'K':
       return amount * 1000
     case 'LB':
       return amount * 453.592
@@ -184,6 +196,11 @@ const compareVariants = (left: ProductType, right: ProductType) => {
   return leftLabel.localeCompare(rightLabel)
 }
 
+const toTimestamp = (value?: string | null) => {
+  const parsed = Date.parse(value ?? '')
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 const pickRepresentativeVariant = (variants: ProductType[]) => {
   const inStock = variants.filter((variant) => Number(variant.quantity ?? 0) > 0)
   const pool = inStock.length > 0 ? inStock : variants
@@ -211,6 +228,30 @@ export const getProductVariants = (product: ProductType): ProductType[] => {
   return [product]
 }
 
+export const getProductCurrentPrice = (product: ProductType) =>
+  Number(product.priceMin ?? product.price ?? 0)
+
+export const getProductOriginalPrice = (product: ProductType) =>
+  Number(product.originPriceMax ?? product.originPrice ?? 0)
+
+export const isProductOnSale = (product: ProductType) => {
+  const currentPrice = getProductCurrentPrice(product)
+  const originalPrice = getProductOriginalPrice(product)
+
+  return Boolean(product.sale) || (originalPrice > 0 && originalPrice > currentPrice)
+}
+
+export const getProductDiscountPercent = (product: ProductType) => {
+  const currentPrice = getProductCurrentPrice(product)
+  const originalPrice = getProductOriginalPrice(product)
+
+  if (originalPrice <= 0 || originalPrice <= currentPrice) {
+    return 0
+  }
+
+  return Math.floor(100 - ((currentPrice / originalPrice) * 100))
+}
+
 export const resolveSelectedVariant = (product: ProductType, idOrSlug?: string | null) => {
   const variants = getProductVariants(product)
   if (idOrSlug) {
@@ -230,7 +271,7 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
     const variantBaseName = getProductVariantBaseName(product)
     const variantGroupKey = getProductVariantGroupKey(product)
     const reviewCount = getProductReviewCount(product)
-    const uniqueSizes = Array.from(new Set([...(product.sizes ?? []), ...(variantLabel ? [variantLabel] : [])].filter(Boolean)))
+    const uniqueSizes = normalizeMeasurementLabels([...(product.sizes ?? []), ...(variantLabel ? [variantLabel] : [])])
 
     return {
       ...product,
@@ -255,13 +296,19 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
   return Array.from(groupedMap.values()).map((variants) => {
     const sortedVariants = variants.slice().sort(compareVariants)
     const representative = pickRepresentativeVariant(sortedVariants)
-    const sizes = Array.from(new Set(sortedVariants.map((variant) => getProductVariantLabel(variant)).filter(Boolean)))
+    const sizes = normalizeMeasurementLabels(sortedVariants.map((variant) => getProductVariantLabel(variant)))
     const priceValues = sortedVariants.map((variant) => Number(variant.price ?? 0)).filter((value) => value > 0)
     const originValues = sortedVariants.map((variant) => Number(variant.originPrice ?? 0)).filter((value) => value > 0)
     const totalQuantity = sortedVariants.reduce((sum, variant) => sum + Number(variant.quantity ?? 0), 0)
     const totalSold = sortedVariants.reduce((sum, variant) => sum + Number(variant.sold ?? 0), 0)
     const reviewCount = sortedVariants.reduce((max, variant) => Math.max(max, getProductReviewCount(variant)), 0)
     const hasMultipleVariants = sortedVariants.length > 1
+    const latestCreatedAt = sortedVariants.reduce<string | undefined>((latest, variant) => {
+      return toTimestamp(variant.createdAt) > toTimestamp(latest) ? variant.createdAt : latest
+    }, representative.createdAt)
+    const latestUpdatedAt = sortedVariants.reduce<string | undefined>((latest, variant) => {
+      return toTimestamp(variant.updatedAt) > toTimestamp(latest) ? variant.updatedAt : latest
+    }, representative.updatedAt)
 
     return {
       ...representative,
@@ -281,6 +328,8 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
       originPriceMax: originValues.length > 0 ? Math.max(...originValues) : Number(representative.originPrice ?? 0),
       price: priceValues.length > 0 ? Math.min(...priceValues) : Number(representative.price ?? 0),
       originPrice: originValues.length > 0 ? Math.max(...originValues) : Number(representative.originPrice ?? 0),
+      createdAt: latestCreatedAt,
+      updatedAt: latestUpdatedAt,
       new: sortedVariants.some((variant) => variant.new),
       sale: sortedVariants.some((variant) => variant.sale || Number(variant.originPrice ?? 0) > Number(variant.price ?? 0)),
     }
@@ -360,7 +409,7 @@ export const buildCatalogCategoryCards = (products: ProductType[], tenantId?: Te
     image: resolveCategoryImage('todos', tenantId),
   })
 
-  if (products.some((product) => product.sale)) {
+  if (products.some(isProductOnSale)) {
     cards.push({
       id: 'descuentos',
       label: resolveCategoryLabel('descuentos', tenantId),
@@ -379,11 +428,52 @@ export const buildCatalogCategoryCards = (products: ProductType[], tenantId?: Te
   return cards
 }
 
+export interface CatalogBrandStat {
+  brand: string
+  productCount: number
+  inStockCount: number
+  soldCount: number
+}
+
+const compareCatalogBrandStats = (left: CatalogBrandStat, right: CatalogBrandStat) => {
+  if (right.soldCount !== left.soldCount) {
+    return right.soldCount - left.soldCount
+  }
+
+  if (right.productCount !== left.productCount) {
+    return right.productCount - left.productCount
+  }
+
+  if (right.inStockCount !== left.inStockCount) {
+    return right.inStockCount - left.inStockCount
+  }
+
+  return left.brand.localeCompare(right.brand)
+}
+
+export const getCatalogBrandStats = (products: ProductType[]): CatalogBrandStat[] => {
+  const statsByBrand = new Map<string, CatalogBrandStat>()
+
+  products.forEach((product) => {
+    const brand = (product.brand ?? '').trim()
+    if (!brand) return
+
+    const current = statsByBrand.get(brand) ?? {
+      brand,
+      productCount: 0,
+      inStockCount: 0,
+      soldCount: 0,
+    }
+
+    current.productCount += 1
+    current.inStockCount += Number(product.quantity ?? 0) > 0 ? 1 : 0
+    current.soldCount += Math.max(0, Number(product.sold ?? 0))
+
+    statsByBrand.set(brand, current)
+  })
+
+  return Array.from(statsByBrand.values()).sort(compareCatalogBrandStats)
+}
+
 export const getCatalogBrands = (products: ProductType[]) =>
-  Array.from(
-    new Set(
-      products
-        .map((product) => (product.brand ?? '').trim())
-        .filter(Boolean)
-    )
-  ).sort((left, right) => left.localeCompare(right))
+  getCatalogBrandStats(products).map((item) => item.brand)

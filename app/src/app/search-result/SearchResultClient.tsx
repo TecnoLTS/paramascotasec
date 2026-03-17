@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
@@ -8,6 +8,7 @@ import Footer from '@/components/Footer/Footer'
 import { ProductType } from '@/type/ProductType'
 import Product from '@/components/Product/Product'
 import HandlePagination from '@/components/Other/HandlePagination'
+import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 
 type Props = {
   products: ProductType[]
@@ -16,47 +17,19 @@ type Props = {
 }
 
 const SearchResultClient = ({ products, error, initialQuery }: Props) => {
-  const [searchKeyword, setSearchKeyword] = useState<string>('')
+  const [searchKeyword, setSearchKeyword] = useState<string>(initialQuery ?? '')
   const [currentPage, setCurrentPage] = useState(0)
   const productsPerPage = 8
   const router = useRouter()
+  const deferredSearchKeyword = useDeferredValue(searchKeyword)
 
-  const query = initialQuery ?? 'dress'
+  const query = sanitizeProductSearchQuery(initialQuery ?? '')
+  const activeQuery = sanitizeProductSearchQuery(deferredSearchKeyword)
+  const productSearchIndex = useMemo(() => buildProductSearchIndex(products), [products])
 
   const filteredData = useMemo(() => {
-    if (!query) return products
-
-    const matches = products.filter((product) =>
-      product.name.toLowerCase().includes(query.toLowerCase()) ||
-      product.type.toLowerCase().includes(query.toLowerCase())
-    )
-
-    if (matches.length > 0) return matches
-
-    return [{
-      id: 'no-data',
-      category: 'no-data',
-      type: 'no-data',
-      name: 'no-data',
-      gender: 'no-data',
-      new: false,
-      sale: false,
-      rate: 0,
-      price: 0,
-      originPrice: 0,
-      brand: 'no-data',
-      sold: 0,
-      quantity: 0,
-      quantityPurchase: 0,
-      sizes: [],
-      variation: [],
-      thumbImage: [],
-      images: [],
-      description: 'no-data',
-      action: 'no-data',
-      slug: 'no-data',
-    }]
-  }, [products, query])
+    return filterProductsBySearch(products, activeQuery, productSearchIndex)
+  }, [activeQuery, productSearchIndex, products])
 
   const pageCount = Math.ceil(filteredData.length / productsPerPage)
   const offset = currentPage * productsPerPage
@@ -64,6 +37,10 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
 
   useEffect(() => {
     setCurrentPage(0)
+  }, [activeQuery])
+
+  useEffect(() => {
+    setSearchKeyword(query)
   }, [query])
 
   const handlePageChange = (selected: number) => {
@@ -71,25 +48,36 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
   }
 
   const handleSearch = (value: string) => {
-    router.push(`/search-result?query=${value}`)
-    setSearchKeyword('')
+    const nextQuery = sanitizeProductSearchQuery(value)
+    setSearchKeyword(nextQuery)
+
+    if (!nextQuery) {
+      router.push('/search-result')
+      return
+    }
+
+    router.push(`/search-result?query=${encodeURIComponent(nextQuery)}`)
   }
 
   return (
     <>
-      <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
+      <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el codigo GET10" />
       <div id="header" className='relative w-full'>
         <MenuOne props="bg-transparent" />
       </div>
       <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
         <div className="container">
           <div className="heading flex flex-col items-center">
-            <div className="heading4 text-center"> {filteredData.length} resultado para {String.raw`"`}{query}{String.raw`"`}</div>
+            <div className="heading4 text-center">
+              {activeQuery
+                ? `${filteredData.length} resultados para "${activeQuery}"`
+                : `${filteredData.length} productos disponibles`}
+            </div>
             <div className="input-block lg:w-1/2 sm:w-3/5 w-full md:h-[52px] h-[44px] sm:mt-8 mt-5">
               <div className='w-full h-full relative'>
                 <input
                   type="text"
-                  placeholder='Search...'
+                  placeholder='Buscar por marca, producto, categoría o SKU'
                   className='caption1 w-full h-full pl-4 md:pr-[150px] pr-32 rounded-xl border border-line'
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
@@ -99,24 +87,26 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
                   className='button-main absolute top-1 bottom-1 right-1 flex items-center justify-center'
                   onClick={() => handleSearch(searchKeyword)}
                 >
-                  search
+                  Buscar
                 </button>
               </div>
             </div>
           </div>
           <div className="list-product-block relative md:pt-10 pt-6">
-            <div className="heading6">product Search: {query}</div>
+            <div className="heading6">
+              {activeQuery ? `Búsqueda de productos: ${activeQuery}` : 'Búsqueda de productos'}
+            </div>
             {error && <div className="py-6 text-secondary">No se pudieron cargar productos.</div>}
             {!error && (
               <>
                 <div className="list-product hide-product-sold grid lg:grid-cols-4 sm:grid-cols-3 grid-cols-2 sm:gap-[30px] gap-[20px] mt-5">
-                  {currentProducts.map((item) => (
-                    item.id === 'no-data' ? (
-                      <div key={item.id} className="no-data-product">No products match the selected criteria.</div>
-                    ) : (
+                  {currentProducts.length === 0 ? (
+                    <div className="no-data-product">No hay productos que coincidan con tu búsqueda.</div>
+                  ) : (
+                    currentProducts.map((item) => (
                       <Product key={item.id} data={item} type='grid' />
-                    )
-                  ))}
+                    ))
+                  )}
                 </div>
 
                 {pageCount > 1 && (

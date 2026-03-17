@@ -17,6 +17,20 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
   const resolvedCategories = categories ?? getCategoryCards(tenant.id)
   const router = useRouter()
 
+  const resolveSectionImage = (category: PetCategoryCard) => {
+    const normalized = category.id.toLowerCase()
+
+    if (normalized === 'comida para gatos' || normalized === 'gatos') {
+      return '/images/collection/categoria_gatos.jpg'
+    }
+
+    if (normalized === 'cuidado') {
+      return '/images/collection/pharmacy.png'
+    }
+
+    return category.image
+  }
+
   const handleCategoryClick = (category: string) => {
     router.push(getCategoryUrl(category, undefined, tenant.id))
   }
@@ -32,8 +46,10 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             spaceBetween={8}
             slidesPerView={3}
             centeredSlides={false}
+            centerInsufficientSlides
             navigation
             loop={enableLoop}
+            watchOverflow
             modules={[Navigation, Autoplay]}
             breakpoints={{
               420: {
@@ -67,7 +83,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
                 >
                   <div className="bg-img mx-auto w-full max-w-[128px] sm:max-w-[150px] md:max-w-none rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-square sm:aspect-[4/5] bg-[#f6f7f9]">
                     <Image
-                      src={category.image}
+                      src={resolveSectionImage(category)}
                       alt={category.label}
                       fill
                       sizes="(min-width: 1200px) 14vw, (min-width: 992px) 17vw, (min-width: 768px) 21vw, (min-width: 576px) 30vw, 32vw"

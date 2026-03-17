@@ -8,6 +8,7 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
+import { getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
 
 interface Props {
     data: Array<ProductType>;
@@ -70,7 +71,7 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
     let filteredData = data.filter(product => {
         let isShowOnlySaleMatched = true;
         if (showOnlySale) {
-            isShowOnlySaleMatched = product.sale
+            isShowOnlySaleMatched = isProductOnSale(product)
         }
 
         let isDataTypeMatched = true;
@@ -116,9 +117,7 @@ const ShopBreadCrumb2: React.FC<Props> = ({ data, productPerPage, dataType }) =>
 
     if (sortOption === 'discountHighToLow') {
         filteredData = sortedData
-            .sort((a, b) => (
-                (Math.floor(100 - ((b.price / b.originPrice) * 100))) - (Math.floor(100 - ((a.price / a.originPrice) * 100)))
-            ))
+            .sort((a, b) => getProductDiscountPercent(b) - getProductDiscountPercent(a))
 
     }
 

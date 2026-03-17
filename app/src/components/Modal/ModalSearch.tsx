@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,15 +9,42 @@ import InlineSpinner from '@/components/Other/InlineSpinner';
 import Product from '../Product/Product';
 import { useModalSearchContext } from '@/context/ModalSearchContext';
 import useProducts from '@/hooks/useProducts';
+import { getCatalogBrandStats } from '@/lib/catalog';
+import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch';
 
 const ModalSearch = () => {
   const { isModalOpen, closeModalSearch } = useModalSearchContext();
   const [searchKeyword, setSearchKeyword] = useState('');
   const router = useRouter();
   const { products, loading, error } = useProducts();
+  const deferredSearchKeyword = useDeferredValue(searchKeyword)
+  const productSearchIndex = useMemo(() => buildProductSearchIndex(products), [products])
+  const trimmedSearchKeyword = sanitizeProductSearchQuery(deferredSearchKeyword)
+  const liveResults = useMemo(
+    () => trimmedSearchKeyword
+      ? filterProductsBySearch(products, trimmedSearchKeyword, productSearchIndex).slice(0, 4)
+      : products.slice(0, 4),
+    [productSearchIndex, products, trimmedSearchKeyword]
+  )
+  const suggestedKeywords = useMemo(() => {
+    const topBrands = getCatalogBrandStats(products)
+      .slice(0, 4)
+      .map((item) => item.brand)
+
+    if (topBrands.length > 0) {
+      return topBrands
+    }
+
+    return ['Ofertas', 'Perros', 'Gatos', 'Cuidado']
+  }, [products])
 
   const handleSearch = (value: string) => {
-    router.push(`/search-result?query=${value}`);
+    const nextQuery = sanitizeProductSearchQuery(value)
+    if (!nextQuery) {
+      return
+    }
+
+    router.push(`/search-result?query=${encodeURIComponent(nextQuery)}`);
     closeModalSearch();
     setSearchKeyword('');
   };
@@ -54,7 +81,7 @@ const ModalSearch = () => {
             />
             <input
               type="text"
-              placeholder="Searching..."
+              placeholder="Buscar por marca, producto, categoría o SKU"
               className="text-button-lg h-14 rounded-2xl border border-line w-full pl-6 pr-12"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
@@ -63,37 +90,22 @@ const ModalSearch = () => {
           </div>
 
           <div className="keyword mt-8">
-            <div className="heading5">Feature keywords Today</div>
+            <div className="heading5">Búsquedas sugeridas</div>
             <div className="list-keyword flex items-center flex-wrap gap-3 mt-4">
-              <div
-                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                onClick={() => handleSearch('dress')}
-              >
-                Dress
-              </div>
-              <div
-                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                onClick={() => handleSearch('t-shirt')}
-              >
-                T-shirt
-              </div>
-              <div
-                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                onClick={() => handleSearch('underwear')}
-              >
-                Underwear
-              </div>
-              <div
-                className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
-                onClick={() => handleSearch('top')}
-              >
-                Top
-              </div>
+              {suggestedKeywords.map((keyword) => (
+                <div
+                  key={keyword}
+                  className="item px-4 py-1.5 border border-line rounded-full cursor-pointer duration-300 hover:bg-black hover:text-white"
+                  onClick={() => handleSearch(keyword)}
+                >
+                  {keyword}
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="list-recent mt-8">
-            <div className="heading6">Recently viewed products</div>
+            <div className="heading6">{trimmedSearchKeyword ? 'Resultados rápidos' : 'Productos destacados'}</div>
 
             {loading && (
               <div className="flex items-center gap-2 py-4 text-secondary">
@@ -110,9 +122,15 @@ const ModalSearch = () => {
 
             {!loading && products.length > 0 && (
               <div className="list-product pb-5 hide-product-sold grid xl:grid-cols-4 sm:grid-cols-2 gap-7 mt-4">
-                {products.slice(0, 4).map((product) => (
+                {liveResults.map((product) => (
                   <Product key={product.id} data={product} type="grid" />
                 ))}
+              </div>
+            )}
+
+            {!loading && !error && trimmedSearchKeyword && liveResults.length === 0 && (
+              <div className="py-4 text-secondary">
+                No encontramos productos para esa búsqueda.
               </div>
             )}
           </div>

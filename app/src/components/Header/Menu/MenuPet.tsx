@@ -3,9 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import { usePathname } from 'next/navigation';
 import useLoginPopup from '@/store/useLoginPopup';
 import useShopDepartmentPopup from '@/store/useShopDepartmentPopup';
 import useMenuMobile from '@/store/useMenuMobile';
@@ -13,6 +12,7 @@ import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 import { useTenant } from '@/context/TenantContext'
+import { sanitizeProductSearchQuery } from '@/lib/productSearch'
 
 type MenuPetProps = {
     props?: string;
@@ -21,6 +21,7 @@ type MenuPetProps = {
 const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     const tenant = useTenant()
     const pathname = usePathname()
+    const searchParams = useSearchParams()
     const { openLoginPopup, handleLoginPopup } = useLoginPopup()
     const { openShopDepartmentPopup, handleShopDepartmentPopup } = useShopDepartmentPopup()
     const { openMenuMobile, handleMenuMobile } = useMenuMobile()
@@ -33,7 +34,28 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     const [hasMounted, setHasMounted] = useState(false)
 
     const handleSearch = (value: string) => {
-        router.push(`/search-result?query=${value}`)
+        const trimmedValue = sanitizeProductSearchQuery(value)
+
+        if (pathname.startsWith('/shop/')) {
+            const nextParams = new URLSearchParams(searchParams.toString())
+
+            if (trimmedValue) {
+                nextParams.set('query', trimmedValue)
+            } else {
+                nextParams.delete('query')
+            }
+
+            const nextQuery = nextParams.toString()
+            router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname)
+            setSearchKeyword(trimmedValue)
+            return
+        }
+
+        if (!trimmedValue) {
+            return
+        }
+
+        router.push(`/search-result?query=${encodeURIComponent(trimmedValue)}`)
         setSearchKeyword('')
     }
 
@@ -75,6 +97,12 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     useEffect(() => {
         setHasMounted(true)
     }, [])
+
+    useEffect(() => {
+        if (pathname.startsWith('/shop/')) {
+            setSearchKeyword(searchParams.get('query') ?? '')
+        }
+    }, [pathname, searchParams])
 
     const handleGenderClick = (gender: string) => {
         router.push(`/shop/breadcrumb1?gender=${gender}`);
@@ -244,7 +272,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                 <input
                                     type="text"
                                     className="search-input h-full px-4 w-full border-none focus:outline-none focus:ring-2 focus:ring-[#2f4f4f]/60 placeholder:text-secondary"
-                                    placeholder="¿Qué estás buscando hoy?"
+                                    placeholder="Buscar por marca, producto, categoría o SKU"
                                     value={searchKeyword}
                                     onChange={(e) => setSearchKeyword(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
@@ -403,8 +431,19 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                 </Link>
                             </div>
                             <div className="form-search relative mt-2">
-                                <Icon.MagnifyingGlass size={20} className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer' />
-                                <input type="text" placeholder='¿Qué estás buscando?' className=' h-12 rounded-lg border border-line text-sm w-full pl-10 pr-4' />
+                                <Icon.MagnifyingGlass
+                                    size={20}
+                                    className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer'
+                                    onClick={() => handleSearch(searchKeyword)}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder='Buscar por marca, producto, categoría o SKU'
+                                    className=' h-12 rounded-lg border border-line text-sm w-full pl-10 pr-4'
+                                    value={searchKeyword}
+                                    onChange={(e) => setSearchKeyword(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
+                                />
                             </div>
                             <div className="list-nav mt-6">
                                 <ul>

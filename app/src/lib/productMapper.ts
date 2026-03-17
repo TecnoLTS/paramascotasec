@@ -1,4 +1,5 @@
 import { ProductType } from '@/type/ProductType'
+import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
 
 // Tipamos lo mínimo necesario
 type Variation = {
@@ -32,6 +33,8 @@ type ProductWithRelations = {
   description: string
   action?: string | null
   slug: string
+  createdAt?: string | null
+  updatedAt?: string | null
 
   // campos dinámicos
   rate?: number | null
@@ -159,6 +162,13 @@ const mapPurchaseInvoiceSummary = (invoice?: PurchaseInvoiceSummary | null) => {
 
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const attributes = product.attributes ?? {}
+  const normalizedAttributes = { ...attributes }
+  ;['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'].forEach((key) => {
+    const value = normalizedAttributes[key]
+    if (typeof value === 'string') {
+      normalizedAttributes[key] = normalizeMeasurementLabel(value)
+    }
+  })
   const images =
     product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean).map(normalizeImageUrl) ?? []
   const thumbImages =
@@ -172,17 +182,17 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const variations = product.variations?.map(mapVariation) ?? []
   const lastPurchaseInvoice = mapPurchaseInvoiceSummary(product.lastPurchaseInvoice ?? product.inventory?.lastPurchaseInvoice)
   const variantLabel = [
-    attributes.variantLabel,
-    attributes.size,
-    attributes.weight,
-    attributes.presentation,
-    attributes.packaging,
-    attributes.dosage,
+    normalizedAttributes.variantLabel,
+    normalizedAttributes.size,
+    normalizedAttributes.weight,
+    normalizedAttributes.presentation,
+    normalizedAttributes.packaging,
+    normalizedAttributes.dosage,
   ].find((value) => typeof value === 'string' && value.trim().length > 0)
   const resolvedSizes = Array.isArray(product.sizes) && product.sizes.length > 0
-    ? product.sizes
-    : (variantLabel ? [String(variantLabel)] : [])
-  const reviewCountRaw = attributes.reviewCount ?? attributes.reviewsCount ?? 0
+    ? normalizeMeasurementLabels(product.sizes)
+    : normalizeMeasurementLabels(variantLabel ? [String(variantLabel)] : [])
+  const reviewCountRaw = normalizedAttributes.reviewCount ?? normalizedAttributes.reviewsCount ?? 0
 
   return {
     id: product.legacyId ?? product.id,
@@ -208,13 +218,13 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     business: product.business ?? undefined,
     quantityPurchase: Number(product.quantityPurchase ?? 1),
     sizes: resolvedSizes,
-    attributes,
+    attributes: normalizedAttributes,
     reviewCount: Number(reviewCountRaw ?? 0),
-    variantLabel: typeof variantLabel === 'string' ? variantLabel : '',
-    variantBaseName: typeof attributes.variantBaseName === 'string' ? attributes.variantBaseName : '',
-    variantGroupKey: typeof attributes.variantGroupKey === 'string' ? attributes.variantGroupKey : '',
-    variantAxis: typeof attributes.variantAxis === 'string' ? attributes.variantAxis : '',
-    variantPresentation: typeof attributes.presentation === 'string' ? attributes.presentation : '',
+    variantLabel: typeof variantLabel === 'string' ? normalizeMeasurementLabel(variantLabel) : '',
+    variantBaseName: typeof normalizedAttributes.variantBaseName === 'string' ? normalizedAttributes.variantBaseName : '',
+    variantGroupKey: typeof normalizedAttributes.variantGroupKey === 'string' ? normalizedAttributes.variantGroupKey : '',
+    variantAxis: typeof normalizedAttributes.variantAxis === 'string' ? normalizedAttributes.variantAxis : '',
+    variantPresentation: typeof normalizedAttributes.presentation === 'string' ? normalizeMeasurementLabel(normalizedAttributes.presentation) : '',
     inventory: product.inventory ? {
       onHand: Number(product.inventory.onHand ?? product.quantity ?? 0),
       reserved: Number(product.inventory.reserved ?? 0),
@@ -272,6 +282,8 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     description: product.description,
     action: product.action ?? '',
     slug: product.slug,
+    createdAt: product.createdAt ?? undefined,
+    updatedAt: product.updatedAt ?? undefined,
   }
 }
 

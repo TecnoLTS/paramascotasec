@@ -9,6 +9,7 @@ type SearchParams = {
     type?: string | string[]
     gender?: string | string[]
     category?: string | string[]
+    query?: string | string[]
 }
 
 export default async function DefaultGrid({ searchParams }: { searchParams?: Promise<SearchParams> }) {
@@ -16,11 +17,12 @@ export default async function DefaultGrid({ searchParams }: { searchParams?: Pro
     const type = typeof resolvedSearchParams?.type === 'string' ? resolvedSearchParams.type : null
     const gender = typeof resolvedSearchParams?.gender === 'string' ? resolvedSearchParams.gender : null
     const category = typeof resolvedSearchParams?.category === 'string' ? resolvedSearchParams.category : null
+    const query = typeof resolvedSearchParams?.query === 'string' ? resolvedSearchParams.query : null
     const { products, error } = await loadProducts()
 
     return (
         <>
-            <TopNavOne props="style-one bg-black" slogan="New customers save 10% with the code GET10" />
+            <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el codigo GET10" />
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
@@ -29,7 +31,7 @@ export default async function DefaultGrid({ searchParams }: { searchParams?: Pro
             ) : !products.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
-                <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} />
+                <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} searchQuery={query} />
             )}
             <Footer />      
         </>

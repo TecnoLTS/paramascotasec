@@ -103,9 +103,9 @@ const tenants: Record<TenantId, TenantConfig> = {
     categories: [
       { id: 'todos', label: 'Todas', image: '/images/collection/categoria_todas.jpg' },
       { id: 'descuentos', label: 'Ofertas', image: '/images/collection/categoria_ofertas.jpg' },
-      { id: 'comida para perros', label: 'Comida para perros', image: '/images/collection/categoria_perros.jpg' },
-      { id: 'comida para gatos', label: 'Comida para gatos', image: '/images/collection/categoria_gatos.jpg' },
-      { id: 'cuidado', label: 'Cuidado', image: '/images/collection/pharmacy.png' },
+      { id: 'comida para perros', label: 'Comida para perros', image: '/uploads/products/img_1769733362773_1773.jpg' },
+      { id: 'comida para gatos', label: 'Comida para gatos', image: '/images/banner/30.jpg' },
+      { id: 'cuidado', label: 'Cuidado', image: '/images/collection/hair.jpg' },
     ],
     categoryFilters: {
       'comida para perros': { category: 'comida para perros', gender: 'dog' },

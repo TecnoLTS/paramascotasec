@@ -40,6 +40,16 @@ export const getVisibleProductCategoryIds = (tenantId?: TenantId) =>
         .map((category) => category.id.toLowerCase())
         .filter((categoryId) => categoryId !== 'todos' && categoryId !== 'descuentos')
 
+export const getShopBrowseCategoryIds = (tenantId?: TenantId) => {
+    const tenant = getTenant(tenantId)
+    const preferredIds = ['todos', 'descuentos', 'perros', 'gatos']
+    const configuredIds = tenant.categories
+        .map((category) => category.id.toLowerCase())
+        .filter((categoryId) => categoryId !== 'todos' && categoryId !== 'descuentos')
+
+    return Array.from(new Set([...preferredIds, ...configuredIds]))
+}
+
 export type CategoryFilter = {
     category?: string
     gender?: string

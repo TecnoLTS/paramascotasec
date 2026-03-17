@@ -140,5 +140,7 @@ export interface ProductType {
     }>,
     description: string,
     action: string,
-    slug: string
+    slug: string,
+    createdAt?: string,
+    updatedAt?: string
 }

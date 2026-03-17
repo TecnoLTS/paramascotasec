@@ -13,6 +13,7 @@ type SearchParams = {
     type?: string | string[]
     gender?: string | string[]
     category?: string | string[]
+    query?: string | string[]
 }
 
 type Props = {
@@ -42,6 +43,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
     const type = typeof resolvedSearchParams?.type === 'string' ? resolvedSearchParams.type : null
     const gender = typeof resolvedSearchParams?.gender === 'string' ? resolvedSearchParams.gender : null
     const category = typeof resolvedSearchParams?.category === 'string' ? resolvedSearchParams.category : null
+    const query = typeof resolvedSearchParams?.query === 'string' ? resolvedSearchParams.query : null
 
     let products: ProductType[] = []
     let error: string | null = null
@@ -61,7 +63,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
             ) : !products.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
-                <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} />
+                <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} searchQuery={query} />
             )}
             <Footer />
         </>
