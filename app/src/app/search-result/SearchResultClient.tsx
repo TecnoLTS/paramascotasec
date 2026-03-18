@@ -63,7 +63,7 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
     <>
       <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el codigo GET10" />
       <div id="header" className='relative w-full'>
-        <MenuOne props="bg-transparent" />
+        <MenuOne props="bg-transparent" searchProducts={products} />
       </div>
       <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
         <div className="container">

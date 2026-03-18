@@ -25,7 +25,7 @@ export default async function HomePet() {
             <ScrollToTopOnMount />
             <TopNavOne props="style-one bg-black" slogan='New customers save 10% with the code GET102222' />
             <div id="header" className='relative w-full style-pet'>
-                <MenuPet />
+                <MenuPet searchProducts={products} />
                 <SliderPet />
             </div>
             <Banner />

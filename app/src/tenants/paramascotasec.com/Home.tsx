@@ -25,7 +25,7 @@ const ParamascotasecHome = ({
     <>
       <ScrollToTopOnMount />
       <div id="header" className="relative w-full style-pet">
-        <MenuPet />
+        <MenuPet searchProducts={products} />
         <SliderPet />
       </div>
       <Collection categories={categories} />

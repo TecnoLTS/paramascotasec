@@ -12,13 +12,15 @@ import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 import { useTenant } from '@/context/TenantContext'
-import { sanitizeProductSearchQuery } from '@/lib/productSearch'
+import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
+import { ProductType } from '@/type/ProductType'
 
 type MenuPetProps = {
     props?: string;
+    searchProducts?: ProductType[];
 };
 
-const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
+const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const tenant = useTenant()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -30,8 +32,11 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     const { cartState } = useCart()
 
     const [searchKeyword, setSearchKeyword] = useState('');
+    const [isSearchFocused, setIsSearchFocused] = useState(false)
     const router = useRouter()
     const [hasMounted, setHasMounted] = useState(false)
+    const searchContainerRef = useRef<HTMLDivElement>(null)
+    const minAutocompleteQueryLength = 2
 
     const handleSearch = (value: string) => {
         const trimmedValue = sanitizeProductSearchQuery(value)
@@ -65,13 +70,16 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
 
     const [fixedHeader, setFixedHeader] = useState(false)
     const headerRef = useRef<HTMLDivElement>(null)
+    const topNavRef = useRef<HTMLDivElement>(null)
     const [headerHeight, setHeaderHeight] = useState(0)
+    const [stickyHeight, setStickyHeight] = useState(0)
 
     useEffect(() => {
         const handleScroll = () => {
-            setFixedHeader(window.scrollY > 0)
+            setFixedHeader(window.scrollY > 16)
         };
 
+        handleScroll()
         window.addEventListener('scroll', handleScroll, { passive: true });
 
         return () => {
@@ -81,9 +89,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
 
     useEffect(() => {
         const updateHeaderHeight = () => {
-            if (headerRef.current) {
-                setHeaderHeight(headerRef.current.offsetHeight)
-            }
+            const nextHeaderHeight = headerRef.current?.offsetHeight ?? 0
+            const nextTopNavHeight = topNavRef.current?.offsetHeight ?? 0
+            setHeaderHeight(nextHeaderHeight)
+            setStickyHeight(nextHeaderHeight + nextTopNavHeight)
         }
 
         updateHeaderHeight()
@@ -104,6 +113,20 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         }
     }, [pathname, searchParams])
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!searchContainerRef.current?.contains(event.target as Node)) {
+                setIsSearchFocused(false)
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside)
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [])
+
     const handleGenderClick = (gender: string) => {
         router.push(`/shop/breadcrumb1?gender=${gender}`);
     };
@@ -112,6 +135,12 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
         const options = gender ? { gender } : undefined
         router.push(getCategoryUrl(category, options, tenant.id));
     };
+
+    const handleSuggestionSelect = (product: ProductType) => {
+        setSearchKeyword(product.name)
+        setIsSearchFocused(false)
+        router.push(`/product/default?id=${product.id}`)
+    }
 
     type CategoryLink = {
         id: string
@@ -241,9 +270,37 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
     }
 
     const departmentLinks = tenant.menu.departmentLinks ?? []
+    const normalizedSearchKeyword = sanitizeProductSearchQuery(searchKeyword)
+    const shouldShowSearchPanel =
+        isSearchFocused &&
+        normalizedSearchKeyword.length >= minAutocompleteQueryLength &&
+        searchProducts.length > 0
+    const productSearchIndex = searchProducts.length > 0
+        ? buildProductSearchIndex(searchProducts)
+        : new Map<string, string>()
+    const searchSuggestions = shouldShowSearchPanel
+        ? filterProductsBySearch(searchProducts, normalizedSearchKeyword, productSearchIndex).slice(0, 6)
+        : []
+
+    const normalizeImageSrc = (src: string) => {
+        if (!src) return src
+        if (src.startsWith('http://localhost:8080') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+            return src.replace('http://localhost:8080', tenant.apiBaseUrl)
+        }
+        return src
+    }
+
+    const getSuggestionImage = (product: ProductType) => {
+        const firstThumb = Array.isArray(product.thumbImage) ? product.thumbImage[0] : ''
+        const firstImage = Array.isArray(product.images) ? product.images[0] : ''
+        const imageValue = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? ''
+        return normalizeImageSrc(firstThumb || imageValue || '/images/placeholder.jpg')
+    }
 
     return (
         <>
+            {fixedHeader && <div aria-hidden="true" className="pet-header-spacer" style={{ height: stickyHeight }} />}
+
             <div
                 ref={headerRef}
                 className={`header-menu style-eight ${props ?? ''} ${fixedHeader ? ' fixed' : 'relative'} bg-white w-full md:h-[90px] h-[64px]`}
@@ -267,24 +324,112 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                 />
                             </div>
                         </Link>
-                        <div className="form-search w-[54%] pl-8 flex items-center h-[48px] max-lg:hidden">
-                            <div className='w-full flex items-center h-full border border-[#2f4f4f] shadow-sm overflow-hidden'>
-                                <input
-                                    type="text"
-                                    className="search-input h-full px-4 w-full border-none focus:outline-none focus:ring-2 focus:ring-[#2f4f4f]/60 placeholder:text-secondary"
-                                    placeholder="Buscar por marca, producto, categoría o SKU"
-                                    value={searchKeyword}
-                                    onChange={(e) => setSearchKeyword(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
-                                />
-                                <button
-                                    className="search-button h-full px-4 flex items-center justify-center bg-[var(--blue)] text-white duration-300 hover:bg-[var(--bluesecondary)]"
-                                    onClick={() => {
-                                        handleSearch(searchKeyword)
-                                    }}
-                                >
-                                    <Icon.MagnifyingGlass size={22} weight='bold' className='duration-300' />
-                                </button>
+                        <div className="form-search w-[54%] pl-8 flex items-center h-[42px] max-lg:hidden">
+                            <div ref={searchContainerRef} className='relative w-full'>
+                                <div className='group flex h-full min-h-[42px] w-full items-center overflow-hidden rounded-[22px] border border-[rgba(0,127,155,0.18)] bg-white shadow-[0_10px_26px_rgba(15,23,42,0.08)] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[var(--blue)] focus-within:shadow-[0_16px_32px_rgba(0,127,155,0.14)]'>
+                                    <input
+                                        type="text"
+                                        className="search-input h-full w-full border-none bg-transparent px-6 text-[16px] text-black outline-none placeholder:text-[rgba(15,23,42,0.48)]"
+                                        placeholder="Buscar por marca, producto, categoría o SKU"
+                                        value={searchKeyword}
+                                        onFocus={() => {
+                                            if (searchProducts.length > 0) {
+                                                setIsSearchFocused(true)
+                                            }
+                                        }}
+                                        onChange={(e) => setSearchKeyword(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Escape') {
+                                                setIsSearchFocused(false)
+                                                return
+                                            }
+
+                                            if (e.key === 'Enter') {
+                                                setIsSearchFocused(false)
+                                                handleSearch(searchKeyword)
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        className="search-button mr-2 flex h-[30px] min-w-[30px] items-center justify-center rounded-full bg-[var(--blue)] px-0 text-white transition-all duration-300 hover:bg-[var(--bluesecondary)]"
+                                        onClick={() => {
+                                            setIsSearchFocused(false)
+                                            handleSearch(searchKeyword)
+                                        }}
+                                    >
+                                        <Icon.MagnifyingGlass size={22} weight='bold' className='duration-300' />
+                                    </button>
+                                </div>
+
+                                {shouldShowSearchPanel && (
+                                    <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-[140] overflow-hidden rounded-[24px] border border-[rgba(0,127,155,0.12)] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+                                        {searchSuggestions.length > 0 ? (
+                                            <>
+                                                <div className="border-b border-line px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-secondary">
+                                                    Resultados rápidos
+                                                </div>
+                                                <div className="max-h-[420px] overflow-y-auto">
+                                                    {searchSuggestions.map((product) => {
+                                                        const imageSrc = getSuggestionImage(product)
+                                                        const price = Number(product.priceMin ?? product.price ?? 0)
+
+                                                        return (
+                                                            <button
+                                                                key={product.id}
+                                                                type="button"
+                                                                className="flex w-full items-center gap-4 border-b border-line px-4 py-3 text-left duration-200 last:border-b-0 hover:bg-surface"
+                                                                onMouseDown={(event) => event.preventDefault()}
+                                                                onClick={() => handleSuggestionSelect(product)}
+                                                            >
+                                                                <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-surface">
+                                                                    <Image
+                                                                        src={imageSrc}
+                                                                        alt={product.name}
+                                                                        fill
+                                                                        unoptimized
+                                                                        className="object-contain"
+                                                                    />
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="truncate text-[14px] font-semibold text-black">
+                                                                        {product.name}
+                                                                    </div>
+                                                                    <div className="mt-1 truncate text-[12px] text-secondary">
+                                                                        {[product.brand, product.category].filter(Boolean).join(' · ')}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-[13px] font-semibold text-[var(--blue)]">
+                                                                        ${price.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    </div>
+                                                                    <div className="mt-1 text-[11px] uppercase tracking-[0.08em] text-secondary">
+                                                                        Ver
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="flex w-full items-center justify-between bg-surface px-5 py-3 text-left text-[13px] font-semibold text-[var(--blue)] duration-200 hover:text-black"
+                                                    onMouseDown={(event) => event.preventDefault()}
+                                                    onClick={() => {
+                                                        setIsSearchFocused(false)
+                                                        handleSearch(searchKeyword)
+                                                    }}
+                                                >
+                                                    <span>Ver todos los resultados</span>
+                                                    <Icon.ArrowRight size={16} />
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="px-5 py-4 text-sm text-secondary">
+                                                No encontramos productos para esa búsqueda.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="right flex gap-12">
@@ -319,6 +464,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
             </div>
 
             <div
+                ref={topNavRef}
                 className={`top-nav-menu relative bg-white h-[44px] max-lg:hidden ${fixedHeader ? 'fixed' : ''}`}
                 style={fixedHeader ? { top: headerHeight } : undefined}
             >
@@ -371,7 +517,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                         )}
                                     </li>
 
-                                    {/* --- CAMBIO AQUÍ: CONÓCENOS ESCRITORIO --- */}
                                     <li className='h-full '>
                                         <Link
                                             href="/pages/about"
@@ -380,7 +525,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props }) => {
                                             Conócenos
                                         </Link>
                                     </li>
-                                    {/* ----------------------------------------- */}
 
                                     <li className='h-full'>
                                         <Link

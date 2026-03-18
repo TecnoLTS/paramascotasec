@@ -178,37 +178,14 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
 
             <div className="menu-tab md:mt-8 mt-6">
                 <div className="rounded-[32px] border border-line bg-white px-4 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)] sm:px-6 sm:py-6 lg:px-7">
-                    <div className="flex flex-col gap-4 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="text-left">
-                            <div className="caption1 font-semibold uppercase tracking-[0.18em] text-[var(--blue)]">
-                                Marcas
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <div className="text-button font-semibold text-black">Explora por marca</div>
-                                <div className="inline-flex items-center rounded-full bg-surface px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
-                                    {brandStats.length} marcas
-                                </div>
-                            </div>
-                        </div>
-
-                        {!effectiveSearchQuery && brandStats.length > previewBrandCount && (
-                            <button
-                                className="inline-flex w-fit items-center justify-center rounded-full border border-line bg-surface px-4 py-2 text-button text-black duration-300 hover:border-[var(--blue)] hover:bg-white hover:text-[var(--blue)]"
-                                onClick={() => setShowAllBrands((current) => !current)}
-                            >
-                                {showAllBrands ? 'Mostrar menos marcas' : `Ver todas las marcas (${brandStats.length})`}
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <div className="relative flex-1">
                             <input
                                 aria-label="Buscar en el catalogo"
                                 autoComplete="off"
                                 className="h-12 w-full rounded-full border border-[rgba(0,127,155,0.18)] bg-white pl-5 pr-24 text-[15px] text-black shadow-[0_8px_20px_rgba(15,23,42,0.05)] outline-none duration-300 placeholder:text-[rgba(15,23,42,0.45)] focus:border-[var(--blue)] focus:shadow-[0_12px_28px_rgba(0,127,155,0.12)]"
                                 onChange={(event) => setSearchQuery(event.target.value)}
-                                placeholder="Buscar por marca, producto, categoría o SKU"
+                                placeholder="Buscar en el catálogo"
                                 spellCheck={false}
                                 type="search"
                                 value={searchQuery}
@@ -232,9 +209,14 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                             <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
                                 {filteredData.length} producto{filteredData.length === 1 ? '' : 's'}
                             </div>
-                            <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
-                                {effectiveSearchQuery ? `${matchedBrandCount} marcas` : `${brandStats.length} marcas`}
-                            </div>
+                            {!effectiveSearchQuery && brandStats.length > previewBrandCount && (
+                                <button
+                                    className="inline-flex items-center rounded-full border border-line bg-surface px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-black duration-300 hover:border-[var(--blue)] hover:bg-white hover:text-[var(--blue)]"
+                                    onClick={() => setShowAllBrands((current) => !current)}
+                                >
+                                    {showAllBrands ? 'Mostrar menos' : `todas las marcas (${brandStats.length})`}
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -282,7 +264,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                     {effectiveSearchQuery ? (
                         <div className="mt-4 flex flex-col gap-2 rounded-[20px] bg-surface px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
                             <div className="caption1 text-secondary">
-                                {filteredData.length} resultado{filteredData.length === 1 ? '' : 's'} y {matchedBrandCount} marca{matchedBrandCount === 1 ? '' : 's'} para &quot;{effectiveSearchQuery}&quot;.
+                                {filteredData.length} resultado{filteredData.length === 1 ? '' : 's'} en {matchedBrandCount} filtro{matchedBrandCount === 1 ? '' : 's'} para &quot;{effectiveSearchQuery}&quot;.
                             </div>
                             <button
                                 className="text-button font-semibold text-[var(--blue)] duration-300 hover:text-black"
@@ -294,7 +276,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                     ) : brandStats.length > previewBrandCount && !showAllBrands && (
                         <div className="mt-4 flex flex-col gap-2 rounded-[20px] bg-surface px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
                             <div className="caption1 text-secondary">
-                                Mostrando {visibleBrandCount} de {brandStats.length} marcas.
+                                Mostrando {visibleBrandCount} de {brandStats.length} opciones.
                             </div>
                             <button
                                 className="text-button font-semibold text-[var(--blue)] duration-300 hover:text-black"
