@@ -6,10 +6,6 @@ import { ProductType } from '@/type/ProductType'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
-import { useWishlist } from '@/context/WishlistContext'
-import { useModalWishlistContext } from '@/context/ModalWishlistContext'
-import { useCompare } from '@/context/CompareContext'
-import { useModalCompareContext } from '@/context/ModalCompareContext'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useRouter } from 'next/navigation'
 import Rate from '../Other/Rate'
@@ -34,10 +30,6 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const [openQuickShop, setOpenQuickShop] = useState<boolean>(false)
     const { addToCart, updateCart, cartState } = useCart();
     const { openModalCart } = useModalCartContext()
-    const { addToWishlist, removeFromWishlist, wishlistState } = useWishlist();
-    const { openModalWishlist } = useModalWishlistContext()
-    const { addToCompare, removeFromCompare, compareState } = useCompare();
-    const { openModalCompare } = useModalCompareContext()
     const { openQuickview } = useModalQuickviewContext()
     const router = useRouter()
     const variantProducts = getProductVariants(data)
@@ -74,33 +66,6 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
             updateCart(cartProduct.id, qtyToAdd, selectedSizeLabel, activeColor)
         }
         openModalCart()
-    };
-
-    const handleAddToWishlist = () => {
-        // if product existed in wishlist, remove from wishlist and set state to false
-        if (wishlistState.wishlistArray.some((item: any) => item.id === data.id)) {
-            removeFromWishlist(data.id);
-        } else {
-            // else, add to wishlist and set state to true
-            addToWishlist(data);
-        }
-        openModalWishlist();
-    };
-
-    const handleAddToCompare = () => {
-        // if product existed in compare, remove from compare and set state to false
-        if (compareState.compareArray.length < 3) {
-            if (compareState.compareArray.some((item: any) => item.id === data.id)) {
-                removeFromCompare(data.id);
-            } else {
-                // else, add to compare and set state to true
-                addToCompare(data);
-            }
-        } else {
-            alert('Compare up to 3 products')
-        }
-
-        openModalCompare();
     };
 
     const handleQuickviewOpen = () => {
@@ -168,8 +133,8 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     <>
                                             <Image
                                                 src={variations.find((item: any) => item.color === activeColor)?.image || primaryImage}
-                                                width={400}
-                                                height={520}
+                                                width={640}
+                                                height={800}
                                                 alt={data.name}
                                                 sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
                                                 quality={85}
@@ -181,8 +146,8 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     <>
                                         <Image
                                             src={primaryImage}
-                                            width={400}
-                                            height={520}
+                                            width={640}
+                                            height={800}
                                             alt={data.name}
                                             sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
                                             quality={85}
@@ -222,7 +187,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     <div className={`list-action flex items-center justify-center gap-3 px-5 absolute w-full ${style === 'style-2' ? 'bottom-12' : 'bottom-5'} max-lg:hidden`}>
                                         {style === 'style-2' && (
                                             <div
-                                                className={`add-cart-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative ${compareState.compareArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
+                                                className="add-cart-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative"
                                                 onClick={e => {
                                                     e.stopPropagation();
                                                     handleAddToCart()
@@ -233,32 +198,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                             </div>
                                         )}
                                         <div
-                                            className={`add-wishlist-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duración-300 relative ${wishlistState.wishlistArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                handleAddToWishlist()
-                                            }}
-                                        >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Agregar a favoritos</div>
-                                            {wishlistState.wishlistArray.some((item: any) => item.id === data.id) ? (
-                                                <Icon.Heart size={18} weight='fill' className='text-white' />
-                                            ) : (
-                                                <Icon.Heart size={18} />
-                                            )}
-                                        </div>
-                                        <div
-                                            className={`compare-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative ${compareState.compareArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                handleAddToCompare()
-                                            }}
-                                        >
-                                            <div className="tag-action bg-black text-white caption2 px-1.5 py-0.5 rounded-sm">Comparar producto</div>
-                                            <Icon.Repeat size={18} className='compare-icon' />
-                                            <Icon.CheckCircle size={20} className='checked-icon' />
-                                        </div>
-                                        <div
-                                            className={`quick-view-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative ${compareState.compareArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
+                                            className="quick-view-btn w-9 h-9 flex items-center justify-center rounded-full bg-white duration-300 relative"
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleQuickviewOpen()
@@ -408,16 +348,16 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                             Oferta
                                         </div>
                                     )}
-                                    <div className="product-img w-full aspect-[3/4] rounded-2xl overflow-hidden">
+                                    <div className="product-img w-full aspect-[4/5] rounded-2xl overflow-hidden bg-white">
                                         {thumbImages.map((img: string, index: number) => (
                                             <Image
                                                 key={index}
                                                 src={img}
-                                                width={500}
-                                                height={500}
+                                                width={640}
+                                                height={800}
                                                 priority={true}
                                                 alt={data.name}
-                                                className='w-full h-full object-cover duration-700'
+                                                className='w-full h-full object-contain duration-700'
                                             />
                                         ))}
                                     </div>
@@ -559,29 +499,6 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             alt="img"
                         />
                         <div className="list-action flex flex-col gap-1 absolute top-0 right-0">
-                            <span
-                                className={`add-wishlist-btn w-8 h-8 bg-white flex items-center justify-center rounded-full box-shadow-sm duration-300 ${wishlistState.wishlistArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleAddToWishlist()
-                                }}
-                            >
-                                {wishlistState.wishlistArray.some((item: any) => item.id === data.id) ? (
-                                    <Icon.Heart size={18} weight='fill' className='text-white' />
-                                ) : (
-                                    <Icon.Heart size={18} />
-                                )}
-                            </span>
-                            <span
-                                className={`compare-btn w-8 h-8 bg-white flex items-center justify-center rounded-full box-shadow-sm duration-300 ${compareState.compareArray.some((item: any) => item.id === data.id) ? 'active' : ''}`}
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleAddToCompare()
-                                }}
-                            >
-                                <Icon.Repeat size={18} className='compare-icon' />
-                                <Icon.CheckCircle size={20} className='checked-icon' />
-                            </span>
                             <span
                                 className="quick-view-btn w-8 h-8 bg-white flex items-center justify-center rounded-full box-shadow-sm duration-300"
                                 onClick={(e) => {

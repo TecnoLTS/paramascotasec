@@ -34,6 +34,13 @@ interface CartContextProps {
 }
 
 const CartContext = createContext<CartContextProps | undefined>(undefined);
+const emptyCartContext: CartContextProps = {
+    cartState: { cartArray: [] },
+    addToCart: () => {},
+    removeFromCart: () => {},
+    updateCart: () => {},
+    clearCart: () => {},
+}
 
 const cartReducer = (state: CartState, action: CartAction): CartState => {
     switch (action.type) {
@@ -157,6 +164,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useCart = () => {
     const context = useContext(CartContext);
     if (!context) {
+        if (typeof window === 'undefined') {
+            return emptyCartContext;
+        }
         throw new Error('useCart must be used within a CartProvider');
     }
     return context;

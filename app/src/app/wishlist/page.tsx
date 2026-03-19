@@ -1,5 +1,5 @@
-import WishlistClient from './WishlistClient'
+import { redirect } from 'next/navigation'
 
 export default function Wishlist() {
-    return <WishlistClient />
+    redirect('/')
 }

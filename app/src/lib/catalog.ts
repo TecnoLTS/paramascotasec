@@ -85,6 +85,12 @@ export const getProductVariantLabel = (product: ProductType) =>
 export const getProductVariantPresentation = (product: ProductType) =>
   normalizeMeasurementLabel(getAttributeValue(product, ['presentation', 'packaging']))
 
+const hasExplicitVariantGrouping = (product: ProductType) => {
+  const explicitGroupKey = (product.variantGroupKey ?? '').trim() || getAttributeValue(product, ['variantGroupKey'])
+  const explicitBaseName = (product.variantBaseName ?? '').trim() || getAttributeValue(product, ['variantBaseName'])
+  return Boolean(explicitGroupKey || explicitBaseName)
+}
+
 export const getProductVariantBaseName = (product: ProductType) => {
   const explicit = (product.variantBaseName ?? '').trim()
   if (explicit) return explicit
@@ -111,6 +117,10 @@ export const getProductVariantBaseName = (product: ProductType) => {
 export const getProductVariantGroupKey = (product: ProductType) => {
   const explicit = (product.variantGroupKey ?? '').trim() || getAttributeValue(product, ['variantGroupKey'])
   if (explicit) return explicit
+
+  if (!hasExplicitVariantGrouping(product)) {
+    return `single:${product.id}`
+  }
 
   const variantLabel = getProductVariantLabel(product)
   if (!variantLabel) {
@@ -394,11 +404,29 @@ const sortCatalogCategoryIds = (categoryIds: string[], tenantId?: TenantId) => {
   })
 }
 
-export const getCatalogCategoryIds = (products: ProductType[], tenantId?: TenantId) =>
-  sortCatalogCategoryIds(
-    Array.from(new Set(products.map((product) => normalizeText(product.category)).filter(Boolean))),
+export const getCatalogCategoryIds = (products: ProductType[], tenantId?: TenantId) => {
+  const explicitCategories = products
+    .map((product) => normalizeText(product.category))
+    .filter(Boolean)
+
+  const hasDogProducts = products.some((product) => normalizeText(product.gender) === 'dog')
+  const hasCatProducts = products.some((product) => normalizeText(product.gender) === 'cat')
+
+  const filteredCategories = explicitCategories.filter((categoryId) => {
+    if (hasDogProducts && categoryId === 'comida para perros') return false
+    if (hasCatProducts && categoryId === 'comida para gatos') return false
+    return true
+  })
+
+  return sortCatalogCategoryIds(
+    Array.from(new Set([
+      ...filteredCategories,
+      ...(hasDogProducts ? ['perros'] : []),
+      ...(hasCatProducts ? ['gatos'] : []),
+    ])),
     tenantId
   )
+}
 
 export const buildCatalogCategoryCards = (products: ProductType[], tenantId?: TenantId): CategoryCard[] => {
   const cards: CategoryCard[] = []

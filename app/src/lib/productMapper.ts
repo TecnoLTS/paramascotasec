@@ -204,7 +204,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     gender: product.gender ?? '',
     new: product.new,
     sale: product.sale,
-    published: product.published ?? true,
+    published: product.published ?? false,
     rate: Number(product.rate ?? 0),
 
     // Aquí normalizamos a number, venga de Decimal, string o lo que sea

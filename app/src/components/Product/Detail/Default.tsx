@@ -56,6 +56,25 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const reviewCount = getProductReviewCount(productFamily)
 
   useEffect(() => {
+    if (!openPopupImg) return
+
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenPopupImg(false)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openPopupImg])
+
+  useEffect(() => {
     setQuantity(productFamily.quantityPurchase ?? 1)
     setActiveColor('')
     setActiveSize(getProductVariantLabel(defaultVariant))
@@ -124,7 +143,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const variationImages = (activeVariant.variation ?? [])
     .flatMap((variation) => [variation.image, variation.colorImage])
     .filter((img): img is string => typeof img === 'string' && img.length > 0)
-  const galleryImages = Array.from(new Set([...productImages, ...thumbImages, ...variationImages])).filter(Boolean)
+  const galleryImages = Array.from(new Set([...thumbImages, ...productImages, ...variationImages])).filter(Boolean)
   const resolvedGalleryImages = galleryImages.length > 0 ? galleryImages : ['/images/product/1.jpg']
   const colorOptions = (activeVariant.variation ?? []).filter((item) => item.color)
 
@@ -229,40 +248,51 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               ))}
             </Swiper>
 
-            <div className={`popup-img ${openPopupImg ? 'open' : ''}`}>
-              <span
-                className="close-popup-btn absolute top-4 right-4 z-[2] cursor-pointer"
-                onClick={() => setOpenPopupImg(false)}
-              >
-                <Icon.X className="text-3xl text-white" />
-              </span>
-              <Swiper
-                spaceBetween={0}
-                slidesPerView={1}
-                modules={[Navigation]}
-                navigation
-                loop={resolvedGalleryImages.length > 1}
-                className="popupSwiper"
-                initialSlide={photoIndex}
-                onSwiper={(swiper) => {
-                  popupSwiperRef.current = swiper
+            <div
+              className={`popup-img ${openPopupImg ? 'open' : ''}`}
+              onClick={() => setOpenPopupImg(false)}
+              aria-hidden={!openPopupImg}
+            >
+              <button
+                type="button"
+                className="close-popup-btn"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setOpenPopupImg(false)
                 }}
+                aria-label="Cerrar visor de imagen"
               >
-                {resolvedGalleryImages.map((image, index) => (
-                  <SwiperSlide key={`${image}-zoom-${index}`}>
-                    <Image
-                      src={image}
-                      width={1400}
-                      height={1600}
-                      alt={`${productFamily.name} - Zoom ${index + 1}`}
-                      sizes="(min-width: 1024px) 70vw, 90vw"
-                      quality={92}
-                      unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
-                      className="w-full aspect-[4/5] object-contain bg-white rounded-xl"
-                    />
-                  </SwiperSlide>
-                ))}
-              </Swiper>
+                <Icon.X weight="bold" />
+              </button>
+              <div className="popup-img-dialog" onClick={(event) => event.stopPropagation()}>
+                <Swiper
+                  spaceBetween={0}
+                  slidesPerView={1}
+                  modules={[Navigation]}
+                  navigation
+                  loop={resolvedGalleryImages.length > 1}
+                  className="popupSwiper"
+                  initialSlide={photoIndex}
+                  onSwiper={(swiper) => {
+                    popupSwiperRef.current = swiper
+                  }}
+                >
+                  {resolvedGalleryImages.map((image, index) => (
+                    <SwiperSlide key={`${image}-zoom-${index}`}>
+                      <Image
+                        src={image}
+                        width={1400}
+                        height={1600}
+                        alt={`${productFamily.name} - Zoom ${index + 1}`}
+                        sizes="(min-width: 1024px) 70vw, 90vw"
+                        quality={92}
+                        unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                        className="w-full aspect-[4/5] object-contain bg-white rounded-xl"
+                      />
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+              </div>
             </div>
           </div>
 

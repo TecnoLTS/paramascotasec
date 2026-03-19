@@ -1,5 +1,5 @@
-import CompareClient from './CompareClient'
+import { redirect } from 'next/navigation'
 
 export default function Compare() {
-    return <CompareClient />
+    redirect('/')
 }

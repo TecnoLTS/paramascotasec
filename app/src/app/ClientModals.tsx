@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import ModalCart from '@/components/Modal/ModalCart'
-import ModalWishlist from '@/components/Modal/ModalWishlist'
 import ModalSearch from '@/components/Modal/ModalSearch'
 import ModalQuickview from '@/components/Modal/ModalQuickview'
 import RouteLoading from '@/components/Other/RouteLoading'
@@ -14,21 +14,23 @@ type ClientModalsProps = {
 
 const ClientModals = ({ serverTimeLeft }: ClientModalsProps) => {
   const [mounted, setMounted] = useState(false)
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     setMounted(true)
+    setPortalTarget(document.body)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted || !portalTarget) return null
 
-  return (
+  return createPortal(
     <>
       <RouteLoading />
       <ModalCart serverTimeLeft={serverTimeLeft} />
-      <ModalWishlist />
       <ModalSearch />
       <ModalQuickview />
-    </>
+    </>,
+    portalTarget
   )
 }
 

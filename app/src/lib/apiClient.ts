@@ -70,6 +70,11 @@ const isPublicEcomPath = (pathname: string, method?: string) => {
   return false
 }
 
+const shouldDisableServerCache = (pathname: string) => {
+  if (pathname === '/api/products' || pathname.startsWith('/api/products/')) return true
+  return false
+}
+
 const getPathname = (pathOrUrl: string) => {
   try {
     if (pathOrUrl.startsWith('http')) return new URL(pathOrUrl).pathname
@@ -323,10 +328,12 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   const url = resolveUrl(path)
   const authedInit = await withAuth(path, init)
   const method = (init?.method || 'GET').toUpperCase()
+  const pathname = getPathname(path)
   const shouldCacheOnServer =
     typeof window === 'undefined' &&
     method === 'GET' &&
-    isPublicEcomPath(getPathname(path), method)
+    isPublicEcomPath(pathname, method) &&
+    !shouldDisableServerCache(pathname)
   const cache = init?.cache || (shouldCacheOnServer ? 'force-cache' : 'no-store')
   const nextOptions = shouldCacheOnServer ? { revalidate: 60 } : undefined
   const fetchOptions: RequestInit & { next?: { revalidate?: number | false } } = { ...authedInit, cache }

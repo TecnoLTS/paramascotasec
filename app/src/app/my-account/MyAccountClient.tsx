@@ -1,7 +1,8 @@
 'use client'
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -11,478 +12,88 @@ import { useRouter } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
 import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateStoreStatus } from '@/lib/api/settings'
 import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
-import { mapProductsToDto } from '@/lib/productMapper'
+import {
+    createEmptyProductForm,
+    createDuplicateVariantFormFromProduct,
+    createProductFormFromProduct,
+    getAdminProductEntityId,
+    isProductEligibleForPublication,
+    normalizeAdminProducts,
+} from './productFormUtils'
+import { buildProductSearchIndex, buildProductSearchText, filterProductsBySearch, getProductSearchScore, sanitizeProductSearchQuery } from '@/lib/productSearch'
+import {
+    ADMIN_PRODUCTS_ENDPOINT,
+    DEFAULT_STORE_PAUSE_MESSAGE,
+    formatMonthKeyLabel,
+    getCurrentMonthKey,
+    RETRYABLE_PANEL_ERROR_PATTERN,
+    withTransientRetry,
+} from './utils'
+import LocalSaleCatalogPanel from './components/LocalSaleCatalogPanel'
+import ProductsManagementPanel from './components/ProductsManagementPanel'
+import type {
+    AddressData,
+    AdminMenuGroupKey,
+    AdminReportSection,
+    AdminUserSummary,
+    DashboardStats,
+    DeepDiveView,
+    LocalSaleLineItem,
+    LocalSaleQuote,
+    LocalSaleSubmissionResult,
+    Order,
+    PosMovement,
+    PosShift,
+    ProductEditorMode,
+    ProductDetailMetric,
+    ProductFormState,
+    ProductPublicationFilter,
+    PurchaseInvoiceDetail,
+    PurchaseInvoiceSummary,
+    SalesRankingRow,
+    ShippingPickup,
+    ShippingProvider,
+} from './types'
 
-interface DashboardStats {
-    totalSales: {
-        amount: number;
-        progress: { percentage: number; current: number; previous: number };
-    };
-    newOrders: {
-        count: number;
-        progress: { percentage: number; current: number; previous: number };
-    };
-    newClients: {
-        count: number;
-        progress: { percentage: number; current: number; previous: number };
-    };
-    monthlyPerformance: Array<{ day: string, total: number }>;
-    salesTrend30Days?: Array<{ day: string, total: number }>;
-    topProducts?: Array<{ name: string, sold: number, revenue: number }>;
-    salesByCategory?: Array<{ category: string, total: number }>;
-    productAnalysis?: { averageMargin: number, lowMarginOpportunities: number, totalMonitored: number };
-    tax?: { rate: number; multiplier: number };
-    businessMetrics?: {
-        averageOrderValue: number;
-        salesSummary?: { gross?: number; net?: number; vat?: number; shipping?: number };
-        profitStats: { revenue: number, cost: number, shipping_cost?: number, profit: number, margin: number, roi?: number };
-        inventoryValue: { market_value: number, cost_value: number, total_items: number };
-        ordersByStatus: Array<{ status: string, count: number }>;
-        recentOrders: Array<{ id: string, user_name: string, total: number, status: string, created_at: string }>;
-        salesDeepDive?: {
-            daily: {
-                current: Array<{ day: string, total: string }>;
-                previous: Array<{ day: string, total: string }>;
-            };
-            categories: Array<{ category: string, current: string, previous: string, growth: number }>;
-        };
-        inventoryDeepDive?: {
-            highValueItems: Array<{ name: string, quantity: number, cost: string, total_cost: string }>;
-            riskItems: Array<{ name: string, quantity: number }>;
-            expiringItems?: Array<{
-                id?: string;
-                legacy_id?: string;
-                name: string;
-                quantity: number | string;
-                expiration_date: string;
-                expiration_alert_days?: number | string;
-                days_to_expire: number | string;
-            }>;
-            expiredItems?: Array<{
-                id?: string;
-                legacy_id?: string;
-                name: string;
-                quantity: number | string;
-                expiration_date: string;
-                days_expired: number | string;
-            }>;
-            health: {
-                out_of_stock: number | string;
-                low_stock: number | string;
-                overstock: number | string;
-                expired_products?: number | string;
-                expiring_products?: number | string;
-            };
-        };
-        aovDeepDive?: {
-            distribution: Array<{ bucket: string, count: number, revenue: string }>;
-        };
-        traceability?: {
-            orders: Array<{
-                id: string;
-                created_at: string;
-                status: string;
-                user_name?: string;
-                gross: number;
-                net: number;
-                vat: number;
-                shipping: number;
-            }>;
-            products: Array<{
-                product_id: string;
-                product_name: string;
-                category: string;
-                units_sold: number;
-                net_revenue: number;
-                order_refs: string[];
-            }>;
-            categories: Array<{
-                category: string;
-                net_revenue: number;
-                order_refs: string[];
-            }>;
-        };
-        productSalesRanking?: {
-            period: { start: string; end: string };
-            selectedMonth?: string;
-            historicalPeriod?: { start: string | null; end: string | null };
-            monthlyTotals: { units_sold: number; net_revenue: number };
-            monthlyFinancial?: {
-                orders_count: number;
-                gross: number;
-                net: number;
-                vat: number;
-                shipping: number;
-                cost: number;
-                profit: number;
-                margin: number;
-            };
-            historicalTotals: { units_sold: number; net_revenue: number };
-            historicalFinancial?: {
-                orders_count: number;
-                gross: number;
-                net: number;
-                vat: number;
-                shipping: number;
-                cost: number;
-                profit: number;
-                margin: number;
-            };
-            monthlyRanking: Array<{
-                product_id: string;
-                product_name: string;
-                category: string;
-                month_orders_count: number;
-                month_units_sold: number;
-                month_gross_revenue: number;
-                month_net_revenue: number;
-                month_vat_amount: number;
-                month_shipping_amount: number;
-                month_cost: number;
-                month_profit: number;
-                month_margin: number;
-                historical_orders_count: number;
-                historical_units_sold: number;
-                historical_gross_revenue: number;
-                historical_net_revenue: number;
-                historical_vat_amount: number;
-                historical_shipping_amount: number;
-                historical_cost: number;
-                historical_profit: number;
-                historical_margin: number;
-            }>;
-            historicalRanking: Array<{
-                product_id: string;
-                product_name: string;
-                category: string;
-                month_orders_count: number;
-                month_units_sold: number;
-                month_gross_revenue: number;
-                month_net_revenue: number;
-                month_vat_amount: number;
-                month_shipping_amount: number;
-                month_cost: number;
-                month_profit: number;
-                month_margin: number;
-                historical_orders_count: number;
-                historical_units_sold: number;
-                historical_gross_revenue: number;
-                historical_net_revenue: number;
-                historical_vat_amount: number;
-                historical_shipping_amount: number;
-                historical_cost: number;
-                historical_profit: number;
-                historical_margin: number;
-            }>;
-        };
-    };
-    strategicAlerts?: Array<{ type: 'critical' | 'warning' | 'info', message: string, action: string }>;
-}
-
-interface Order {
-    id: string;
-    user_name?: string;
-    total: number;
-    status: string;
-    created_at: string;
-    order_notes?: string | null;
-    items?: Array<{
-        order_id: string;
-        product_id: string;
-        product_name: string;
-        product_image?: string | null;
-        quantity: number;
-        price: number;
-    }>;
-}
-
-interface ShippingProvider {
-    id: number;
-    name: string;
-    status: string;
-}
-
-interface ShippingPickup {
-    id?: number | string;
-    provider?: string;
-    provider_name?: string;
-    status?: string;
-    scheduled_at?: string;
-    date?: string;
-    window?: string;
-    reference?: string;
-    order_id?: string | number;
-    notes?: string;
-}
-
-interface AdminUserSummary {
-    id: string;
-    name?: string | null;
-    email?: string | null;
-    role?: string | null;
-    email_verified?: boolean | null;
-    document_type?: string | null;
-    document_number?: string | null;
-    business_name?: string | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-    orders_total?: number | string | null;
-    orders_active?: number | string | null;
-    orders_completed?: number | string | null;
-    total_spent?: number | string | null;
-    last_order_at?: string | null;
-    last_order_id?: string | null;
-    profile?: Record<string, any> | string | null;
-    addresses?: any;
-    last_shipping_address?: Record<string, any> | string | null;
-    last_billing_address?: Record<string, any> | string | null;
-}
-
-type DeepDiveView = 'sales' | 'profit' | 'aov' | 'inventory' | 'product-breakdown'
-type ProductDetailMetric = 'gross' | 'net' | 'vat' | 'shipping' | 'profit' | 'inventory'
-type AdminReportSection = 'general' | 'sales' | 'balance' | 'inventory' | 'traceability'
-type AdminMenuGroupKey = 'monitoring' | 'reporting' | 'catalog' | 'operations' | 'finance'
-type ProductPublicationFilter = 'all' | 'published' | 'hidden'
-const ADMIN_PRODUCTS_ENDPOINT = '/api/products?scope=admin'
-
-type PurchaseInvoiceFormState = {
-    invoiceNumber: string;
-    supplierName: string;
-    supplierDocument: string;
-    issuedAt: string;
-    notes: string;
-}
-
-type PurchaseInvoiceSummary = {
-    id: string;
-    invoice_number: string;
-    supplier_name: string;
-    supplier_document?: string | null;
-    issued_at: string;
-    subtotal: number;
-    tax_total: number;
-    total: number;
-    notes?: string | null;
-    created_at: string;
-    items_count: number;
-    units_total: number;
-    products_count: number;
-}
-
-type PurchaseInvoiceDetailItem = {
-    id: string;
-    product_id: string;
-    product_name_snapshot?: string | null;
-    quantity: number;
-    unit_cost: number;
-    line_total: number;
-    created_at?: string | null;
-    category?: string | null;
-    brand?: string | null;
-    metadata?: Record<string, any> | null;
-}
-
-type PurchaseInvoiceDetail = {
-    id: string;
-    invoice_number: string;
-    supplier_name: string;
-    supplier_document?: string | null;
-    issued_at: string;
-    subtotal: number;
-    tax_total: number;
-    total: number;
-    notes?: string | null;
-    metadata?: Record<string, any> | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-    items: PurchaseInvoiceDetailItem[];
-}
-
-type ProductFormState = {
-    id: string;
-    name: string;
-    price: string;
-    pvp: string;
-    cost: string;
-    quantity: string;
-    category: string;
-    brand: string;
-    description: string;
-    productType: string;
-    published: boolean;
-    attributes: Record<string, string>;
-    purchaseInvoice: PurchaseInvoiceFormState;
-    thumbImages: Array<{ url: string; width: string; height: string }>;
-    galleryImages: Array<{ url: string; width: string; height: string }>;
-}
-
-type AddressData = {
-    firstName?: string;
-    lastName?: string;
-    company?: string;
-    country?: string;
-    street?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
-    phone?: string;
-    email?: string;
-}
-
-type SalesRankingRow = {
-    product_id: string;
-    product_name: string;
-    category: string;
-    orders_count: number;
-    units_sold: number;
-    gross_revenue: number;
-    net_revenue: number;
-    vat_amount: number;
-    shipping_amount: number;
-    cost: number;
-    profit: number;
-    margin: number;
-    month_orders_count: number;
-    month_units_sold: number;
-    month_gross_revenue: number;
-    month_net_revenue: number;
-    month_vat_amount: number;
-    month_shipping_amount: number;
-    month_cost: number;
-    month_profit: number;
-    month_margin: number;
-    historical_orders_count: number;
-    historical_units_sold: number;
-    historical_gross_revenue: number;
-    historical_net_revenue: number;
-    historical_vat_amount: number;
-    historical_shipping_amount: number;
-    historical_cost: number;
-    historical_profit: number;
-    historical_margin: number;
-}
-
-type LocalSaleLineItem = {
-    productId: string;
-    internalId: string;
-    name: string;
-    category: string;
-    sku: string;
-    image: string;
-    stock: number;
-    quantity: number;
-    price: number;
-    cost: number;
-}
-
-type LocalSaleQuote = {
-    subtotal: number;
-    items_subtotal_before_discount?: number;
-    vat_rate: number;
-    vat_subtotal: number;
-    vat_amount: number;
-    shipping: number;
-    shipping_base?: number;
-    shipping_tax_rate?: number;
-    shipping_tax_amount?: number;
-    discount_code?: string | null;
-    discount_total?: number;
-    discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>;
-    discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>;
-    total: number;
-    items?: Array<{ product_id: string; quantity: number; price: number; total: number }>;
-}
-
-type PosShiftSummary = {
-    orders_count: number;
-    sales_total: number;
-    cash_sales: number;
-    electronic_sales: number;
-    sales_by_payment: {
-        cash: number;
-        card: number;
-        transfer: number;
-        mixed: number;
-        other: number;
-    };
-    movement_income: number;
-    movement_expense: number;
-    movement_adjustments: number;
-    expected_cash: number;
-    closing_cash: number | null;
-    difference_cash: number | null;
-    period: { start: string | null; end: string | null };
-}
-
-type PosShift = {
-    id: string;
-    opened_by_user_id: string;
-    opened_at: string;
-    opening_cash: number;
-    status: 'open' | 'closed';
-    open_notes?: string | null;
-    closed_by_user_id?: string | null;
-    closed_at?: string | null;
-    closing_cash?: number | null;
-    close_notes?: string | null;
-    expected_cash?: number | null;
-    difference_cash?: number | null;
-    summary?: PosShiftSummary;
-}
-
-type PosMovement = {
-    id: number;
-    shift_id: string;
-    type: 'income' | 'expense' | 'withdrawal' | 'deposit' | 'adjustment';
-    amount: number;
-    description?: string | null;
-    created_by_user_id: string;
-    created_at: string;
-}
-
-const DEFAULT_STORE_PAUSE_MESSAGE = 'Tienda temporalmente en mantenimiento. Intenta más tarde.'
-const RETRYABLE_PANEL_ERROR_PATTERN = /(502|503|504|bad gateway|gateway timeout|service unavailable|failed to fetch|networkerror|tiempo de espera agotado)/i
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-const withTransientRetry = async <T,>(operation: () => Promise<T>, retries = 2, baseDelayMs = 450): Promise<T> => {
-    let lastError: unknown
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-        try {
-            return await operation()
-        } catch (error) {
-            lastError = error
-            const message = String((error as any)?.message || '')
-            const canRetry = RETRYABLE_PANEL_ERROR_PATTERN.test(message)
-            if (!canRetry || attempt === retries) {
-                throw error
-            }
-            await delay(baseDelayMs * (attempt + 1))
-        }
-    }
-    throw lastError
-}
-
-const getCurrentMonthKey = () => {
-    const now = new Date()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    return `${now.getFullYear()}-${month}`
-}
-const formatMonthKeyLabel = (monthKey: string) => {
-    const match = monthKey.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
-    if (!match) return monthKey
-    const year = Number(match[1])
-    const month = Number(match[2])
-    return new Date(year, month - 1, 1).toLocaleDateString('es-EC', {
-        month: 'long',
-        year: 'numeric'
-    })
-}
+const AccountSidebar = dynamic(() => import('./components/AccountSidebar'), {
+    ssr: false,
+})
+const ProductEditorModal = dynamic(() => import('./components/ProductEditorModal'), {
+    ssr: false,
+})
+const PurchaseInvoiceDetailModal = dynamic(() => import('./components/PurchaseInvoiceDetailModal'), {
+    ssr: false,
+})
+const SalesProductDetailModal = dynamic(() => import('./components/SalesProductDetailModal'), {
+    ssr: false,
+})
+const OrderDetailModal = dynamic(() => import('./components/OrderDetailModal'), {
+    ssr: false,
+})
+const UsersManagementPanel = dynamic(() => import('./components/UsersManagementPanel'), {
+    ssr: false,
+})
+const CustomerOrdersPanel = dynamic(() => import('./components/CustomerOrdersPanel'), {
+    ssr: false,
+})
+const ProductPageSettingsPanel = dynamic(() => import('./components/ProductPageSettingsPanel'), {
+    ssr: false,
+})
+const AdminOrdersPanel = dynamic(() => import('./components/AdminOrdersPanel'), {
+    ssr: false,
+})
+const ShipmentsPanel = dynamic(() => import('./components/ShipmentsPanel'), {
+    ssr: false,
+})
+const InventoryManagementPanel = dynamic(() => import('./components/InventoryManagementPanel'), {
+    ssr: false,
+})
 
 const MyAccount = () => {
     const router = useRouter()
     const [activeTab, setActiveTab] = useState<string | undefined>('dashboard')
     const [activeAddress, setActiveAddress] = useState<string | null>('billing')
     const [activeOrders, setActiveOrders] = useState<string | undefined>('all')
-    const [openDetail, setOpenDetail] = useState<boolean | undefined>(false)
     const [authBootstrapping, setAuthBootstrapping] = useState(true)
     const [user, setUser] = useState<{ id: string, name: string, email: string, role?: 'customer' | 'admin' } | null>(null)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
@@ -543,6 +154,9 @@ const MyAccount = () => {
     const [adminReloadNonce, setAdminReloadNonce] = useState(0)
     const [adminOrdersList, setAdminOrdersList] = useState<Order[]>([])
     const [adminProductsList, setAdminProductsList] = useState<any[]>([])
+    const [adminProductsSearch, setAdminProductsSearch] = useState('')
+    const [adminProductsQuickFilter, setAdminProductsQuickFilter] = useState<'all' | 'publishable' | 'blocked' | 'with-stock' | 'no-stock' | 'no-price'>('all')
+    const [productPublicationPendingIds, setProductPublicationPendingIds] = useState<Record<string, boolean>>({})
     const [adminUsersList, setAdminUsersList] = useState<AdminUserSummary[]>([])
     const [adminUsersSearch, setAdminUsersSearch] = useState('')
     const [adminUsersRoleFilter, setAdminUsersRoleFilter] = useState<'all' | 'clients' | 'admins'>('all')
@@ -551,9 +165,9 @@ const MyAccount = () => {
     const [inventoryTypeFilter, setInventoryTypeFilter] = useState<'all' | 'perishable' | 'nonperishable'>('all')
     const [alertsSeverityFilter, setAlertsSeverityFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all')
     const [adminMenuExpanded, setAdminMenuExpanded] = useState<Record<AdminMenuGroupKey, boolean>>({
-        monitoring: true,
+        monitoring: false,
         reporting: true,
-        catalog: true,
+        catalog: false,
         operations: false,
         finance: false
     })
@@ -609,6 +223,7 @@ const MyAccount = () => {
     const [localSaleElectronicAmount, setLocalSaleElectronicAmount] = useState('')
     const [localSaleAutoPrint, setLocalSaleAutoPrint] = useState(true)
     const [localSaleLastOrderId, setLocalSaleLastOrderId] = useState<string | null>(null)
+    const [localSaleLastSubmission, setLocalSaleLastSubmission] = useState<LocalSaleSubmissionResult | null>(null)
     const [localSaleCustomerLookupLoading, setLocalSaleCustomerLookupLoading] = useState(false)
     const [localSaleCustomerLookupMessage, setLocalSaleCustomerLookupMessage] = useState<string | null>(null)
     const [posActiveShift, setPosActiveShift] = useState<PosShift | null>(null)
@@ -627,393 +242,37 @@ const MyAccount = () => {
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<any | null>(null)
-    const [productForm, setProductForm] = useState<ProductFormState>({
-        id: '',
-        name: '',
-        price: '',
-        pvp: '',
-        cost: '',
-        quantity: '',
-        category: 'General',
-        brand: 'Generico',
-        description: '',
-        productType: '',
-        published: true,
-        attributes: {},
-        purchaseInvoice: createEmptyPurchaseInvoice(),
-        thumbImages: [],
-        galleryImages: []
-    })
-    const [imageUploading, setImageUploading] = useState<Record<string, boolean>>({})
-    const [productSaving, setProductSaving] = useState(false)
-    const [productFormErrors, setProductFormErrors] = useState<Record<string, string>>({})
+    const [productEditorMode, setProductEditorMode] = useState<ProductEditorMode>('create')
+    const [productEditorInitialForm, setProductEditorInitialForm] = useState<ProductFormState>(createEmptyProductForm())
     const [productPublicationFilter, setProductPublicationFilter] = useState<ProductPublicationFilter>('all')
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
-    const productFormRef = useRef<HTMLFormElement | null>(null)
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
     const [selectedSalesProduct, setSelectedSalesProduct] = useState<SalesRankingRow | null>(null)
     const [isSalesProductModalOpen, setIsSalesProductModalOpen] = useState(false)
     const [userOrders, setUserOrders] = useState<Order[]>([])
     const [userOrdersLoading, setUserOrdersLoading] = useState(false)
-
-    const normalizeAdminProducts = (items: any[]) => {
-        try {
-            return mapProductsToDto(items as any)
-        } catch {
-            return items
-        }
-    }
-
-    const getEmptyAttributes = (type: string): Record<string, string> => {
-        if (type === 'comida') {
-            return {
-                size: '',
-                weight: '',
-                flavor: '',
-                age: '',
-                species: '',
-                ingredients: '',
-                expirationDate: '',
-                expirationAlertDays: '30',
-                lotCode: '',
-                storageLocation: '',
-                supplier: '',
-                sku: '',
-                tag: ''
-            }
-        }
-        if (type === 'ropa') {
-            return {
-                size: '',
-                material: '',
-                color: '',
-                gender: '',
-                species: '',
-                lotCode: '',
-                storageLocation: '',
-                supplier: '',
-                sku: '',
-                tag: ''
-            }
-        }
-        if (type === 'accesorios') {
-            return {
-                material: '',
-                size: '',
-                usage: '',
-                species: '',
-                lotCode: '',
-                storageLocation: '',
-                supplier: '',
-                sku: '',
-                tag: ''
-            }
-        }
-        return {}
-    }
-
-    const getAttributesForTypeChange = (nextType: string, currentAttributes?: Record<string, string>) => {
-        const base = getEmptyAttributes(nextType)
-        const current = currentAttributes || {}
-        ;['sku', 'tag', 'species', 'lotCode', 'storageLocation', 'supplier'].forEach((key) => {
-            const value = String(current[key] || '').trim()
-            if (value) {
-                base[key] = value
-            }
-        })
-        if (nextType === 'comida') {
-            ;['expirationDate', 'expirationAlertDays'].forEach((key) => {
-                const value = String(current[key] || '').trim()
-                if (value) {
-                    base[key] = value
-                }
-            })
-        }
-        return base
-    }
-
-    const normalizeAttributes = (type: string, attrs: any) => {
-        const base = getEmptyAttributes(type)
-        const merged = { ...base, ...(attrs || {}) }
-        const cleaned: Record<string, string> = {}
-        Object.keys(merged).forEach((key) => {
-            const value = (merged as any)[key]
-            if (value !== undefined && value !== null && String(value).trim() !== '') {
-                cleaned[key] = String(value).trim()
-            }
-        })
-        return cleaned
-    }
-
-    function getTodayDateInputValue() {
-        return new Date().toISOString().slice(0, 10)
-    }
-
-    function createEmptyPurchaseInvoice(supplierName = ''): PurchaseInvoiceFormState {
-        return {
-            invoiceNumber: '',
-            supplierName: supplierName.trim(),
-            supplierDocument: '',
-            issuedAt: getTodayDateInputValue(),
-            notes: ''
-        }
-    }
-
-    const clearProductErrors = (...fields: string[]) => {
-        setProductFormErrors((prev) => {
-            let changed = false
-            const next = { ...prev }
-            fields.forEach((field) => {
-                if (Object.prototype.hasOwnProperty.call(next, field)) {
-                    delete next[field]
-                    changed = true
-                }
-            })
-            return changed ? next : prev
-        })
-    }
-
-    const setProductAttribute = (key: string, value: string) => {
-        setProductForm((prev: any) => ({
-            ...prev,
-            attributes: {
-                ...(prev.attributes || {}),
-                [key]: value
-            }
-        }))
-        if (['sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays'].includes(key)) {
-            clearProductErrors(key)
-        }
-    }
-
-    const closeProductModal = () => {
-        if (productSaving || Object.values(imageUploading).some(Boolean)) return
-        setIsProductModalOpen(false)
-    }
-
-    const getProductInputClass = (field: string, baseClass: string) => {
-        const borderClass = productFormErrors[field] ? 'border-red focus:border-red' : 'border-line focus:border-black'
-        return `${baseClass} ${borderClass}`
-    }
-
-    const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
-    const PRODUCT_IMAGE_ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
-
-    const createImageEntry = () => ({ url: '', width: '', height: '' })
-    const addImageEntry = (kind: 'thumb' | 'gallery') => {
-        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
-        setProductForm((prev: any) => ({
-            ...prev,
-            [key]: [...(prev[key] || []), createImageEntry()]
-        }))
-    }
-    const setImageEntry = (kind: 'thumb' | 'gallery', index: number, entry: { url: string; width: string; height: string }) => {
-        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
-        setProductForm((prev: any) => {
-            const next = [...(prev[key] || [])]
-            next[index] = entry
-            return { ...prev, [key]: next }
-        })
-    }
-    const removeImageEntry = (kind: 'thumb' | 'gallery', index: number) => {
-        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
-        setProductForm((prev: any) => {
-            const next = [...(prev[key] || [])]
-            next.splice(index, 1)
-            if (next.length === 0) {
-                next.push(createImageEntry())
-            }
-            return { ...prev, [key]: next }
-        })
-    }
-    const requiredImageSizes = {
-        thumb: { width: 400, height: 520 },
-        gallery: { width: 1200, height: 1400 }
-    }
-    const applyDefaultSizes = (entries: Array<{ url: string; width?: string | number; height?: string | number }>, kind: 'thumb' | 'gallery') => {
-        const required = requiredImageSizes[kind]
-        return entries.map((entry) => ({
-            ...entry,
-            width: entry.width && Number(entry.width) > 0 ? String(entry.width) : String(required.width),
-            height: entry.height && Number(entry.height) > 0 ? String(entry.height) : String(required.height)
-        }))
-    }
-    const getImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
-        new Promise((resolve, reject) => {
-            const url = URL.createObjectURL(file)
-            const img = document.createElement('img')
-            img.onload = () => {
-                const width = img.naturalWidth
-                const height = img.naturalHeight
-                URL.revokeObjectURL(url)
-                resolve({ width, height })
-            }
-            img.onerror = () => {
-                URL.revokeObjectURL(url)
-                reject(new Error('No se pudo leer la imagen.'))
-            }
-            img.src = url
-        })
-    const resizeImage = (file: File, targetWidth: number, targetHeight: number): Promise<File> =>
-        new Promise((resolve, reject) => {
-            const url = URL.createObjectURL(file)
-            const img = document.createElement('img')
-            img.onload = () => {
-                const canvas = document.createElement('canvas')
-                canvas.width = targetWidth
-                canvas.height = targetHeight
-                const ctx = canvas.getContext('2d')
-                if (!ctx) {
-                    URL.revokeObjectURL(url)
-                    reject(new Error('No se pudo procesar la imagen.'))
-                    return
-                }
-                ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
-                canvas.toBlob((blob) => {
-                    URL.revokeObjectURL(url)
-                    if (!blob) {
-                        reject(new Error('No se pudo recortar la imagen.'))
-                        return
-                    }
-                    const ext = file.name.split('.').pop() || 'jpg'
-                    const resizedFile = new File([blob], `recorte-${Date.now()}.${ext}`, { type: blob.type })
-                    resolve(resizedFile)
-                }, file.type || 'image/jpeg', 0.92)
-            }
-            img.onerror = () => {
-                URL.revokeObjectURL(url)
-                reject(new Error('No se pudo procesar la imagen.'))
-            }
-            img.src = url
-        })
-    const uploadImage = async (file: File, kind: 'thumb' | 'gallery') => {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('kind', kind)
-
-        const url =
-            typeof window !== 'undefined'
-                ? `${window.location.origin}/uploads-api/images`
-                : '/uploads-api/images'
-
-        const res = await requestApi<{ url: string; width?: number; height?: number; kind: string }>(url, {
-            method: 'POST',
-            body: formData
-        })
-        return res.body
-    }
-    const handleImageFileChange = async (kind: 'thumb' | 'gallery', index: number, file?: File | null) => {
-        if (!file) return
-        const key = `${kind}-${index}`
-        setImageUploading((prev) => ({ ...prev, [key]: true }))
-        try {
-            if (!PRODUCT_IMAGE_ACCEPTED_TYPES.has(file.type)) {
-                throw new Error('Formato no permitido. Usa JPG, PNG o WEBP.')
-            }
-            if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
-                throw new Error('La imagen excede 8MB. Reduce el tamaño e intenta nuevamente.')
-            }
-            const { width, height } = await getImageDimensions(file)
-            const required = requiredImageSizes[kind]
-            let fileToUpload = file
-            if (width !== required.width || height !== required.height) {
-                showNotification(`Ajustamos la imagen automáticamente a ${required.width}x${required.height}px.`)
-                fileToUpload = await resizeImage(file, required.width, required.height)
-            }
-            const uploaded = await withTransientRetry(() => uploadImage(fileToUpload, kind))
-            setImageEntry(kind, index, {
-                url: uploaded.url,
-                width: String((uploaded as any).width || required.width),
-                height: String((uploaded as any).height || required.height)
-            })
-            clearProductErrors(kind === 'thumb' ? 'thumbImages' : 'galleryImages')
-            showNotification('Imagen subida correctamente.')
-        } catch (error) {
-            console.error(error)
-            const message = String((error as any)?.message || '').trim()
-            showNotification(message || 'No se pudo subir la imagen.', 'error')
-        } finally {
-            setImageUploading((prev) => ({ ...prev, [key]: false }))
-        }
-    }
+    const [, startPanelNavigationTransition] = React.useTransition()
+    const deferredAdminUsersSearch = React.useDeferredValue(adminUsersSearch)
+    const deferredInventorySearch = React.useDeferredValue(inventorySearch)
+    const deferredLocalSaleSearch = React.useDeferredValue(localSaleSearch)
 
     // Handlers
-    const handleNewProduct = () => {
+    const handleNewProduct = React.useCallback(() => {
         setEditingProduct(null)
-        setProductFormErrors({})
-        setImageUploading({})
-        setProductSaving(false)
-        setProductForm({
-            id: '',
-            name: '',
-            price: '',
-            pvp: '',
-            cost: '',
-            quantity: '',
-            category: 'General',
-            brand: 'Generico',
-            description: '',
-            productType: '',
-            published: true,
-            attributes: {},
-            purchaseInvoice: createEmptyPurchaseInvoice(),
-            thumbImages: [createImageEntry()],
-            galleryImages: [createImageEntry()]
-        })
+        setProductEditorMode('create')
+        setProductEditorInitialForm(createEmptyProductForm())
         setIsProductModalOpen(true)
-    }
+    }, [])
 
-    const handleEditProduct = (product: any) => {
+    const handleEditProduct = React.useCallback((product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
         const multiplier = 1 + rate / 100
-        const pvpPrice = Number(product.price ?? 0)
-        const basePrice = multiplier > 0 ? pvpPrice / multiplier : pvpPrice
-        const productType = (product.productType || '').toLowerCase()
-        const attributes = normalizeAttributes(productType, product.attributes)
-        const imageMeta = Array.isArray(product.imageMeta) ? product.imageMeta : []
-        const thumbMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'thumb')
-        const galleryMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'gallery')
-        const thumbImages = thumbMeta.length > 0
-            ? thumbMeta.map((img: any) => ({
-                url: img.url || '',
-                width: img.width ? String(img.width) : '',
-                height: img.height ? String(img.height) : ''
-            }))
-            : (Array.isArray(product.thumbImage) ? product.thumbImage : []).map((url: string) => ({ url, width: '', height: '' }))
-        const galleryImages = galleryMeta.length > 0
-            ? galleryMeta.map((img: any) => ({
-                url: img.url || '',
-                width: img.width ? String(img.width) : '',
-                height: img.height ? String(img.height) : ''
-            }))
-            : (Array.isArray(product.images) ? product.images : []).map((url: string) => ({ url, width: '', height: '' }))
-        const filledThumbs = applyDefaultSizes(thumbImages, 'thumb')
-        const filledGallery = applyDefaultSizes(galleryImages, 'gallery')
-        const defaultSupplierName = String(attributes?.supplier || '').trim()
-        setProductFormErrors({})
-        setImageUploading({})
-        setProductSaving(false)
         setEditingProduct(product)
-        setProductForm({
-            id: product.internalId || product.id,
-            name: product.name,
-            price: Number.isFinite(basePrice) ? basePrice.toFixed(2) : product.price,
-            pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : product.price,
-            cost: product.business?.cost || product.cost || 0,
-            quantity: product.quantity,
-            category: product.category || 'General',
-            brand: product.brand || 'Generico',
-            description: product.description || '',
-            productType: productType,
-            published: product.published !== false,
-            attributes,
-            purchaseInvoice: createEmptyPurchaseInvoice(defaultSupplierName),
-            thumbImages: filledThumbs.length > 0 ? filledThumbs : [createImageEntry()],
-            galleryImages: filledGallery.length > 0 ? filledGallery : [createImageEntry()]
-        })
+        setProductEditorMode('edit')
+        setProductEditorInitialForm(createProductFormFromProduct(product, multiplier))
         setIsProductModalOpen(true)
-    }
+    }, [dashboardStats?.tax?.rate, vatRate])
 
     const handleDeleteProduct = async (id: string) => {
         if (!confirm('¿Estás seguro de eliminar este producto?')) return;
@@ -1034,213 +293,20 @@ const MyAccount = () => {
         }
     }
 
-    const handleSaveProduct = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (productSaving) return
-        try {
-            const hasPendingUpload = Object.values(imageUploading).some(Boolean)
-            if (hasPendingUpload) {
-                showNotification('Espera a que terminen de subir las imágenes.', 'error')
-                return
-            }
-            const token = localStorage.getItem('authToken')
-            if (!token) {
-                showNotification('Sesión no válida. Inicia sesión nuevamente.', 'error')
-                handleLogout()
-                return
-            }
-
-            const nextErrors: Record<string, string> = {}
-            const name = String(productForm.name || '').trim()
-            const brand = String(productForm.brand || '').trim()
-            const category = String(productForm.category || '').trim()
-            const description = String(productForm.description || '').trim()
-            const basePrice = Number(productForm.price)
-            const productCost = Number(productForm.cost)
-            const quantity = Number(productForm.quantity)
-            const previousQuantity = Number(editingProduct?.quantity ?? 0)
-            const stockIncrease = editingProduct ? Math.max(0, quantity - previousQuantity) : Math.max(0, quantity)
-
-            if (name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
-            if (!brand) nextErrors.brand = 'La marca es obligatoria.'
-            if (!category) nextErrors.category = 'La categoría es obligatoria.'
-            if (!productForm.productType) nextErrors.productType = 'Selecciona el tipo de producto.'
-            if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
-            if (!Number.isFinite(productCost) || productCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
-            if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) {
-                nextErrors.quantity = 'El stock debe ser un número entero mayor o igual a 0.'
-            }
-            if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
-
-            const normalizedAttributes = normalizeAttributes(productForm.productType, productForm.attributes)
-            if (productForm.productType) {
-                if (!normalizedAttributes.sku) nextErrors.sku = 'El SKU es obligatorio.'
-                if (!normalizedAttributes.tag) nextErrors.tag = 'La etiqueta es obligatoria.'
-                if (!normalizedAttributes.species) nextErrors.species = 'La especie/mascota es obligatoria.'
-            }
-            const expirationDateRaw = String(normalizedAttributes.expirationDate || '').trim()
-            const alertDaysRaw = String(normalizedAttributes.expirationAlertDays || '').trim()
-            const isPerishableProduct = productForm.productType === 'comida'
-            const requiresExpirationDate = isPerishableProduct && quantity > 0
-            if (isPerishableProduct) {
-                if (requiresExpirationDate && !expirationDateRaw) {
-                    nextErrors.expirationDate = 'La fecha de vencimiento es obligatoria para comida.'
-                }
-                if (expirationDateRaw) {
-                    if (!/^\d{4}-\d{2}-\d{2}$/.test(expirationDateRaw)) {
-                        nextErrors.expirationDate = 'Fecha de vencimiento inválida. Usa formato YYYY-MM-DD.'
-                    } else {
-                        normalizedAttributes.expirationDate = expirationDateRaw
-                    }
-                    if (alertDaysRaw === '') {
-                        normalizedAttributes.expirationAlertDays = '30'
-                    } else if (!/^\d+$/.test(alertDaysRaw)) {
-                        nextErrors.expirationAlertDays = 'Los días de alerta de vencimiento deben ser un número entero.'
-                    } else {
-                        normalizedAttributes.expirationAlertDays = String(Math.min(3650, Math.max(0, Number(alertDaysRaw))))
-                    }
-                } else if (requiresExpirationDate && alertDaysRaw !== '') {
-                    nextErrors.expirationDate = 'Si defines días de alerta, también debes definir fecha de vencimiento.'
-                } else {
-                    delete normalizedAttributes.expirationDate
-                    delete normalizedAttributes.expiryDate
-                    delete normalizedAttributes.expirationAlertDays
-                    delete normalizedAttributes.expiryAlertDays
-                }
-            } else {
-                delete normalizedAttributes.expirationDate
-                delete normalizedAttributes.expiryDate
-                delete normalizedAttributes.expirationAlertDays
-                delete normalizedAttributes.expiryAlertDays
-            }
-            const purchaseInvoice = {
-                invoiceNumber: String(productForm.purchaseInvoice?.invoiceNumber || '').trim(),
-                supplierName: String(productForm.purchaseInvoice?.supplierName || '').trim(),
-                supplierDocument: String(productForm.purchaseInvoice?.supplierDocument || '').trim(),
-                issuedAt: String(productForm.purchaseInvoice?.issuedAt || '').trim(),
-                notes: String(productForm.purchaseInvoice?.notes || '').trim()
-            }
-            if (stockIncrease > 0) {
-                if (!purchaseInvoice.invoiceNumber) nextErrors.purchaseInvoiceNumber = 'El número de factura de compra es obligatorio para ingresar stock.'
-                if (!purchaseInvoice.supplierName) nextErrors.purchaseInvoiceSupplierName = 'El proveedor es obligatorio para ingresar stock.'
-                if (!purchaseInvoice.issuedAt || !/^\d{4}-\d{2}-\d{2}$/.test(purchaseInvoice.issuedAt)) {
-                    nextErrors.purchaseInvoiceIssuedAt = 'La fecha de la factura de compra es obligatoria y debe usar formato YYYY-MM-DD.'
-                }
-                if (!normalizedAttributes.supplier && purchaseInvoice.supplierName) {
-                    normalizedAttributes.supplier = purchaseInvoice.supplierName
-                }
-            }
-            const thumbEntries = applyDefaultSizes(
-                (productForm.thumbImages || []).filter((img: any) => img.url && img.url.trim()),
-                'thumb'
-            )
-            const galleryEntries = applyDefaultSizes(
-                (productForm.galleryImages || []).filter((img: any) => img.url && img.url.trim()),
-                'gallery'
-            )
-            if (thumbEntries.length === 0) {
-                nextErrors.thumbImages = 'Agrega al menos una miniatura para el listado.'
-            }
-            if (galleryEntries.length === 0) {
-                nextErrors.galleryImages = 'Agrega al menos una imagen grande para la ficha del producto.'
-            }
-            const validateSizes = (entries: any[], label: string) => {
-                for (const entry of entries) {
-                    if (!entry.width || !entry.height) {
-                        return `Completa el ancho y alto de ${label}.`
-                    }
-                    if (Number(entry.width) <= 0 || Number(entry.height) <= 0) {
-                        return `El tamaño de ${label} debe ser mayor a 0.`
-                    }
-                }
-                return ''
-            }
-            const thumbSizeError = validateSizes(thumbEntries, 'las miniaturas')
-            const gallerySizeError = validateSizes(galleryEntries, 'las imágenes grandes')
-            if (thumbSizeError) nextErrors.thumbImages = thumbSizeError
-            if (gallerySizeError) nextErrors.galleryImages = gallerySizeError
-
-            if (Object.keys(nextErrors).length > 0) {
-                setProductFormErrors(nextErrors)
-                const firstError = Object.values(nextErrors)[0]
-                showNotification(firstError, 'error')
-                return
-            }
-            setProductFormErrors({})
-            setProductSaving(true)
-
-            const data = {
-                name,
-                price: basePrice,
-                cost: productCost,
-                quantity,
-                category,
-                productType: productForm.productType,
-                published: !!productForm.published,
-                attributes: normalizedAttributes,
-                brand,
-                description,
-                purchaseInvoice: stockIncrease > 0 ? purchaseInvoice : undefined,
-                images: galleryEntries.map((img: any) => ({
-                    url: img.url.trim(),
-                    width: Number(img.width),
-                    height: Number(img.height),
-                    kind: 'gallery'
-                })),
-                thumbImages: thumbEntries.map((img: any) => ({
-                    url: img.url.trim(),
-                    width: Number(img.width),
-                    height: Number(img.height),
-                    kind: 'thumb'
-                }))
-            };
-
-            if (editingProduct) {
-                await withTransientRetry(() => requestApi(`/api/products/${productForm.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                }))
-                showNotification('Producto actualizado correctamente');
-            } else {
-                await withTransientRetry(() => requestApi('/api/products', {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                }))
-                showNotification('Producto creado correctamente');
-            }
-            setIsProductModalOpen(false);
-            // Refresh list
-            const res = await withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } }));
-            setAdminProductsList(normalizeAdminProducts(res.body));
-            if (activeTab === 'inventory') {
-                await loadRecentPurchaseInvoices({ silent: true })
-            }
-        } catch (error) {
-            console.error(error);
-            const message = String((error as any)?.message || '').trim()
-            showNotification(message || 'Error al guardar producto', 'error');
-        } finally {
-            setProductSaving(false)
-        }
-    }
-
     const handleOptimizePrice = async (product: any) => {
         if (!product.business?.suggestions?.recommended_price) return;
 
         const newPrice = product.business.suggestions.recommended_price;
+        const productId = getAdminProductEntityId(product)
         if (!confirm(`¿Aplicar precio sugerido de $${newPrice}?`)) return;
+        if (!productId) {
+            showNotification('No se pudo resolver el identificador del producto.', 'error')
+            return
+        }
 
         try {
             const token = localStorage.getItem('authToken');
-            await requestApi(`/api/products/${product.id}`, {
+            await requestApi(`/api/products/${productId}`, {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -1434,10 +500,10 @@ const MyAccount = () => {
         return primary?.billing || null
     }
 
-    const formatMoney = (value: any) => {
+    const formatMoney = React.useCallback((value: any) => {
         const num = Number(value ?? 0)
         return `$${num.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    }
+    }, [])
 
     const formatDateEcuador = (
         value: string | number | Date,
@@ -1456,6 +522,21 @@ const MyAccount = () => {
         if (Number.isNaN(date.getTime())) return '-'
         return date.toLocaleString('es-EC', { timeZone: 'America/Guayaquil', ...options })
     }
+
+    const getLocalSalePaymentMethodLabel = React.useCallback((method?: string) => {
+        switch ((method || '').toLowerCase()) {
+            case 'cash':
+                return 'Efectivo'
+            case 'card':
+                return 'Tarjeta'
+            case 'transfer':
+                return 'Transferencia'
+            case 'mixed':
+                return 'Mixto'
+            default:
+                return 'Otro'
+        }
+    }, [])
 
     const getOrderItemsGrossSubtotal = (order: any) => {
         if (!order) return 0
@@ -1523,49 +604,73 @@ const MyAccount = () => {
         }
     }
     const printOrderInvoiceById = async (orderId: string) => {
+        let printWindow: Window | null = null
+
         try {
             const token = localStorage.getItem('authToken')
             const res = await fetch(`/api/orders/${orderId}/invoice`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             if (!res.ok) {
-                throw new Error('No se pudo abrir la factura.')
+                throw new Error('No se pudo preparar la factura para impresión.')
             }
-            const html = await res.text()
-            const iframe = document.createElement('iframe')
-            iframe.style.position = 'fixed'
-            iframe.style.right = '0'
-            iframe.style.bottom = '0'
-            iframe.style.width = '0'
-            iframe.style.height = '0'
-            iframe.style.border = '0'
-            iframe.style.visibility = 'hidden'
-            document.body.appendChild(iframe)
 
-            const doc = iframe.contentWindow?.document
-            if (!doc) return
-            doc.open()
-            doc.write(html)
-            doc.close()
-
-            iframe.onload = () => {
-                setTimeout(() => {
-                    try {
-                        iframe.contentWindow?.focus()
-                        iframe.contentWindow?.print()
-                    } catch (err) {
-                        console.error(err)
-                    } finally {
-                        setTimeout(() => {
-                            iframe.remove()
-                        }, 1000)
-                    }
-                }, 300)
+            const invoiceHtml = await res.text()
+            printWindow = window.open('', '_blank', 'width=1024,height=768')
+            if (!printWindow) {
+                showNotification('Tu navegador bloqueó la ventana de impresión.', 'error')
+                return false
             }
+
+            const printDocumentHtml = invoiceHtml.includes('</body>')
+                ? invoiceHtml.replace(
+                    '</body>',
+                    `<script>
+                        window.addEventListener('load', function () {
+                            setTimeout(function () {
+                                window.focus();
+                                window.print();
+                            }, 250);
+                        });
+                        window.addEventListener('afterprint', function () {
+                            setTimeout(function () {
+                                window.close();
+                            }, 150);
+                        });
+                    </script></body>`
+                )
+                : `${invoiceHtml}<script>
+                    window.addEventListener('load', function () {
+                        setTimeout(function () {
+                            window.focus();
+                            window.print();
+                        }, 250);
+                    });
+                    window.addEventListener('afterprint', function () {
+                        setTimeout(function () {
+                            window.close();
+                        }, 150);
+                    });
+                </script>`
+
+            printWindow.document.open()
+            printWindow.document.write(printDocumentHtml)
+            printWindow.document.close()
+            window.setTimeout(() => {
+                try {
+                    printWindow?.focus()
+                } catch (error) {
+                    console.error(error)
+                }
+            }, 100)
+
             return true
         } catch (error) {
             console.error(error)
-            showNotification('No se pudo abrir la factura.', 'error')
+            if (printWindow && !printWindow.closed) {
+                printWindow.close()
+            }
+            showNotification('No se pudo abrir el panel de impresión.', 'error')
             return false
         }
     }
@@ -1697,10 +802,62 @@ const MyAccount = () => {
         }
     }
 
-    const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
+    const showNotification = React.useCallback((text: string, type: 'success' | 'error' = 'success') => {
         setMessage({ text, type })
         setTimeout(() => setMessage(null), 5000)
-    }
+    }, [])
+
+    const handleDuplicateVariant = React.useCallback((product: any) => {
+        const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+        const multiplier = 1 + rate / 100
+        setEditingProduct(null)
+        setProductEditorMode('duplicate-variant')
+        setProductEditorInitialForm(createDuplicateVariantFormFromProduct(product, multiplier))
+        setIsProductModalOpen(true)
+        showNotification('Se duplicó la variante. Cambia nombre o presentación antes de guardar.')
+    }, [dashboardStats?.tax?.rate, showNotification, vatRate])
+
+    const handleToggleProductPublication = React.useCallback(async (product: any, nextPublished: boolean) => {
+        const productId = getAdminProductEntityId(product)
+        if (!productId) return
+
+        if (nextPublished && !isProductEligibleForPublication(product)) {
+            showNotification('Solo puedes publicar artículos con precio y existencia mayor a 0.', 'error')
+            return
+        }
+
+        setProductPublicationPendingIds((prev) => ({ ...prev, [productId]: true }))
+        try {
+            const token = localStorage.getItem('authToken')
+            await requestApi(`/api/products/${productId}`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ published: nextPublished })
+            })
+
+            setAdminProductsList((prev) => prev.map((item: any) => {
+                const itemId = getAdminProductEntityId(item)
+                if (itemId !== productId) return item
+                return {
+                    ...item,
+                    published: nextPublished
+                }
+            }))
+            showNotification(nextPublished ? 'Artículo publicado.' : 'Artículo ocultado del sitio.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo actualizar la publicación del artículo.', 'error')
+        } finally {
+            setProductPublicationPendingIds((prev) => {
+                const next = { ...prev }
+                delete next[productId]
+                return next
+            })
+        }
+    }, [showNotification])
 
     const loadVatRate = async (options?: { silent?: boolean }) => {
         const silent = options?.silent === true
@@ -1993,7 +1150,7 @@ const MyAccount = () => {
     }
 
     const normalizeStatus = (status?: string) => (status || '').toLowerCase()
-    const parseMoney = (value: any) => {
+    const parseMoney = React.useCallback((value: any) => {
         if (typeof value === 'string') {
             const normalized = value.replace(/\./g, '').replace(',', '.')
             const parsed = Number(normalized)
@@ -2001,11 +1158,11 @@ const MyAccount = () => {
         }
         const parsed = Number(value)
         return Number.isFinite(parsed) ? parsed : 0
-    }
-    const parseDecimalInput = (value: string) => {
+    }, [])
+    const parseDecimalInput = React.useCallback((value: string) => {
         const parsed = Number(value)
         return Number.isFinite(parsed) ? parsed : 0
-    }
+    }, [])
 
     const toNumber = (value: any, fallback = 0, min = 0, max?: number) => {
         const parsed = Number(value)
@@ -2042,80 +1199,6 @@ const MyAccount = () => {
         return Math.round(value / increment) * increment
     }
 
-    const applyPricingAdjustmentsPreview = (
-        priceNet: number,
-        taxMultiplier: number,
-        rounding: number,
-        includeVatInPvp: boolean,
-        shippingBuffer: number
-    ) => {
-        let adjusted = priceNet * (1 + (Math.max(0, shippingBuffer) / 100))
-        if (rounding > 0) {
-            if (includeVatInPvp && taxMultiplier > 0) {
-                const pvp = roundPriceIncrement(adjusted * taxMultiplier, rounding)
-                adjusted = taxMultiplier > 0 ? (pvp / taxMultiplier) : pvp
-            } else {
-                adjusted = roundPriceIncrement(adjusted, rounding)
-            }
-        }
-        return Math.max(0, adjusted)
-    }
-
-    const getSuggestedBasePriceForCostPreview = (
-        cost: number,
-        taxMultiplier: number,
-        margins: PricingMargins,
-        calc: PricingCalc
-    ) => {
-        const normalizedCost = Math.max(0, Number(cost || 0))
-        if (!Number.isFinite(normalizedCost) || normalizedCost <= 0) return 0
-
-        const minMargin = Math.max(0, Number(margins.minMargin || 0))
-        const baseMargin = Math.max(minMargin, Number(margins.baseMargin || 0))
-        const targetMargin = Math.max(baseMargin, Number(margins.targetMargin || 0))
-        const promoBuffer = Math.max(0, Number(margins.promoBuffer || 0))
-        const strategy: PricingCalc['strategy'] = ['cost_plus', 'target_margin', 'competitive'].includes(calc.strategy)
-            ? calc.strategy
-            : 'cost_plus'
-
-        const priceFromMargin = (baseCost: number, marginPct: number) => {
-            const margin = Math.max(0, Math.min(95, marginPct))
-            const denom = 1 - (margin / 100)
-            if (denom <= 0) return baseCost
-            return baseCost / denom
-        }
-
-        const minPrice = priceFromMargin(normalizedCost, minMargin)
-        let recommended = minPrice
-        if (strategy === 'target_margin') {
-            recommended = priceFromMargin(normalizedCost, targetMargin + promoBuffer)
-        } else if (strategy === 'competitive') {
-            recommended = priceFromMargin(normalizedCost, minMargin)
-        } else {
-            recommended = normalizedCost * (1 + ((baseMargin + promoBuffer) / 100))
-        }
-
-        if (recommended < minPrice) {
-            recommended = minPrice
-        }
-
-        const adjustedRecommended = applyPricingAdjustmentsPreview(
-            recommended,
-            taxMultiplier,
-            Math.max(0, Number(calc.rounding || 0)),
-            Boolean(calc.includeVatInPvp),
-            Math.max(0, Number(calc.shippingBuffer || 0))
-        )
-        const adjustedMin = applyPricingAdjustmentsPreview(
-            minPrice,
-            taxMultiplier,
-            Math.max(0, Number(calc.rounding || 0)),
-            Boolean(calc.includeVatInPvp),
-            Math.max(0, Number(calc.shippingBuffer || 0))
-        )
-
-        return Math.max(adjustedRecommended, adjustedMin)
-    }
 
     const normalizePricingRules = (input: typeof pricingRules) => ({
         bulkThreshold: Math.round(toNumber(input.bulkThreshold, 10, 1)),
@@ -2158,12 +1241,12 @@ const MyAccount = () => {
         return { label: 'Cliente', className: 'bg-surface text-secondary' }
     }
 
-    const formatIsoDate = (value?: string | null) => {
+    const formatIsoDate = React.useCallback((value?: string | null) => {
         const raw = String(value || '').trim()
         if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return '-'
         const [year, month, day] = raw.split('-')
         return `${day}/${month}/${year}`
-    }
+    }, [])
 
     const getProductExpirationMeta = (product: any) => {
         const productType = String(product?.productType || '').toLowerCase()
@@ -2253,21 +1336,63 @@ const MyAccount = () => {
         return null
     }
 
-    const toggleAdminMenuGroup = (groupKey: AdminMenuGroupKey) => {
-        setAdminMenuExpanded((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))
-    }
+    const navigateToPanelTab = React.useCallback((
+        nextTab: string,
+        options?: {
+            adminReportSection?: AdminReportSection;
+            clearDeepDive?: boolean;
+        }
+    ) => {
+        startPanelNavigationTransition(() => {
+            if (typeof options?.adminReportSection !== 'undefined') {
+                setAdminReportSection(options.adminReportSection)
+            }
+            if (options?.clearDeepDive !== false) {
+                setSelectedDeepDive(null)
+            }
+            setActiveTab((prev) => (prev === nextTab ? prev : nextTab))
+        })
+    }, [])
 
-    const openAdminReportSection = (section: AdminReportSection) => {
-        setAdminReportSection(section)
-        setSelectedDeepDive(null)
-        setActiveTab('reports')
-    }
+    const toggleAdminMenuGroup = React.useCallback((groupKey: AdminMenuGroupKey) => {
+        setAdminMenuExpanded((prev) => {
+            const nextState = !prev[groupKey]
+            return {
+                monitoring: false,
+                reporting: false,
+                catalog: false,
+                operations: false,
+                finance: false,
+                [groupKey]: nextState
+            }
+        })
+    }, [])
+
+    const openAdminReportSection = React.useCallback((section: AdminReportSection) => {
+        navigateToPanelTab('reports', { adminReportSection: section })
+    }, [navigateToPanelTab])
 
     React.useEffect(() => {
         if (user?.role !== 'admin') return
         const groupKey = getAdminGroupForTab(activeTab)
         if (!groupKey) return
-        setAdminMenuExpanded((prev) => (prev[groupKey] ? prev : { ...prev, [groupKey]: true }))
+        setAdminMenuExpanded((prev) => {
+            const nextState = {
+                monitoring: groupKey === 'monitoring',
+                reporting: groupKey === 'reporting',
+                catalog: groupKey === 'catalog',
+                operations: groupKey === 'operations',
+                finance: groupKey === 'finance',
+            }
+            const hasChanged =
+                prev.monitoring !== nextState.monitoring ||
+                prev.reporting !== nextState.reporting ||
+                prev.catalog !== nextState.catalog ||
+                prev.operations !== nextState.operations ||
+                prev.finance !== nextState.finance
+
+            return hasChanged ? nextState : prev
+        })
     }, [activeTab, user?.role])
 
     const strategicAlerts = dashboardStats?.strategicAlerts ?? []
@@ -2294,38 +1419,47 @@ const MyAccount = () => {
         const text = `${alert.action} ${alert.message}`.toLowerCase()
 
         if (text.includes('invent') || text.includes('stock') || text.includes('riesgo') || text.includes('venc') || text.includes('caduc')) {
-            setActiveTab('inventory')
+            navigateToPanelTab('inventory')
             return
         }
 
         if (text.includes('ticket') || text.includes('promedio')) {
-            setAdminReportSection('general')
-            setActiveTab('reports')
-            setSelectedDeepDive('aov')
+            startPanelNavigationTransition(() => {
+                setAdminReportSection('general')
+                setActiveTab('reports')
+                setSelectedDeepDive('aov')
+            })
             return
         }
 
         if (text.includes('margen') || text.includes('utilidad') || text.includes('rentab')) {
-            setAdminReportSection('balance')
-            setActiveTab('reports')
-            setSelectedDeepDive('profit')
+            startPanelNavigationTransition(() => {
+                setAdminReportSection('balance')
+                setActiveTab('reports')
+                setSelectedDeepDive('profit')
+            })
             return
         }
 
         if (text.includes('pedido') || text.includes('env') || text.includes('log')) {
-            setActiveOrders('delivery')
-            setActiveTab('admin-orders')
+            startPanelNavigationTransition(() => {
+                setActiveOrders('delivery')
+                setActiveTab('admin-orders')
+                setSelectedDeepDive(null)
+            })
             return
         }
 
         if (text.includes('precio') || text.includes('promoc') || text.includes('campa')) {
-            setActiveTab('prices')
+            navigateToPanelTab('prices')
             return
         }
 
-        setAdminReportSection('sales')
-        setActiveTab('reports')
-        setSelectedDeepDive('sales')
+        startPanelNavigationTransition(() => {
+            setAdminReportSection('sales')
+            setActiveTab('reports')
+            setSelectedDeepDive('sales')
+        })
     }
 
     const syncPosState = (payload: any) => {
@@ -2713,17 +1847,6 @@ const MyAccount = () => {
     }, [user])
 
     React.useEffect(() => {
-        if (!isProductModalOpen) return
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && !productSaving) {
-                setIsProductModalOpen(false)
-            }
-        }
-        window.addEventListener('keydown', onKeyDown)
-        return () => window.removeEventListener('keydown', onKeyDown)
-    }, [isProductModalOpen, productSaving])
-
-    React.useEffect(() => {
         if (!isPurchaseInvoiceModalOpen) return
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape' && !purchaseInvoiceDetailLoading) {
@@ -2762,50 +1885,6 @@ const MyAccount = () => {
     const vatExampleTotal = (100 * vatDisplayMultiplier).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const vatRateValue = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
     const vatMultiplier = 1 + vatRateValue / 100
-    const normalizedProductMargins = normalizeMarginSettings(marginSettings)
-    const normalizedProductCalc = normalizeCalcSettings(calcSettings)
-    const productBasePrice = Number(productForm.price || 0)
-    const productCost = Number(productForm.cost || 0)
-    const productPvpPrice = Number(productForm.pvp || 0) || (productBasePrice * vatMultiplier)
-    const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const productGrossProfit = Math.max(productBasePrice - productCost, 0)
-    const productGrossMargin = productBasePrice > 0 ? (productGrossProfit / productBasePrice) * 100 : 0
-    const productMarkup = productCost > 0 ? (productGrossProfit / productCost) * 100 : 0
-    const productProfitLabel = productGrossProfit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const persistedProductPvpPrice = Number(editingProduct?.price ?? 0)
-    const persistedProductBasePrice = vatMultiplier > 0 ? (persistedProductPvpPrice / vatMultiplier) : persistedProductPvpPrice
-    const persistedProductCost = Number(editingProduct?.business?.cost ?? editingProduct?.cost ?? 0)
-    const persistedProductQuantity = Number(editingProduct?.quantity ?? 0)
-    const requestedProductQuantity = Number(productForm.quantity || 0)
-    const stockEntryDelta = editingProduct
-        ? Math.max(0, requestedProductQuantity - persistedProductQuantity)
-        : Math.max(0, requestedProductQuantity)
-    const requiresPurchaseInvoice = stockEntryDelta > 0
-    const purchaseInvoiceTitle = editingProduct
-        ? `Factura para ingreso de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
-        : `Factura para stock inicial de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
-    const hasProductCostPreview = Number.isFinite(productCost) && productCost > 0
-    const suggestedBasePricePreview = hasProductCostPreview
-        ? getSuggestedBasePriceForCostPreview(productCost, vatMultiplier, normalizedProductMargins, normalizedProductCalc)
-        : 0
-    const suggestedPvpPricePreview = suggestedBasePricePreview * vatMultiplier
-    const costChangedForAutoPricing = Boolean(editingProduct)
-        && Number.isFinite(productCost)
-        && Math.abs(productCost - persistedProductCost) > 0.00001
-    const automaticAppliedBasePrice = costChangedForAutoPricing
-        ? Math.max(suggestedBasePricePreview, persistedProductBasePrice, Number.isFinite(productBasePrice) ? productBasePrice : 0)
-        : (Number.isFinite(productBasePrice) ? productBasePrice : 0)
-    const automaticAppliedPvpPrice = automaticAppliedBasePrice * vatMultiplier
-    const automaticPriceWillIncrease = costChangedForAutoPricing
-        && automaticAppliedBasePrice > (Number.isFinite(productBasePrice) ? productBasePrice : 0) + 0.00001
-    const suggestedBasePriceLabel = suggestedBasePricePreview.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const suggestedPvpPriceLabel = suggestedPvpPricePreview.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const automaticAppliedBasePriceLabel = automaticAppliedBasePrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const automaticAppliedPvpPriceLabel = automaticAppliedPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const isUploadingProductImages = Object.values(imageUploading).some(Boolean)
-    const productFormErrorEntries = Object.entries(productFormErrors)
     const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
     const salesTrendIsPositive = salesProgressPercentage >= 0
     const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
@@ -2909,10 +1988,10 @@ const MyAccount = () => {
         setIsSalesProductModalOpen(true)
     }
     const localSaleCatalog = React.useMemo(() => {
-        const query = localSaleSearch.trim().toLowerCase()
+        const query = deferredLocalSaleSearch.trim().toLowerCase()
         return (adminProductsList || [])
             .map((product: any) => {
-                const internalId = String(product.internalId || product.id || '').trim()
+                const internalId = getAdminProductEntityId(product)
                 const legacyId = String(product.id || internalId).trim()
                 const stock = Math.max(0, Number(product.quantity ?? 0))
                 const sku = String(product.attributes?.sku || '').trim()
@@ -2945,13 +2024,16 @@ const MyAccount = () => {
                 if (b.stock !== a.stock) return b.stock - a.stock
                 return a.name.localeCompare(b.name, 'es')
             })
-    }, [adminProductsList, localSaleSearch, parseMoney])
+    }, [adminProductsList, deferredLocalSaleSearch, parseMoney])
+    const localSaleItemQuantityById = React.useMemo(() => {
+        return new Map(localSaleItems.map((item) => [item.internalId, item.quantity]))
+    }, [localSaleItems])
     const INVENTORY_LOW_STOCK_THRESHOLD = 5
     const inventoryManagementRows = React.useMemo(() => {
         const statusOrder: Record<string, number> = { expired: 0, expiring: 1, out: 2, low: 3, available: 4 }
         return (adminProductsList || [])
             .map((product: any) => {
-                const internalId = String(product.internalId || product.id || '').trim()
+                const internalId = getAdminProductEntityId(product)
                 const legacyId = String(product.id || internalId).trim()
                 const productType = String(product.productType || '').toLowerCase()
                 const isPerishable = productType === 'comida'
@@ -3026,15 +2108,36 @@ const MyAccount = () => {
             })
     }, [adminProductsList, parseMoney])
     const filteredInventoryRows = React.useMemo(() => {
-        const query = inventorySearch.trim().toLowerCase()
-        return inventoryManagementRows.filter((row) => {
+        const scopedRows = inventoryManagementRows.filter((row) => {
             if (inventoryTypeFilter === 'perishable' && !row.isPerishable) return false
             if (inventoryTypeFilter === 'nonperishable' && row.isPerishable) return false
             if (inventoryStatusFilter !== 'all' && row.stockStatus !== inventoryStatusFilter) return false
-            if (!query) return true
-            return row.searchText.includes(query)
+            return true
         })
-    }, [inventoryManagementRows, inventorySearch, inventoryStatusFilter, inventoryTypeFilter])
+        const query = sanitizeProductSearchQuery(deferredInventorySearch)
+        if (!query) {
+            return scopedRows
+        }
+
+        const inventorySearchIndex = new Map(
+            scopedRows.map((row) => [
+                row.internalId,
+                `${buildProductSearchText(row.source as any)} ${row.lotCode} ${row.storageLocation} ${row.supplier} ${row.lastPurchaseInvoiceNumber} ${row.category}`,
+            ])
+        )
+
+        return scopedRows
+            .map((row) => ({
+                row,
+                score: getProductSearchScore(inventorySearchIndex.get(row.internalId) ?? row.searchText, query),
+            }))
+            .filter((item) => item.score > 0)
+            .sort((left, right) => {
+                if (right.score !== left.score) return right.score - left.score
+                return left.row.name.localeCompare(right.row.name, 'es')
+            })
+            .map((item) => item.row)
+    }, [deferredInventorySearch, inventoryManagementRows, inventoryStatusFilter, inventoryTypeFilter])
     const inventorySummary = React.useMemo(() => {
         return inventoryManagementRows.reduce((acc, row) => {
             acc.totalSkus += 1
@@ -3065,6 +2168,15 @@ const MyAccount = () => {
         })
     }, [recentPurchaseInvoices])
     const hasPerishableProducts = inventoryManagementRows.some((row) => row.isPerishable)
+    const deferredAdminProductsSearch = React.useDeferredValue(adminProductsSearch)
+    const adminProductSearchIndex = React.useMemo(
+        () => buildProductSearchIndex((adminProductsList || []) as any),
+        [adminProductsList]
+    )
+    const normalizedAdminProductsSearch = React.useMemo(
+        () => sanitizeProductSearchQuery(deferredAdminProductsSearch),
+        [deferredAdminProductsSearch]
+    )
     const productPublicationSummary = React.useMemo(() => {
         return (adminProductsList || []).reduce((acc, product: any) => {
             acc.all += 1
@@ -3073,11 +2185,26 @@ const MyAccount = () => {
             } else {
                 acc.published += 1
             }
+            if (isProductEligibleForPublication(product)) {
+                acc.publishable += 1
+            } else {
+                acc.blocked += 1
+            }
+            if (Number(product?.quantity ?? 0) > 0) {
+                acc.withStock += 1
+            } else {
+                acc.noStock += 1
+            }
+            if (Number(product?.price ?? 0) > 0) {
+                acc.withPrice += 1
+            } else {
+                acc.noPrice += 1
+            }
             return acc
-        }, { all: 0, published: 0, hidden: 0 })
+        }, { all: 0, published: 0, hidden: 0, publishable: 0, blocked: 0, withStock: 0, noStock: 0, withPrice: 0, noPrice: 0 })
     }, [adminProductsList])
     const filteredAdminProductsList = React.useMemo(() => {
-        return (adminProductsList || []).filter((product: any) => {
+        const publicationScopedProducts = (adminProductsList || []).filter((product: any) => {
             if (productPublicationFilter === 'published') {
                 return product?.published !== false
             }
@@ -3086,7 +2213,36 @@ const MyAccount = () => {
             }
             return true
         })
-    }, [adminProductsList, productPublicationFilter])
+
+        const quickScopedProducts = publicationScopedProducts.filter((product: any) => {
+            if (adminProductsQuickFilter === 'publishable') {
+                return isProductEligibleForPublication(product)
+            }
+            if (adminProductsQuickFilter === 'blocked') {
+                return !isProductEligibleForPublication(product)
+            }
+            if (adminProductsQuickFilter === 'with-stock') {
+                return Number(product?.quantity ?? 0) > 0
+            }
+            if (adminProductsQuickFilter === 'no-stock') {
+                return Number(product?.quantity ?? 0) <= 0
+            }
+            if (adminProductsQuickFilter === 'no-price') {
+                return Number(product?.price ?? 0) <= 0
+            }
+            return true
+        })
+
+        if (!normalizedAdminProductsSearch) {
+            return quickScopedProducts
+        }
+
+        return filterProductsBySearch(
+            quickScopedProducts as any,
+            normalizedAdminProductsSearch,
+            adminProductSearchIndex as any
+        ) as any[]
+    }, [adminProductSearchIndex, adminProductsList, adminProductsQuickFilter, normalizedAdminProductsSearch, productPublicationFilter])
     const localSaleUnits = localSaleItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0)
     const localSaleNet = Number(localSaleQuote?.vat_subtotal ?? 0)
     const localSaleVat = Number(localSaleQuote?.vat_amount ?? 0)
@@ -3256,7 +2412,7 @@ const MyAccount = () => {
     const posFieldFlexClass = 'flex-1 px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
     const posTextareaClass = 'w-full px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm resize-none focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
 
-    const handleAddLocalSaleProduct = (product: {
+    const handleAddLocalSaleProduct = React.useCallback((product: {
         internalId: string;
         name: string;
         category: string;
@@ -3304,9 +2460,9 @@ const MyAccount = () => {
             ]
         })
         setLocalSaleError(null)
-    }
+    }, [showNotification])
 
-    const handleUpdateLocalSaleQuantity = (internalId: string, quantity: number) => {
+    const handleUpdateLocalSaleQuantity = React.useCallback((internalId: string, quantity: number) => {
         setLocalSaleItems((prev) => prev
             .map((item) => {
                 if (item.internalId !== internalId) return item
@@ -3316,13 +2472,13 @@ const MyAccount = () => {
             })
             .filter((item) => item.quantity > 0)
         )
-    }
+    }, [])
 
-    const handleRemoveLocalSaleItem = (internalId: string) => {
+    const handleRemoveLocalSaleItem = React.useCallback((internalId: string) => {
         setLocalSaleItems((prev) => prev.filter((item) => item.internalId !== internalId))
-    }
+    }, [])
 
-    const handleClearLocalSale = () => {
+    const handleClearLocalSale = React.useCallback(() => {
         setLocalSaleItems([])
         setLocalSaleDiscountCode('')
         setLocalSaleNotes('')
@@ -3340,7 +2496,7 @@ const MyAccount = () => {
         setLocalSaleQuote(null)
         setLocalSaleError(null)
         setLocalSaleCustomerLookupMessage(null)
-    }
+    }, [])
     const handleOpenLastLocalSaleOrder = async () => {
         if (!localSaleLastOrderId) return
         await handleViewOrder(localSaleLastOrderId)
@@ -3510,6 +2666,17 @@ const MyAccount = () => {
         const firstName = nameParts[0] || 'Cliente'
         const lastName = nameParts.slice(1).join(' ') || 'Local'
         const normalizedDiscountCode = localSaleDiscountCode.trim().toUpperCase() || null
+        const paymentMethodLabel = getLocalSalePaymentMethodLabel(localSalePaymentMethod)
+        const attemptedAt = new Date().toISOString()
+        const fallbackOrderSummary = {
+            customerName,
+            documentNumber: localSaleDocumentNumberValue || null,
+            paymentMethod: paymentMethodLabel,
+            total: Number(localSaleTotal.toFixed(2)),
+            itemCount: localSaleItems.length,
+            units: localSaleUnits,
+            createdAt: attemptedAt
+        }
         const paymentDetails = {
             channel: 'local_pos',
             shift_id: posActiveShift?.id || null,
@@ -3561,6 +2728,26 @@ const MyAccount = () => {
             })
 
             const createdOrderId = created.body?.id ? String(created.body.id) : ''
+            const createdItems = Array.isArray(created.body?.items) ? created.body.items : []
+            const createdUnits = createdItems.length > 0
+                ? createdItems.reduce((acc: number, item: any) => acc + Number(item?.quantity || 0), 0)
+                : fallbackOrderSummary.units
+            setLocalSaleLastSubmission({
+                status: 'success',
+                orderId: createdOrderId || null,
+                orderStatus: created.body?.status ? String(created.body.status) : 'completed',
+                message: createdOrderId
+                    ? `Venta registrada correctamente con pedido ${createdOrderId}.`
+                    : 'Venta registrada correctamente.',
+                customerName: fallbackOrderSummary.customerName,
+                documentNumber: fallbackOrderSummary.documentNumber,
+                paymentMethod: fallbackOrderSummary.paymentMethod,
+                total: Number(created.body?.total ?? fallbackOrderSummary.total),
+                itemCount: createdItems.length > 0 ? createdItems.length : fallbackOrderSummary.itemCount,
+                units: createdUnits,
+                createdAt: created.body?.created_at ? String(created.body.created_at) : fallbackOrderSummary.createdAt,
+                invoiceAvailable: Boolean(createdOrderId)
+            })
             showNotification(createdOrderId ? `Venta local registrada: ${createdOrderId}` : 'Venta local registrada.')
             if (createdOrderId) {
                 setLocalSaleLastOrderId(createdOrderId)
@@ -3600,6 +2787,20 @@ const MyAccount = () => {
             console.error(error)
             const message = String(error?.message || 'No se pudo registrar la venta local.')
             setLocalSaleError(message)
+            setLocalSaleLastSubmission({
+                status: 'error',
+                orderId: null,
+                orderStatus: null,
+                message,
+                customerName: fallbackOrderSummary.customerName,
+                documentNumber: fallbackOrderSummary.documentNumber,
+                paymentMethod: fallbackOrderSummary.paymentMethod,
+                total: fallbackOrderSummary.total,
+                itemCount: fallbackOrderSummary.itemCount,
+                units: fallbackOrderSummary.units,
+                createdAt: fallbackOrderSummary.createdAt,
+                invoiceAvailable: false
+            })
             showNotification(message, 'error')
         } finally {
             setLocalSaleSaving(false)
@@ -3725,25 +2926,6 @@ const MyAccount = () => {
             .sort((a, b) => b.inventoryCost - a.inventoryCost)
     }, [adminProductsList, parseMoney])
 
-    const handleBasePriceChange = (value: string) => {
-        const baseValue = Number(value || 0)
-        const pvpValue = vatMultiplier > 0 ? (baseValue * vatMultiplier) : baseValue
-        setProductForm((prev) => ({
-            ...prev,
-            price: value,
-            pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : ''
-        }))
-    }
-
-    const handlePvpPriceChange = (value: string) => {
-        const pvpValue = Number(value || 0)
-        const baseValue = vatMultiplier > 0 ? (pvpValue / vatMultiplier) : pvpValue
-        setProductForm((prev) => ({
-            ...prev,
-            pvp: value,
-            price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : ''
-        }))
-    }
 
     const updateAddressData = (type: 'billing' | 'shipping', field: string, value: string) => {
         const newAddresses = [...savedAddresses]
@@ -4301,7 +3483,7 @@ const MyAccount = () => {
         })
     }, [adminUsersList])
 
-    const adminUsersSearchTerm = adminUsersSearch.trim().toLowerCase()
+    const adminUsersSearchTerm = deferredAdminUsersSearch.trim().toLowerCase()
     const filteredAdminUsers = React.useMemo(() => {
         return adminUsersEnriched.filter((item) => {
             const roleNormalized = String(item.role || 'customer').toLowerCase()
@@ -4340,10 +3522,16 @@ const MyAccount = () => {
         })
     }, [adminUsersEnriched])
 
-    const recentUserOrders = userOrders.slice(0, 5)
+    const recentUserOrders = React.useMemo(() => userOrders.slice(0, 5), [userOrders])
     const totalUserOrders = userOrders.length
-    const canceledUserOrders = userOrders.filter(order => ['canceled', 'cancelled'].includes(normalizeStatus(order.status))).length
-    const pickupUserOrders = userOrders.filter(order => ['pickup', 'ready_for_pickup', 'ready'].includes(normalizeStatus(order.status))).length
+    const canceledUserOrders = React.useMemo(
+        () => userOrders.filter((order) => ['canceled', 'cancelled'].includes(normalizeStatus(order.status))).length,
+        [userOrders]
+    )
+    const pickupUserOrders = React.useMemo(
+        () => userOrders.filter((order) => ['pickup', 'ready_for_pickup', 'ready'].includes(normalizeStatus(order.status))).length,
+        [userOrders]
+    )
 
     const matchesActiveOrder = (order: Order) => {
         const status = normalizeStatus(order.status)
@@ -4358,8 +3546,8 @@ const MyAccount = () => {
         if (activeOrders === 'canceled') return ['canceled', 'cancelled'].includes(status)
         return true
     }
-    const filteredUserOrders = userOrders.filter(matchesActiveOrder)
-    const filteredAdminOrders = adminOrdersList.filter(matchesActiveOrder)
+    const filteredUserOrders = React.useMemo(() => userOrders.filter(matchesActiveOrder), [userOrders, activeOrders, activeTab])
+    const filteredAdminOrders = React.useMemo(() => adminOrdersList.filter(matchesActiveOrder), [adminOrdersList, activeOrders, activeTab])
     const adminOrdersCounts = React.useMemo(() => {
         const counts = {
             all: adminOrdersList.length,
@@ -4472,234 +3660,18 @@ const MyAccount = () => {
                 <div className="w-full max-w-[1920px] mx-auto px-6 md:px-10">
                     <div className="content-main flex gap-y-8 max-lg:flex-col w-full min-w-0">
                         <div className="left lg:w-1/4 xl:w-1/5 w-full xl:pr-10 lg:pr-6 min-w-0">
-                            <div className="user-infor bg-surface lg:px-7 px-4 lg:py-10 py-5 md:rounded-[20px] rounded-xl">
-                                <div className="heading flex flex-col items-center justify-center">
-                                    <div className="avatar">
-                                        <Image
-                                            src={'/images/avatar/1.png'}
-                                            width={300}
-                                            height={300}
-                                            alt='Foto de perfil'
-                                            priority
-                                            loading="eager"
-                                            className='md:w-[140px] w-[120px] md:h-[140px] h-[120px] rounded-full'
-                                        />
-                                    </div>
-                                    <div className="name heading6 mt-4 text-center">{user.name}</div>
-                                    <div className="mail heading6 font-normal normal-case text-secondary text-center mt-1 break-all">{user.email}</div>
-                                </div>
-                                <div className="menu-tab w-full max-w-none lg:mt-10 mt-6">
-                                    {user.role === 'admin' ? (
-                                        <>
-                                            <div className="space-y-3">
-                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                                        onClick={() => toggleAdminMenuGroup('monitoring')}
-                                                    >
-                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                                            <Icon.ChartBar size={16} />
-                                                            <span>Monitoreo</span>
-                                                        </div>
-                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.monitoring ? 'rotate-180' : ''}`} />
-                                                    </button>
-                                                    {adminMenuExpanded.monitoring && (
-                                                        <div className="pb-2 px-2 space-y-1.5">
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center justify-between gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'alerts' ? 'active' : ''}`} onClick={() => setActiveTab('alerts')}>
-                                                                <span className="flex items-center gap-2">
-                                                                    <Icon.Bell size={18} />
-                                                                    <strong className="heading6">Alertas</strong>
-                                                                </span>
-                                                                {strategicAlerts.length > 0 && (
-                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${strategicAlertSummary.critical > 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                                        {strategicAlerts.length}
-                                                                    </span>
-                                                                )}
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                                        onClick={() => toggleAdminMenuGroup('reporting')}
-                                                    >
-                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                                            <Icon.ChartPieSlice size={16} />
-                                                            <span>Reportes</span>
-                                                        </div>
-                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.reporting ? 'rotate-180' : ''}`} />
-                                                    </button>
-                                                    {adminMenuExpanded.reporting && (
-                                                        <div className="pb-2 px-2 space-y-1.5">
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'general') ? 'active' : ''}`} onClick={() => openAdminReportSection('general')}>
-                                                                <Icon.ChartPieSlice size={18} />
-                                                                <strong className="heading6">General</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'sales') ? 'active' : ''}`} onClick={() => openAdminReportSection('sales')}>
-                                                                <Icon.ChartLineUp size={18} />
-                                                                <strong className="heading6">Ventas</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'balance') ? 'active' : ''}`} onClick={() => openAdminReportSection('balance')}>
-                                                                <Icon.Bank size={18} />
-                                                                <strong className="heading6">Balance General</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'inventory') ? 'active' : ''}`} onClick={() => openAdminReportSection('inventory')}>
-                                                                <Icon.Archive size={18} />
-                                                                <strong className="heading6">Inventario</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${(activeTab === 'reports' && adminReportSection === 'traceability') ? 'active' : ''}`} onClick={() => openAdminReportSection('traceability')}>
-                                                                <Icon.Files size={18} />
-                                                                <strong className="heading6">Trazabilidad</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'sales-ranking' ? 'active' : ''}`} onClick={() => setActiveTab('sales-ranking')}>
-                                                                <Icon.Trophy size={18} />
-                                                                <strong className="heading6">Ranking Productos</strong>
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                                        onClick={() => toggleAdminMenuGroup('catalog')}
-                                                    >
-                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                                            <Icon.Package size={16} />
-                                                            <span>Catálogo</span>
-                                                        </div>
-                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.catalog ? 'rotate-180' : ''}`} />
-                                                    </button>
-                                                    {adminMenuExpanded.catalog && (
-                                                        <div className="pb-2 px-2 space-y-1.5">
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>
-                                                                <Icon.ShoppingBag size={18} />
-                                                                <strong className="heading6">Productos</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'inventory' ? 'active' : ''}`} onClick={() => setActiveTab('inventory')}>
-                                                                <Icon.Archive size={18} />
-                                                                <strong className="heading6">Inventario</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-                                                                <Icon.Users size={18} />
-                                                                <strong className="heading6">Usuarios</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'product-page' ? 'active' : ''}`} onClick={() => setActiveTab('product-page')}>
-                                                                <Icon.NotePencil size={18} />
-                                                                <strong className="heading6">Ficha de producto</strong>
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                                        onClick={() => toggleAdminMenuGroup('operations')}
-                                                    >
-                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                                            <Icon.Truck size={16} />
-                                                            <span>Operación</span>
-                                                        </div>
-                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.operations ? 'rotate-180' : ''}`} />
-                                                    </button>
-                                                    {adminMenuExpanded.operations && (
-                                                        <div className="pb-2 px-2 space-y-1.5">
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'store-status' ? 'active' : ''}`} onClick={() => setActiveTab('store-status')}>
-                                                                <Icon.Power size={18} />
-                                                                <strong className="heading6">Ventas</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'local-sales' ? 'active' : ''}`} onClick={() => setActiveTab('local-sales')}>
-                                                                <Icon.Storefront size={18} />
-                                                                <strong className="heading6">Venta en local</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'admin-orders' ? 'active' : ''}`} onClick={() => setActiveTab('admin-orders')}>
-                                                                <Icon.ListChecks size={18} />
-                                                                <strong className="heading6">Pedidos</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'shipments' ? 'active' : ''}`} onClick={() => setActiveTab('shipments')}>
-                                                                <Icon.Truck size={18} />
-                                                                <strong className="heading6">Envíos</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'balances' ? 'active' : ''}`} onClick={() => setActiveTab('balances')}>
-                                                                <Icon.Briefcase size={18} />
-                                                                <strong className="heading6">Balances</strong>
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="rounded-xl border border-line overflow-hidden bg-white">
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                                        onClick={() => toggleAdminMenuGroup('finance')}
-                                                    >
-                                                        <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                                            <Icon.CurrencyDollar size={16} />
-                                                            <span>Precios y finanzas</span>
-                                                        </div>
-                                                        <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.finance ? 'rotate-180' : ''}`} />
-                                                    </button>
-                                                    {adminMenuExpanded.finance && (
-                                                        <div className="pb-2 px-2 space-y-1.5">
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'prices' ? 'active' : ''}`} onClick={() => setActiveTab('prices')}>
-                                                                <Icon.CurrencyDollar size={18} />
-                                                                <strong className="heading6">Precios</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'taxes' ? 'active' : ''}`} onClick={() => setActiveTab('taxes')}>
-                                                                <Icon.Percent size={18} />
-                                                                <strong className="heading6">Impuestos</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'margins' ? 'active' : ''}`} onClick={() => setActiveTab('margins')}>
-                                                                <Icon.TrendUp size={18} />
-                                                                <strong className="heading6">Márgenes</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'calculations' ? 'active' : ''}`} onClick={() => setActiveTab('calculations')}>
-                                                                <Icon.Calculator size={18} />
-                                                                <strong className="heading6">Cálculos</strong>
-                                                            </Link>
-                                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface ${activeTab === 'pricing-rules' ? 'active' : ''}`} onClick={() => setActiveTab('pricing-rules')}>
-                                                                <Icon.SlidersHorizontal size={18} />
-                                                                <strong className="heading6">Reglas de precio</strong>
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-                                                <Icon.HouseLine size={20} />
-                                                <strong className="heading6">Panel de Control</strong>
-                                            </Link>
-                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>
-                                                <Icon.Package size={20} />
-                                                <strong className="heading6">Historial de Pedidos</strong>
-                                            </Link>
-                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'address' ? 'active' : ''}`} onClick={() => setActiveTab('address')}>
-                                                <Icon.Tag size={20} />
-                                                <strong className="heading6">Mis Direcciones</strong>
-                                            </Link>
-                                            <Link href={'#!'} scroll={false} className={`item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 ${activeTab === 'setting' ? 'active' : ''}`} onClick={() => setActiveTab('setting')}>
-                                                <Icon.GearSix size={20} />
-                                                <strong className="heading6">Configuración</strong>
-                                            </Link>
-                                        </>
-                                    )}
-                                    <button onClick={handleLogout} className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 text-left border-none bg-transparent">
-                                        <Icon.SignOut size={20} />
-                                        <strong className="heading6">Cerrar Sesión</strong>
-                                    </button>
-                                </div>
-                            </div>
+                            <AccountSidebar
+                                user={user}
+                                activeTab={activeTab}
+                                adminReportSection={adminReportSection}
+                                adminMenuExpanded={adminMenuExpanded}
+                                onToggleAdminMenuGroup={toggleAdminMenuGroup}
+                                onOpenAdminReportSection={openAdminReportSection}
+                                onNavigateToPanelTab={navigateToPanelTab}
+                                onLogout={handleLogout}
+                                strategicAlertsCount={strategicAlerts.length}
+                                strategicCriticalCount={strategicAlertSummary.critical}
+                            />
                         </div>
                         <div className="right lg:w-3/4 xl:w-4/5 w-full lg:pl-6 pl-0 min-w-0">
                             {user.role === 'admin' && (
@@ -4724,7 +3696,8 @@ const MyAccount = () => {
                                             {adminDataLoading ? 'Actualizando...' : 'Recargar panel'}
                                         </button>
                                     </div>
-                                    <div className={`tab text-content w-full ${activeTab === 'alerts' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'alerts' && (
+                                    <div className="tab text-content w-full">
                                         <div className="flex items-center justify-between pb-6">
                                             <div>
                                                 <div className="heading5">Alertas estratégicas</div>
@@ -4774,7 +3747,7 @@ const MyAccount = () => {
                                             <button
                                                 type="button"
                                                 className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => setActiveTab('inventory')}
+                                                onClick={() => navigateToPanelTab('inventory')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Sin stock</div>
                                                 <div className="text-lg font-bold text-red">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.out_of_stock ?? 0)}</div>
@@ -4782,7 +3755,7 @@ const MyAccount = () => {
                                             <button
                                                 type="button"
                                                 className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => setActiveTab('inventory')}
+                                                onClick={() => navigateToPanelTab('inventory')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
                                                 <div className="text-lg font-bold text-amber-600">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.low_stock ?? 0)}</div>
@@ -4790,7 +3763,7 @@ const MyAccount = () => {
                                             <button
                                                 type="button"
                                                 className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => setActiveTab('inventory')}
+                                                onClick={() => navigateToPanelTab('inventory')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Por vencer</div>
                                                 <div className="text-lg font-bold text-amber-600">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.expiring_products ?? 0)}</div>
@@ -4798,7 +3771,7 @@ const MyAccount = () => {
                                             <button
                                                 type="button"
                                                 className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => setActiveTab('inventory')}
+                                                onClick={() => navigateToPanelTab('inventory')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Vencidos</div>
                                                 <div className="text-lg font-bold text-red">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.expired_products ?? 0)}</div>
@@ -4845,7 +3818,9 @@ const MyAccount = () => {
                                             </div>
                                         )}
                                     </div>
-                                    <div className={`tab text-content w-full ${activeTab === 'reports' ? 'block' : 'hidden'}`}>
+                                    )}
+                                    {activeTab === 'reports' && (
+                                    <div className="tab text-content w-full">
                                         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 pb-6">
                                             <div>
                                                 <div className="heading5">{activeReportMeta.title}</div>
@@ -4909,7 +3884,7 @@ const MyAccount = () => {
                                         <button
                                             type="button"
                                             className="mb-6 p-4 rounded-xl border border-line bg-surface w-full text-left transition-all hover:border-black"
-                                            onClick={() => setActiveTab('taxes')}
+                                            onClick={() => navigateToPanelTab('taxes')}
                                         >
                                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                                 <div>
@@ -5044,7 +4019,7 @@ const MyAccount = () => {
 
                                             <div
                                                 className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                onClick={() => setActiveTab('products')}
+                                                onClick={() => navigateToPanelTab('products')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="text-secondary text-sm font-medium">Productos Activos</div>
@@ -5251,7 +4226,7 @@ const MyAccount = () => {
                                                                                 ? 'bg-amber-600'
                                                                                 : 'bg-primary'
                                                             return (
-                                                                <div key={i} className="cursor-pointer group hover:bg-surface -mx-2 p-2 rounded-lg transition-colors" onClick={() => setActiveTab('admin-orders')}>
+                                                                <div key={i} className="cursor-pointer group hover:bg-surface -mx-2 p-2 rounded-lg transition-colors" onClick={() => navigateToPanelTab('admin-orders')}>
                                                                     <div className="flex justify-between text-sm mb-2">
                                                                         <span className="capitalize font-bold text-secondary group-hover:text-black transition-colors">{getStatusBadge(status.status).label}</span>
                                                                         <span className="font-bold">{status.count} ({perc}%)</span>
@@ -5329,7 +4304,7 @@ const MyAccount = () => {
                                                             const total = dashboardStats.salesByCategory?.reduce((acc, curr) => acc + Number(curr.total), 0) || 1;
                                                             const perc = Math.round((Number(cat.total) / total) * 100);
                                                             return (
-                                                                <div key={i} className="cursor-pointer group hover:bg-white -mx-2 p-2 rounded-lg transition-colors" onClick={() => setActiveTab('products')}>
+                                                                <div key={i} className="cursor-pointer group hover:bg-white -mx-2 p-2 rounded-lg transition-colors" onClick={() => navigateToPanelTab('products')}>
                                                                     <div className="flex justify-between text-[10px] mb-1">
                                                                         <span className="capitalize font-bold text-secondary group-hover:text-black">{cat.category}</span>
                                                                         <span className="font-bold">{perc}%</span>
@@ -5684,7 +4659,7 @@ const MyAccount = () => {
                                                             <button
                                                                 type="button"
                                                                 className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                                onClick={() => setActiveTab('margins')}
+                                                                onClick={() => navigateToPanelTab('margins')}
                                                             >
                                                                 Ajustar márgenes
                                                             </button>
@@ -5698,7 +4673,7 @@ const MyAccount = () => {
                                                             <button
                                                                 type="button"
                                                                 className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                                onClick={() => setActiveTab('taxes')}
+                                                                onClick={() => navigateToPanelTab('taxes')}
                                                             >
                                                                 IVA y costos de envío
                                                             </button>
@@ -5799,7 +4774,7 @@ const MyAccount = () => {
                                                             <button
                                                                 type="button"
                                                                 className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
-                                                                onClick={() => setActiveTab('inventory')}
+                                                                onClick={() => navigateToPanelTab('inventory')}
                                                             >
                                                                 Abrir inventario
                                                             </button>
@@ -5915,7 +4890,7 @@ const MyAccount = () => {
                                                             <button
                                                                 type="button"
                                                                 className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
-                                                                onClick={() => setActiveTab('admin-orders')}
+                                                                onClick={() => navigateToPanelTab('admin-orders')}
                                                             >
                                                                 Ver todos
                                                             </button>
@@ -6014,7 +4989,9 @@ const MyAccount = () => {
                                             </>
                                         )}
                                     </div>
-                                    <div className={`tab text-content w-full ${activeTab === 'sales-ranking' ? 'block' : 'hidden'}`}>
+                                    )}
+                                    {activeTab === 'sales-ranking' && (
+                                    <div className="tab text-content w-full">
                                         <div className="flex items-center justify-between pb-6">
                                             <div>
                                                 <div className="heading5">Ranking de productos vendidos</div>
@@ -6180,8 +5157,10 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'local-sales' ? '!flex !flex-col' : 'hidden'}`}>
+                                    {activeTab === 'local-sales' && (
+                                    <div className="tab text-content !flex !flex-col w-full">
                                         <div className="flex items-center justify-between pb-6">
                                             <div>
                                                 <div className="heading5">Venta en local (POS)</div>
@@ -6200,121 +5179,17 @@ const MyAccount = () => {
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-                                            <div className="p-3 rounded-lg border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos disponibles</div>
-                                                <div className="text-lg font-bold">{localSaleCatalog.length}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades en inventario</div>
-                                                <div className="text-lg font-bold">{localSaleCatalog.reduce((acc, item) => acc + item.stock, 0)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades en la venta</div>
-                                                <div className="text-lg font-bold">{localSaleUnits}</div>
-                                            </div>
-                                        </div>
-
                                         <div className="grid grid-cols-1 2xl:grid-cols-12 gap-5">
-                                            <div className="2xl:col-span-6 border border-line rounded-2xl bg-white p-5">
-                                                <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
-                                                    <label className="flex-1">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary mb-1">Buscar artículo</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleSearch}
-                                                            onChange={(event) => setLocalSaleSearch(event.target.value)}
-                                                            placeholder="Nombre, categoría, SKU o ID"
-                                                            className="w-full px-3 py-2 rounded-lg border border-line bg-white text-black text-sm focus:border-black outline-none"
-                                                        />
-                                                    </label>
-                                                    <div className="text-xs text-secondary">
-                                                        {localSaleCatalog.length} resultado{localSaleCatalog.length === 1 ? '' : 's'}
-                                                    </div>
-                                                </div>
-
-                                                <div className="overflow-y-auto overflow-x-hidden max-h-[560px] border border-line rounded-xl">
-                                                    <table className="w-full table-fixed">
-                                                        <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
-                                                            <tr>
-                                                                <th className="px-3 py-2 text-left w-[46%]">Producto</th>
-                                                                <th className="px-3 py-2 text-left w-[18%] hidden xl:table-cell">Categoría</th>
-                                                                <th className="px-3 py-2 text-right w-[10%]">Existencia</th>
-                                                                <th className="px-3 py-2 text-right w-[10%]">Costo</th>
-                                                                <th className="px-3 py-2 text-right w-[10%]">Precio</th>
-                                                                <th className="px-3 py-2 text-right w-[14%]">Acción</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-line">
-                                                            {localSaleCatalog.map((product) => {
-                                                                const cartQty = localSaleItems.find((item) => item.internalId === product.internalId)?.quantity ?? 0
-                                                                const noStock = product.stock <= 0
-                                                                const expired = Boolean(product.isExpired)
-                                                                const missingFields: string[] = []
-                                                                if (!product.sku) missingFields.push('SKU')
-                                                                if (!product.category || product.category.toLowerCase().includes('sin categoría')) missingFields.push('categoría')
-                                                                if (product.cost <= 0) missingFields.push('costo')
-                                                                return (
-                                                                    <tr key={product.internalId} className="hover:bg-surface/40">
-                                                                        <td className="px-3 py-2">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <Image
-                                                                                    src={product.image}
-                                                                                    width={44}
-                                                                                    height={44}
-                                                                                    alt={product.name}
-                                                                                    unoptimized={product.image.startsWith('/uploads/') || product.image.startsWith('/images/')}
-                                                                                    className="w-11 h-11 rounded-md object-cover border border-line"
-                                                                                />
-                                                                                <div className="min-w-0">
-                                                                                    <div className="font-semibold text-sm leading-tight truncate" title={product.name}>{product.name}</div>
-                                                                                    <div className="text-[11px] text-secondary">{product.sku ? `SKU: ${product.sku}` : `ID: ${product.legacyId}`}</div>
-                                                                                    {missingFields.length > 0 && (
-                                                                                        <div className="text-[10px] text-yellow mt-0.5 truncate" title={`Falta: ${missingFields.join(', ')}`}>
-                                                                                            Falta: {missingFields.join(', ')}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {expired && (
-                                                                                        <div className="text-[10px] text-red mt-0.5">
-                                                                                            Vencido{product.expirationDate ? ` (${formatIsoDate(product.expirationDate)})` : ''}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-3 py-2 text-sm hidden xl:table-cell truncate" title={product.category}>{product.category}</td>
-                                                                        <td className={`px-3 py-2 text-sm text-right font-semibold ${(noStock || expired) ? 'text-red' : ''}`}>
-                                                                            {product.stock}
-                                                                        </td>
-                                                                        <td className="px-3 py-2 text-sm text-right">{formatMoney(product.cost)}</td>
-                                                                        <td className="px-3 py-2 text-sm text-right font-semibold">{formatMoney(product.price)}</td>
-                                                                        <td className="px-3 py-2 text-right">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => handleAddLocalSaleProduct(product)}
-                                                                                disabled={noStock || expired || cartQty >= product.stock}
-                                                                                className={`px-2.5 py-1.5 rounded-md text-xs font-bold border transition-all whitespace-nowrap ${(noStock || expired || cartQty >= product.stock)
-                                                                                    ? 'border-line text-secondary bg-surface cursor-not-allowed'
-                                                                                    : 'border-black text-black hover:bg-black hover:text-white'
-                                                                                    }`}
-                                                                            >
-                                                                                {expired ? 'Vencido' : (noStock ? 'Sin stock' : (cartQty > 0 ? `Agregar (${cartQty})` : 'Agregar'))}
-                                                                            </button>
-                                                                        </td>
-                                                                    </tr>
-                                                                )
-                                                            })}
-                                                            {localSaleCatalog.length === 0 && (
-                                                                <tr>
-                                                                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-secondary">
-                                                                        No se encontraron artículos para la búsqueda actual.
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                            <LocalSaleCatalogPanel
+                                                products={localSaleCatalog}
+                                                search={localSaleSearch}
+                                                setSearch={setLocalSaleSearch}
+                                                localSaleUnits={localSaleUnits}
+                                                itemQuantityById={localSaleItemQuantityById}
+                                                onAddProduct={handleAddLocalSaleProduct}
+                                                formatMoney={formatMoney}
+                                                formatIsoDate={formatIsoDate}
+                                            />
 
                                             <div className="2xl:col-span-6 border border-line rounded-2xl bg-white p-5">
                                                 <div className="flex items-start justify-between gap-3 mb-4">
@@ -6720,26 +5595,93 @@ const MyAccount = () => {
                                                         {localSaleSaving ? 'Registrando...' : (localSaleQuoteLoading ? 'Calculando...' : 'Registrar venta local')}
                                                     </button>
                                                 </div>
-                                                {localSaleLastOrderId && (
-                                                    <div className="mt-4 p-3 rounded-lg border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Última venta registrada</div>
-                                                        <div className="font-semibold text-sm mt-1">{localSaleLastOrderId}</div>
-                                                        <div className="flex gap-2 mt-3 flex-wrap">
-                                                            <button
-                                                                type="button"
-                                                                className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
-                                                                onClick={handleOpenLastLocalSaleOrder}
-                                                            >
-                                                                Ver pedido
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
-                                                                onClick={handlePrintLastLocalSaleInvoice}
-                                                            >
-                                                                Imprimir factura
-                                                            </button>
+                                                {localSaleLastSubmission && (
+                                                    <div className={`mt-4 p-4 rounded-xl border ${localSaleLastSubmission.status === 'success'
+                                                        ? 'border-success/20 bg-success/5'
+                                                        : 'border-red/20 bg-red/5'
+                                                        }`}>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Último resultado de venta</div>
+                                                                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                                                    <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${localSaleLastSubmission.status === 'success'
+                                                                        ? 'bg-success/15 text-success'
+                                                                        : 'bg-red/10 text-red'
+                                                                        }`}>
+                                                                        {localSaleLastSubmission.status === 'success' ? (
+                                                                            <Icon.CheckCircle size={14} weight="fill" />
+                                                                        ) : (
+                                                                            <Icon.WarningCircle size={14} weight="fill" />
+                                                                        )}
+                                                                        {localSaleLastSubmission.status === 'success' ? 'Venta OK' : 'Venta con error'}
+                                                                    </div>
+                                                                    {localSaleLastSubmission.orderStatus && localSaleLastSubmission.status === 'success' && (
+                                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${getStatusBadge(localSaleLastSubmission.orderStatus).className}`}>
+                                                                            {getStatusBadge(localSaleLastSubmission.orderStatus).label}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right text-[11px] text-secondary shrink-0">
+                                                                {formatDateTimeEcuador(localSaleLastSubmission.createdAt, {
+                                                                    day: '2-digit',
+                                                                    month: '2-digit',
+                                                                    year: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </div>
                                                         </div>
+
+                                                        <div className="mt-3 text-sm font-medium text-black">
+                                                            {localSaleLastSubmission.message}
+                                                        </div>
+
+                                                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedido</div>
+                                                                <div className="font-semibold mt-1 break-all">{localSaleLastSubmission.orderId || 'No generado'}</div>
+                                                            </div>
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Cliente</div>
+                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.customerName}</div>
+                                                            </div>
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Total</div>
+                                                                <div className="font-semibold mt-1">{formatMoney(localSaleLastSubmission.total)}</div>
+                                                            </div>
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pago</div>
+                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.paymentMethod}</div>
+                                                            </div>
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos</div>
+                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.itemCount} tipo{localSaleLastSubmission.itemCount === 1 ? '' : 's'} / {localSaleLastSubmission.units} ud{localSaleLastSubmission.units === 1 ? '' : 's'}</div>
+                                                            </div>
+                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Documento</div>
+                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.documentNumber || 'Consumidor final'}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {localSaleLastSubmission.invoiceAvailable && localSaleLastSubmission.orderId && (
+                                                            <div className="mt-3 flex gap-2 flex-wrap">
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
+                                                                    onClick={handleOpenLastLocalSaleOrder}
+                                                                >
+                                                                    Ver pedido
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
+                                                                    onClick={handlePrintLastLocalSaleInvoice}
+                                                                >
+                                                                    Imprimir / Guardar PDF
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -7005,477 +5947,70 @@ const MyAccount = () => {
                                         </div>
 
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'inventory' ? 'block' : 'hidden'}`}>
-                                        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
-                                            <div>
-                                                <div className="heading5">Gestión de Inventario</div>
-                                                <p className="text-secondary text-sm mt-1">
-                                                    Controla stock, perecibles, vencimientos y valor inmovilizado del catálogo.
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-surface transition-all"
-                                                    onClick={() => setActiveTab('products')}
-                                                >
-                                                    Ver catálogo
-                                                </button>
-                                                <button type="button" className="button-main py-2 px-6" onClick={handleNewProduct}>
-                                                    Nuevo Producto
-                                                </button>
-                                            </div>
-                                        </div>
+                                    {activeTab === 'inventory' && (
+                                    <InventoryManagementPanel
+                                        summary={inventorySummary}
+                                        rows={filteredInventoryRows}
+                                        searchQuery={inventorySearch}
+                                        statusFilter={inventoryStatusFilter}
+                                        typeFilter={inventoryTypeFilter}
+                                        purchaseInvoicesSummary={{
+                                            totalInvoices: purchaseInvoicesSummary.totalInvoices,
+                                            totalUnits: purchaseInvoicesSummary.totalUnits,
+                                            totalAmount: purchaseInvoicesSummary.totalAmount,
+                                            suppliersCount: purchaseInvoicesSummary.suppliers.size,
+                                        }}
+                                        recentPurchaseInvoices={recentPurchaseInvoices}
+                                        purchaseInvoicesLoading={purchaseInvoicesLoading}
+                                        hasPerishableProducts={hasPerishableProducts}
+                                        lowStockThreshold={INVENTORY_LOW_STOCK_THRESHOLD}
+                                        onSearchChange={setInventorySearch}
+                                        onStatusFilterChange={setInventoryStatusFilter}
+                                        onTypeFilterChange={setInventoryTypeFilter}
+                                        onClearFilters={() => {
+                                            setInventorySearch('')
+                                            setInventoryStatusFilter('all')
+                                            setInventoryTypeFilter('all')
+                                        }}
+                                        onNavigateToProducts={() => navigateToPanelTab('products')}
+                                        onNewProduct={handleNewProduct}
+                                        onReloadPurchaseInvoices={loadRecentPurchaseInvoices}
+                                        onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
+                                        onEditProduct={handleEditProduct}
+                                        formatMoney={formatMoney}
+                                        formatIsoDate={formatIsoDate}
+                                        formatDateEcuador={formatDateEcuador}
+                                        formatDateTimeEcuador={formatDateTimeEcuador}
+                                    />
+                                    )}
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('all')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${inventoryStatusFilter === 'all' ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">SKUs en inventario</div>
-                                                <div className="text-2xl font-bold">{inventorySummary.totalSkus}</div>
-                                                <div className="text-xs text-secondary mt-1">{inventorySummary.totalUnits.toLocaleString('es-EC')} unidades</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('out')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${inventoryStatusFilter === 'out' ? 'border-red-500 bg-red-50' : 'border-line bg-white hover:border-red-500'}`}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Sin stock</div>
-                                                <div className="text-2xl font-bold text-red">{inventorySummary.out}</div>
-                                                <div className="text-xs text-secondary mt-1">Reposición inmediata</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('low')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${inventoryStatusFilter === 'low' ? 'border-amber-500 bg-amber-50' : 'border-line bg-white hover:border-amber-500'}`}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
-                                                <div className="text-2xl font-bold text-amber-700">{inventorySummary.low}</div>
-                                                <div className="text-xs text-secondary mt-1">Umbral operativo: {INVENTORY_LOW_STOCK_THRESHOLD} uds o menos</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('expiring')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${inventoryStatusFilter === 'expiring' ? 'border-amber-500 bg-amber-50' : 'border-line bg-white hover:border-amber-500'}`}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Por vencer</div>
-                                                <div className="text-2xl font-bold text-amber-700">{inventorySummary.expiring}</div>
-                                                <div className="text-xs text-secondary mt-1">Solo productos perecederos</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('expired')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${inventoryStatusFilter === 'expired' ? 'border-red-500 bg-red-50' : 'border-line bg-white hover:border-red-500'}`}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Vencidos</div>
-                                                <div className="text-2xl font-bold text-red">{inventorySummary.expired}</div>
-                                                <div className="text-xs text-secondary mt-1">Bloqueados para venta</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('all')}
-                                                className="p-4 rounded-xl border border-line bg-white hover:border-black transition-all text-left"
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Valor costo</div>
-                                                <div className="text-2xl font-bold">{formatMoney(inventorySummary.totalCost)}</div>
-                                                <div className="text-xs text-secondary mt-1">Capital en inventario</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setInventoryStatusFilter('all')}
-                                                className="p-4 rounded-xl border border-line bg-white hover:border-black transition-all text-left"
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Valor mercado</div>
-                                                <div className="text-2xl font-bold">{formatMoney(inventorySummary.totalMarket)}</div>
-                                                <div className="text-xs text-secondary mt-1">PVP total de stock</div>
-                                            </button>
-                                        </div>
+                                    {activeTab === 'products' && (
+                                    <ProductsManagementPanel
+                                        products={filteredAdminProductsList}
+                                        summary={productPublicationSummary}
+                                        activeFilter={productPublicationFilter}
+                                        activeQuickFilter={adminProductsQuickFilter}
+                                        searchQuery={adminProductsSearch}
+                                        hasPerishableProducts={hasPerishableProducts}
+                                        onFilterChange={setProductPublicationFilter}
+                                        onQuickFilterChange={setAdminProductsQuickFilter}
+                                        onSearchChange={setAdminProductsSearch}
+                                        onNewProduct={handleNewProduct}
+                                        onEditProduct={handleEditProduct}
+                                        onDuplicateVariant={handleDuplicateVariant}
+                                        onDeleteProduct={handleDeleteProduct}
+                                        onTogglePublication={handleToggleProductPublication}
+                                        publicationPendingIds={productPublicationPendingIds}
+                                        isProductEligibleForPublication={isProductEligibleForPublication}
+                                        getProductExpirationMeta={getProductExpirationMeta}
+                                        formatIsoDate={formatIsoDate}
+                                    />
+                                    )}
 
-                                        <div className="p-4 rounded-xl border border-line bg-white mb-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                                                <input
-                                                    type="text"
-                                                    className="border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-black"
-                                                    placeholder="Buscar por nombre, SKU, lote, proveedor o factura..."
-                                                    value={inventorySearch}
-                                                    onChange={(event) => setInventorySearch(event.target.value)}
-                                                />
-                                                <select
-                                                    className="border border-line rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-black"
-                                                    value={inventoryStatusFilter}
-                                                    onChange={(event) => setInventoryStatusFilter(event.target.value as 'all' | 'available' | 'low' | 'out' | 'expiring' | 'expired')}
-                                                >
-                                                    <option value="all">Todos los estados</option>
-                                                    <option value="available">Disponible</option>
-                                                    <option value="low">Bajo stock</option>
-                                                    <option value="out">Sin stock</option>
-                                                    <option value="expiring">Por vencer</option>
-                                                    <option value="expired">Vencidos</option>
-                                                </select>
-                                                <select
-                                                    className="border border-line rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-black"
-                                                    value={inventoryTypeFilter}
-                                                    onChange={(event) => setInventoryTypeFilter(event.target.value as 'all' | 'perishable' | 'nonperishable')}
-                                                >
-                                                    <option value="all">Todos los tipos</option>
-                                                    <option value="perishable">Solo perecederos</option>
-                                                    <option value="nonperishable">Solo no perecederos</option>
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-surface transition-all"
-                                                    onClick={() => {
-                                                        setInventorySearch('')
-                                                        setInventoryStatusFilter('all')
-                                                        setInventoryTypeFilter('all')
-                                                    }}
-                                                >
-                                                    Limpiar filtros
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
-                                            <div className="xl:col-span-2 p-5 rounded-2xl border border-line bg-white">
-                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                                                    <div>
-                                                        <div className="heading6">Últimas facturas de compra</div>
-                                                        <p className="text-sm text-secondary mt-1">
-                                                            Trazabilidad reciente de ingresos de inventario y costos de compra.
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-surface transition-all"
-                                                        onClick={() => loadRecentPurchaseInvoices()}
-                                                        disabled={purchaseInvoicesLoading}
-                                                    >
-                                                        {purchaseInvoicesLoading ? 'Actualizando...' : 'Actualizar facturas'}
-                                                    </button>
-                                                </div>
-                                                <div className="overflow-x-auto rounded-xl border border-line">
-                                                    <table className="w-full min-w-[760px] text-left">
-                                                        <thead className="bg-surface border-b border-line">
-                                                            <tr className="text-[11px] uppercase font-bold text-secondary">
-                                                                <th className="px-3 py-3">Factura</th>
-                                                                <th className="px-3 py-3">Proveedor</th>
-                                                                <th className="px-3 py-3">Fecha</th>
-                                                                <th className="px-3 py-3 text-right">Productos</th>
-                                                                <th className="px-3 py-3 text-right">Unidades</th>
-                                                                <th className="px-3 py-3 text-right">Total</th>
-                                                                <th className="px-3 py-3">Acción</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-line">
-                                                            {recentPurchaseInvoices.map((invoice) => (
-                                                                <tr key={invoice.id} className="hover:bg-surface/40">
-                                                                    <td className="px-3 py-3">
-                                                                        <div className="text-sm font-semibold">{invoice.invoice_number || '-'}</div>
-                                                                        <div className="text-xs text-secondary">{invoice.notes || 'Sin observaciones'}</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3">
-                                                                        <div className="text-sm">{invoice.supplier_name || '-'}</div>
-                                                                        <div className="text-xs text-secondary">{invoice.supplier_document || 'Sin documento'}</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 text-sm">
-                                                                        <div>{formatIsoDate(invoice.issued_at)}</div>
-                                                                        <div className="text-xs text-secondary">{formatDateTimeEcuador(invoice.created_at, { hour: '2-digit', minute: '2-digit' })}</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 text-right text-sm">{Number(invoice.products_count ?? 0).toLocaleString('es-EC')}</td>
-                                                                    <td className="px-3 py-3 text-right text-sm">{Number(invoice.units_total ?? 0).toLocaleString('es-EC')}</td>
-                                                                    <td className="px-3 py-3 text-right text-sm font-semibold">{formatMoney(invoice.total)}</td>
-                                                                    <td className="px-3 py-3">
-                                                                        <button
-                                                                            type="button"
-                                                                            className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
-                                                                            onClick={() => handleOpenPurchaseInvoice(invoice.id)}
-                                                                        >
-                                                                            Ver detalle
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                            {!purchaseInvoicesLoading && recentPurchaseInvoices.length === 0 && (
-                                                                <tr>
-                                                                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-secondary">
-                                                                        Aún no hay facturas de compra registradas para este tenant.
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                            {purchaseInvoicesLoading && (
-                                                                <tr>
-                                                                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-secondary">
-                                                                        Cargando facturas de compra...
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-
-                                            <div className="p-5 rounded-2xl border border-line bg-white">
-                                                <div className="heading6 mb-4">Resumen de compras</div>
-                                                <div className="space-y-4">
-                                                    <div className="p-4 rounded-xl bg-surface border border-line">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Facturas recientes</div>
-                                                        <div className="text-2xl font-bold mt-1">{purchaseInvoicesSummary.totalInvoices.toLocaleString('es-EC')}</div>
-                                                        <div className="text-xs text-secondary mt-1">Cargadas en este panel</div>
-                                                    </div>
-                                                    <div className="p-4 rounded-xl bg-surface border border-line">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Unidades compradas</div>
-                                                        <div className="text-2xl font-bold mt-1">{purchaseInvoicesSummary.totalUnits.toLocaleString('es-EC')}</div>
-                                                        <div className="text-xs text-secondary mt-1">Suma de las facturas listadas</div>
-                                                    </div>
-                                                    <div className="p-4 rounded-xl bg-surface border border-line">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Monto comprado</div>
-                                                        <div className="text-2xl font-bold mt-1">{formatMoney(purchaseInvoicesSummary.totalAmount)}</div>
-                                                        <div className="text-xs text-secondary mt-1">
-                                                            {purchaseInvoicesSummary.suppliers.size.toLocaleString('es-EC')} proveedor(es) registrados
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="overflow-x-auto rounded-xl border border-line bg-white">
-                                            <table className="w-full min-w-[1720px] text-left">
-                                                <thead className="border-b border-line bg-surface">
-                                                    <tr className="text-[11px] uppercase font-bold text-secondary">
-                                                        <th className="px-3 py-3">Producto</th>
-                                                        <th className="px-3 py-3">SKU</th>
-                                                        <th className="px-3 py-3">Tipo</th>
-                                                        <th className="px-3 py-3 text-right">Stock</th>
-                                                        <th className="px-3 py-3">Estado</th>
-                                                        <th className="px-3 py-3">Vencimiento</th>
-                                                        <th className="px-3 py-3">Lote</th>
-                                                        <th className="px-3 py-3">Ubicación</th>
-                                                        <th className="px-3 py-3">Proveedor</th>
-                                                        <th className="px-3 py-3">Factura compra</th>
-                                                        <th className="px-3 py-3 text-right">Costo</th>
-                                                        <th className="px-3 py-3 text-right">PVP</th>
-                                                        <th className="px-3 py-3 text-right">Valor costo</th>
-                                                        <th className="px-3 py-3">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-line">
-                                                    {filteredInventoryRows.map((row) => {
-                                                        const stockBadge = row.stockStatus === 'expired'
-                                                            ? { label: 'Vencido', className: 'bg-red-100 text-red-700' }
-                                                            : row.stockStatus === 'expiring'
-                                                                ? { label: 'Por vencer', className: 'bg-amber-100 text-amber-700' }
-                                                                : row.stockStatus === 'out'
-                                                                    ? { label: 'Sin stock', className: 'bg-red-100 text-red-700' }
-                                                                    : row.stockStatus === 'low'
-                                                                        ? { label: 'Bajo stock', className: 'bg-amber-100 text-amber-700' }
-                                                                        : { label: 'Disponible', className: 'bg-emerald-100 text-emerald-700' }
-                                                        return (
-                                                            <tr key={row.internalId} className="hover:bg-surface/40">
-                                                                <td className="px-3 py-3">
-                                                                    <div className="font-semibold text-sm">{row.name}</div>
-                                                                    <div className="text-xs text-secondary">{row.category}</div>
-                                                                </td>
-                                                                <td className="px-3 py-3 text-sm">{row.sku || '-'}</td>
-                                                                <td className="px-3 py-3 text-sm">{row.isPerishable ? 'Perecedero (comida)' : 'No perecedero'}</td>
-                                                                <td className={`px-3 py-3 text-right text-sm font-semibold ${row.stock <= 0 ? 'text-red' : ''}`}>{row.stock}</td>
-                                                                <td className="px-3 py-3">
-                                                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${stockBadge.className}`}>
-                                                                        {stockBadge.label}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-3">
-                                                                    {row.isPerishable ? (
-                                                                        <div className="space-y-1">
-                                                                            <div className="text-xs font-semibold">{formatIsoDate(row.expirationMeta.expirationDate)}</div>
-                                                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${row.expirationMeta.badge.className}`}>
-                                                                                {row.expirationMeta.badge.label}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-secondary">No perecedero</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-3 py-3 text-sm">{row.lotCode || '-'}</td>
-                                                                <td className="px-3 py-3 text-sm">{row.storageLocation || '-'}</td>
-                                                                <td className="px-3 py-3">
-                                                                    <div className="text-sm">{row.supplier || '-'}</div>
-                                                                    <div className="text-xs text-secondary">
-                                                                        Entradas: {Number(row.purchaseEntriesCount ?? 0).toLocaleString('es-EC')} • Comprado: {Number(row.purchasedUnits ?? 0).toLocaleString('es-EC')}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-3 py-3">
-                                                                    {row.lastPurchaseInvoiceNumber ? (
-                                                                        <div className="space-y-1">
-                                                                            {row.lastPurchaseInvoiceId ? (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="text-sm font-semibold text-left underline underline-offset-2"
-                                                                                    onClick={() => handleOpenPurchaseInvoice(row.lastPurchaseInvoiceId)}
-                                                                                >
-                                                                                    {row.lastPurchaseInvoiceNumber}
-                                                                                </button>
-                                                                            ) : (
-                                                                                <div className="text-sm font-semibold">{row.lastPurchaseInvoiceNumber}</div>
-                                                                            )}
-                                                                            <div className="text-xs text-secondary">
-                                                                                {row.lastPurchaseIssuedAt
-                                                                                    ? formatIsoDate(row.lastPurchaseIssuedAt)
-                                                                                    : formatDateEcuador(row.lastPurchaseReceivedAt)} • {formatMoney(row.lastPurchaseUnitCost)} x {Number(row.lastPurchaseQuantity ?? 0).toLocaleString('es-EC')}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-secondary">Sin factura enlazada</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.unitCost)}</td>
-                                                                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.unitPrice)}</td>
-                                                                <td className="px-3 py-3 text-right text-sm font-semibold">{formatMoney(row.inventoryCost)}</td>
-                                                                <td className="px-3 py-3">
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
-                                                                            onClick={() => handleEditProduct(row.source)}
-                                                                        >
-                                                                            Editar
-                                                                        </button>
-                                                                        {row.lastPurchaseInvoiceId && (
-                                                                            <button
-                                                                                type="button"
-                                                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
-                                                                                onClick={() => handleOpenPurchaseInvoice(row.lastPurchaseInvoiceId)}
-                                                                            >
-                                                                                Factura
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    })}
-                                                    {filteredInventoryRows.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan={14} className="px-3 py-8 text-center text-sm text-secondary">
-                                                                No hay productos para los filtros actuales.
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    <div className={`tab text-content w-full ${activeTab === 'products' ? 'block' : 'hidden'}`}>
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div>
-                                                <div className="heading5">Gestión de Productos</div>
-                                                <p className="text-sm text-secondary mt-1">
-                                                    Mostrando {filteredAdminProductsList.length} de {productPublicationSummary.all} productos.
-                                                </p>
-                                            </div>
-                                            <button className="button-main py-2 px-6" onClick={handleNewProduct}>Nuevo Producto</button>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 mb-6">
-                                            {[
-                                                { key: 'all', label: 'Todos', count: productPublicationSummary.all },
-                                                { key: 'published', label: 'Publicados', count: productPublicationSummary.published },
-                                                { key: 'hidden', label: 'Ocultos', count: productPublicationSummary.hidden }
-                                            ].map((option) => {
-                                                const isActive = productPublicationFilter === option.key
-                                                return (
-                                                    <button
-                                                        key={option.key}
-                                                        type="button"
-                                                        className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${isActive ? 'bg-black text-white' : 'border border-line bg-white text-black hover:bg-surface'}`}
-                                                        onClick={() => setProductPublicationFilter(option.key as ProductPublicationFilter)}
-                                                    >
-                                                        <span>{option.label}</span>
-                                                        <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/15 text-white' : 'bg-surface text-secondary'}`}>
-                                                            {option.count}
-                                                        </span>
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
-                                                <thead>
-                                                    <tr className="border-b border-line">
-                                                        <th className="pb-4 font-bold text-secondary">Imagen</th>
-                                                        <th className="pb-4 font-bold text-secondary">Producto</th>
-                                                        <th className="pb-4 font-bold text-secondary">Stock</th>
-                                                        {hasPerishableProducts && (
-                                                            <th className="pb-4 font-bold text-secondary">Vencimiento</th>
-                                                        )}
-                                                        <th className="pb-4 font-bold text-secondary">Publicado</th>
-                                                        <th className="pb-4 font-bold text-secondary">Precio</th>
-                                                        <th className="pb-4 font-bold text-secondary">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {filteredAdminProductsList.length > 0 ? filteredAdminProductsList.map((product) => {
-                                                        const expirationMeta = getProductExpirationMeta(product)
-                                                        return (
-                                                        <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
-                                                            <td className="py-4">
-                                                                <div className="w-12 h-12 bg-line rounded-lg overflow-hidden">
-                                                                    <Image
-                                                                        src={(product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png'))}
-                                                                        width={100}
-                                                                        height={100}
-                                                                        alt={product.name}
-                                                                        unoptimized={((product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string).startsWith('/uploads/') || ((product.thumbImage && product.thumbImage.length > 0 ? product.thumbImage[0] : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string).startsWith('/images/')}
-                                                                        className="w-full h-full object-cover"
-                                                                    />
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-4 font-semibold">{product.name}</td>
-                                                            <td className="py-4">{product.quantity ?? 0} unidades</td>
-                                                            {hasPerishableProducts && (
-                                                                <td className="py-4">
-                                                                    {expirationMeta.isFood ? (
-                                                                        <div className="space-y-1">
-                                                                            <div className="text-xs font-semibold">{formatIsoDate(expirationMeta.expirationDate)}</div>
-                                                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${expirationMeta.badge.className}`}>
-                                                                                {expirationMeta.badge.label}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-secondary">-</span>
-                                                                    )}
-                                                                </td>
-                                                            )}
-                                                            <td className="py-4">
-                                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${product.published !== false ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'}`}>
-                                                                    {product.published !== false ? 'Sí' : 'No'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-4 font-bold">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                            <td className="py-4">
-                                                                <div className="flex gap-2">
-                                                                    <button className="p-2 hover:bg-line rounded-full transition-colors" onClick={() => handleEditProduct(product)}><Icon.PencilSimple size={18} /></button>
-                                                                    <button
-                                                                        className="p-2 hover:bg-line rounded-full transition-colors text-red"
-                                                                        onClick={() => handleDeleteProduct(product.internalId || product.id)}
-                                                                    >
-                                                                        <Icon.Trash size={18} />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                        )
-                                                    }) : (
-                                                        <tr><td colSpan={hasPerishableProducts ? 7 : 6} className="py-8 text-center text-secondary">No se encontraron productos para este filtro.</td></tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    <div className={`tab text-content w-full ${activeTab === 'taxes' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'taxes' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Impuestos y cargos</div>
                                         <p className="text-secondary mb-6">Configura IVA y ajustes de envío que impactan el precio final.</p>
                                         <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
@@ -7593,8 +6128,10 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'prices' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'prices' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Gestión Inteligente de Precios</div>
                                         <p className="text-secondary mb-6">Optimiza tus márgenes con sugerencias basadas en costos.</p>
                                         <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
@@ -7602,17 +6139,17 @@ const MyAccount = () => {
                                                 <div className="p-4 rounded-lg bg-white border border-line">
                                                     <div className="text-xs uppercase font-bold text-secondary">Margen base</div>
                                                     <div className="heading5">{marginSettings.baseMargin}%</div>
-                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('margins')}>Editar márgenes</button>
+                                                    <button className="text-xs underline mt-2" onClick={() => navigateToPanelTab('margins')}>Editar márgenes</button>
                                                 </div>
                                                 <div className="p-4 rounded-lg bg-white border border-line">
                                                     <div className="text-xs uppercase font-bold text-secondary">Redondeo</div>
                                                     <div className="heading5">${calcSettings.rounding.toFixed(2)}</div>
-                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('calculations')}>Editar cálculos</button>
+                                                    <button className="text-xs underline mt-2" onClick={() => navigateToPanelTab('calculations')}>Editar cálculos</button>
                                                 </div>
                                                 <div className="p-4 rounded-lg bg-white border border-line">
                                                     <div className="text-xs uppercase font-bold text-secondary">Descuento por volumen</div>
                                                     <div className="heading5">{pricingRules.bulkDiscount}%</div>
-                                                    <button className="text-xs underline mt-2" onClick={() => setActiveTab('pricing-rules')}>Editar reglas</button>
+                                                    <button className="text-xs underline mt-2" onClick={() => navigateToPanelTab('pricing-rules')}>Editar reglas</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -7894,8 +6431,10 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'store-status' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'store-status' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Ventas en línea</div>
                                         <p className="text-secondary mb-6">Activa o detén la tienda para mantenimiento o fallas operativas.</p>
                                         <div className="p-6 rounded-xl border border-line bg-surface">
@@ -7966,8 +6505,10 @@ const MyAccount = () => {
                                             )}
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'margins' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'margins' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Márgenes y rentabilidad</div>
                                         <p className="text-secondary mb-6">Define objetivos de margen para tus precios recomendados.</p>
                                         <div className="p-6 rounded-xl border border-line bg-surface">
@@ -8071,8 +6612,10 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'calculations' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'calculations' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Cálculos y redondeos</div>
                                         <p className="text-secondary mb-6">Ajusta cómo se calculan los precios finales.</p>
                                         <div className="p-6 rounded-xl border border-line bg-surface">
@@ -8195,8 +6738,10 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'pricing-rules' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'pricing-rules' && (
+                                    <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Reglas de precios</div>
                                         <p className="text-secondary mb-6">Define descuentos automáticos y limpieza de inventario.</p>
                                         <div className="p-6 rounded-xl border border-line bg-surface">
@@ -8299,478 +6844,78 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'product-page' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-4">Ficha de producto (común)</div>
-                                        <p className="text-secondary mb-6">Configura textos que se muestran en todas las fichas.</p>
-                                        <div className="p-6 rounded-xl border border-line bg-surface">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Entrega estimada</label>
-                                                    <input
-                                                        className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productPageSettings.deliveryEstimate}
-                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, deliveryEstimate: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Personas viendo</label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productPageSettings.viewerCount}
-                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, viewerCount: Number(e.target.value) })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Envío gratis desde ($)</label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productPageSettings.freeShippingThreshold}
-                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, freeShippingThreshold: Number(e.target.value) })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Horario de soporte</label>
-                                                    <input
-                                                        className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productPageSettings.supportHours}
-                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, supportHours: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Días de devolución</label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productPageSettings.returnDays}
-                                                        onChange={(e) => setProductPageSettings({ ...productPageSettings, returnDays: Number(e.target.value) })}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="mt-6 flex justify-end">
-                                                <button
-                                                    className="button-main py-2 px-6"
-                                                    onClick={async () => {
-                                                        try {
-                                                            const res = await updateProductPageSettings(productPageSettings)
-                                                            setProductPageSettings(res.body)
-                                                            showNotification('Ficha de producto actualizada.')
-                                                        } catch (error) {
-                                                            console.error(error)
-                                                            showNotification('No se pudo guardar la ficha.', 'error')
-                                                        }
-                                                    }}
-                                                >
-                                                    Guardar configuración
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {activeTab === 'product-page' && (
+                                    <ProductPageSettingsPanel
+                                        settings={productPageSettings}
+                                        onChange={setProductPageSettings}
+                                        onSave={async () => {
+                                            try {
+                                                const res = await updateProductPageSettings(productPageSettings)
+                                                setProductPageSettings(res.body)
+                                                showNotification('Ficha de producto actualizada.')
+                                            } catch (error) {
+                                                console.error(error)
+                                                showNotification('No se pudo guardar la ficha.', 'error')
+                                            }
+                                        }}
+                                    />
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'admin-orders' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-6">Todos los Pedidos</div>
-                                        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-                                            {[
-                                                { id: 'all', label: 'Todos', count: adminOrdersCounts.all },
-                                                { id: 'pending', label: 'Nuevos', count: adminOrdersCounts.pending },
-                                                { id: 'processing', label: 'En proceso', count: adminOrdersCounts.processing },
-                                                { id: 'delivery', label: 'Enviados', count: adminOrdersCounts.delivery },
-                                                { id: 'completed', label: 'Completados', count: adminOrdersCounts.completed },
-                                                { id: 'canceled', label: 'Cancelados', count: adminOrdersCounts.canceled }
-                                            ].map((tab) => (
-                                                <button
-                                                    key={tab.id}
-                                                    className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${activeOrders === tab.id
-                                                        ? 'bg-black text-white border-black'
-                                                        : 'bg-white text-secondary border-line hover:bg-surface'
-                                                        }`}
-                                                    onClick={() => setActiveOrders(tab.id)}
-                                                >
-                                                    {tab.label} ({tab.count})
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
-                                                <thead>
-                                                    <tr className="border-b border-line">
-                                                        <th className="pb-4 font-bold text-secondary text-sm">ID PEDIDO</th>
-                                                        <th className="pb-4 font-bold text-secondary text-sm">CLIENTE</th>
-                                                        <th className="pb-4 font-bold text-secondary text-sm">FECHA</th>
-                                                        <th className="pb-4 font-bold text-secondary text-sm">TOTAL</th>
-                                                        <th className="pb-4 font-bold text-secondary text-sm">ESTADO</th>
-                                                        <th className="pb-4 font-bold text-secondary text-sm">ACCIONES</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {filteredAdminOrders.length > 0 ? filteredAdminOrders.map((order) => {
-                                                        const badge = getStatusBadge(order.status)
-                                                        return (
-                                                        <tr key={order.id} className="border-b border-line last:border-0 hover:bg-surface duration-300 text-sm">
-                                                            <td className="py-4 font-bold">#{order.id}</td>
-                                                            <td className="py-4">{order.user_name || 'Cliente'}</td>
-                                                            <td className="py-4">{formatDateEcuador(order.created_at)}</td>
-                                                            <td className="py-4 font-bold">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                            <td className="py-4">
-                                                                <span className={`tag px-3 py-1 rounded-full text-xs font-semibold bg-opacity-10 ${badge.className}`}>
-                                                                    {badge.label}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-4">
-                                                                <button className="text-button-uppercase text-xs underline font-bold" onClick={() => {
-                                                                    handleViewOrder(order.id)
-                                                                }}>Ver Detalles</button>
-                                                            </td>
-                                                        </tr>
-                                                    )}) : (
-                                                        <tr><td colSpan={6} className="py-8 text-center text-secondary">No se encontraron pedidos.</td></tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
+                                    {activeTab === 'admin-orders' && (
+                                    <AdminOrdersPanel
+                                        activeOrders={activeOrders}
+                                        counts={adminOrdersCounts}
+                                        orders={filteredAdminOrders}
+                                        onFilterChange={setActiveOrders}
+                                        onViewOrder={handleViewOrder}
+                                        getStatusBadge={getStatusBadge}
+                                        formatDate={formatDateEcuador}
+                                    />
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'shipments' ? 'block' : 'hidden'}`}>
-                                        <div className="heading5 pb-4">Gestión de Envíos</div>
-                                        <p className="text-secondary mb-6">Controla costos logísticos, proveedores activos y pedidos en recojo.</p>
-                                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-                                            <div className="xl:col-span-2 p-6 bg-surface rounded-xl border border-line">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <h6 className="heading6">Proveedores de Envío</h6>
-                                                    <span className="text-xs text-secondary font-bold uppercase">{shippingProviders.length} activos</span>
-                                                </div>
-                                                <div className="flex flex-col gap-3">
-                                                    {shippingProviders.length > 0 ? shippingProviders.map((prov) => (
-                                                        <div key={prov.id} className="flex items-center justify-between p-3 bg-white rounded border border-line">
-                                                            <span className="font-semibold">{prov.name}</span>
-                                                            <span className="text-success text-xs font-bold uppercase">{prov.status}</span>
-                                                        </div>
-                                                    )) : (
-                                                        <div className="p-3 text-sm text-secondary">No hay proveedores configurados.</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="p-6 bg-surface rounded-xl border border-line">
-                                                <h6 className="heading6 mb-3">Operación logística</h6>
-                                                <div className="space-y-2 text-sm mb-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-secondary">Domicilio</span>
-                                                        <span className="font-semibold">{formatMoney(shippingRates.delivery)}</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-secondary">Retiro</span>
-                                                        <span className="font-semibold">{formatMoney(shippingRates.pickup)}</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-secondary">IVA envío</span>
-                                                        <span className="font-semibold">{shippingRates.taxRate.toFixed(1)}%</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <button
-                                                        type="button"
-                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
-                                                        onClick={() => setActiveTab('taxes')}
-                                                    >
-                                                        Configurar costos e IVA
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
-                                                        onClick={() => {
-                                                            setActiveTab('admin-orders')
-                                                            setActiveOrders('delivery')
-                                                        }}
-                                                    >
-                                                        Ver pedidos en ruta
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="p-6 bg-surface rounded-xl border border-line">
-                                            <h6 className="heading6 mb-4">Próximas Recogidas</h6>
-                                            {shippingPickups.length > 0 ? (
-                                                <div className="flex flex-col gap-3">
-                                                    {shippingPickups.map((pickup, index) => {
-                                                        const pickupDateRaw = pickup.scheduled_at || pickup.date || ''
-                                                        const pickupProvider = pickup.provider || pickup.provider_name || 'Proveedor'
-                                                        const pickupReference = pickup.reference || pickup.order_id || pickup.id || '-'
-                                                        return (
-                                                            <div key={`${pickupReference}-${index}`} className="p-4 bg-white rounded-lg border border-line flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                <div>
-                                                                    <div className="font-semibold">{pickupProvider}</div>
-                                                                    <div className="text-xs text-secondary mt-1">Ref: {pickupReference}</div>
-                                                                    {pickup.notes ? <div className="text-xs text-secondary mt-1">{pickup.notes}</div> : null}
-                                                                </div>
-                                                                <div className="text-sm text-right">
-                                                                    <div className="font-semibold">
-                                                                        {pickupDateRaw ? formatDateEcuador(pickupDateRaw, { weekday: 'short', day: '2-digit', month: 'short' }) : 'Fecha pendiente'}
-                                                                    </div>
-                                                                    <div className="text-secondary">
-                                                                        {pickupDateRaw ? formatDateTimeEcuador(pickupDateRaw, { hour: '2-digit', minute: '2-digit' }) : (pickup.window || 'Hora pendiente')}
-                                                                    </div>
-                                                                    <div className="text-xs mt-1 uppercase font-bold text-primary">{pickup.status || 'Pendiente'}</div>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            ) : pickupReadyOrders.length > 0 ? (
-                                                <div className="flex flex-col gap-3">
-                                                    {pickupReadyOrders.map((order) => {
-                                                        const badge = getStatusBadge(order.status)
-                                                        return (
-                                                            <div key={order.id} className="p-4 bg-white rounded-lg border border-line flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                <div>
-                                                                    <div className="font-semibold">Pedido #{order.id}</div>
-                                                                    <div className="text-xs text-secondary mt-1">Cliente: {order.user_name || 'Cliente'}</div>
-                                                                    <div className="text-xs text-secondary mt-1">Creado: {formatDateEcuador(order.created_at)}</div>
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${badge.className}`}>{badge.label}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold hover:bg-surface"
-                                                                        onClick={() => handleViewOrder(order.id)}
-                                                                    >
-                                                                        Ver pedido
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="text-center py-6 text-secondary text-sm">
-                                                    No hay recogidas programadas ni pedidos listos para retiro.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                    {activeTab === 'shipments' && (
+                                    <ShipmentsPanel
+                                        shippingProviders={shippingProviders}
+                                        shippingPickups={shippingPickups}
+                                        pickupReadyOrders={pickupReadyOrders}
+                                        shippingRates={shippingRates}
+                                        onConfigureTaxes={() => navigateToPanelTab('taxes')}
+                                        onViewDeliveryOrders={() => {
+                                            startPanelNavigationTransition(() => {
+                                                setActiveOrders('delivery')
+                                                setActiveTab('admin-orders')
+                                                setSelectedDeepDive(null)
+                                            })
+                                        }}
+                                        onViewOrder={handleViewOrder}
+                                        formatMoney={formatMoney}
+                                        formatDate={formatDateEcuador}
+                                        formatDateTime={formatDateTimeEcuador}
+                                        getStatusBadge={getStatusBadge}
+                                    />
+                                    )}
 
-                                    <div className={`tab text-content w-full ${activeTab === 'users' ? 'block' : 'hidden'}`}>
-                                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-                                            <div>
-                                                <div className="heading5">Usuarios registrados</div>
-                                                <p className="text-secondary text-sm mt-1">
-                                                    Consulta clientes y administradores con métricas de actividad y compras.
-                                                </p>
-                                            </div>
-                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
-                                                Total: {adminUsersList.length.toLocaleString('es-EC')}
-                                            </div>
-                                        </div>
+                                    {activeTab === 'users' && (
+                                    <UsersManagementPanel
+                                        users={adminUsersList}
+                                        filteredUsers={filteredAdminUsers}
+                                        loading={adminDataLoading}
+                                        search={adminUsersSearch}
+                                        roleFilter={adminUsersRoleFilter}
+                                        summary={adminUsersSummary}
+                                        onSearchChange={setAdminUsersSearch}
+                                        onRoleFilterChange={setAdminUsersRoleFilter}
+                                        getUserRoleBadge={getUserRoleBadge}
+                                        formatMoney={formatMoney}
+                                        formatDate={formatDateEcuador}
+                                        formatDateTime={formatDateTimeEcuador}
+                                    />
+                                    )}
 
-                                        <div className="grid grid-cols-2 xl:grid-cols-7 gap-3 mt-6">
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Clientes</div>
-                                                <div className="heading6">{adminUsersSummary.clients.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Administradores</div>
-                                                <div className="heading6">{adminUsersSummary.admins.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Verificados</div>
-                                                <div className="heading6">{adminUsersSummary.verified.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Con pedidos</div>
-                                                <div className="heading6">{adminUsersSummary.withOrders.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Con dirección</div>
-                                                <div className="heading6">{adminUsersSummary.withAddress.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Con teléfono</div>
-                                                <div className="heading6">{adminUsersSummary.withPhone.toLocaleString('es-EC')}</div>
-                                            </div>
-                                            <div className="p-4 bg-white rounded-xl border border-line shadow-sm col-span-2 xl:col-span-1">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Nuevos (30 días)</div>
-                                                <div className="heading6">{adminUsersSummary.newLast30Days.toLocaleString('es-EC')}</div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-6 p-4 rounded-xl border border-line bg-white">
-                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                                                <div className="lg:col-span-2">
-                                                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Buscar usuario</div>
-                                                    <input
-                                                        type="text"
-                                                        value={adminUsersSearch}
-                                                        onChange={(e) => setAdminUsersSearch(e.target.value)}
-                                                        placeholder="Nombre, email, documento, teléfono o dirección"
-                                                        className="w-full px-3 py-2 rounded-lg border border-line text-sm"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Rol</div>
-                                                    <select
-                                                        value={adminUsersRoleFilter}
-                                                        onChange={(e) => setAdminUsersRoleFilter(e.target.value as 'all' | 'clients' | 'admins')}
-                                                        className="w-full px-3 py-2 rounded-lg border border-line text-sm bg-white"
-                                                    >
-                                                        <option value="all">Todos</option>
-                                                        <option value="clients">Solo clientes</option>
-                                                        <option value="admins">Solo administradores</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-6">
-                                            {adminDataLoading && adminUsersList.length === 0 ? (
-                                                <div className="p-5 rounded-xl border border-line bg-surface text-secondary text-sm">
-                                                    Cargando usuarios...
-                                                </div>
-                                            ) : filteredAdminUsers.length === 0 ? (
-                                                <div className="p-5 rounded-xl border border-line bg-surface text-secondary text-sm">
-                                                    No se encontraron usuarios con los filtros actuales.
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="md:hidden flex flex-col gap-3">
-                                                        {filteredAdminUsers.map((adminUser) => {
-                                                            const roleBadge = getUserRoleBadge(adminUser.role)
-                                                            const ordersTotal = Number(adminUser.orders_total ?? 0)
-                                                            const ordersCompleted = Number(adminUser.orders_completed ?? 0)
-                                                            const totalSpent = Number(adminUser.total_spent ?? 0)
-                                                            return (
-                                                                <div key={adminUser.id} className="p-4 bg-white rounded-xl border border-line shadow-sm">
-                                                                    <div className="flex items-start justify-between gap-3">
-                                                                        <div>
-                                                                            <div className="font-semibold">{adminUser.name || 'Sin nombre'}</div>
-                                                                            <div className="text-xs text-secondary break-all">{adminUser.email || '-'}</div>
-                                                                            {adminUser.resolvedCompany && (
-                                                                                <div className="text-[11px] text-secondary mt-1">
-                                                                                    Empresa: {adminUser.resolvedCompany}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${roleBadge.className}`}>
-                                                                            {roleBadge.label}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
-                                                                        <div>
-                                                                            <div className="text-[10px] uppercase text-secondary font-bold mb-1">Registro</div>
-                                                                            <div>{adminUser.created_at ? formatDateEcuador(adminUser.created_at) : '-'}</div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-[10px] uppercase text-secondary font-bold mb-1">Verificación</div>
-                                                                            <div>{adminUser.email_verified ? 'Verificado' : 'Pendiente'}</div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-[10px] uppercase text-secondary font-bold mb-1">Pedidos</div>
-                                                                            <div>{ordersTotal.toLocaleString('es-EC')} ({ordersCompleted.toLocaleString('es-EC')} completados)</div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="text-[10px] uppercase text-secondary font-bold mb-1">Facturado</div>
-                                                                            <div>{formatMoney(totalSpent)}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="mt-3 text-xs text-secondary">
-                                                                        <strong className="font-semibold text-black">Contacto:</strong>{' '}
-                                                                        {adminUser.resolvedPhone || 'Sin teléfono'}
-                                                                    </div>
-                                                                    <div className="mt-1 text-xs text-secondary">
-                                                                        <strong className="font-semibold text-black">Dirección:</strong>{' '}
-                                                                        {adminUser.resolvedAddressText || 'Sin dirección'}
-                                                                    </div>
-                                                                    <div className="mt-3 text-xs text-secondary">
-                                                                        Última compra: {adminUser.last_order_at ? formatDateTimeEcuador(adminUser.last_order_at) : 'Sin compras'}
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-
-                                                    <div className="hidden md:block overflow-x-auto border border-line rounded-xl bg-white">
-                                                        <table className="w-full min-w-[1280px]">
-                                                            <thead className="bg-surface border-b border-line">
-                                                                <tr>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Usuario</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Rol</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Registro</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Verificación</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Contacto</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Dirección</th>
-                                                                    <th className="text-right px-4 py-3 text-[11px] uppercase font-bold text-secondary">Pedidos</th>
-                                                                    <th className="text-right px-4 py-3 text-[11px] uppercase font-bold text-secondary">Facturado</th>
-                                                                    <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Última compra</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-line">
-                                                                {filteredAdminUsers.map((adminUser) => {
-                                                                    const roleBadge = getUserRoleBadge(adminUser.role)
-                                                                    const ordersTotal = Number(adminUser.orders_total ?? 0)
-                                                                    const ordersCompleted = Number(adminUser.orders_completed ?? 0)
-                                                                    const totalSpent = Number(adminUser.total_spent ?? 0)
-                                                                    return (
-                                                                        <tr key={adminUser.id} className="hover:bg-surface/40">
-                                                                            <td className="px-4 py-3 align-top">
-                                                                                <div className="font-semibold">{adminUser.name || 'Sin nombre'}</div>
-                                                                                <div className="text-xs text-secondary">{adminUser.email || '-'}</div>
-                                                                                {adminUser.resolvedCompany && (
-                                                                                    <div className="text-[11px] text-secondary mt-1">
-                                                                                        Empresa: {adminUser.resolvedCompany}
-                                                                                    </div>
-                                                                                )}
-                                                                                {adminUser.document_number && (
-                                                                                    <div className="text-[11px] text-secondary mt-1">
-                                                                                        {adminUser.document_type ? `${adminUser.document_type.toUpperCase()}: ` : 'Documento: '}
-                                                                                        {adminUser.document_number}
-                                                                                    </div>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top">
-                                                                                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${roleBadge.className}`}>
-                                                                                    {roleBadge.label}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm">
-                                                                                {adminUser.created_at ? formatDateEcuador(adminUser.created_at) : '-'}
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm">
-                                                                                {adminUser.email_verified ? 'Verificado' : 'Pendiente'}
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm">
-                                                                                <div className="font-semibold">{adminUser.resolvedPhone || '-'}</div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm">
-                                                                                <div className="max-w-[300px] truncate" title={adminUser.resolvedAddressText || '-'}>
-                                                                                    {adminUser.resolvedAddressText || '-'}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm text-right">
-                                                                                <div className="font-semibold">{ordersTotal.toLocaleString('es-EC')}</div>
-                                                                                <div className="text-xs text-secondary">{ordersCompleted.toLocaleString('es-EC')} completados</div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm text-right font-semibold">
-                                                                                {formatMoney(totalSpent)}
-                                                                            </td>
-                                                                            <td className="px-4 py-3 align-top text-sm">
-                                                                                {adminUser.last_order_at ? formatDateTimeEcuador(adminUser.last_order_at) : 'Sin compras'}
-                                                                            </td>
-                                                                        </tr>
-                                                                    )
-                                                                })}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className={`tab text-content w-full ${activeTab === 'balances' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'balances' && (
+                                    <div className="tab text-content w-full">
                                         <div className="text-gray-400 text-sm">Balance General (Información crítica para decisiones)</div>
                                         <div className="heading2 mt-2">
                                             {formatMoney(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0)}
@@ -8841,9 +6986,11 @@ const MyAccount = () => {
                                                     type="button"
                                                     className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
                                                     onClick={() => {
-                                                        setAdminReportSection('balance')
-                                                        setActiveTab('reports')
-                                                        setSelectedDeepDive('profit')
+                                                        startPanelNavigationTransition(() => {
+                                                            setAdminReportSection('balance')
+                                                            setActiveTab('reports')
+                                                            setSelectedDeepDive('profit')
+                                                        })
                                                     }}
                                                 >
                                                     Analizar rentabilidad
@@ -8851,7 +6998,7 @@ const MyAccount = () => {
                                                 <button
                                                     type="button"
                                                     className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => setActiveTab('margins')}
+                                                    onClick={() => navigateToPanelTab('margins')}
                                                 >
                                                     Ajustar márgenes
                                                 </button>
@@ -8859,8 +7006,11 @@ const MyAccount = () => {
                                                     type="button"
                                                     className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
                                                     onClick={() => {
-                                                        setActiveTab('admin-orders')
-                                                        setActiveOrders('all')
+                                                        startPanelNavigationTransition(() => {
+                                                            setActiveOrders('all')
+                                                            setActiveTab('admin-orders')
+                                                            setSelectedDeepDive(null)
+                                                        })
                                                     }}
                                                 >
                                                     Revisar pedidos
@@ -8868,7 +7018,7 @@ const MyAccount = () => {
                                                 <button
                                                     type="button"
                                                     className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => setActiveTab('taxes')}
+                                                    onClick={() => navigateToPanelTab('taxes')}
                                                 >
                                                     IVA y costos de envío
                                                 </button>
@@ -8997,12 +7147,14 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
                                 </>
                             )}
 
                             {user.role !== 'admin' && (
                                 <>
-                                    <div className={`tab text-content w-full ${activeTab === 'dashboard' ? 'block' : 'hidden'}`}>
+                                    {activeTab === 'dashboard' && (
+                                    <div className="tab text-content w-full">
                                         <div className="overview grid sm:grid-cols-3 gap-5">
                                             <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
                                                 <div className="counter">
@@ -9083,91 +7235,23 @@ const MyAccount = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className={`tab text-content overflow-hidden w-full p-7 border border-line rounded-xl ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
-                                        <h6 className="heading6">Tus Pedidos</h6>
-                                        <div className="w-full">
-                                            <div className="menu-tab flex flex-wrap gap-2 border-b border-line mt-3 pb-3">
-                                                {[
-                                                    { id: 'all', label: 'Todos' },
-                                                    { id: 'pending', label: 'Pendientes' },
-                                                    { id: 'delivery', label: 'Enviados' },
-                                                    { id: 'completed', label: 'Completados' },
-                                                    { id: 'canceled', label: 'Cancelados' }
-                                                ].map((item, index) => (
-                                                    <button
-                                                        key={index}
-                                                        className={`item relative px-3 sm:px-4 py-2 text-secondary text-center duration-300 hover:text-black border-b-2 text-xs sm:text-sm ${activeOrders === item.id ? 'active border-black' : 'border-transparent'}`}
-                                                        onClick={() => handleActiveOrders(item.id)}
-                                                    >
-                                                        <span className='relative text-button z-[1]'>
-                                                            {item.label}
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="list_order">
-                                            {userOrdersLoading && (
-                                                <div className="text-center py-6 text-secondary">Cargando pedidos...</div>
-                                            )}
-                                            {!userOrdersLoading && filteredUserOrders.length === 0 && (
-                                                <div className="text-center py-6 text-secondary">No tienes pedidos en este estado.</div>
-                                            )}
-                                            {!userOrdersLoading && filteredUserOrders.map((order) => {
-                                                const badge = getStatusBadge(order.status)
-                                                return (
-                                                    <div key={order.id} className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
-                                                        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-4 p-5 border-b border-line">
-                                                            <div className="flex items-center gap-2">
-                                                                <strong className="text-title">Número de Pedido:</strong>
-                                                                <strong className="order_number text-button uppercase">{order.id}</strong>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <strong className="text-title">Estado del pedido:</strong>
-                                                                <span className={`tag px-4 py-1.5 rounded-full bg-opacity-10 ${badge.className} caption1 font-semibold`}>{badge.label}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="list_prd px-5">
-                                                            {(order.items && order.items.length > 0) ? (
-                                                                order.items.map((item, idx) => (
-                                                                    <div key={`${order.id}-${idx}`} className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line last:border-0">
-                                                                        <Link href={'/product/default'} className="flex items-center gap-5">
-                                                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                                                <Image
-                                                                                    src={item.product_image || '/images/product/1000x1000.png'}
-                                                                                    width={1000}
-                                                                                    height={1000}
-                                                                                    alt={item.product_name}
-                                                                                    className='w-full h-full object-cover'
-                                                                                />
-                                                                            </div>
-                                                                            <div>
-                                                                                <div className="prd_name text-title">{item.product_name}</div>
-                                                                                <div className="caption1 text-secondary mt-2">
-                                                                                    <span>{item.quantity} unidad{item.quantity === 1 ? '' : 'es'}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </Link>
-                                                                        <div className='text-title'>
-                                                                            <span className="prd_quantity">{item.quantity}</span>
-                                                                            <span> X </span>
-                                                                            <span className="prd_price">${Number(getItemNetPrice(item, order)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))
-                                                            ) : (
-                                                                <div className="py-5 text-secondary">Sin productos asociados.</div>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-4 p-5">
-                                                            <button className="button-main" onClick={() => { setSelectedOrder(order); setOpenDetail(true); }}>Detalles del Pedido</button>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
-                                    <div className={`tab_address text-content w-full p-7 border border-line rounded-xl ${activeTab === 'address' ? 'block' : 'hidden'}`}>
+                                    )}
+                                    {activeTab === 'orders' && (
+                                    <CustomerOrdersPanel
+                                        activeOrders={activeOrders}
+                                        orders={filteredUserOrders}
+                                        loading={userOrdersLoading}
+                                        onFilterChange={handleActiveOrders}
+                                        onOpenOrder={(order) => {
+                                            setSelectedOrder(order)
+                                            setIsOrderModalOpen(true)
+                                        }}
+                                        getStatusBadge={getStatusBadge}
+                                        getItemNetPrice={getItemNetPrice}
+                                    />
+                                    )}
+                                    {activeTab === 'address' && (
+                                    <div className="tab_address text-content w-full p-7 border border-line rounded-xl">
                                         <div className="heading5 pb-4">Direcciones de envío</div>
                                         <form onSubmit={handleSaveAddresses}>
                                             <div className="flex items-center justify-between mb-8 border-b border-line pb-4">
@@ -9334,7 +7418,9 @@ const MyAccount = () => {
                                             </div>
                                         </form>
                                     </div>
-                                    <div className={`tab text-content w-full p-7 border border-line rounded-xl ${activeTab === 'setting' ? 'block' : 'hidden'}`}>
+                                    )}
+                                    {activeTab === 'setting' && (
+                                    <div className="tab text-content w-full p-7 border border-line rounded-xl">
                                         <div className="heading5 pb-4">Configuraciones de la cuenta</div>
                                         <form className='form-password' onSubmit={handleSaveSettings}>
                                             <div className="heading5 pb-4">Información Personal</div>
@@ -9533,6 +7619,7 @@ const MyAccount = () => {
                                             </div>
                                         </form>
                                     </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -9540,1301 +7627,67 @@ const MyAccount = () => {
                 </div>
             </div>
             <Footer />
-            <div className={`modal-order-detail-block flex items-center justify-center`} onClick={() => setOpenDetail(false)}>
-                <div className={`modal-order-detail-main grid grid-cols-1 lg:grid-cols-2 w-full max-w-[1160px] bg-white rounded-2xl max-md:mx-4 overflow-hidden shadow-2xl max-h-[90vh] ${openDetail ? 'open' : ''}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                    <div className="info p-8 md:p-10 bg-white lg:border-r border-line">
-                        <h5 className="heading5">Detalles del Pedido</h5>
-                        <div className="list_info grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line sm:col-span-2">
-                                <strong className="text-button-uppercase text-secondary">Información de Contacto</strong>
-                                <h6 className="heading6 order_name mt-2">{selectedOrderContact.name}</h6>
-                                {selectedOrderContact.phone && selectedOrderContact.phone !== '-' ? (
-                                    <h6 className="heading6 order_phone mt-2">{selectedOrderContact.phone}</h6>
-                                ) : null}
-                                <h6 className="heading6 normal-case order_email mt-2 text-sm">{selectedOrderContact.email}</h6>
-                            </div>
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
-                                <strong className="text-button-uppercase text-secondary">Método de Pago</strong>
-                                <h6 className="heading6 order_payment mt-2">{selectedOrder?.payment_method || '-'}</h6>
-                            </div>
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
-                                <strong className="text-button-uppercase text-secondary">Empresa</strong>
-                                <h6 className="heading6 order_company mt-2">{getDefaultBillingAddress()?.company || 'No aplica'}</h6>
-                            </div>
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line sm:col-span-2">
-                                <strong className="text-button-uppercase text-secondary">Indicaciones del Pedido</strong>
-                                <h6 className="heading6 order_notes mt-2 text-sm leading-relaxed break-words">
-                                    {selectedOrder?.order_notes ? selectedOrder.order_notes : 'Sin indicaciones adicionales.'}
-                                </h6>
-                            </div>
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
-                                <strong className="text-button-uppercase text-secondary">Dirección de Envío</strong>
-                                <div className="heading6 order_shipping_address mt-2 break-words text-sm leading-relaxed">
-                                    {(() => {
-                                        const shippingAddress = parseAddress(selectedOrder?.shipping_address) || {}
-                                        const shippingLines = formatAddressLines(shippingAddress)
-                                        if (getOrderShipping(selectedOrder) > 0 && shippingLines.length > 0) {
-                                            return shippingLines.map((line, idx) => (
-                                                <div key={idx}>{line}</div>
-                                            ))
-                                        }
-                                        return (
-                                            <>
-                                                <div>Local Para Mascotas EC</div>
-                                                <div>Retiro en tienda</div>
-                                            </>
-                                        )
-                                    })()}
-                                </div>
-                            </div>
-                            <div className="info_item p-5 rounded-xl bg-surface border border-line">
-                                <strong className="text-button-uppercase text-secondary">Dirección de Facturación</strong>
-                                <div className="heading6 order_billing_address mt-2 break-words text-sm leading-relaxed">
-                                    {(() => {
-                                        const lines = formatAddressLines(getDefaultBillingAddress())
-                                        if (lines.length > 0) {
-                                            return lines.map((line, idx) => (
-                                                <div key={idx}>{line}</div>
-                                            ))
-                                        }
-                                        return <div>-</div>
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="list p-8 md:p-10 bg-white">
-                        <h5 className="heading5">Artículos</h5>
-                        <div className="list_prd mt-4">
-                            {Array.isArray(selectedOrder?.items) && selectedOrder.items.length > 0 ? (
-                                selectedOrder.items.map((item: any, idx: number) => (
-                                    <div key={`${item.product_id}-${idx}`} className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line last:border-0">
-                                        <div className="flex items-center gap-5">
-                                            <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
-                                                <Image
-                                                    src={item.product_image || '/images/product/1000x1000.png'}
-                                                    width={1000}
-                                                    height={1000}
-                                                    alt={item.product_name || 'Producto'}
-                                                    className='w-full h-full object-cover'
-                                                />
-                                            </div>
-                                            <div>
-                                                <div className="prd_name text-title">{item.product_name || 'Producto'}</div>
-                                            </div>
-                                        </div>
-                                        <div className='text-title'>
-                                            <span className="prd_quantity">{item.quantity}</span>
-                                            <span> X </span>
-                                            <span className="prd_price">{formatMoney(getItemNetPrice(item, selectedOrder))}</span>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="py-6 text-secondary">No hay artículos para este pedido.</div>
-                            )}
-                        </div>
-                        <div className="mt-6 p-5 rounded-xl bg-surface border border-line space-y-3">
-                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-                                <strong className="text-title">Subtotal sin IVA</strong>
-                                <strong className="order_total text-title text-right">{formatMoney(getOrderVatSubtotal(selectedOrder))}</strong>
-                            </div>
-                            {Number(selectedOrder?.vat_rate ?? 0) > 0 && (
-                                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-                                    <span className="text-title">IVA ({Number(selectedOrder?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
-                                    <span className="text-title text-right">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
-                                </div>
-                            )}
-                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-                                <span className="text-title">Envío</span>
-                                <span className="order_ship text-title text-right">{formatMoney(getOrderShipping(selectedOrder))}</span>
-                            </div>
-                            <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-                                <span className="text-title">Descuentos</span>
-                                <span className="order_discounts text-title text-right">{formatMoney(0)}</span>
-                            </div>
-                            <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-3 border-t border-line">
-                                <strong className="text-title">Total</strong>
-                                <strong className="text-title text-right">{formatMoney(selectedOrder?.total)}</strong>
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end">
-                            {selectedOrder?.status !== 'canceled' ? (
-                                <button className="button-main py-2 px-6" onClick={handleGenerateInvoice}>Ver factura</button>
-                            ) : (
-                                <span className="text-secondary text-sm">Factura no disponible para pedidos cancelados</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <ProductEditorModal
+                open={isProductModalOpen}
+                editingProduct={editingProduct}
+                editorMode={productEditorMode}
+                initialForm={productEditorInitialForm}
+                vatMultiplier={vatMultiplier}
+                normalizedMargins={normalizeMarginSettings(marginSettings)}
+                normalizedCalc={normalizeCalcSettings(calcSettings)}
+                activeTab={activeTab}
+                onClose={() => {
+                    setIsProductModalOpen(false)
+                    setProductEditorMode('create')
+                }}
+                onProductsUpdated={setAdminProductsList}
+                onRefreshPurchaseInvoices={() => loadRecentPurchaseInvoices({ silent: true })}
+                onSessionExpired={handleLogout}
+                showNotification={showNotification}
+            />
 
-            {
-                isProductModalOpen && (
-                    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 p-2 sm:p-4" onClick={closeProductModal}>
-                        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[92vh] flex flex-col shadow-2xl" onClick={(event: React.MouseEvent) => event.stopPropagation()}>
-                            <div className="p-4 sm:p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl sticky top-0 z-10">
-                                <h3 className="heading4">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
-                                <button onClick={closeProductModal} className="text-secondary hover:text-black" disabled={productSaving}>
-                                    <Icon.X size={24} />
-                                </button>
-                            </div>
+            <PurchaseInvoiceDetailModal
+                open={isPurchaseInvoiceModalOpen}
+                loading={purchaseInvoiceDetailLoading}
+                invoice={selectedPurchaseInvoice}
+                onClose={closePurchaseInvoiceModal}
+                formatMoney={formatMoney}
+                formatIsoDate={formatIsoDate}
+                formatDateTime={formatDateTimeEcuador}
+            />
 
-                            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-                                <form id="product-form" ref={productFormRef} onSubmit={handleSaveProduct} className="space-y-6">
-                                    {productFormErrorEntries.length > 0 && (
-                                        <div className="p-4 rounded-xl border border-red/30 bg-red/5">
-                                            <div className="text-sm font-bold text-red mb-2">Revisa los siguientes campos:</div>
-                                            <div className="space-y-1">
-                                                {productFormErrorEntries.slice(0, 6).map(([field, message]) => (
-                                                    <p key={field} className="text-xs text-red">
-                                                        {message}
-                                                    </p>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
-                                            <input
-                                                type="text"
-                                                className={getProductInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                value={productForm.name}
-                                                onChange={e => {
-                                                    setProductForm({ ...productForm, name: e.target.value })
-                                                    clearProductErrors('name')
-                                                }}
-                                                required
-                                                placeholder="Ej: Camiseta Deportiva"
-                                                disabled={productSaving}
-                                            />
-                                            {productFormErrors.name && <p className="text-xs text-red mt-1">{productFormErrors.name}</p>}
-                                        </div>
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
-                                            <input
-                                                type="text"
-                                                className={getProductInputClass('brand', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                value={productForm.brand}
-                                                onChange={e => {
-                                                    setProductForm({ ...productForm, brand: e.target.value })
-                                                    clearProductErrors('brand')
-                                                }}
-                                                placeholder="Ej: Adidas"
-                                                required
-                                                disabled={productSaving}
-                                            />
-                                            {productFormErrors.brand && <p className="text-xs text-red mt-1">{productFormErrors.brand}</p>}
-                                        </div>
-                                    </div>
+            <SalesProductDetailModal
+                open={isSalesProductModalOpen}
+                product={selectedSalesProduct}
+                currentPeriod={productSalesRanking?.period || { start: null, end: null }}
+                historicalPeriod={productSalesRanking?.historicalPeriod || { start: null, end: null }}
+                formatMoney={formatMoney}
+                onClose={() => {
+                    setIsSalesProductModalOpen(false)
+                    setSelectedSalesProduct(null)
+                }}
+            />
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
-                                            <div className="relative">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    className={getProductInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')}
-                                                    value={productForm.price}
-                                                    onChange={e => {
-                                                        handleBasePriceChange(e.target.value)
-                                                        clearProductErrors('price')
-                                                    }}
-                                                    required
-                                                    disabled={productSaving}
-                                                />
-                                            </div>
-                                            {productFormErrors.price && <p className="text-xs text-red mt-1">{productFormErrors.price}</p>}
-                                            <label className="text-secondary text-xs font-bold uppercase mt-3 mb-2 block">Precio PVP (con IVA)</label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all"
-                                                value={productForm.pvp}
-                                                onChange={e => handlePvpPriceChange(e.target.value)}
-                                                disabled={productSaving}
-                                            />
-                                            <p className="text-secondary text-xs mt-1">PVP estimado actual: ${productPvpPriceLabel}</p>
-                                            {hasProductCostPreview && (
-                                                <div className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 space-y-2">
-                                                    <div className="text-[10px] uppercase font-bold text-secondary">Vista previa por costo</div>
-                                                    <p className="text-xs text-secondary">
-                                                        Sugerido por costo: <span className="font-semibold text-black">${suggestedBasePriceLabel}</span> base
-                                                        {' / '}
-                                                        <span className="font-semibold text-black">${suggestedPvpPriceLabel}</span> PVP
-                                                    </p>
-                                                    {costChangedForAutoPricing && (
-                                                        <p className={`text-xs ${automaticPriceWillIncrease ? 'text-orange-600' : 'text-green-700'}`}>
-                                                            Precio aplicado al guardar: <span className="font-semibold">${automaticAppliedBasePriceLabel}</span> base
-                                                            {' / '}
-                                                            <span className="font-semibold">${automaticAppliedPvpPriceLabel}</span> PVP
-                                                        </p>
-                                                    )}
-                                                    {costChangedForAutoPricing && automaticPriceWillIncrease && (
-                                                        <p className="text-[11px] text-orange-700">
-                                                            El backend subirá el precio al guardar para no quedar por debajo del piso calculado por costo.
-                                                        </p>
-                                                    )}
-                                                    {costChangedForAutoPricing && !automaticPriceWillIncrease && (
-                                                        <p className="text-[11px] text-green-700">
-                                                            Tu precio actual ya está por encima del piso automático. El backend no lo bajará.
-                                                        </p>
-                                                    )}
-                                                    {!editingProduct && (
-                                                        <p className="text-[11px] text-secondary">
-                                                            En productos nuevos esto se muestra como referencia; si quieres usarlo, copia ese precio antes de guardar.
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="md:col-span-2">
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-surface rounded-xl border border-line">
-                                                <div>
-                                                    <div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div>
-                                                    <div className="text-lg font-bold text-success">${productProfitLabel}</div>
-                                                    <div className="text-xs text-secondary">Base sin IVA</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div>
-                                                    <div className="text-lg font-bold">{productGrossMarginLabel}%</div>
-                                                    <div className="text-xs text-secondary">Utilidad / precio base</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] uppercase font-bold text-secondary">Markup</div>
-                                                    <div className="text-lg font-bold">{productMarkupLabel}%</div>
-                                                    <div className="text-xs text-secondary">Utilidad / costo</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] uppercase font-bold text-secondary">Utilidad real</div>
-                                                    <div className="text-lg font-bold text-success">${productProfitLabel}</div>
-                                                    <div className="text-xs text-secondary">El IVA no es utilidad</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
-                                            <div className="relative">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    className={getProductInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')}
-                                                    value={productForm.cost}
-                                                    onChange={e => {
-                                                        setProductForm({ ...productForm, cost: e.target.value })
-                                                        clearProductErrors('cost')
-                                                    }}
-                                                    required
-                                                    disabled={productSaving}
-                                                />
-                                            </div>
-                                            {productFormErrors.cost && <p className="text-xs text-red mt-1">{productFormErrors.cost}</p>}
-                                            <p className="text-secondary text-xs mt-2">Costo real de compra (base para margen).</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Stock Disponible</label>
-                                            <input
-                                                type="number"
-                                                step="1"
-                                                min="0"
-                                                className={getProductInputClass('quantity', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                value={productForm.quantity}
-                                                onChange={e => {
-                                                    setProductForm({ ...productForm, quantity: e.target.value })
-                                                    clearProductErrors('quantity')
-                                                }}
-                                                required
-                                                disabled={productSaving}
-                                            />
-                                            {productFormErrors.quantity && <p className="text-xs text-red mt-1">{productFormErrors.quantity}</p>}
-                                        </div>
-                                    </div>
-
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-4">
-                                            <div>
-                                                <div className="text-xs uppercase font-bold text-secondary">Factura de compra</div>
-                                                <div className="text-sm font-semibold">
-                                                    {requiresPurchaseInvoice ? purchaseInvoiceTitle : 'Sin ingreso de stock nuevo'}
-                                                </div>
-                                            </div>
-                                            <span className={`text-xs font-semibold ${requiresPurchaseInvoice ? 'text-orange-700' : 'text-secondary'}`}>
-                                                {requiresPurchaseInvoice
-                                                    ? 'Obligatoria para registrar el movimiento de inventario.'
-                                                    : 'Solo se exige cuando el stock aumenta.'}
-                                            </span>
-                                        </div>
-                                        {requiresPurchaseInvoice ? (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Número de factura</label>
-                                                    <input
-                                                        className={getProductInputClass('purchaseInvoiceNumber', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                        value={productForm.purchaseInvoice.invoiceNumber}
-                                                        onChange={e => {
-                                                            setProductForm({
-                                                                ...productForm,
-                                                                purchaseInvoice: { ...productForm.purchaseInvoice, invoiceNumber: e.target.value }
-                                                            })
-                                                            clearProductErrors('purchaseInvoiceNumber')
-                                                        }}
-                                                        disabled={productSaving}
-                                                    />
-                                                    {productFormErrors.purchaseInvoiceNumber && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceNumber}</p>}
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor</label>
-                                                    <input
-                                                        className={getProductInputClass('purchaseInvoiceSupplierName', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                        value={productForm.purchaseInvoice.supplierName}
-                                                        onChange={e => {
-                                                            setProductForm({
-                                                                ...productForm,
-                                                                purchaseInvoice: { ...productForm.purchaseInvoice, supplierName: e.target.value }
-                                                            })
-                                                            clearProductErrors('purchaseInvoiceSupplierName')
-                                                        }}
-                                                        disabled={productSaving}
-                                                    />
-                                                    {productFormErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceSupplierName}</p>}
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">RUC o documento</label>
-                                                    <input
-                                                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all"
-                                                        value={productForm.purchaseInvoice.supplierDocument}
-                                                        onChange={e => {
-                                                            setProductForm({
-                                                                ...productForm,
-                                                                purchaseInvoice: { ...productForm.purchaseInvoice, supplierDocument: e.target.value }
-                                                            })
-                                                        }}
-                                                        disabled={productSaving}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label>
-                                                    <input
-                                                        type="date"
-                                                        className={getProductInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
-                                                        value={productForm.purchaseInvoice.issuedAt}
-                                                        onChange={e => {
-                                                            setProductForm({
-                                                                ...productForm,
-                                                                purchaseInvoice: { ...productForm.purchaseInvoice, issuedAt: e.target.value }
-                                                            })
-                                                            clearProductErrors('purchaseInvoiceIssuedAt')
-                                                        }}
-                                                        disabled={productSaving}
-                                                    />
-                                                    {productFormErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{productFormErrors.purchaseInvoiceIssuedAt}</p>}
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Notas de compra</label>
-                                                    <textarea
-                                                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[96px]"
-                                                        value={productForm.purchaseInvoice.notes}
-                                                        onChange={e => {
-                                                            setProductForm({
-                                                                ...productForm,
-                                                                purchaseInvoice: { ...productForm.purchaseInvoice, notes: e.target.value }
-                                                            })
-                                                        }}
-                                                        disabled={productSaving}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-secondary">
-                                                Puedes editar precio, costo o contenido del producto sin capturar factura, siempre que no aumentes el stock disponible.
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría</label>
-                                            <select
-                                                className={getProductInputClass('category', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
-                                                value={productForm.category}
-                                                onChange={e => {
-                                                    setProductForm({ ...productForm, category: e.target.value })
-                                                    clearProductErrors('category')
-                                                }}
-                                                disabled={productSaving}
-                                            >
-                                                <option value="General">General</option>
-                                                <option value="Comida">Comida</option>
-                                                <option value="Juguetes">Juguetes</option>
-                                                <option value="Accesorios">Accesorios</option>
-                                            </select>
-                                            {productFormErrors.category && <p className="text-xs text-red mt-1">{productFormErrors.category}</p>}
-                                        </div>
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Publicado en tienda web</label>
-                                            <select
-                                                className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
-                                                value={productForm.published ? 'yes' : 'no'}
-                                                onChange={e => setProductForm({ ...productForm, published: e.target.value === 'yes' })}
-                                                disabled={productSaving}
-                                            >
-                                                <option value="yes">Sí, mostrar en el sitio</option>
-                                                <option value="no">No, ocultar del sitio</option>
-                                            </select>
-                                            <p className="text-secondary text-xs mt-2">Si está en no, el producto seguirá en el panel pero no aparecerá en la web pública.</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="text-xs uppercase font-bold text-secondary">Imágenes del producto</div>
-                                            <span className="text-xs text-secondary">Usa miniaturas para listado y fotos grandes para la ficha.</span>
-                                        </div>
-                                        {(productFormErrors.thumbImages || productFormErrors.galleryImages) && (
-                                            <div className="mb-4 space-y-1">
-                                                {productFormErrors.thumbImages && <p className="text-xs text-red">{productFormErrors.thumbImages}</p>}
-                                                {productFormErrors.galleryImages && <p className="text-xs text-red">{productFormErrors.galleryImages}</p>}
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div>
-                                                <div className="text-sm font-semibold mb-3">Miniaturas (listado)</div>
-                                                <div className="space-y-3">
-                                                    {(productForm.thumbImages || []).map((img: any, idx: number) => {
-                                                        const key = `thumb-${idx}`
-                                                        return (
-                                                            <div key={key} className="p-3 rounded-xl border border-line bg-white">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                                                    <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                                        {img.url ? (
-                                                                            <Image
-                                                                                src={img.url}
-                                                                                alt={`Miniatura ${idx + 1}`}
-                                                                                width={64}
-                                                                                height={64}
-                                                                                unoptimized
-                                                                                className="w-full h-full object-cover"
-                                                                            />
-                                                                        ) : (
-                                                                            <span className="text-[10px] text-secondary">Sin imagen</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <input
-                                                                            type="file"
-                                                                            accept="image/jpeg,image/png,image/webp"
-                                                                            className="border border-line rounded-lg px-3 py-2 w-full text-sm"
-                                                                            onChange={(e) => handleImageFileChange('thumb', idx, e.target.files?.[0])}
-                                                                            disabled={productSaving}
-                                                                        />
-                                                                        <div className="text-xs text-secondary mt-1">
-                                                                            {img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.thumb.width}x${requiredImageSizes.thumb.height}px`}
-                                                                            {imageUploading[key] && <span className="ml-2 text-primary font-semibold">Subiendo...</span>}
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="text-xs text-red-600 font-semibold hover:underline disabled:opacity-50"
-                                                                        onClick={() => removeImageEntry('thumb', idx)}
-                                                                        disabled={productSaving}
-                                                                    >
-                                                                        Quitar
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    className="mt-3 text-sm text-primary font-semibold disabled:opacity-50"
-                                                    onClick={() => addImageEntry('thumb')}
-                                                    disabled={productSaving}
-                                                >
-                                                    + Agregar miniatura
-                                                </button>
-                                                <div className="text-xs text-secondary mt-2">Recomendado: 400x520</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-semibold mb-3">Imágenes grandes (ficha)</div>
-                                                <div className="space-y-3">
-                                                    {(productForm.galleryImages || []).map((img: any, idx: number) => {
-                                                        const key = `gallery-${idx}`
-                                                        return (
-                                                            <div key={key} className="p-3 rounded-xl border border-line bg-white">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                                                    <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                                        {img.url ? (
-                                                                            <Image
-                                                                                src={img.url}
-                                                                                alt={`Imagen ficha ${idx + 1}`}
-                                                                                width={64}
-                                                                                height={64}
-                                                                                unoptimized
-                                                                                className="w-full h-full object-cover"
-                                                                            />
-                                                                        ) : (
-                                                                            <span className="text-[10px] text-secondary">Sin imagen</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <input
-                                                                            type="file"
-                                                                            accept="image/jpeg,image/png,image/webp"
-                                                                            className="border border-line rounded-lg px-3 py-2 w-full text-sm"
-                                                                            onChange={(e) => handleImageFileChange('gallery', idx, e.target.files?.[0])}
-                                                                            disabled={productSaving}
-                                                                        />
-                                                                        <div className="text-xs text-secondary mt-1">
-                                                                            {img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.gallery.width}x${requiredImageSizes.gallery.height}px`}
-                                                                            {imageUploading[key] && <span className="ml-2 text-primary font-semibold">Subiendo...</span>}
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="text-xs text-red-600 font-semibold hover:underline disabled:opacity-50"
-                                                                        onClick={() => removeImageEntry('gallery', idx)}
-                                                                        disabled={productSaving}
-                                                                    >
-                                                                        Quitar
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    className="mt-3 text-sm text-primary font-semibold disabled:opacity-50"
-                                                    onClick={() => addImageEntry('gallery')}
-                                                    disabled={productSaving}
-                                                >
-                                                    + Agregar imagen grande
-                                                </button>
-                                                <div className="text-xs text-secondary mt-2">Recomendado: 1200x1400</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
-                                            <select
-                                                required
-                                                className={getProductInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
-                                                value={productForm.productType}
-                                                onChange={(e) => {
-                                                    const value = e.target.value
-                                                    setProductForm({
-                                                        ...productForm,
-                                                        productType: value,
-                                                        attributes: getAttributesForTypeChange(value, productForm.attributes)
-                                                    })
-                                                    clearProductErrors('productType', 'sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays')
-                                                }}
-                                                disabled={productSaving}
-                                            >
-                                                <option value="">Seleccionar</option>
-                                                <option value="comida">Comida</option>
-                                                <option value="ropa">Ropa</option>
-                                                <option value="accesorios">Accesorios</option>
-                                            </select>
-                                            {productFormErrors.productType && <p className="text-xs text-red mt-1">{productFormErrors.productType}</p>}
-                                            <p className="text-secondary text-xs mt-2">Define qué atributos se mostrarán en la ficha.</p>
-                                        </div>
-                                    </div>
-
-                                    {productForm.productType === 'comida' && (
-                                        <div className="p-5 rounded-xl border border-line bg-surface">
-                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de comida</div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Tamaño</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Peso</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.weight || ''} onChange={e => setProductAttribute('weight', e.target.value)} placeholder="Ej: 2 kg" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Sabor</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.flavor || ''} onChange={e => setProductAttribute('flavor', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Edad</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.age || ''} onChange={e => setProductAttribute('age', e.target.value)} placeholder="Ej: Adulto, Cachorro" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" disabled={productSaving} />
-                                                    {productFormErrors.species && <p className="text-xs text-red mt-1">{productFormErrors.species}</p>}
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Ingredientes</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.ingredients || ''} onChange={e => setProductAttribute('ingredients', e.target.value)} placeholder="Ej: pollo, arroz, vegetales" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {productForm.productType === 'ropa' && (
-                                        <div className="p-5 rounded-xl border border-line bg-surface">
-                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de ropa</div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Talla</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} placeholder="Ej: S, M, L" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Material</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.material || ''} onChange={e => setProductAttribute('material', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Color</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.color || ''} onChange={e => setProductAttribute('color', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Género</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.gender || ''} onChange={e => setProductAttribute('gender', e.target.value)} placeholder="Ej: Unisex" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" disabled={productSaving} />
-                                                    {productFormErrors.species && <p className="text-xs text-red mt-1">{productFormErrors.species}</p>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {productForm.productType === 'accesorios' && (
-                                        <div className="p-5 rounded-xl border border-line bg-surface">
-                                            <div className="text-xs uppercase font-bold text-secondary mb-4">Atributos de accesorios</div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Material</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.material || ''} onChange={e => setProductAttribute('material', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Tamaño</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.size || ''} onChange={e => setProductAttribute('size', e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Uso</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.usage || ''} onChange={e => setProductAttribute('usage', e.target.value)} placeholder="Ej: Paseo, entrenamiento" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Especie</label>
-                                                    <input className="border border-line rounded-lg px-4 py-2 w-full"
-                                                        value={productForm.attributes?.species || ''} onChange={e => setProductAttribute('species', e.target.value)} placeholder="Ej: Perro, Gato" disabled={productSaving} />
-                                                    {productFormErrors.species && <p className="text-xs text-red mt-1">{productFormErrors.species}</p>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="text-xs uppercase font-bold text-secondary mb-4">Datos comunes</div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">SKU</label>
-                                                <input
-                                                    required
-                                                    className={getProductInputClass('sku', 'border rounded-lg px-4 py-2 w-full outline-none transition-all')}
-                                                    value={productForm.attributes?.sku || ''}
-                                                    onChange={e => setProductAttribute('sku', e.target.value)}
-                                                    disabled={productSaving}
-                                                />
-                                                {productFormErrors.sku && <p className="text-xs text-red mt-1">{productFormErrors.sku}</p>}
-                                            </div>
-                                            <div>
-                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Etiqueta</label>
-                                                <input
-                                                    required
-                                                    className={getProductInputClass('tag', 'border rounded-lg px-4 py-2 w-full outline-none transition-all')}
-                                                    value={productForm.attributes?.tag || ''}
-                                                    onChange={e => setProductAttribute('tag', e.target.value)}
-                                                    placeholder="Ej: abrigo, premium"
-                                                    disabled={productSaving}
-                                                />
-                                                {productFormErrors.tag && <p className="text-xs text-red mt-1">{productFormErrors.tag}</p>}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="flex items-center justify-between gap-3 mb-4">
-                                            <div className="text-xs uppercase font-bold text-secondary">Inventario</div>
-                                            {productForm.productType === 'comida' && (
-                                                <span className="text-[11px] text-red font-semibold">Producto perecedero: fecha obligatoria</span>
-                                            )}
-                                        </div>
-                                        {productForm.productType === 'comida' ? (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de vencimiento</label>
-                                                    <input
-                                                        type="date"
-                                                        required
-                                                        className={getProductInputClass('expirationDate', 'border rounded-lg px-4 py-2 w-full outline-none transition-all')}
-                                                        value={productForm.attributes?.expirationDate || ''}
-                                                        onChange={e => setProductAttribute('expirationDate', e.target.value)}
-                                                        disabled={productSaving}
-                                                    />
-                                                    {productFormErrors.expirationDate && <p className="text-xs text-red mt-1">{productFormErrors.expirationDate}</p>}
-                                                </div>
-                                                <div>
-                                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Días de alerta de vencimiento</label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="1"
-                                                        className={getProductInputClass('expirationAlertDays', 'border rounded-lg px-4 py-2 w-full outline-none transition-all')}
-                                                        value={productForm.attributes?.expirationAlertDays || '30'}
-                                                        onChange={e => setProductAttribute('expirationAlertDays', e.target.value)}
-                                                        disabled={productSaving}
-                                                    />
-                                                    {productFormErrors.expirationAlertDays && <p className="text-xs text-red mt-1">{productFormErrors.expirationAlertDays}</p>}
-                                                    <p className="text-secondary text-[11px] mt-1">Se marcará como por vencer cuando falten estos días o menos.</p>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="text-[11px] text-secondary mb-4">
-                                                Este tipo de producto no maneja fecha de vencimiento.
-                                            </p>
-                                        )}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Código de lote</label>
-                                                <input
-                                                    className="border border-line rounded-lg px-4 py-2 w-full"
-                                                    value={productForm.attributes?.lotCode || ''}
-                                                    onChange={e => setProductAttribute('lotCode', e.target.value)}
-                                                    placeholder="Ej: LOTE-2026-03"
-                                                    disabled={productSaving}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Ubicación en bodega</label>
-                                                <input
-                                                    className="border border-line rounded-lg px-4 py-2 w-full"
-                                                    value={productForm.attributes?.storageLocation || ''}
-                                                    onChange={e => setProductAttribute('storageLocation', e.target.value)}
-                                                    placeholder="Ej: Pasillo A - Estante 3"
-                                                    disabled={productSaving}
-                                                />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor</label>
-                                                <input
-                                                    className="border border-line rounded-lg px-4 py-2 w-full"
-                                                    value={productForm.attributes?.supplier || ''}
-                                                    onChange={e => setProductAttribute('supplier', e.target.value)}
-                                                    placeholder="Ej: Distribuidora Pet Andina"
-                                                    disabled={productSaving}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción</label>
-                                        <textarea className={getProductInputClass('description', 'border rounded-lg px-4 py-3 w-full outline-none transition-all h-32 resize-none')}
-                                            required
-                                            value={productForm.description}
-                                            onChange={e => {
-                                                setProductForm({ ...productForm, description: e.target.value })
-                                                clearProductErrors('description')
-                                            }}
-                                            placeholder="Describe el producto..."
-                                            disabled={productSaving}
-                                        ></textarea>
-                                        {productFormErrors.description && <p className="text-xs text-red mt-1">{productFormErrors.description}</p>}
-                                    </div>
-                                </form>
-                            </div>
-
-                            <div className="p-4 sm:p-6 border-t border-line flex justify-end gap-3 sm:gap-4 bg-white rounded-b-2xl sticky bottom-0">
-                                <button type="button" className="px-6 sm:px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold disabled:opacity-60" onClick={closeProductModal} disabled={productSaving}>
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="button"
-                                    className="button-main bg-black text-white px-7 sm:px-10 py-3 rounded-full hover:bg-primary transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
-                                    disabled={productSaving || isUploadingProductImages}
-                                    onClick={() => {
-                                        if (productFormRef.current?.requestSubmit) {
-                                            productFormRef.current.requestSubmit()
-                                            return
-                                        }
-                                        if (productFormRef.current) {
-                                            productFormRef.current.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-                                        } else {
-                                            showNotification('No se pudo enviar el formulario.', 'error')
-                                        }
-                                    }}
-                                >
-                                    {productSaving
-                                        ? 'Guardando...'
-                                        : isUploadingProductImages
-                                            ? 'Subiendo imágenes...'
-                                            : (editingProduct ? 'Guardar Cambios' : 'Crear Producto')}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {
-                isPurchaseInvoiceModalOpen && (
-                    <div
-                        className="fixed inset-0 z-[215] flex items-center justify-center bg-black bg-opacity-50 p-4"
-                        onClick={closePurchaseInvoiceModal}
-                    >
-                        <div
-                            className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
-                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        >
-                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
-                                <div>
-                                    <h4 className="heading4">
-                                        {selectedPurchaseInvoice?.invoice_number
-                                            ? `Factura ${selectedPurchaseInvoice.invoice_number}`
-                                            : 'Factura de compra'}
-                                    </h4>
-                                    <div className="text-secondary text-sm mt-1">
-                                        {selectedPurchaseInvoice?.supplier_name || 'Cargando detalle...'}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={closePurchaseInvoiceModal}
-                                    className="text-secondary hover:text-black disabled:opacity-50"
-                                    disabled={purchaseInvoiceDetailLoading}
-                                >
-                                    <Icon.X size={24} />
-                                </button>
-                            </div>
-
-                            <div className="p-6 overflow-y-auto flex-1">
-                                {purchaseInvoiceDetailLoading && !selectedPurchaseInvoice ? (
-                                    <div className="py-16 text-center text-sm text-secondary">
-                                        Cargando detalle de la factura de compra...
-                                    </div>
-                                ) : selectedPurchaseInvoice ? (
-                                    <>
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                            <div className="p-4 rounded-xl border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Proveedor</div>
-                                                <div className="text-sm font-semibold mt-1">{selectedPurchaseInvoice.supplier_name || '-'}</div>
-                                                <div className="text-xs text-secondary mt-1">{selectedPurchaseInvoice.supplier_document || 'Sin documento'}</div>
-                                            </div>
-                                            <div className="p-4 rounded-xl border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Fecha factura</div>
-                                                <div className="text-sm font-semibold mt-1">{formatIsoDate(selectedPurchaseInvoice.issued_at)}</div>
-                                                <div className="text-xs text-secondary mt-1">
-                                                    Registro: {selectedPurchaseInvoice.created_at ? formatDateTimeEcuador(selectedPurchaseInvoice.created_at, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                </div>
-                                            </div>
-                                            <div className="p-4 rounded-xl border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos</div>
-                                                <div className="text-sm font-semibold mt-1">{selectedPurchaseInvoice.items.length.toLocaleString('es-EC')} líneas</div>
-                                                <div className="text-xs text-secondary mt-1">
-                                                    {selectedPurchaseInvoice.items.reduce((acc, item) => acc + Number(item.quantity ?? 0), 0).toLocaleString('es-EC')} unidades
-                                                </div>
-                                            </div>
-                                            <div className="p-4 rounded-xl border border-line bg-surface">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Total compra</div>
-                                                <div className="text-sm font-semibold mt-1">{formatMoney(selectedPurchaseInvoice.total)}</div>
-                                                <div className="text-xs text-secondary mt-1">Subtotal: {formatMoney(selectedPurchaseInvoice.subtotal)}</div>
-                                            </div>
-                                        </div>
-
-                                        {(selectedPurchaseInvoice.notes || selectedPurchaseInvoice.metadata) && (
-                                            <div className="p-4 rounded-xl border border-line bg-white mb-6">
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-2">Observaciones</div>
-                                                {selectedPurchaseInvoice.notes && (
-                                                    <p className="text-sm text-black whitespace-pre-wrap">{selectedPurchaseInvoice.notes}</p>
-                                                )}
-                                                {selectedPurchaseInvoice.metadata && Object.keys(selectedPurchaseInvoice.metadata).length > 0 && (
-                                                    <div className="text-xs text-secondary mt-3">
-                                                        Metadata: {JSON.stringify(selectedPurchaseInvoice.metadata)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        <div className="overflow-x-auto rounded-xl border border-line">
-                                            <table className="w-full min-w-[760px] text-left">
-                                                <thead className="bg-surface border-b border-line">
-                                                    <tr className="text-[11px] uppercase font-bold text-secondary">
-                                                        <th className="px-4 py-3">Producto</th>
-                                                        <th className="px-4 py-3">Categoría</th>
-                                                        <th className="px-4 py-3 text-right">Cantidad</th>
-                                                        <th className="px-4 py-3 text-right">Costo unitario</th>
-                                                        <th className="px-4 py-3 text-right">Total línea</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-line">
-                                                    {selectedPurchaseInvoice.items.map((item) => (
-                                                        <tr key={item.id} className="hover:bg-surface/40">
-                                                            <td className="px-4 py-3">
-                                                                <div className="text-sm font-semibold">{item.product_name_snapshot || item.product_id || 'Producto sin nombre'}</div>
-                                                                <div className="text-xs text-secondary">{item.brand || 'Sin marca'}</div>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-sm">{item.category || '-'}</td>
-                                                            <td className="px-4 py-3 text-right text-sm">{Number(item.quantity ?? 0).toLocaleString('es-EC')}</td>
-                                                            <td className="px-4 py-3 text-right text-sm">{formatMoney(item.unit_cost)}</td>
-                                                            <td className="px-4 py-3 text-right text-sm font-semibold">{formatMoney(item.line_total)}</td>
-                                                        </tr>
-                                                    ))}
-                                                    {selectedPurchaseInvoice.items.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan={5} className="px-4 py-8 text-center text-sm text-secondary">
-                                                                Esta factura no tiene líneas registradas.
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="py-16 text-center text-sm text-secondary">
-                                        No se encontró el detalle de la factura seleccionada.
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="p-5 border-t border-line flex justify-end bg-white rounded-b-2xl">
-                                <button
-                                    className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold"
-                                    onClick={closePurchaseInvoiceModal}
-                                    disabled={purchaseInvoiceDetailLoading}
-                                >
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {
-                isSalesProductModalOpen && selectedSalesProduct && (
-                    <div
-                        className="fixed inset-0 z-[210] flex items-center justify-center bg-black bg-opacity-50 p-4"
-                        onClick={() => {
-                            setIsSalesProductModalOpen(false)
-                            setSelectedSalesProduct(null)
-                        }}
-                    >
-                        <div
-                            className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl"
-                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        >
-                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
-                                <div>
-                                    <h4 className="heading4">{selectedSalesProduct.product_name}</h4>
-                                    <div className="text-secondary text-sm mt-1 capitalize">
-                                        Categoría: {selectedSalesProduct.category || 'Sin categoría'}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setIsSalesProductModalOpen(false)
-                                        setSelectedSalesProduct(null)
-                                    }}
-                                    className="text-secondary hover:text-black"
-                                >
-                                    <Icon.X size={24} />
-                                </button>
-                            </div>
-
-                            <div className="p-6 overflow-y-auto flex-1">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="text-xs uppercase font-bold text-secondary">Detalle mes seleccionado</div>
-                                            <div className="text-xs font-semibold text-secondary">
-                                                {productSalesRanking?.period?.start || '-'} → {productSalesRanking?.period?.end || '-'}
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
-                                                <div className="text-lg font-bold">{selectedSalesProduct.month_orders_count}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
-                                                <div className="text-lg font-bold">{selectedSalesProduct.month_units_sold}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_gross_revenue)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_net_revenue)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_vat_amount)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_shipping_amount)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.month_cost)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
-                                                <div className={`text-lg font-bold ${selectedSalesProduct.month_profit >= 0 ? 'text-success' : 'text-red'}`}>
-                                                    {formatMoney(selectedSalesProduct.month_profit)}
-                                                </div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white col-span-2">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Margen neto</div>
-                                                <div className="text-lg font-bold">
-                                                    {Number(selectedSalesProduct.month_margin).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-5 rounded-xl border border-line bg-surface">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="text-xs uppercase font-bold text-secondary">Detalle histórico total</div>
-                                            <div className="text-xs font-semibold text-secondary">
-                                                {productSalesRanking?.historicalPeriod?.start || '-'} → {productSalesRanking?.historicalPeriod?.end || '-'}
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos</div>
-                                                <div className="text-lg font-bold">{selectedSalesProduct.historical_orders_count}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Unidades</div>
-                                                <div className="text-lg font-bold">{selectedSalesProduct.historical_units_sold}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_gross_revenue)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_net_revenue)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_vat_amount)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_shipping_amount)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Costo</div>
-                                                <div className="text-lg font-bold">{formatMoney(selectedSalesProduct.historical_cost)}</div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
-                                                <div className={`text-lg font-bold ${selectedSalesProduct.historical_profit >= 0 ? 'text-success' : 'text-red'}`}>
-                                                    {formatMoney(selectedSalesProduct.historical_profit)}
-                                                </div>
-                                            </div>
-                                            <div className="p-3 rounded-lg border border-line bg-white col-span-2">
-                                                <div className="text-[10px] uppercase font-bold text-secondary">Margen neto</div>
-                                                <div className="text-lg font-bold">
-                                                    {Number(selectedSalesProduct.historical_margin).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-5 border-t border-line flex justify-end bg-white rounded-b-2xl">
-                                <button
-                                    className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold"
-                                    onClick={() => {
-                                        setIsSalesProductModalOpen(false)
-                                        setSelectedSalesProduct(null)
-                                    }}
-                                >
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {
-                isOrderModalOpen && selectedOrder && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
-                        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
-                            <div className="p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl">
-                                <div>
-                                    <h4 className="heading4">Pedido #{selectedOrder.id}</h4>
-                                    <div className="text-secondary text-sm mt-1">{formatDateTimeEcuador(selectedOrder.created_at)}</div>
-                                </div>
-                                <button onClick={() => setIsOrderModalOpen(false)} className="text-secondary hover:text-black">
-                                    <Icon.X size={24} />
-                                </button>
-                            </div>
-
-                            <div className="p-8 overflow-y-auto flex-1">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                                    <div className="bg-surface rounded-xl p-6 border border-line">
-                                        <h6 className="heading6 mb-4 flex items-center gap-2">
-                                            <Icon.User size={20} /> Cliente
-                                        </h6>
-                                        <div className="space-y-2">
-                                            <div className="font-bold text-lg">{selectedOrderContact.name}</div>
-                                            <div className="text-secondary">{selectedOrderContact.email}</div>
-                                            <div className="text-secondary">{selectedOrderContact.phone !== '-' ? selectedOrderContact.phone : 'Sin teléfono'}</div>
-                                        </div>
-                                    </div>
-                                    <div className="bg-surface rounded-xl p-6 border border-line flex flex-col justify-between">
-                                        <h6 className="heading6 mb-4 flex items-center gap-2">
-                                            <Icon.Receipt size={20} /> Resumen
-                                        </h6>
-                                        <div className="space-y-3">
-                                            <div className="grid grid-cols-[1fr_120px] items-center">
-                                                <span className="text-secondary">Subtotal sin IVA</span>
-                                                <span className="font-bold tabular-nums text-right">{formatMoney(getOrderVatSubtotal(selectedOrder))}</span>
-                                            </div>
-                                            {Number(selectedOrder?.vat_rate ?? 0) > 0 && (
-                                                <div className="grid grid-cols-[1fr_120px] items-center">
-                                                    <span className="text-secondary">IVA ({Number(selectedOrder?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
-                                                    <span className="font-bold tabular-nums text-right">{formatMoney(getOrderVatAmount(selectedOrder))}</span>
-                                                </div>
-                                            )}
-                                            <div className="grid grid-cols-[1fr_120px] items-center">
-                                                <span className="text-secondary">Envío</span>
-                                                <span className={`font-bold tabular-nums text-right ${getOrderShipping(selectedOrder) === 0 ? 'text-success' : 'text-[#111827]'}`}>
-                                                    {getOrderShipping(selectedOrder) === 0 ? 'Gratis' : formatMoney(getOrderShipping(selectedOrder))}
-                                                </span>
-                                            </div>
-                                            <div className="pt-3 border-t border-line grid grid-cols-[1fr_120px] items-center">
-                                                <span className="text-lg font-bold">Total</span>
-                                                <span className="text-xl font-bold text-primary tabular-nums text-right">{formatMoney(selectedOrder?.total)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="mb-8">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h6 className="heading6">Productos del Pedido</h6>
-                                        <span className="bg-line px-3 py-1 rounded-full text-xs font-bold">{selectedOrder.items?.length || 0} ítems</span>
-                                    </div>
-                                    <div className="overflow-x-auto border border-line rounded-xl">
-                                        <table className="w-full text-left table-fixed">
-                                            <thead className="bg-surface border-b border-line text-xs uppercase text-secondary font-bold">
-                                                <tr>
-                                                    <th className="px-6 py-4 w-[55%]">Producto</th>
-                                                    <th className="px-6 py-4 w-[12%] text-center">Cant.</th>
-                                                    <th className="px-6 py-4 w-[16%] text-right tabular-nums">Precio</th>
-                                                    <th className="px-6 py-4 w-[17%] text-right tabular-nums">Total</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-line">
-                                                {selectedOrder.items?.map((item: any) => (
-                                                    <tr key={item.id} className="hover:bg-surface/50 transition-colors">
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-12 h-12 bg-line rounded-lg overflow-hidden border border-line flex-shrink-0">
-                                                                    <img src="/images/product/1000x1000.png" className="w-full h-full object-cover" alt={item.product_name} />
-                                                                </div>
-                                                                <span className="font-medium text-sm">{item.product_name}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                                                        <td className="px-6 py-4 text-right tabular-nums">${Number(getItemNetPrice(item, selectedOrder)).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                        <td className="px-6 py-4 text-right font-bold text-primary tabular-nums">${(Number(getItemNetPrice(item, selectedOrder)) * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-6 border-t border-line flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white rounded-b-2xl">
-                                <div className="flex items-center gap-3">
-                                    {(() => {
-                                        const badge = getStatusBadge(selectedOrder.status)
-                                        return (
-                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase ${badge.className}`}>
-                                                Estado: {badge.label}
-                                            </span>
-                                        )
-                                    })()}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {(user?.role === 'admin' || user?.role === 'customer') && selectedOrder.status !== 'canceled' && (
-                                        <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={handleGenerateInvoice}>
-                                            Ver factura
-                                        </button>
-                                    )}
-                                    <button className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => setIsOrderModalOpen(false)}>
-                                        Cerrar
-                                    </button>
-                                    {user?.role === 'admin' && selectedOrder.status !== 'canceled' && selectedOrder.status !== 'delivered' && (
-                                        <>
-                                            <button className="px-4 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => {
-                                                handleUpdateOrderStatus(selectedOrder.id, 'processing')
-                                            }}>
-                                                En proceso
-                                            </button>
-                                            <button className="px-4 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={() => {
-                                                handleUpdateOrderStatus(selectedOrder.id, 'shipped')
-                                            }}>
-                                                Enviado
-                                            </button>
-                                            <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={() => {
-                                                handleUpdateOrderStatus(selectedOrder.id, 'delivered')
-                                            }}>
-                                                Completado
-                                            </button>
-                                            <button className="px-4 py-2 rounded-lg border border-red text-red hover:bg-red/10 transition-all text-sm font-semibold" onClick={() => {
-                                                handleUpdateOrderStatus(selectedOrder.id, 'canceled')
-                                            }}>
-                                                Cancelar
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            <OrderDetailModal
+                open={isOrderModalOpen}
+                order={selectedOrder}
+                orderContact={selectedOrderContact}
+                statusBadge={selectedOrder ? getStatusBadge(selectedOrder.status) : { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }}
+                canViewInvoice={(user?.role === 'admin' || user?.role === 'customer') && selectedOrder?.status !== 'canceled'}
+                canManageStatus={user?.role === 'admin' && selectedOrder?.status !== 'canceled' && selectedOrder?.status !== 'delivered'}
+                onClose={() => setIsOrderModalOpen(false)}
+                onViewInvoice={handleGenerateInvoice}
+                onUpdateStatus={(status) => {
+                    if (!selectedOrder?.id) return
+                    handleUpdateOrderStatus(selectedOrder.id, status)
+                }}
+                formatDateTime={formatDateTimeEcuador}
+                formatMoney={formatMoney}
+                getVatSubtotal={getOrderVatSubtotal}
+                getVatAmount={getOrderVatAmount}
+                getShipping={getOrderShipping}
+                getItemNetPrice={getItemNetPrice}
+            />
 
             {renderDeepDive()}
         </>

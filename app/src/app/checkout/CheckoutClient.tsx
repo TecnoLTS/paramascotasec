@@ -10,6 +10,7 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { createOrder, getQuote } from '@/lib/api'
 import { login, register, requestOtp, verifyOtp } from '@/lib/api/auth'
 import { fetchJson, requestApi } from '@/lib/apiClient'
+import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCountryToEcuador, saveCheckoutDraft } from '@/lib/checkoutDraft'
 
 interface AddressData {
     firstName: string;
@@ -40,7 +41,7 @@ const emptyAddress: AddressData = {
     company: '',
     documentType: '',
     documentNumber: '',
-    country: '',
+    country: 'Ecuador',
     street: '',
     city: '',
     state: '',
@@ -48,6 +49,11 @@ const emptyAddress: AddressData = {
     phone: '',
     email: '',
 };
+
+const ensureEcuadorAddress = (address: AddressData): AddressData => ({
+    ...address,
+    country: 'Ecuador',
+})
 
 const fallbackItems = [
     {
@@ -131,10 +137,16 @@ const Checkout = () => {
             if (typeof value === 'string' && value.trim() === '') return
             ;(next as any)[key] = value
         })
+        next.country = normalizeCountryToEcuador(next.country)
         return next
     }
 
     useEffect(() => {
+        const draft = loadCheckoutDraft()
+        setOrderNotes(draft.note)
+        setTempAddress((prev) => mergeAddressFields(prev, draft.shipping))
+        setBillingAddress((prev) => mergeAddressFields(prev, { country: 'Ecuador' }))
+
         const saved = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
         if (saved) {
             try {
@@ -142,7 +154,7 @@ const Checkout = () => {
                 setSavedAddresses(parsed)
                 if (parsed.length > 0) {
                     setSelectedAddressId(parsed[0].id)
-                    setTempAddress(parsed[0].shipping)
+                    setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
                     setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
                     setUseBillingSame(!!parsed[0].isSame)
                 }
@@ -268,7 +280,7 @@ const Checkout = () => {
                 if (addresses.length > 0) {
                     setSavedAddresses(addresses)
                     setSelectedAddressId(addresses[0].id)
-                    setTempAddress(addresses[0].shipping)
+                    setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), addresses[0].shipping))
                     setBillingAddress((prev) => mergeAddressFields(prev, addresses[0].billing))
                     setUseBillingSame(!!addresses[0].isSame)
                     return
@@ -282,7 +294,7 @@ const Checkout = () => {
                         if (Array.isArray(parsed) && parsed.length > 0) {
                             setSavedAddresses(parsed)
                             setSelectedAddressId(parsed[0].id)
-                            setTempAddress(parsed[0].shipping)
+                            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
                             setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
                             setUseBillingSame(!!parsed[0].isSame)
                             requestApi('/api/user/addresses', {
@@ -311,11 +323,33 @@ const Checkout = () => {
             if (keepOneTimeSelectionRef.current) return
             const first = savedAddresses[0]
             setSelectedAddressId(first.id)
-            setTempAddress(first.shipping)
+            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), first.shipping))
             setBillingAddress((prev) => mergeAddressFields(prev, first.billing))
             setUseBillingSame(!!first.isSame)
         }
     }, [isLoggedIn, savedAddresses, selectedAddressId])
+
+    useEffect(() => {
+        const draft = loadCheckoutDraft()
+        const shippingDraftChanged =
+            draft.shipping.state !== tempAddress.state
+            || draft.shipping.city !== tempAddress.city
+            || draft.shipping.zip !== tempAddress.zip
+            || draft.shipping.country !== normalizeCountryToEcuador(tempAddress.country)
+        const noteChanged = draft.note !== orderNotes
+
+        if (!shippingDraftChanged && !noteChanged) return
+
+        saveCheckoutDraft({
+            note: orderNotes,
+            shipping: {
+                country: 'Ecuador',
+                state: tempAddress.state,
+                city: tempAddress.city,
+                zip: tempAddress.zip,
+            },
+        })
+    }, [orderNotes, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country])
 
     useEffect(() => {
         let mounted = true
@@ -341,12 +375,13 @@ const Checkout = () => {
     const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target
         setTempAddress(prev => {
-            const updated = { ...prev, [id]: value }
+            const nextValue = id === 'country' ? 'Ecuador' : value
+            const updated = { ...prev, [id]: nextValue, country: 'Ecuador' }
             if (useBillingSame) {
                 const addressFields = {
                     firstName: updated.firstName,
                     lastName: updated.lastName,
-                    country: updated.country,
+                    country: 'Ecuador',
                     street: updated.street,
                     city: updated.city,
                     state: updated.state,
@@ -367,7 +402,11 @@ const Checkout = () => {
         const target = e.target
         const field = target.name || target.id
         if (!field) return
-        setBillingAddress(prev => ({ ...prev, [field]: target.value }))
+        setBillingAddress(prev => ({
+            ...prev,
+            [field]: field === 'country' ? 'Ecuador' : target.value,
+            country: 'Ecuador'
+        }))
     }
 
     const handleContactChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -407,6 +446,10 @@ const Checkout = () => {
             setMessage({ text: 'Completa país, ciudad, código postal y dirección para el envío.', type: 'error' })
             return false
         }
+        if (!isCountryEcuador(tempAddress.country)) {
+            setMessage({ text: 'Solo realizamos envíos dentro de Ecuador.', type: 'error' })
+            return false
+        }
         return true
     }
 
@@ -428,6 +471,10 @@ const Checkout = () => {
             setMessage({ text: 'Completa país, ciudad, código postal y dirección para la facturación.', type: 'error' })
             return false
         }
+        if (!isCountryEcuador(billingAddress.country)) {
+            setMessage({ text: 'La dirección de facturación debe estar en Ecuador.', type: 'error' })
+            return false
+        }
         return true
     }
 
@@ -446,7 +493,7 @@ const Checkout = () => {
                     phone: contactInfo.phone
                 },
                 shipping: {
-                    ...tempAddress,
+                    ...ensureEcuadorAddress(tempAddress),
                     firstName: contactInfo.firstName,
                     lastName: contactInfo.lastName,
                     email: contactInfo.email,
@@ -473,7 +520,7 @@ const Checkout = () => {
             })
             setSavedAddresses([newAddress])
             setSelectedAddressId(newAddress.id.toString())
-            setTempAddress(newAddress.shipping)
+            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), newAddress.shipping))
             setBillingAddress((prev) => mergeAddressFields(prev, newAddress.billing))
             const localAddresses = [newAddress]
             localStorage.setItem('savedAddresses', JSON.stringify(localAddresses))
@@ -514,7 +561,7 @@ const Checkout = () => {
                         })
                         setSavedAddresses(parsed)
                         setSelectedAddressId(parsed[0].id)
-                        setTempAddress(parsed[0].shipping)
+                        setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
                         setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
                         setUseBillingSame(!!parsed[0].isSame)
                     }
@@ -769,7 +816,7 @@ const Checkout = () => {
 
         try {
             const shippingAddress = {
-                ...tempAddress,
+                ...ensureEcuadorAddress(tempAddress),
                 ...contactInfo
             }
             const billingAddressPayload = (deliveryMethod === 'delivery' && useBillingSame)
@@ -779,7 +826,7 @@ const Checkout = () => {
                     documentNumber: billingAddress.documentNumber,
                     company: billingAddress.company
                 }
-                : { ...billingAddress, ...contactInfo }
+                : { ...ensureEcuadorAddress(billingAddress), ...contactInfo }
             const orderData = {
                 total, // This is just for local UI, backend will re-calculate.
                 status: 'pending',
@@ -807,6 +854,7 @@ const Checkout = () => {
             } else {
                 setMessage({ text: '¡Pedido realizado con éxito!', type: 'success' })
             }
+            clearCheckoutDraft();
             clearCart();
 
             setTimeout(() => {
@@ -1143,7 +1191,7 @@ const Checkout = () => {
                                                                     keepOneTimeSelectionRef.current = false
                                                                     const addr = savedAddresses.find(a => a.id === val);
                                                                     if (addr) {
-                                                                        setTempAddress(addr.shipping);
+                                                                        setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), addr.shipping));
                                                                         setBillingAddress((prev) => mergeAddressFields(prev, addr.billing));
                                                                         setUseBillingSame(!!addr.isSame);
                                                                     }
@@ -1179,11 +1227,7 @@ const Checkout = () => {
                                                             onChange={handleAddressChange}
                                                             className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
                                                         >
-                                                            <option value="">País/Región *</option>
                                                             <option value="Ecuador">Ecuador</option>
-                                                            <option value="España">España</option>
-                                                            <option value="México">México</option>
-                                                            <option value="Argentina">Argentina</option>
                                                         </select>
                                                         <input
                                                             type="text"
@@ -1223,13 +1267,6 @@ const Checkout = () => {
                                                             </div>
                                                         )}
 
-                                                        <textarea
-                                                            placeholder="Indicaciones adicionales (opcional)"
-                                                            rows={3}
-                                                            value={orderNotes}
-                                                            onChange={(e) => setOrderNotes(e.target.value)}
-                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
-                                                        />
                                                     </div>
                                                 )}
                                             </div>
@@ -1245,6 +1282,20 @@ const Checkout = () => {
                                                 </p>
                                             </div>
                                         )}
+
+                                        <div className="mt-6 space-y-2">
+                                            <h3 className="font-medium text-[#111827]">Nota del pedido</h3>
+                                            <textarea
+                                                placeholder="Entrega, referencias o indicaciones adicionales"
+                                                rows={3}
+                                                value={orderNotes}
+                                                onChange={(e) => setOrderNotes(e.target.value)}
+                                                className="w-full border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                            />
+                                            <p className="text-sm text-[#6b7280]">
+                                                Esta nota se guarda en el pedido y la verá el equipo al preparar la compra.
+                                            </p>
+                                        </div>
 
                                         <div className="mt-6 space-y-6">
                                             {deliveryMethod === 'delivery' && (
@@ -1292,11 +1343,7 @@ const Checkout = () => {
                                                             onChange={handleBillingAddressChange}
                                                             className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
                                                         >
-                                                            <option value="">País/Región *</option>
                                                             <option value="Ecuador">Ecuador</option>
-                                                            <option value="España">España</option>
-                                                            <option value="México">México</option>
-                                                            <option value="Argentina">Argentina</option>
                                                         </select>
                                                         <input
                                                             type="text"

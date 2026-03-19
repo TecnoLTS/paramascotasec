@@ -6,10 +6,6 @@ import * as Icon from '@phosphor-icons/react/dist/ssr'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
-import { useModalCompareContext } from '@/context/ModalCompareContext'
-import { useWishlist } from '@/context/WishlistContext'
-import { useModalWishlistContext } from '@/context/ModalWishlistContext'
-import { useCompare } from '@/context/CompareContext'
 import ModalSizeguide from './ModalSizeguide'
 import Rate from '../Other/Rate'
 import {
@@ -25,10 +21,6 @@ const ModalQuickview = () => {
     const { selectedProduct, closeQuickview } = useModalQuickviewContext()
     const { addToCart, updateCart, cartState } = useCart()
     const { openModalCart } = useModalCartContext()
-    const { openModalCompare } = useModalCompareContext()
-    const { wishlistState, addToWishlist, removeFromWishlist } = useWishlist()
-    const { openModalWishlist } = useModalWishlistContext()
-    const { compareState, addToCompare, removeFromCompare } = useCompare()
 
     const [openSizeGuide, setOpenSizeGuide] = useState(false)
     const [activeColor, setActiveColor] = useState('')
@@ -66,6 +58,9 @@ const ModalQuickview = () => {
 
     const price = Number(activeVariant?.price ?? selectedProduct?.price ?? 0)
     const originPrice = Number(activeVariant?.originPrice ?? selectedProduct?.originPrice ?? 0)
+    const availableStock = Math.max(0, Number(activeVariant?.quantity ?? selectedProduct?.quantity ?? 0))
+    const safeQuantity = availableStock > 0 ? Math.min(Math.max(quantity, 1), availableStock) : 0
+    const lineTotal = price * safeQuantity
     const hasSale = (activeVariant?.sale || selectedProduct?.sale || originPrice > price) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
     const categoryLabel = (selectedProduct?.category ?? '').toLowerCase()
@@ -76,13 +71,31 @@ const ModalQuickview = () => {
         .join(' · ')
     const sku = activeVariant ? getProductSku(activeVariant) : ''
 
-    const handleIncreaseQuantity = () => setQuantity((current) => current + 1)
-    const handleDecreaseQuantity = () => setQuantity((current) => current <= 1 ? current : current - 1)
+    useEffect(() => {
+        setQuantity((current) => {
+            if (availableStock <= 0) return 0
+            if (current < 1) return 1
+            if (current > availableStock) return availableStock
+            return current
+        })
+    }, [availableStock, activeVariant?.id])
+
+    const handleIncreaseQuantity = () => {
+        if (availableStock <= 0) return
+        setQuantity((current) => Math.min(current + 1, availableStock))
+    }
+
+    const handleDecreaseQuantity = () => {
+        setQuantity((current) => {
+            if (availableStock <= 0) return 0
+            return current <= 1 ? 1 : current - 1
+        })
+    }
 
     const handleAddToCart = () => {
-        if (!selectedProduct || !activeVariant) return
+        if (!selectedProduct || !activeVariant || availableStock <= 0 || safeQuantity <= 0) return
 
-        const quantityToAdd = quantity ?? 1
+        const quantityToAdd = safeQuantity
         const variantLabel = activeSize || getProductVariantLabel(activeVariant)
         const existingItem = cartState.cartArray.find((item) => item.id === activeVariant.id)
 
@@ -98,39 +111,18 @@ const ModalQuickview = () => {
         closeQuickview()
     }
 
-    const handleAddToWishlist = () => {
-        if (!selectedProduct) return
-
-        if (wishlistState.wishlistArray.some((item) => item.id === selectedProduct.id)) {
-            removeFromWishlist(selectedProduct.id)
-        } else {
-            addToWishlist(selectedProduct)
-        }
-        openModalWishlist()
-    }
-
-    const handleAddToCompare = () => {
-        if (!selectedProduct) return
-
-        if (compareState.compareArray.length >= 3) {
-            alert('Compare up to 3 products')
-            return
-        }
-
-        if (compareState.compareArray.some((item) => item.id === selectedProduct.id)) {
-            removeFromCompare(selectedProduct.id)
-        } else {
-            addToCompare(selectedProduct)
-        }
-        openModalCompare()
-    }
-
     const isOpen = selectedProduct !== null
     const overlayStyle: React.CSSProperties = {
         position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
         pointerEvents: isOpen ? 'auto' : 'none',
         opacity: isOpen ? 1 : 0,
         visibility: isOpen ? 'visible' : 'hidden',
+    }
+
+    const panelStyle: React.CSSProperties = {
+        zIndex: 100000,
     }
 
     return (
@@ -142,6 +134,7 @@ const ModalQuickview = () => {
         >
             <div
                 className={`modal-quickview-main py-6 ${isOpen ? 'open' : ''}`}
+                style={panelStyle}
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="flex h-full max-md:flex-col gap-y-6">
@@ -268,26 +261,31 @@ const ModalQuickview = () => {
                                 <div className="choose-quantity flex items-center max-xl:flex-wrap lg:justify-between gap-5 mt-3">
                                     <div className="quantity-block md:p-3 max-md:py-1.5 max-md:px-3 flex items-center justify-between rounded-lg border border-line sm:w-[180px] w-[120px] flex-shrink-0">
                                         <Icon.Minus onClick={handleDecreaseQuantity} className="cursor-pointer body1" />
-                                        <div className="body1 font-semibold">{quantity}</div>
+                                        <div className="body1 font-semibold">{safeQuantity}</div>
                                         <Icon.Plus onClick={handleIncreaseQuantity} className="cursor-pointer body1" />
                                     </div>
-                                    <div onClick={handleAddToCart} className="button-main w-full text-center bg-white text-black border border-black">
+                                    <button
+                                        type="button"
+                                        onClick={handleAddToCart}
+                                        disabled={availableStock <= 0}
+                                        className="button-main w-full text-center bg-white text-black border border-black disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
                                         Agregar al carrito
-                                    </div>
+                                    </button>
                                 </div>
 
-                                <div className="flex items-center flex-wrap lg:gap-20 gap-8 gap-y-4 mt-5">
-                                    <div className="share flex items-center gap-3 cursor-pointer" onClick={handleAddToWishlist}>
-                                        <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                                            <Icon.Heart weight={wishlistState.wishlistArray.some((item) => item.id === selectedProduct?.id) ? 'fill' : 'regular'} className="heading6" />
+                                <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3">
+                                    <div>
+                                        <div className="caption1 text-secondary">Existencia</div>
+                                        <div className="text-title mt-1">
+                                            {availableStock > 0 ? `${availableStock} disponible${availableStock === 1 ? '' : 's'}` : 'Sin stock'}
                                         </div>
-                                        <span>Favoritos</span>
                                     </div>
-                                    <div className="share flex items-center gap-3 cursor-pointer" onClick={handleAddToCompare}>
-                                        <div className="share-btn md:w-12 md:h-12 w-10 h-10 flex items-center justify-center border border-line cursor-pointer rounded-xl duration-300 hover:bg-black hover:text-white">
-                                            <Icon.Repeat className="heading6" />
+                                    <div className="text-right">
+                                        <div className="caption1 text-secondary">Total</div>
+                                        <div className="heading6 mt-1">
+                                            ${lineTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
-                                        <span>Comparar</span>
                                     </div>
                                 </div>
 
