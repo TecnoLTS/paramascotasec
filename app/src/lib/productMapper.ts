@@ -1,5 +1,6 @@
 import { ProductType } from '@/type/ProductType'
 import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
+import { resolveAudienceGenderFromSpecies } from '@/lib/productTaxonomy'
 
 // Tipamos lo mínimo necesario
 type Variation = {
@@ -193,6 +194,10 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     ? normalizeMeasurementLabels(product.sizes)
     : normalizeMeasurementLabels(variantLabel ? [String(variantLabel)] : [])
   const reviewCountRaw = normalizedAttributes.reviewCount ?? normalizedAttributes.reviewsCount ?? 0
+  const resolvedGender = resolveAudienceGenderFromSpecies(
+    typeof normalizedAttributes.species === 'string' ? normalizedAttributes.species : '',
+    product.gender ?? ''
+  )
 
   return {
     id: product.legacyId ?? product.id,
@@ -201,7 +206,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     productType: product.productType ?? '',
     type: product.type ?? '',
     name: product.name,
-    gender: product.gender ?? '',
+    gender: resolvedGender,
     new: product.new,
     sale: product.sale,
     published: product.published ?? false,

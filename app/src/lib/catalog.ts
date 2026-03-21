@@ -1,4 +1,6 @@
-import { CategoryCard, TenantId, getTenantConfig } from '@/lib/tenant'
+import { CategoryCard } from '@/config/siteConfig'
+import { getCategoryImage, getCategoryLabel, getShopBrowseCategoryIds } from '@/data/petCategoryCards'
+import type { SiteId } from '@/lib/site'
 import { ProductType, ProductVariantOption } from '@/type/ProductType'
 import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
 
@@ -358,33 +360,29 @@ export const findCatalogProduct = (products: ProductType[], idOrSlug: string) =>
     )
   )
 
-const resolveCategoryImage = (categoryId: string, tenantId?: TenantId) => {
-  const categories = getTenantConfig(tenantId).categories
-  const byId = new Map(categories.map((category) => [normalizeText(category.id), category.image]))
+const resolveCategoryImage = (categoryId: string, _siteId?: SiteId) => {
   const normalized = normalizeText(categoryId)
+  const configuredImage = getCategoryImage(normalized)
 
-  if (byId.has(normalized)) return byId.get(normalized) as string
-  if (normalized.includes('perro') && byId.has('comida para perros')) return byId.get('comida para perros') as string
-  if (normalized.includes('perro') && byId.has('perros')) return byId.get('perros') as string
-  if (normalized.includes('gato') && byId.has('comida para gatos')) return byId.get('comida para gatos') as string
-  if (normalized.includes('gato') && byId.has('gatos')) return byId.get('gatos') as string
-  if (normalized.includes('cuidado') && byId.has('cuidado')) return byId.get('cuidado') as string
-  if (normalized.includes('accesorio') && byId.has('accesorios')) return byId.get('accesorios') as string
-  if (normalized.includes('comedero') && byId.has('comederos')) return byId.get('comederos') as string
-  if (normalized.includes('cama') && byId.has('camas')) return byId.get('camas') as string
+  if (configuredImage && configuredImage !== '/images/collection/categoria_todas.jpg') return configuredImage
+  if (normalized.includes('perro')) return getCategoryImage('perros')
+  if (normalized.includes('gato')) return getCategoryImage('gatos')
+  if (normalized.includes('cuidado')) return getCategoryImage('cuidado')
+  if (normalized.includes('accesorio')) return getCategoryImage('accesorios')
+  if (normalized.includes('ropa')) return getCategoryImage('ropa')
+  if (normalized.includes('comedero')) return getCategoryImage('comederos')
+  if (normalized.includes('cama')) return getCategoryImage('camas')
   return '/images/collection/categoria_todas.jpg'
 }
 
-const resolveCategoryLabel = (categoryId: string, tenantId?: TenantId) => {
-  const categories = getTenantConfig(tenantId).categories
-  const match = categories.find((category) => normalizeText(category.id) === normalizeText(categoryId))
-  if (match) return match.label
-  return toTitleCase(categoryId)
+const resolveCategoryLabel = (categoryId: string, _siteId?: SiteId) => {
+  const label = getCategoryLabel(categoryId)
+  return label || toTitleCase(categoryId)
 }
 
-const sortCatalogCategoryIds = (categoryIds: string[], tenantId?: TenantId) => {
-  const configuredOrder = getTenantConfig(tenantId).categories
-    .map((category) => normalizeText(category.id))
+const sortCatalogCategoryIds = (categoryIds: string[], _siteId?: SiteId) => {
+  const configuredOrder = getShopBrowseCategoryIds()
+    .map((categoryId) => normalizeText(categoryId))
     .filter((categoryId) => categoryId !== 'todos' && categoryId !== 'descuentos')
 
   const orderIndex = new Map(configuredOrder.map((categoryId, index) => [categoryId, index]))
@@ -404,7 +402,7 @@ const sortCatalogCategoryIds = (categoryIds: string[], tenantId?: TenantId) => {
   })
 }
 
-export const getCatalogCategoryIds = (products: ProductType[], tenantId?: TenantId) => {
+export const getCatalogCategoryIds = (products: ProductType[], siteId?: SiteId) => {
   const explicitCategories = products
     .map((product) => normalizeText(product.category))
     .filter(Boolean)
@@ -424,32 +422,32 @@ export const getCatalogCategoryIds = (products: ProductType[], tenantId?: Tenant
       ...(hasDogProducts ? ['perros'] : []),
       ...(hasCatProducts ? ['gatos'] : []),
     ])),
-    tenantId
+    siteId
   )
 }
 
-export const buildCatalogCategoryCards = (products: ProductType[], tenantId?: TenantId): CategoryCard[] => {
+export const buildCatalogCategoryCards = (products: ProductType[], siteId?: SiteId): CategoryCard[] => {
   const cards: CategoryCard[] = []
 
   cards.push({
     id: 'todos',
-    label: resolveCategoryLabel('todos', tenantId),
-    image: resolveCategoryImage('todos', tenantId),
+    label: resolveCategoryLabel('todos', siteId),
+    image: resolveCategoryImage('todos', siteId),
   })
 
   if (products.some(isProductOnSale)) {
     cards.push({
       id: 'descuentos',
-      label: resolveCategoryLabel('descuentos', tenantId),
-      image: resolveCategoryImage('descuentos', tenantId),
+      label: resolveCategoryLabel('descuentos', siteId),
+      image: resolveCategoryImage('descuentos', siteId),
     })
   }
 
-  getCatalogCategoryIds(products, tenantId).forEach((categoryId) => {
+  getCatalogCategoryIds(products, siteId).forEach((categoryId) => {
     cards.push({
       id: categoryId,
-      label: resolveCategoryLabel(categoryId, tenantId),
-      image: resolveCategoryImage(categoryId, tenantId),
+      label: resolveCategoryLabel(categoryId, siteId),
+      image: resolveCategoryImage(categoryId, siteId),
     })
   })
 

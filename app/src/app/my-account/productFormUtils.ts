@@ -1,4 +1,9 @@
 import { mapProductsToDto } from '@/lib/productMapper'
+import {
+    normalizeProductCategory,
+    normalizeProductType,
+    normalizeProductSpecies,
+} from '@/lib/productTaxonomy'
 import type { ProductFormState, PurchaseInvoiceFormState } from './types'
 
 export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
@@ -82,6 +87,22 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
         }
     }
 
+    if (type === 'cuidado') {
+        return {
+            presentation: '',
+            activeIngredient: '',
+            usage: '',
+            species: '',
+            expirationDate: '',
+            expirationAlertDays: '30',
+            lotCode: '',
+            storageLocation: '',
+            supplier: '',
+            sku: '',
+            tag: ''
+        }
+    }
+
     return {}
 }
 
@@ -89,15 +110,35 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
     const base = getEmptyAttributes(nextType)
     const current = currentAttributes || {}
 
-    ;['sku', 'tag', 'species', 'lotCode', 'storageLocation', 'supplier', 'variantLabel', 'variantBaseName', 'variantGroupKey'].forEach((key) => {
+    Array.from(new Set([
+        ...Object.keys(base),
+        'sku',
+        'tag',
+        'species',
+        'lotCode',
+        'storageLocation',
+        'supplier',
+        'variantLabel',
+        'variantBaseName',
+        'variantGroupKey',
+    ])).forEach((key) => {
         const value = String(current[key] || '').trim()
         if (value) {
             base[key] = value
         }
     })
 
-    if (nextType === 'comida') {
+    if (nextType === 'comida' || nextType === 'cuidado') {
         ;['expirationDate', 'expirationAlertDays'].forEach((key) => {
+            const value = String(current[key] || '').trim()
+            if (value) {
+                base[key] = value
+            }
+        })
+    }
+
+    if (nextType === 'ropa') {
+        ;['sizeGuideRows', 'sizeGuideNotes'].forEach((key) => {
             const value = String(current[key] || '').trim()
             if (value) {
                 base[key] = value
@@ -136,8 +177,8 @@ export const createEmptyPurchaseInvoice = (supplierName = ''): PurchaseInvoiceFo
 export const createImageEntry = () => ({ url: '', width: '', height: '' })
 
 const requiredImageSizes = {
-    thumb: { width: 400, height: 520 },
-    gallery: { width: 1200, height: 1400 }
+    thumb: { width: 640, height: 800 },
+    gallery: { width: 1200, height: 1500 }
 }
 
 const applyDefaultSizes = (
@@ -159,7 +200,7 @@ export const createEmptyProductForm = (): ProductFormState => ({
     pvp: '',
     cost: '',
     quantity: '',
-    category: 'General',
+    category: '',
     brand: 'Generico',
     description: '',
     productType: '',
@@ -173,7 +214,7 @@ export const createEmptyProductForm = (): ProductFormState => ({
 export const createProductFormFromProduct = (product: any, vatMultiplier: number): ProductFormState => {
     const pvpPrice = Number(product?.price ?? 0)
     const basePrice = vatMultiplier > 0 ? pvpPrice / vatMultiplier : pvpPrice
-    const productType = String(product?.productType || '').toLowerCase()
+    const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const attributes = normalizeAttributes(productType, product?.attributes)
     const imageMeta = Array.isArray(product?.imageMeta) ? product.imageMeta : []
     const thumbMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'thumb')
@@ -206,6 +247,12 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
     const filledThumbs = applyDefaultSizes(thumbImages, 'thumb')
     const filledGallery = applyDefaultSizes(galleryImages, 'gallery')
     const defaultSupplierName = String(attributes?.supplier || '').trim()
+    if (!attributes.species) {
+        const resolvedSpecies = normalizeProductSpecies(product?.gender ?? '')
+        if (resolvedSpecies) {
+            attributes.species = resolvedSpecies
+        }
+    }
 
     return {
         id: getAdminProductEntityId(product),
@@ -214,7 +261,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : String(product?.price || ''),
         cost: String(product?.business?.cost ?? product?.cost ?? 0),
         quantity: String(product?.quantity ?? ''),
-        category: String(product?.category || 'General'),
+        category: normalizeProductCategory(product?.category || '', productType),
         brand: String(product?.brand || 'Generico'),
         description: String(product?.description || ''),
         productType,

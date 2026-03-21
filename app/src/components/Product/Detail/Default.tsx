@@ -111,7 +111,8 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       size: 'Talla',
       material: 'Material',
       color: 'Color',
-      gender: 'Genero',
+      gender: 'Genero de la prenda',
+      species: 'Mascota',
     },
     accesorios: {
       material: 'Material',
@@ -368,7 +369,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 </div>
               )}
 
-              {variantProducts.length > 1 && (
+              {(variantProducts.length > 1 || isClothing) && (
                 <div className="choose-size mt-5">
                   <div className="heading flex items-center justify-between gap-3">
                     <div className="text-title">{selectorLabel}: <span className="text-title size">{activeSize}</span></div>
@@ -384,21 +385,23 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                       </>
                     )}
                   </div>
-                  <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                    {variantProducts.map((product) => {
-                      const label = getProductVariantLabel(product) || product.name
-                      return (
-                        <button
-                          type="button"
-                          className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${activeSize === label ? 'active' : ''}`}
-                          key={product.id}
-                          onClick={() => setActiveSize(label)}
-                        >
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  {variantProducts.length > 1 && (
+                    <div className="list-size flex items-center gap-2 flex-wrap mt-3">
+                      {variantProducts.map((product) => {
+                        const label = getProductVariantLabel(product) || product.name
+                        return (
+                          <button
+                            type="button"
+                            className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${activeSize === label ? 'active' : ''}`}
+                            key={product.id}
+                            onClick={() => setActiveSize(label)}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

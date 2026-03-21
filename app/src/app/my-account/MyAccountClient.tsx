@@ -10,8 +10,9 @@ import { motion } from 'framer-motion'
 
 import { useRouter } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
-import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateStoreStatus } from '@/lib/api/settings'
+import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateStoreStatus } from '@/lib/api/settings'
 import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
+import { createEmptyProductReferenceData, type ProductReferenceData } from '@/lib/productReferenceData'
 import {
     createEmptyProductForm,
     createDuplicateVariantFormFromProduct,
@@ -77,6 +78,9 @@ const CustomerOrdersPanel = dynamic(() => import('./components/CustomerOrdersPan
     ssr: false,
 })
 const ProductPageSettingsPanel = dynamic(() => import('./components/ProductPageSettingsPanel'), {
+    ssr: false,
+})
+const ProductReferenceDataPanel = dynamic(() => import('./components/ProductReferenceDataPanel'), {
     ssr: false,
 })
 const AdminOrdersPanel = dynamic(() => import('./components/AdminOrdersPanel'), {
@@ -194,6 +198,9 @@ const MyAccount = () => {
         supportHours: '8:30 AM a 10:00 PM',
         returnDays: 100
     })
+    const [productReferenceData, setProductReferenceData] = useState<ProductReferenceData>(createEmptyProductReferenceData())
+    const [productReferenceDataLoading, setProductReferenceDataLoading] = useState(false)
+    const [productReferenceDataSaving, setProductReferenceDataSaving] = useState(false)
     const [storeStatus, setStoreStatus] = useState<StoreStatusSettings>({
         salesEnabled: true,
         message: DEFAULT_STORE_PAUSE_MESSAGE,
@@ -1042,6 +1049,24 @@ const MyAccount = () => {
         }
     }
 
+    const loadProductReferenceData = async (options?: { silent?: boolean }) => {
+        const silent = options?.silent === true
+        if (!user || user.role !== 'admin') return
+        setProductReferenceDataLoading(true)
+        try {
+            const data = await getProductReferenceData()
+            setProductReferenceData(data)
+        } catch (error) {
+            console.error(error)
+            setProductReferenceData(createEmptyProductReferenceData())
+            if (!silent) {
+                showNotification('No se pudieron cargar los catalogos operativos.', 'error')
+            }
+        } finally {
+            setProductReferenceDataLoading(false)
+        }
+    }
+
     const normalizeStoreStatus = (input?: Partial<StoreStatusSettings> | null): StoreStatusSettings => {
         const salesEnabled = input?.salesEnabled !== false
         const rawMessage = String(input?.message ?? '').trim()
@@ -1322,7 +1347,7 @@ const MyAccount = () => {
     const adminTabGroups: Record<AdminMenuGroupKey, string[]> = {
         monitoring: ['alerts'],
         reporting: ['reports', 'sales-ranking'],
-        catalog: ['products', 'inventory', 'users', 'product-page'],
+        catalog: ['products', 'inventory', 'catalogs', 'users', 'product-page'],
         operations: ['store-status', 'local-sales', 'admin-orders', 'shipments', 'balances'],
         finance: ['prices', 'taxes', 'margins', 'calculations', 'pricing-rules']
     }
@@ -1547,6 +1572,7 @@ const MyAccount = () => {
             'balances'
         ])
         const tabsWithProducts = new Set(['products', 'inventory', 'prices', 'local-sales'])
+        const tabsWithReferenceData = new Set(['products', 'inventory', 'catalogs'])
         const tabsWithUsers = new Set(['users'])
         const tabsWithOrders = new Set(['admin-orders', 'shipments', 'balances', 'local-sales'])
         const tabsWithPricingSettings = new Set(['prices', 'margins', 'calculations', 'pricing-rules'])
@@ -1584,6 +1610,10 @@ const MyAccount = () => {
                         if (!cancelled) setAdminProductsList(normalizeAdminProducts(res.body))
                     })
                 )
+            }
+
+            if (tabsWithReferenceData.has(activeTab)) {
+                tasks.push(loadProductReferenceData({ silent: true }))
             }
 
             if (activeTab === 'inventory') {
@@ -6009,6 +6039,28 @@ const MyAccount = () => {
                                     />
                                     )}
 
+                                    {activeTab === 'catalogs' && (
+                                    <ProductReferenceDataPanel
+                                        data={productReferenceData}
+                                        loading={productReferenceDataLoading}
+                                        saving={productReferenceDataSaving}
+                                        onChange={setProductReferenceData}
+                                        onSave={async () => {
+                                            try {
+                                                setProductReferenceDataSaving(true)
+                                                const res = await updateProductReferenceData(productReferenceData)
+                                                setProductReferenceData(res.body)
+                                                showNotification('Catalogos operativos actualizados.')
+                                            } catch (error) {
+                                                console.error(error)
+                                                showNotification('No se pudieron guardar los catalogos.', 'error')
+                                            } finally {
+                                                setProductReferenceDataSaving(false)
+                                            }
+                                        }}
+                                    />
+                                    )}
+
                                     {activeTab === 'taxes' && (
                                     <div className="tab text-content w-full">
                                         <div className="heading5 pb-4">Impuestos y cargos</div>
@@ -7635,6 +7687,7 @@ const MyAccount = () => {
                 vatMultiplier={vatMultiplier}
                 normalizedMargins={normalizeMarginSettings(marginSettings)}
                 normalizedCalc={normalizeCalcSettings(calcSettings)}
+                referenceData={productReferenceData}
                 activeTab={activeTab}
                 onClose={() => {
                     setIsProductModalOpen(false)

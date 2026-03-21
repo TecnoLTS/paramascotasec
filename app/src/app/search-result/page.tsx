@@ -6,6 +6,8 @@ type SearchParams = {
     query?: string | string[]
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function SearchResult({ searchParams }: { searchParams?: Promise<SearchParams> }) {
     const resolvedSearchParams = await searchParams
     const { products, error } = await loadProducts()

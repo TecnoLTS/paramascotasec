@@ -154,6 +154,10 @@ export default function AccountSidebar({
                                         <Icon.Archive size={18} />
                                         <strong className="heading6">Inventario</strong>
                                     </PanelNavButton>
+                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'catalogs'} onClick={() => onNavigateToPanelTab('catalogs')}>
+                                        <Icon.Rows size={18} />
+                                        <strong className="heading6">Catálogos</strong>
+                                    </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'users'} onClick={() => onNavigateToPanelTab('users')}>
                                         <Icon.Users size={18} />
                                         <strong className="heading6">Usuarios</strong>

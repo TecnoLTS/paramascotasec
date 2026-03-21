@@ -9,7 +9,7 @@ import InlineSpinner from '@/components/Other/InlineSpinner'
 import { ProductType } from '@/type/ProductType';
 import { useModalCartContext } from '@/context/ModalCartContext'
 import { useCart } from '@/context/CartContext'
-import { useTenant } from '@/context/TenantContext'
+import { useSite } from '@/context/SiteContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 import { getPublicStoreStatus } from '@/lib/api/settings'
@@ -17,7 +17,7 @@ import { loadCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
     const router = useRouter()
-    const tenant = useTenant()
+    const site = useSite()
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
 
     useEffect(() => {
@@ -138,7 +138,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const normalizeImageSrc = (src: string) => {
         if (!src) return src
         if (src.startsWith('http://localhost:8080') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-            return src.replace('http://localhost:8080', tenant.apiBaseUrl)
+            return src.replace('http://localhost:8080', site.apiBaseUrl)
         }
         return src
     }

@@ -7,9 +7,7 @@ import { listProducts } from '@/lib/products'
 import { getProductPageSettings } from '@/lib/api/settings'
 import { generateProductJsonLd } from '@/lib/seo'
 import { findCatalogProduct, groupCatalogProducts } from '@/lib/catalog'
-import { headers } from 'next/headers'
-import { getTenantConfigFromHost } from '@/lib/tenant'
-import { getHostFromHeaders } from '@/lib/headerUtils'
+import { getSiteConfig } from '@/lib/site'
 
 type SearchParams = {
     id?: string | string[]
@@ -18,6 +16,8 @@ type SearchParams = {
 type Props = {
     searchParams: Promise<SearchParams>
 }
+
+export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(
     { searchParams }: Props,
@@ -56,9 +56,7 @@ export async function generateMetadata(
 }
 
 const ProductDefault = async ({ searchParams }: Props) => {
-    const headerList = await headers()
-    const host = getHostFromHeaders(headerList)
-    const tenant = getTenantConfigFromHost(host)
+    const site = getSiteConfig()
     const resolvedSearchParams = await searchParams
     const [rawProducts, pageSettings] = await Promise.all([
         listProducts(),
@@ -83,8 +81,8 @@ const ProductDefault = async ({ searchParams }: Props) => {
                     dangerouslySetInnerHTML={{
                         __html: JSON.stringify(
                             generateProductJsonLd(currentProduct, {
-                                baseUrl: tenant.baseUrl,
-                                brandName: tenant.name,
+                                baseUrl: site.baseUrl,
+                                brandName: site.name,
                             })
                         )
                     }}

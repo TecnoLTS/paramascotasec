@@ -9,9 +9,9 @@ import Product from '../Product/Product';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
-import { getCategoryFilter, getCategoryLabel, getCategoryUrl, getShopBrowseCategoryIds } from '@/data/petCategoryCards';
-import { useTenant } from '@/context/TenantContext';
-import { getCatalogCategoryIds, getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
+import { getCategoryFilter, getCategoryLabel, getCategoryUrl, getShopBrowseCategoryIds, matchesPetCategoryFilter } from '@/data/petCategoryCards';
+import { useSite } from '@/context/SiteContext';
+import { getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
 import { buildProductSearchIndex, filterProductsBySearch, matchesProductSearch, sanitizeProductSearchQuery } from '@/lib/productSearch';
 
 interface Props {
@@ -24,7 +24,7 @@ interface Props {
 }
 
 const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, category, gender, searchQuery }) => {
-    const tenant = useTenant()
+    useSite()
     const pathname = usePathname()
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -44,48 +44,35 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
 
     const normalizedCategoryInput = category?.toLowerCase()
     const normalizedCategory = normalizedCategoryInput === 'ofertas' ? 'descuentos' : normalizedCategoryInput
-    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory, tenant.id) : undefined
-    const categoryToMatch = categoryFilter?.category
-    const genderToMatch = categoryFilter?.gender ?? gender
+    const categoryFilter = normalizedCategory ? getCategoryFilter(normalizedCategory) : undefined
     const isDiscountCategory = normalizedCategory === 'descuentos'
     const effectiveSearchQuery = useMemo(() => sanitizeProductSearchQuery(deferredSearchInput), [deferredSearchInput])
     const productSearchIndex = useMemo(() => buildProductSearchIndex(data), [data])
 
     const categoryCounts = useCallback((categoryId: string) => {
-        const filter = getCategoryFilter(categoryId, tenant.id)
+        const filter = getCategoryFilter(categoryId)
         return data.filter(product => {
             if (effectiveSearchQuery && !matchesProductSearch(productSearchIndex.get(product.id) ?? '', effectiveSearchQuery)) {
                 return false
             }
-            let matchesCategory = true
-            if (filter.category) {
-                matchesCategory = product.category === filter.category
-            }
-            let matchesGender = true
-            if (filter.gender) {
-                matchesGender = product.gender === filter.gender
-            }
             if (categoryId === 'descuentos') {
-                matchesCategory = isProductOnSale(product)
+                return isProductOnSale(product)
             }
-            return matchesCategory && matchesGender
+            return matchesPetCategoryFilter(product, filter)
         }).length
-    }, [data, effectiveSearchQuery, productSearchIndex, tenant.id])
+    }, [data, effectiveSearchQuery, productSearchIndex])
     const categoryOptions = useMemo(() => {
-        const preferred = getShopBrowseCategoryIds(tenant.id)
-        const catalogCategories = getCatalogCategoryIds(data, tenant.id)
-        const orderedIds = Array.from(new Set([...preferred, ...catalogCategories]))
-
-        return orderedIds.filter((categoryId) => {
+        const preferred = getShopBrowseCategoryIds()
+        return preferred.filter((categoryId) => {
             if (categoryId === 'todos') {
                 return data.length > 0
             }
 
             return categoryCounts(categoryId) > 0
         })
-    }, [categoryCounts, data, tenant.id])
+    }, [categoryCounts, data])
     const buildCategoryHref = useCallback((categoryId: string) => {
-        const baseUrl = getCategoryUrl(categoryId, undefined, tenant.id)
+        const baseUrl = getCategoryUrl(categoryId)
 
         const sanitizedQuery = sanitizeProductSearchQuery(searchInput)
 
@@ -96,7 +83,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
         const url = new URL(baseUrl, 'https://paramascotas.local')
         url.searchParams.set('query', sanitizedQuery)
         return `${url.pathname}${url.search}`
-    }, [searchInput, tenant.id])
+    }, [searchInput])
     const clearSearchQuery = useCallback(() => {
         setSearchInput('')
         const nextParams = new URLSearchParams(searchParams.toString())
@@ -138,11 +125,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
             return false
         }
 
-        if (categoryToMatch && product.category !== categoryToMatch) {
-            return false
-        }
-
-        if (genderToMatch && product.gender !== genderToMatch) {
+        if (!matchesPetCategoryFilter(product, categoryFilter, { gender })) {
             return false
         }
 
@@ -151,7 +134,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
         }
 
         return true
-    }, [brand, categoryToMatch, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, genderToMatch, isDiscountCategory, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, type])
+    }, [brand, categoryFilter, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, gender, isDiscountCategory, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, type])
 
     const uniqueSizes = useMemo(
         () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'size')).flatMap((product) => product.sizes ?? []).filter(Boolean))).sort(),
@@ -327,7 +310,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
                                                 href={buildCategoryHref(item)}
                                                 className={`item flex items-center justify-between cursor-pointer ${isActiveCategory ? 'active' : ''}`}
                                             >
-                                                    <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item, tenant.id)}</div>
+                                                    <div className='text-secondary has-line-before hover:text-black capitalize'>{getCategoryLabel(item)}</div>
                                                 <div className='text-secondary2'>
                                                     ({categoryCounts(item)})
                                                 </div>

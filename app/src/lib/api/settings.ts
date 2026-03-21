@@ -1,4 +1,5 @@
 import { fetchJson, requestApi } from '@/lib/apiClient'
+import { normalizeProductReferenceData, type ProductReferenceData } from '@/lib/productReferenceData'
 import { apiEndpoints } from './endpoints'
 
 export type ProductPageSettings = {
@@ -89,3 +90,23 @@ export const updateStoreStatus = (payload: StoreStatusSettings) =>
 
 export const getPublicStoreStatus = () =>
   fetchJson<StoreStatusSettings>(apiEndpoints.settings.publicStoreStatus)
+
+export const getProductReferenceData = async () => {
+  const data = await fetchJson<ProductReferenceData>(apiEndpoints.settings.productReferenceData)
+  return normalizeProductReferenceData(data)
+}
+
+export const updateProductReferenceData = async (payload: ProductReferenceData) => {
+  const res = await requestApi<ProductReferenceData>(apiEndpoints.settings.productReferenceData, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  return {
+    ...res,
+    body: normalizeProductReferenceData(res.body),
+  }
+}
+
+export type { ProductReferenceData }

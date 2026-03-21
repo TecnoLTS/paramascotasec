@@ -6,33 +6,17 @@ import { Swiper, SwiperSlide } from 'swiper/react'
 import { Autoplay, Navigation } from 'swiper/modules'
 import { useRouter } from 'next/navigation'
 import { PetCategoryCard, getCategoryCards, getCategoryUrl } from '@/data/petCategoryCards'
-import { useTenant } from '@/context/TenantContext'
 
 interface CollectionProps {
   categories?: PetCategoryCard[]
 }
 
 const Collection: React.FC<CollectionProps> = ({ categories }) => {
-  const tenant = useTenant()
-  const resolvedCategories = categories ?? getCategoryCards(tenant.id)
+  const resolvedCategories = categories ?? getCategoryCards()
   const router = useRouter()
 
-  const resolveSectionImage = (category: PetCategoryCard) => {
-    const normalized = category.id.toLowerCase()
-
-    if (normalized === 'comida para gatos' || normalized === 'gatos') {
-      return '/images/collection/categoria_gatos.jpg'
-    }
-
-    if (normalized === 'cuidado') {
-      return '/images/collection/pharmacy.png'
-    }
-
-    return category.image
-  }
-
   const handleCategoryClick = (category: string) => {
-    router.push(getCategoryUrl(category, undefined, tenant.id))
+    router.push(getCategoryUrl(category))
   }
 
   const enableLoop = resolvedCategories.length > 6
@@ -83,10 +67,11 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
                 >
                   <div className="bg-img mx-auto w-full max-w-[128px] sm:max-w-[150px] md:max-w-none rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-square sm:aspect-[4/5] bg-[#f6f7f9]">
                     <Image
-                      src={resolveSectionImage(category)}
+                      src={category.image}
                       alt={category.label}
                       fill
-                      sizes="(min-width: 1200px) 14vw, (min-width: 992px) 17vw, (min-width: 768px) 21vw, (min-width: 576px) 30vw, 32vw"
+                      quality={90}
+                      sizes="(min-width: 1200px) 202px, (min-width: 992px) calc((100vw - 32px - 56px) / 5), (min-width: 768px) calc((100vw - 32px - 36px) / 4), (min-width: 576px) calc((100vw - 32px - 20px) / 3), calc((100vw - 32px - 16px) / 3)"
                       className="w-full h-full object-cover"
                       priority={index === 0}
                       loading={index === 0 ? 'eager' : 'lazy'}

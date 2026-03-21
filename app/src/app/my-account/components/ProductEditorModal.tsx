@@ -6,6 +6,26 @@ import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import { requestApi } from '@/lib/apiClient'
 import type { PricingCalc, PricingMargins } from '@/lib/api/settings'
+import { getReferenceOptionsWithCurrent, type ProductReferenceData } from '@/lib/productReferenceData'
+import {
+    APPAREL_GENDER_OPTIONS,
+    PET_SPECIES_OPTIONS,
+    PRODUCT_CATEGORY_OPTIONS,
+    PRODUCT_TYPE_OPTIONS,
+    getCategoryOptionsForProductType,
+    getDefaultCategoryForProductType,
+    getDefaultProductTypeForCategory,
+    normalizeProductCategory,
+    normalizeProductType,
+    normalizeProductSpecies,
+    resolveAudienceGenderFromSpecies,
+} from '@/lib/productTaxonomy'
+import {
+    createEmptyProductSizeGuideRow,
+    parseProductSizeGuideRows,
+    serializeProductSizeGuideRows,
+    type ProductSizeGuideRow,
+} from '@/lib/productSizeGuide'
 import {
     createEmptyPurchaseInvoice,
     createImageEntry,
@@ -27,6 +47,7 @@ type ProductEditorModalProps = {
     vatMultiplier: number;
     normalizedMargins: PricingMargins;
     normalizedCalc: PricingCalc;
+    referenceData: ProductReferenceData;
     activeTab?: string;
     onClose: () => void;
     onProductsUpdated: (products: any[]) => void;
@@ -158,6 +179,7 @@ export default function ProductEditorModal({
     vatMultiplier,
     normalizedMargins,
     normalizedCalc,
+    referenceData,
     activeTab,
     onClose,
     onProductsUpdated,
@@ -197,6 +219,20 @@ export default function ProductEditorModal({
         if (weight) return weight
         return String(form.attributes?.variantLabel || '').trim()
     }, [form.attributes?.size, form.attributes?.variantLabel, form.attributes?.weight])
+    const categoryOptions = React.useMemo(() => getCategoryOptionsForProductType(form.productType), [form.productType])
+    const sizeGuideRows = React.useMemo(() => parseProductSizeGuideRows(form.attributes?.sizeGuideRows), [form.attributes?.sizeGuideRows])
+    const brandOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.brands, form.brand), [form.brand, referenceData.brands])
+    const supplierOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.suppliers, form.purchaseInvoice?.supplierName || form.attributes?.supplier), [form.attributes?.supplier, form.purchaseInvoice?.supplierName, referenceData.suppliers])
+    const sizeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.sizes, form.attributes?.size), [form.attributes?.size, referenceData.sizes])
+    const materialOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.materials, form.attributes?.material), [form.attributes?.material, referenceData.materials])
+    const colorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.colors, form.attributes?.color), [form.attributes?.color, referenceData.colors])
+    const usageOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.usages, form.attributes?.usage), [form.attributes?.usage, referenceData.usages])
+    const presentationOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.presentations, form.attributes?.presentation), [form.attributes?.presentation, referenceData.presentations])
+    const activeIngredientOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.activeIngredients, form.attributes?.activeIngredient), [form.attributes?.activeIngredient, referenceData.activeIngredients])
+    const storageLocationOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.storageLocations, form.attributes?.storageLocation), [form.attributes?.storageLocation, referenceData.storageLocations])
+    const tagOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.tags, form.attributes?.tag), [form.attributes?.tag, referenceData.tags])
+    const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
+    const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
 
     const closeModal = React.useCallback(() => {
         if (saving || Object.values(imageUploading).some(Boolean)) return
@@ -262,6 +298,96 @@ export default function ProductEditorModal({
             clearErrors(key)
         }
     }, [clearErrors])
+
+    const setCategory = React.useCallback((value: string) => {
+        setForm((prev) => {
+            const nextCategory = normalizeProductCategory(value, prev.productType)
+            const nextProductType = getDefaultProductTypeForCategory(nextCategory) || normalizeProductType(prev.productType, nextCategory)
+            const previousProductType = normalizeProductType(prev.productType, prev.category)
+            const nextAttributes = nextProductType !== previousProductType
+                ? getAttributesForTypeChange(nextProductType, prev.attributes)
+                : { ...(prev.attributes || {}) }
+
+            if (nextProductType !== 'ropa') {
+                delete nextAttributes.sizeGuideRows
+                delete nextAttributes.sizeGuideNotes
+            }
+
+            return {
+                ...prev,
+                category: nextCategory,
+                productType: nextProductType,
+                attributes: nextAttributes,
+            }
+        })
+        clearErrors('category', 'productType', 'species', 'expirationDate', 'expirationAlertDays')
+    }, [clearErrors])
+
+    const setSpeciesAttribute = React.useCallback((value: string) => {
+        setAttribute('species', normalizeProductSpecies(value))
+    }, [setAttribute])
+
+    const setPurchaseInvoiceSupplier = React.useCallback((value: string) => {
+        setForm((prev) => ({
+            ...prev,
+            purchaseInvoice: {
+                ...prev.purchaseInvoice,
+                supplierName: value,
+            },
+            attributes: {
+                ...(prev.attributes || {}),
+                supplier: value || String(prev.attributes?.supplier || '').trim(),
+            },
+        }))
+        clearErrors('purchaseInvoiceSupplierName')
+    }, [clearErrors])
+
+    const handleProductTypeChange = React.useCallback((value: string) => {
+        setForm((prev) => {
+            const normalizedType = normalizeProductType(value, prev.category)
+            const nextAttributes = getAttributesForTypeChange(normalizedType, prev.attributes)
+            const defaultCategory = getDefaultCategoryForProductType(normalizedType)
+            const normalizedCurrentCategory = normalizeProductCategory(prev.category, normalizedType)
+            const nextCategory = defaultCategory || normalizedCurrentCategory
+
+            if (normalizedType !== 'ropa') {
+                delete nextAttributes.sizeGuideRows
+                delete nextAttributes.sizeGuideNotes
+            }
+
+            return {
+                ...prev,
+                productType: normalizedType,
+                category: nextCategory,
+                attributes: nextAttributes
+            }
+        })
+        clearErrors('productType', 'sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays')
+    }, [clearErrors])
+
+    const persistSizeGuideRows = React.useCallback((rows: ProductSizeGuideRow[]) => {
+        const serializedRows = serializeProductSizeGuideRows(rows)
+        setAttribute('sizeGuideRows', serializedRows === '[]' ? '' : serializedRows)
+    }, [setAttribute])
+
+    const addSizeGuideRow = React.useCallback(() => {
+        persistSizeGuideRows([...sizeGuideRows, createEmptyProductSizeGuideRow()])
+    }, [persistSizeGuideRows, sizeGuideRows])
+
+    const updateSizeGuideRow = React.useCallback((index: number, key: keyof ProductSizeGuideRow, value: string) => {
+        const nextRows = sizeGuideRows.slice()
+        nextRows[index] = {
+            ...(nextRows[index] || createEmptyProductSizeGuideRow()),
+            [key]: value
+        }
+        persistSizeGuideRows(nextRows)
+    }, [persistSizeGuideRows, sizeGuideRows])
+
+    const removeSizeGuideRow = React.useCallback((index: number) => {
+        const nextRows = sizeGuideRows.slice()
+        nextRows.splice(index, 1)
+        persistSizeGuideRows(nextRows)
+    }, [persistSizeGuideRows, sizeGuideRows])
 
     const getInputClass = React.useCallback((field: string, baseClass: string) => {
         const borderClass = formErrors[field] ? 'border-red focus:border-red' : 'border-line focus:border-black'
@@ -420,7 +546,8 @@ export default function ProductEditorModal({
             const nextErrors: Record<string, string> = {}
             const name = String(form.name || '').trim()
             const brand = String(form.brand || '').trim()
-            const category = String(form.category || '').trim()
+            const productType = normalizeProductType(form.productType, form.category)
+            const category = normalizeProductCategory(form.category, productType)
             const description = String(form.description || '').trim()
             const basePrice = Number(form.price)
             const currentCost = Number(form.cost)
@@ -431,14 +558,22 @@ export default function ProductEditorModal({
             if (name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
             if (!category) nextErrors.category = 'La categoría es obligatoria.'
-            if (!form.productType) nextErrors.productType = 'Selecciona el tipo de producto.'
+            if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(currentCost) || currentCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) nextErrors.quantity = 'El stock debe ser un número entero mayor o igual a 0.'
             if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
 
-            const normalizedAttributes = normalizeAttributes(form.productType, form.attributes)
-            if (form.productType) {
+            const normalizedAttributes = normalizeAttributes(productType, form.attributes)
+            const normalizedSpecies = normalizeProductSpecies(normalizedAttributes.species, editingProduct?.gender ?? '')
+            if (normalizedSpecies) {
+                normalizedAttributes.species = normalizedSpecies
+            }
+            if (productType !== 'ropa') {
+                delete normalizedAttributes.sizeGuideRows
+                delete normalizedAttributes.sizeGuideNotes
+            }
+            if (productType) {
                 if (!normalizedAttributes.sku) nextErrors.sku = 'El SKU es obligatorio.'
                 if (!normalizedAttributes.tag) nextErrors.tag = 'La etiqueta es obligatoria.'
                 if (!normalizedAttributes.species) nextErrors.species = 'La especie/mascota es obligatoria.'
@@ -446,9 +581,10 @@ export default function ProductEditorModal({
 
             const expirationDateRaw = String(normalizedAttributes.expirationDate || '').trim()
             const alertDaysRaw = String(normalizedAttributes.expirationAlertDays || '').trim()
-            const isPerishableProduct = form.productType === 'comida'
+            const isPerishableProduct = productType === 'comida'
+            const isCareProduct = productType === 'cuidado'
             const requiresExpirationDate = isPerishableProduct && quantity > 0
-            if (isPerishableProduct) {
+            if (isPerishableProduct || isCareProduct) {
                 if (requiresExpirationDate && !expirationDateRaw) {
                     nextErrors.expirationDate = 'La fecha de vencimiento es obligatoria para comida.'
                 }
@@ -530,7 +666,8 @@ export default function ProductEditorModal({
                 cost: currentCost,
                 quantity,
                 category,
-                productType: form.productType,
+                productType,
+                gender: resolveAudienceGenderFromSpecies(normalizedSpecies, editingProduct?.gender ?? ''),
                 published: publicationEligible ? !!form.published : false,
                 attributes: normalizedAttributes,
                 brand,
@@ -629,8 +766,20 @@ export default function ProductEditorModal({
                             </div>
                             <div>
                                 <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
-                                <input type="text" className={getInputClass('brand', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.brand} onChange={e => { setForm({ ...form, brand: e.target.value }); clearErrors('brand') }} placeholder="Ej: Adidas" required disabled={saving || isDuplicateVariantMode} />
+                                <select
+                                    className={getInputClass('brand', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                                    value={form.brand || ''}
+                                    onChange={e => { setForm({ ...form, brand: e.target.value }); clearErrors('brand') }}
+                                    required
+                                    disabled={saving || isDuplicateVariantMode}
+                                >
+                                    <option value="">Selecciona marca</option>
+                                    {brandOptions.map((option) => (
+                                        <option key={`brand-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
                                 {formErrors.brand && <p className="text-xs text-red mt-1">{formErrors.brand}</p>}
+                                <p className="text-secondary text-xs mt-2">Gestiona marcas disponibles en Catálogo &gt; Catálogos.</p>
                             </div>
                         </div>
 
@@ -687,14 +836,29 @@ export default function ProductEditorModal({
                             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-4">
                                 <div>
                                     <div className="text-xs uppercase font-bold text-secondary">Factura de compra</div>
-                                    <div className="text-sm font-semibold">{requiresPurchaseInvoice ? purchaseInvoiceTitle : 'Sin ingreso de stock nuevo'}</div>
+                                <div className="text-sm font-semibold">{requiresPurchaseInvoice ? purchaseInvoiceTitle : 'Sin ingreso de stock nuevo'}</div>
                                 </div>
                                 <span className={`text-xs font-semibold ${requiresPurchaseInvoice ? 'text-orange-700' : 'text-secondary'}`}>{requiresPurchaseInvoice ? 'Obligatoria para registrar el movimiento de inventario.' : 'Solo se exige cuando el stock aumenta.'}</span>
                             </div>
                             {requiresPurchaseInvoice ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Número de factura</label><input className={getInputClass('purchaseInvoiceNumber', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.invoiceNumber} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, invoiceNumber: e.target.value } }); clearErrors('purchaseInvoiceNumber') }} disabled={saving} />{formErrors.purchaseInvoiceNumber && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceNumber}</p>}</div>
-                                    <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor</label><input className={getInputClass('purchaseInvoiceSupplierName', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.supplierName} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, supplierName: e.target.value } }); clearErrors('purchaseInvoiceSupplierName') }} disabled={saving} />{formErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceSupplierName}</p>}</div>
+                                    <div>
+                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor</label>
+                                        <select
+                                            className={getInputClass('purchaseInvoiceSupplierName', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                                            value={form.purchaseInvoice.supplierName || ''}
+                                            onChange={e => setPurchaseInvoiceSupplier(e.target.value)}
+                                            disabled={saving}
+                                        >
+                                            <option value="">Selecciona proveedor</option>
+                                            {supplierOptions.map((option) => (
+                                                <option key={`purchase-supplier-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        {formErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceSupplierName}</p>}
+                                        <p className="text-secondary text-xs mt-2">Los proveedores se administran desde Catálogo &gt; Catálogos.</p>
+                                    </div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">RUC o documento</label><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.purchaseInvoice.supplierDocument} onChange={e => setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, supplierDocument: e.target.value } })} disabled={saving} /></div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label><input type="date" className={getInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.issuedAt} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, issuedAt: e.target.value } }); clearErrors('purchaseInvoiceIssuedAt') }} disabled={saving} />{formErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceIssuedAt}</p>}</div>
                                     <div className="md:col-span-2"><label className="text-secondary text-xs uppercase font-bold mb-2 block">Notas de compra</label><textarea className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[96px]" value={form.purchaseInvoice.notes} onChange={e => setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, notes: e.target.value } })} disabled={saving} /></div>
@@ -707,11 +871,20 @@ export default function ProductEditorModal({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {!isDuplicateVariantMode && (
                                 <div>
-                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría</label>
-                                    <select className={getInputClass('category', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.category} onChange={e => { setForm({ ...form, category: e.target.value }); clearErrors('category') }} disabled={saving}>
-                                        <option value="General">General</option><option value="Comida">Comida</option><option value="Juguetes">Juguetes</option><option value="Accesorios">Accesorios</option>
+                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría pública</label>
+                                    <select
+                                        className={getInputClass('category', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                                        value={normalizeProductCategory(form.category, form.productType)}
+                                        onChange={e => setCategory(e.target.value)}
+                                        disabled={saving}
+                                    >
+                                        <option value="">Selecciona categoría</option>
+                                        {(categoryOptions.length > 0 ? categoryOptions : PRODUCT_CATEGORY_OPTIONS).map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
                                     </select>
                                     {formErrors.category && <p className="text-xs text-red mt-1">{formErrors.category}</p>}
+                                    <p className="text-secondary text-xs mt-2">Define dónde aparecerá el producto en la tienda. La categoría queda cerrada para evitar mezclas erróneas como comida dentro de accesorios.</p>
                                 </div>
                             )}
                             <div>
@@ -802,8 +975,11 @@ export default function ProductEditorModal({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
-                                <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => { const value = e.target.value; setForm({ ...form, productType: value, attributes: getAttributesForTypeChange(value, form.attributes) }); clearErrors('productType', 'sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays') }} disabled={saving}>
-                                    <option value="">Selecciona tipo</option><option value="comida">Comida</option><option value="ropa">Ropa</option><option value="accesorios">Accesorios</option>
+                                <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => handleProductTypeChange(e.target.value)} disabled={saving}>
+                                    <option value="">Selecciona tipo</option>
+                                    {PRODUCT_TYPE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
                                 </select>
                                 {formErrors.productType && <p className="text-xs text-red mt-1">{formErrors.productType}</p>}
                             </div>
@@ -812,58 +988,222 @@ export default function ProductEditorModal({
 
                         {form.productType === 'comida' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Tamaño" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} />
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
+                                    <option value="">Tamaño</option>
+                                    {sizeOptions.map((option) => (
+                                        <option key={`food-size-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
                                 <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Peso. Ej: 2 kg" value={form.attributes?.weight || ''} onChange={e => setAttribute('weight', e.target.value)} />
                                 {!isDuplicateVariantMode && (
                                     <>
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Sabor" value={form.attributes?.flavor || ''} onChange={e => setAttribute('flavor', e.target.value)} />
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Edad. Ej: Adulto" value={form.attributes?.age || ''} onChange={e => setAttribute('age', e.target.value)} />
-                                        <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Especie. Ej: Perro" value={form.attributes?.species || ''} onChange={e => setAttribute('species', e.target.value)} disabled={saving} />{formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}</div>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.flavor || ''} onChange={e => setAttribute('flavor', e.target.value)} disabled={saving}>
+                                            <option value="">Sabor</option>
+                                            {flavorOptions.map((option) => (
+                                                <option key={`food-flavor-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.age || ''} onChange={e => setAttribute('age', e.target.value)} disabled={saving}>
+                                            <option value="">Edad</option>
+                                            {ageRangeOptions.map((option) => (
+                                                <option key={`food-age-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <div>
+                                            <select className={getInputClass('species', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.species || ''} onChange={e => setSpeciesAttribute(e.target.value)} disabled={saving}>
+                                                <option value="">Mascota</option>
+                                                {PET_SPECIES_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                            {formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}
+                                        </div>
                                         <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ingredientes" value={form.attributes?.ingredients || ''} onChange={e => setAttribute('ingredients', e.target.value)} />
                                     </>
                                 )}
+                                <div className="md:col-span-2 text-secondary text-xs">Tallas, sabores y edades se administran en Catálogo &gt; Catálogos para evitar variantes escritas de formas distintas.</div>
                             </div>
                         )}
                         {form.productType === 'ropa' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Talla. Ej: S, M, L" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} />
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
+                                    <option value="">Talla</option>
+                                    {sizeOptions.map((option) => (
+                                        <option key={`apparel-size-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
                                 {!isDuplicateVariantMode && (
                                     <>
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Material" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} />
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Color" value={form.attributes?.color || ''} onChange={e => setAttribute('color', e.target.value)} />
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Género. Ej: Unisex" value={form.attributes?.gender || ''} onChange={e => setAttribute('gender', e.target.value)} />
-                                        <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Especie. Ej: Perro" value={form.attributes?.species || ''} onChange={e => setAttribute('species', e.target.value)} disabled={saving} />{formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}</div>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
+                                            <option value="">Material</option>
+                                            {materialOptions.map((option) => (
+                                                <option key={`apparel-material-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.color || ''} onChange={e => setAttribute('color', e.target.value)} disabled={saving}>
+                                            <option value="">Color</option>
+                                            {colorOptions.map((option) => (
+                                                <option key={`apparel-color-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.gender || ''} onChange={e => setAttribute('gender', e.target.value)} disabled={saving}>
+                                            <option value="">Género de la prenda</option>
+                                            {APPAREL_GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                        <div>
+                                            <select className={getInputClass('species', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.species || ''} onChange={e => setSpeciesAttribute(e.target.value)} disabled={saving}>
+                                                <option value="">Mascota</option>
+                                                {PET_SPECIES_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                            {formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}
+                                            <p className="text-secondary text-xs mt-2">Este campo controla en qué secciones públicas aparece la prenda: Perros, Gatos o ambas.</p>
+                                        </div>
                                     </>
                                 )}
+                                <div className="md:col-span-2 text-secondary text-xs">Tallas, materiales y colores se editan en Catálogo &gt; Catálogos para mantener consistencia entre prendas.</div>
                             </div>
                         )}
                         {form.productType === 'accesorios' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Tamaño" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} />
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
+                                    <option value="">Tamaño</option>
+                                    {sizeOptions.map((option) => (
+                                        <option key={`accessory-size-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
                                 {!isDuplicateVariantMode && (
                                     <>
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Material" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} />
-                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Uso. Ej: Paseo" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} />
-                                        <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Especie. Ej: Perro" value={form.attributes?.species || ''} onChange={e => setAttribute('species', e.target.value)} disabled={saving} />{formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}</div>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
+                                            <option value="">Material</option>
+                                            {materialOptions.map((option) => (
+                                                <option key={`accessory-material-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} disabled={saving}>
+                                            <option value="">Uso</option>
+                                            {usageOptions.map((option) => (
+                                                <option key={`accessory-usage-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <div>
+                                            <select className={getInputClass('species', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.species || ''} onChange={e => setSpeciesAttribute(e.target.value)} disabled={saving}>
+                                                <option value="">Mascota</option>
+                                                {PET_SPECIES_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                            {formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}
+                                        </div>
                                     </>
                                 )}
+                                <div className="md:col-span-2 text-secondary text-xs">Usa listas controladas para tamaños, materiales y usos. Si falta una opción, agrégala en Catálogo &gt; Catálogos.</div>
+                            </div>
+                        )}
+                        {form.productType === 'cuidado' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.presentation || ''} onChange={e => setAttribute('presentation', e.target.value)} disabled={saving}>
+                                    <option value="">Presentación</option>
+                                    {presentationOptions.map((option) => (
+                                        <option key={`care-presentation-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
+                                {!isDuplicateVariantMode && (
+                                    <>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.activeIngredient || ''} onChange={e => setAttribute('activeIngredient', e.target.value)} disabled={saving}>
+                                            <option value="">Ingrediente activo o principio</option>
+                                            {activeIngredientOptions.map((option) => (
+                                                <option key={`care-active-ingredient-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} disabled={saving}>
+                                            <option value="">Uso</option>
+                                            {usageOptions.map((option) => (
+                                                <option key={`care-usage-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                        <div>
+                                            <select className={getInputClass('species', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.species || ''} onChange={e => setSpeciesAttribute(e.target.value)} disabled={saving}>
+                                                <option value="">Mascota</option>
+                                                {PET_SPECIES_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                            {formErrors.species && <p className="text-xs text-red mt-1">{formErrors.species}</p>}
+                                            <p className="text-secondary text-xs mt-2">Úsalo para que el medicamento o cuidado aparezca en la especie correcta.</p>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="md:col-span-2 text-secondary text-xs">Presentación, principio activo y uso se administran desde Catálogo &gt; Catálogos.</div>
+                            </div>
+                        )}
+
+                        {form.productType === 'ropa' && !isDuplicateVariantMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-semibold">Guía de tallas</div>
+                                        <p className="text-secondary text-xs mt-1">Se muestra en la ficha del producto y en la vista rápida. Usa medidas reales de la mascota.</p>
+                                    </div>
+                                    <button type="button" className="text-sm text-primary font-semibold disabled:opacity-50" onClick={addSizeGuideRow} disabled={saving}>+ Agregar talla</button>
+                                </div>
+
+                                {sizeGuideRows.length === 0 ? (
+                                    <div className="rounded-xl border border-dashed border-line bg-white px-4 py-5 text-sm text-secondary">
+                                        Aún no agregas tallas. Usa “Agregar talla” para cargar cuello, pecho, largo y peso recomendado.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {sizeGuideRows.map((row, index) => (
+                                            <div key={`size-guide-row-${index}`} className="rounded-xl border border-line bg-white p-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                                    <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Talla" value={row.size} onChange={e => updateSizeGuideRow(index, 'size', e.target.value)} disabled={saving} />
+                                                    <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Cuello. Ej: 24-28 cm" value={row.neck} onChange={e => updateSizeGuideRow(index, 'neck', e.target.value)} disabled={saving} />
+                                                    <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Pecho. Ej: 38-44 cm" value={row.chest} onChange={e => updateSizeGuideRow(index, 'chest', e.target.value)} disabled={saving} />
+                                                    <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Largo. Ej: 30-34 cm" value={row.length} onChange={e => updateSizeGuideRow(index, 'length', e.target.value)} disabled={saving} />
+                                                    <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Peso. Ej: 5-7 kg" value={row.weight} onChange={e => updateSizeGuideRow(index, 'weight', e.target.value)} disabled={saving} />
+                                                </div>
+                                                <div className="mt-3 flex justify-end">
+                                                    <button type="button" className="text-xs text-red-600 font-semibold hover:underline disabled:opacity-50" onClick={() => removeSizeGuideRow(index)} disabled={saving}>Quitar talla</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Nota adicional</label>
+                                    <textarea className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[88px]" placeholder="Ej: Si tu mascota está entre dos tallas, elige la mayor." value={form.attributes?.sizeGuideNotes || ''} onChange={e => setAttribute('sizeGuideNotes', e.target.value)} disabled={saving} />
+                                </div>
                             </div>
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="SKU" value={form.attributes?.sku || ''} onChange={e => setAttribute('sku', e.target.value)} disabled={saving} />{formErrors.sku && <p className="text-xs text-red mt-1">{formErrors.sku}</p>}</div>
                             {!isDuplicateVariantMode && (
-                                <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Etiqueta" value={form.attributes?.tag || ''} onChange={e => setAttribute('tag', e.target.value)} disabled={saving} />{formErrors.tag && <p className="text-xs text-red mt-1">{formErrors.tag}</p>}</div>
+                                <div>
+                                    <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.tag || ''} onChange={e => setAttribute('tag', e.target.value)} disabled={saving}>
+                                        <option value="">Etiqueta</option>
+                                        {tagOptions.map((option) => (
+                                            <option key={`tag-option-${option}`} value={option}>{option}</option>
+                                        ))}
+                                    </select>
+                                    {formErrors.tag && <p className="text-xs text-red mt-1">{formErrors.tag}</p>}
+                                </div>
                             )}
-                            {form.productType === 'comida' && (
+                            {(form.productType === 'comida' || form.productType === 'cuidado') && (
                                 <>
                                     <div><input type="date" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationDate || ''} onChange={e => setAttribute('expirationDate', e.target.value)} disabled={saving} />{formErrors.expirationDate && <p className="text-xs text-red mt-1">{formErrors.expirationDate}</p>}</div>
                                     <div><input type="number" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationAlertDays || '30'} onChange={e => setAttribute('expirationAlertDays', e.target.value)} disabled={saving} />{formErrors.expirationAlertDays && <p className="text-xs text-red mt-1">{formErrors.expirationAlertDays}</p>}</div>
                                 </>
                             )}
                             <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Lote" value={form.attributes?.lotCode || ''} onChange={e => setAttribute('lotCode', e.target.value)} disabled={saving} />
-                            <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ubicación de almacenamiento" value={form.attributes?.storageLocation || ''} onChange={e => setAttribute('storageLocation', e.target.value)} disabled={saving} />
-                            <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Proveedor" value={form.attributes?.supplier || ''} onChange={e => setAttribute('supplier', e.target.value)} disabled={saving} />
+                            <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.storageLocation || ''} onChange={e => setAttribute('storageLocation', e.target.value)} disabled={saving}>
+                                <option value="">Ubicación de almacenamiento</option>
+                                {storageLocationOptions.map((option) => (
+                                    <option key={`storage-location-option-${option}`} value={option}>{option}</option>
+                                ))}
+                            </select>
+                            <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setAttribute('supplier', e.target.value)} disabled={saving}>
+                                <option value="">Proveedor</option>
+                                {supplierOptions.map((option) => (
+                                    <option key={`supplier-option-${option}`} value={option}>{option}</option>
+                                ))}
+                            </select>
+                            <div className="md:col-span-2 text-secondary text-xs">Si falta una opción en etiquetas, proveedores o ubicaciones, agrégala en Catálogo &gt; Catálogos antes de guardar.</div>
                         </div>
 
                         {!isDuplicateVariantMode && (

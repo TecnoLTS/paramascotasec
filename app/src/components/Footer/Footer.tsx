@@ -5,12 +5,12 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
-import { useTenant } from '@/context/TenantContext'
+import { useSite } from '@/context/SiteContext'
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
 const Footer = () => {
-    const tenant = useTenant()
-    const footerCategories = tenant.footerCategoryLinks
+    const site = useSite()
+    const footerCategories = site.footerCategoryLinks
     return (
         <div id="footer" className='footer'>
             <div className="footer-main bg-surface pt-[60px] pb-[20px]">
@@ -22,8 +22,8 @@ const Footer = () => {
                             <Link href={'/'} className="logo inline-block mb-6">
                                 <div className="logo-image relative w-[150px] h-[50px]">
                                     <Image
-                                        src={tenant.logo.src}
-                                        alt={tenant.logo.alt}
+                                        src={site.logo.src}
+                                        alt={site.logo.alt}
                                         fill
                                         className="object-contain object-left"
                                         sizes="150px"
@@ -37,16 +37,16 @@ const Footer = () => {
                                     <span>WhatsApp:</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
-                                    <a href={`mailto:${tenant.contact.email}`} className='hover:text-green-600 transition-colors'>
-                                        {tenant.contact.email}
+                                    <a href={`mailto:${site.contact.email}`} className='hover:text-green-600 transition-colors'>
+                                        {site.contact.email}
                                     </a>
                                     <a 
-                                        href={`https://wa.me/${tenant.contact.whatsappNumber}`} 
+                                        href={`https://wa.me/${site.contact.whatsappNumber}`} 
                                         target="_blank" 
                                         rel="noopener noreferrer"
                                         className='hover:text-green-600 transition-colors'
                                     >
-                                        {tenant.contact.whatsappLabel}
+                                        {site.contact.whatsappLabel}
                                     </a>
                                 </div>
                             </div>
@@ -73,9 +73,9 @@ const Footer = () => {
                                             <Link
                                                 key={categoryId}
                                                 className='caption1 hover:text-green-600 duration-300'
-                                                href={getCategoryUrl(categoryId, undefined, tenant.id)}
+                                                href={getCategoryUrl(categoryId)}
                                             >
-                                                {getCategoryLabel(categoryId, tenant.id)}
+                                                {getCategoryLabel(categoryId)}
                                             </Link>
                                         ))}
                                     </div>
@@ -110,16 +110,16 @@ const Footer = () => {
                                     </form>
                                 </div>
                                 <div className="list-social flex items-center gap-4 mt-6">
-                                    <Link href={tenant.social.facebook ?? 'https://www.facebook.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={site.social.facebook ?? 'https://www.facebook.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-facebook text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={tenant.social.instagram ?? 'https://www.instagram.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={site.social.instagram ?? 'https://www.instagram.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-instagram text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={tenant.social.twitter ?? 'https://www.twitter.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={site.social.twitter ?? 'https://www.twitter.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-twitter text-2xl text-black"></div>
                                     </Link>
-                                    <Link href={tenant.social.youtube ?? 'https://www.youtube.com/'} target='_blank' className="hover:opacity-70">
+                                    <Link href={site.social.youtube ?? 'https://www.youtube.com/'} target='_blank' className="hover:opacity-70">
                                         <div className="icon-youtube text-2xl text-black"></div>
                                     </Link>
                                 </div>
@@ -131,7 +131,7 @@ const Footer = () => {
                     <div className="footer-bottom py-6 mt-8 flex items-center justify-between gap-5 max-lg:justify-center max-lg:flex-col border-t border-gray-200">
                         <div className="left flex items-center gap-8">
                             <div className="copyright caption1 text-secondary text-center">
-                                ©{new Date().getFullYear()} {tenant.name} - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
+                                ©{new Date().getFullYear()} {site.name} - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
                             </div>
                         </div>
                     </div>

@@ -1,8 +1,25 @@
-# App Frontend (Next.js)
+# Frontend `paramascotasec/app`
 
-Este directorio contiene la aplicacion Next.js. Para despliegues con Docker, ejecutar comandos desde la raiz del repositorio `paramascotasec/`.
+Aplicacion Next.js de ParaMascotas.
 
-## Comandos exactos
+## Lo importante para editar a mano
+
+- Configuracion global del sitio:
+  [siteConfig.ts](/home/admincenter/contenedores/paramascotasec/app/src/config/siteConfig.ts)
+- Categorias, imagenes, rutas y filtros visibles:
+  [petCategoryCards.ts](/home/admincenter/contenedores/paramascotasec/app/src/data/petCategoryCards.ts)
+- Home principal:
+  [Home.tsx](/home/admincenter/contenedores/paramascotasec/app/src/tenants/paramascotasec.com/Home.tsx)
+
+## Desarrollo local
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec/app
+npm install
+npm run dev
+```
+
+## Docker
 
 Desarrollo:
 
@@ -18,51 +35,10 @@ cd /home/admincenter/contenedores/paramascotasec
 ./scripts/deploy-production.sh
 ```
 
-## Desarrollo (local)
-Desde `paramascotasec/app`:
+## Validacion
 
 ```bash
-npm install
-npm run dev
-```
-
-## Despliegue Docker en desarrollo
-Desde `paramascotasec/`:
-
-```bash
-./scripts/deploy-development.sh
-```
-
-Servicio esperado: `paramascotasec-app-dev`.
-
-## Despliegue Docker en produccion
-Desde `paramascotasec/`:
-
-```bash
-./scripts/deploy-production.sh
-```
-
-Servicio esperado: `paramascotasec-app`.
-
-Si prefieres cambiar por archivo:
-
-```bash
-docker compose --env-file .env.development up -d --build
-docker compose --env-file .env up -d --build
-```
-
-En ambos casos `COMPOSE_PROFILES` del archivo debe coincidir con `APP_ENV`.
-
-## Logs y estado
-Desde `paramascotasec/`:
-
-```bash
-docker compose ps
-docker compose logs -f app-dev
-```
-
-En produccion:
-
-```bash
-docker compose logs -f app
+cd /home/admincenter/contenedores/paramascotasec/app
+npx eslint src
+./node_modules/.bin/tsc --noEmit --pretty false
 ```

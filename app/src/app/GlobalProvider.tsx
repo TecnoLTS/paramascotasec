@@ -9,15 +9,11 @@ import { CompareProvider } from '@/context/CompareContext'
 import { ModalCompareProvider } from '@/context/ModalCompareContext'
 import { ModalSearchProvider } from '@/context/ModalSearchContext'
 import { ModalQuickviewProvider } from '@/context/ModalQuickviewContext'
-import { TenantProvider } from '@/context/TenantContext'
-import { TenantId } from '@/lib/tenant'
+import { SiteProvider } from '@/context/SiteContext'
 
-const GlobalProvider: React.FC<{ children: React.ReactNode; tenantId: TenantId }> = ({
-    children,
-    tenantId,
-}) => {
+const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
-        <TenantProvider tenantId={tenantId}>
+        <SiteProvider>
             <CartProvider>
                 <ModalCartProvider>
                     <WishlistProvider>
@@ -35,7 +31,7 @@ const GlobalProvider: React.FC<{ children: React.ReactNode; tenantId: TenantId }
                     </WishlistProvider>
                 </ModalCartProvider>
             </CartProvider>
-        </TenantProvider>
+        </SiteProvider>
     )
 }
 

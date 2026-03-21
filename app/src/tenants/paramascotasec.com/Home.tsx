@@ -10,20 +10,13 @@ import Benefit from '@/components/Pet/Benefit'
 import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
-import { CategoryCard } from '@/lib/tenant'
 import { ProductType } from '@/type/ProductType'
 
 const ParamascotasecHome = ({
   products,
-  categories,
 }: {
   products: ProductType[]
-  categories: CategoryCard[]
 }) => {
-  const featuredSecondaryCategories = ['cuidado', 'gatos', 'perros']
-    .map((categoryId) => categories.find((category) => category.id.toLowerCase() === categoryId))
-    .filter((category): category is CategoryCard => Boolean(category))
-
   return (
     <>
       <ScrollToTopOnMount />
@@ -31,12 +24,12 @@ const ParamascotasecHome = ({
         <MenuPet searchProducts={products} />
         <SliderPet />
       </div>
-      <Collection categories={categories} />
+      <Collection />
       <AllProducts data={products} />
       <Benefit props="md:py-10 py-5" />
       <ChooseUs />
       <FeatureProduct data={products} start={0} limit={4} />
-      <Collection2 categories={featuredSecondaryCategories} />
+      <Collection2 />
       <Brand products={products} />
       <Footer />
     </>

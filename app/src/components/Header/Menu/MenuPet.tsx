@@ -11,7 +11,7 @@ import useMenuMobile from '@/store/useMenuMobile';
 import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
-import { useTenant } from '@/context/TenantContext'
+import { useSite } from '@/context/SiteContext'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import { ProductType } from '@/type/ProductType'
 
@@ -21,7 +21,7 @@ type MenuPetProps = {
 };
 
 const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
-    const tenant = useTenant()
+    const site = useSite()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const { openLoginPopup, handleLoginPopup } = useLoginPopup()
@@ -133,7 +133,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
     const handleCategoryClick = (category: string, gender?: string) => {
         const options = gender ? { gender } : undefined
-        router.push(getCategoryUrl(category, options, tenant.id));
+        router.push(getCategoryUrl(category, options));
     };
 
     const handleSuggestionSelect = (product: ProductType) => {
@@ -163,12 +163,12 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
         (link as CategoryLink).id !== undefined
 
     const categoriesSections: Array<{ title: string; links: CategoryLink[] }> =
-        tenant.menu.categorySections
+        site.menu.categorySections
 
-    const serviceLinks: MegaNavLink[] = tenant.menu.serviceLinks
+    const serviceLinks: MegaNavLink[] = site.menu.serviceLinks
 
     // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
-    const companyLinks: MegaNavLink[] = tenant.menu.companyLinks
+    const companyLinks: MegaNavLink[] = site.menu.companyLinks
 
     const renderMegaMenu = (
         sections: MegaMenuSection[],
@@ -190,7 +190,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                                     onClick={() => handleCategoryClick(link.id, link.gender)}
                                                     className="link text-secondary duration-300 cursor-pointer"
                                                 >
-                                                    {link.labelOverride ?? getCategoryLabel(link.id, tenant.id)}
+                                                    {link.labelOverride ?? getCategoryLabel(link.id)}
                                                 </div>
                                             ) : (
                                                 <Link
@@ -246,7 +246,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                             onClick={() => handleCategoryClick(link.id, link.gender)}
                             className="nav-item-mobile text-secondary duration-300 cursor-pointer"
                         >
-                            {link.labelOverride ?? getCategoryLabel(link.id, tenant.id)}
+                            {link.labelOverride ?? getCategoryLabel(link.id)}
                         </div>
                     ) : (
                         <Link
@@ -261,15 +261,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
         </>
     )
 
-    const categoryBanner = tenant.menu.banner
+    const categoryBanner = site.menu.banner
 
-    const servicesBanner = tenant.menu.servicesBanner ?? {
+    const servicesBanner = site.menu.servicesBanner ?? {
         title: ' ',
         subtitle: ' ',
         image: '/images/collection/15.jpg',
     }
 
-    const departmentLinks = tenant.menu.departmentLinks ?? []
+    const departmentLinks = site.menu.departmentLinks ?? []
     const normalizedSearchKeyword = sanitizeProductSearchQuery(searchKeyword)
     const shouldShowSearchPanel =
         isSearchFocused &&
@@ -285,7 +285,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const normalizeImageSrc = (src: string) => {
         if (!src) return src
         if (src.startsWith('http://localhost:8080') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-            return src.replace('http://localhost:8080', tenant.apiBaseUrl)
+            return src.replace('http://localhost:8080', site.apiBaseUrl)
         }
         return src
     }
@@ -314,8 +314,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                         <Link href={'/'} className='flex items-center'>
                             <div className="relative h-[55px] w-[126px] md:h-[80px] md:w-[184px]">
                                 <Image
-                                    src={tenant.logo.src}
-                                    alt={tenant.logo.alt}
+                                    src={site.logo.src}
+                                    alt={site.logo.alt}
                                     fill
                                     priority
                                     loading="eager"
@@ -564,8 +564,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                 <Link href={'/'} className='logo text-3xl font-semibold text-center'>
                                     <div className="relative mx-auto h-14 w-[160px]">
                                         <Image
-                                            src={tenant.logo.mobileSrc ?? tenant.logo.src}
-                                            alt={`${tenant.name} logo`}
+                                            src={site.logo.mobileSrc ?? site.logo.src}
+                                            alt={`${site.name} logo`}
                                             fill
                                             className="object-contain"
                                             priority

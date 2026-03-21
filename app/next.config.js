@@ -1,12 +1,20 @@
 /** @type {import('next').NextConfig} */
-const isDevelopment = (process.env.APP_ENV || process.env.NODE_ENV) === 'development'
+const imageOptimizationDisabled = process.env.NEXT_IMAGE_UNOPTIMIZED === '1'
 
 const nextConfig = {
     reactStrictMode: true,
     images: {
         minimumCacheTTL: 0,
-        unoptimized: isDevelopment,
-        qualities: [75, 85],
+        unoptimized: imageOptimizationDisabled,
+        qualities: [75, 85, 90],
+        formats: ['image/avif', 'image/webp'],
+        localPatterns: [
+            {
+                pathname: '/**',
+            },
+        ],
+        deviceSizes: [360, 420, 576, 640, 750, 768, 828, 992, 1080, 1200, 1320, 1536, 1920, 2048, 2560, 3840],
+        imageSizes: [96, 128, 150, 180, 202, 220, 256, 300, 360, 420, 472, 496, 520, 630, 750, 960, 1200, 1600, 2000],
         remotePatterns: [
             {
                 protocol: 'https',
@@ -38,7 +46,7 @@ const nextConfig = {
                 headers: [
                     {
                         key: 'Cache-Control',
-                        value: 'public, max-age=604800, stale-while-revalidate=86400',
+                        value: 'public, max-age=0, must-revalidate',
                     },
                 ],
             },
@@ -47,7 +55,7 @@ const nextConfig = {
                 headers: [
                     {
                         key: 'Cache-Control',
-                        value: 'public, max-age=86400, stale-while-revalidate=3600',
+                        value: 'public, max-age=0, must-revalidate',
                     },
                 ],
             },

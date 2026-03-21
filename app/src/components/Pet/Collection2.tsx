@@ -2,32 +2,37 @@
 
 import React from 'react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation';
-import { CategoryCard } from '@/lib/tenant';
-import { getCategoryUrl } from '@/data/petCategoryCards';
-import { useTenant } from '@/context/TenantContext';
+import { useRouter } from 'next/navigation'
+import { PetCategoryCard, getCategoryUrl, getHomeSecondaryCategoryCards } from '@/data/petCategoryCards'
 
 type CollectionProps = {
-    categories?: CategoryCard[]
+    categories?: PetCategoryCard[]
 }
 
-const Collection = ({ categories = [] }: CollectionProps) => {
+const Collection = ({ categories = getHomeSecondaryCategoryCards() }: CollectionProps) => {
     const router = useRouter()
-    const tenant = useTenant()
     const featuredCategories = categories
         .filter((item) => item.id !== 'todos' && item.id !== 'descuentos')
         .slice(0, 4)
 
+    const sizesSecondarySingle = '(min-width: 768px) 520px, 92vw'
+    const sizesSecondaryTwoUp = '(min-width: 952px) 430px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), calc((100vw - 32px - 12px) / 2)'
+    const sizesSecondaryThreePrimary = '(min-width: 1150px) 496px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), 92vw'
+    const sizesSecondaryThreeSecondary = '(min-width: 1150px) 472px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), calc((100vw - 32px - 12px) / 2)'
+    const sizesSecondaryFourPrimary = '(min-width: 1150px) 630px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), calc((100vw - 32px - 12px) / 2)'
+    const sizesSecondaryFourTop = '(min-width: 1150px) 300px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), calc((100vw - 32px - 12px) / 2)'
+    const sizesSecondaryFourBottom = '(min-width: 1150px) 630px, (min-width: 640px) calc((100vw - 32px - 16px) / 2), 92vw'
+
     const handleCategoryClick = (category: string) => {
-        router.push(getCategoryUrl(category, undefined, tenant.id))
-    };
+        router.push(getCategoryUrl(category))
+    }
 
     if (featuredCategories.length === 0) {
         return null
     }
 
     const renderCategoryTile = (
-        item: CategoryCard,
+        item: PetCategoryCard,
         options?: {
             aspectClass?: string
             priority?: boolean
@@ -47,7 +52,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                     alt={item.label}
                     width={1000}
                     height={1000}
-                    quality={85}
+                    quality={90}
                     priority={options?.priority}
                     sizes={options?.sizes ?? '(min-width: 1280px) 360px, (min-width: 640px) 44vw, 92vw'}
                     className='h-full w-full object-cover'
@@ -68,7 +73,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                     <div className="mx-auto max-w-[520px]">
                         {renderCategoryTile(featuredCategories[0], {
                             priority: true,
-                            sizes: '(min-width: 768px) 520px, 92vw',
+                            sizes: sizesSecondarySingle,
                             labelWidthClass: 'lg:w-[220px]',
                         })}
                     </div>
@@ -86,7 +91,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                             renderCategoryTile(item, {
                                 priority: index < 2,
                                 aspectClass: 'aspect-[4/5] sm:aspect-square',
-                                sizes: '(min-width: 1024px) 430px, (min-width: 640px) 44vw, 46vw',
+                                sizes: sizesSecondaryTwoUp,
                                 labelWidthClass: 'w-[calc(100%-20px)] max-w-[170px] sm:max-w-none lg:w-[220px]',
                             })
                         )}
@@ -128,7 +133,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                             {renderCategoryTile(primary, {
                                 aspectClass: 'aspect-[4/5] max-h-[620px]',
                                 priority: true,
-                                sizes: '(min-width: 1024px) 430px, 92vw',
+                                sizes: sizesSecondaryThreePrimary,
                                 labelWidthClass: 'lg:w-[220px]',
                             })}
                         </div>
@@ -138,7 +143,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                                     {renderCategoryTile(item, {
                                         aspectClass: 'aspect-[16/10] max-h-[295px]',
                                         priority: index === 0,
-                                        sizes: '(min-width: 1024px) 430px, 92vw',
+                                        sizes: sizesSecondaryThreeSecondary,
                                         labelWidthClass: 'lg:w-[220px]',
                                     })}
                                 </div>
@@ -163,8 +168,8 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                             <div key={item.id}>
                                 {renderCategoryTile(item, {
                                     aspectClass: 'aspect-square',
-                                    priority: index < 2,
-                                    sizes: '46vw',
+                                        priority: index < 2,
+                                        sizes: '46vw',
                                     labelWidthClass: 'w-[calc(100%-20px)] max-w-[160px]',
                                 })}
                             </div>
@@ -175,7 +180,7 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                             {renderCategoryTile(primary, {
                                 aspectClass: 'h-full w-full aspect-square',
                                 priority: true,
-                                sizes: '(min-width: 1024px) 430px, 92vw',
+                                sizes: sizesSecondaryFourPrimary,
                                 labelWidthClass: 'lg:w-[220px]',
                             })}
                         </div>
@@ -184,14 +189,14 @@ const Collection = ({ categories = [] }: CollectionProps) => {
                                 {secondary.slice(0, 2).map((item) =>
                                     renderCategoryTile(item, {
                                         priority: true,
-                                        sizes: '(min-width: 1024px) 220px, 46vw',
+                                        sizes: sizesSecondaryFourTop,
                                         labelWidthClass: 'lg:w-[200px]',
                                     })
                                 )}
                             </div>
                             <div className="bottom">
                                 {renderCategoryTile(bottomCard, {
-                                    sizes: '(min-width: 1024px) 430px, 92vw',
+                                    sizes: sizesSecondaryFourBottom,
                                     labelWidthClass: 'lg:w-[220px]',
                                 })}
                             </div>
