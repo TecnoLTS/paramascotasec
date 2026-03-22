@@ -126,19 +126,19 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
   {
     key: 'usages',
     title: 'Usos',
-    description: 'Destino o uso del producto, especialmente en accesorios y cuidados.',
+    description: 'Destino o uso del producto, especialmente en accesorios y salud.',
     placeholder: 'Ej: Paseo',
   },
   {
     key: 'presentations',
     title: 'Presentaciones',
-    description: 'Formatos comerciales de productos de cuidado o medicina.',
+    description: 'Formatos comerciales de productos de salud o medicina.',
     placeholder: 'Ej: Spray 120 ml',
   },
   {
     key: 'activeIngredients',
     title: 'Ingredientes activos',
-    description: 'Principios activos de medicamentos y cuidados.',
+    description: 'Principios activos de medicamentos y productos de salud.',
     placeholder: 'Ej: Fipronil',
   },
   {
@@ -170,7 +170,7 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
 export const PRODUCT_SYSTEM_REFERENCE_GROUPS: ProductSystemReferenceGroup[] = [
   {
     title: 'Categorias publicas',
-    description: 'Se mantienen controladas por el sistema para evitar cruces entre comida, ropa, cuidados y accesorios.',
+    description: 'Se mantienen controladas por el sistema para evitar cruces entre comida, ropa, salud y accesorios.',
     values: PRODUCT_CATEGORY_OPTIONS.map((option) => option.label),
   },
   {

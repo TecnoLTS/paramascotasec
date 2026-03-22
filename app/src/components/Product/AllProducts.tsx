@@ -3,7 +3,16 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ProductType } from '@/type/ProductType'
 import Product from './Product'
-import { getCatalogBrandStats, isProductOnSale } from '@/lib/catalog'
+import { getCategoryFilter, getCategoryLabel, matchesPetCategoryFilter } from '@/data/petCategoryCards'
+import {
+    CATALOG_PRIMARY_FILTER_IDS,
+    type CatalogPrimaryFilterId,
+    getCatalogAllSecondaryId,
+    getCatalogAllSecondaryOption,
+    getCatalogSecondaryConfig,
+    matchesCatalogSecondaryFilter,
+} from '@/lib/catalogBrowse'
+import { isProductOnSale } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 
 interface Props {
@@ -11,124 +20,114 @@ interface Props {
     pageSize?: number;
 }
 
-const getBrandLabel = (brand: string, offersFilterId: string) => {
-    if (brand === 'todas') return 'Todas'
-    if (brand === offersFilterId) return 'Ofertas'
-    return brand
+const getPrimaryFilterLabel = (filterId: CatalogPrimaryFilterId) => {
+    if (filterId === 'ofertas') return 'Ofertas'
+    return getCategoryLabel(filterId)
 }
 
 const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
-    const offersFilterId = '__offers__'
+    const offersFilterId = 'ofertas' as const
+    const allSecondaryId = getCatalogAllSecondaryId()
     const [page, setPage] = useState<number>(1)
-    const [activeBrand, setActiveBrand] = useState<string>('todas')
+    const [activePrimaryFilter, setActivePrimaryFilter] = useState<CatalogPrimaryFilterId>('todas')
+    const [activeSecondaryFilter, setActiveSecondaryFilter] = useState<string>(allSecondaryId)
     const [searchQuery, setSearchQuery] = useState<string>('')
-    const [showAllBrands, setShowAllBrands] = useState<boolean>(false)
-    const previewBrandCount = 10
+    const [showAllSecondaryFilters, setShowAllSecondaryFilters] = useState<boolean>(false)
 
     const productsRef = useRef<HTMLDivElement | null>(null)
     const deferredSearchQuery = useDeferredValue(searchQuery)
 
-    const brandStats = useMemo(() => getCatalogBrandStats(data), [data])
     const productSearchIndex = useMemo(() => buildProductSearchIndex(data), [data])
-    const offersCount = useMemo(() => data.filter((product) => isProductOnSale(product)).length, [data])
-    const brands = useMemo(
-        () => ['todas', offersFilterId, ...brandStats.map((item) => item.brand)],
-        [brandStats]
-    )
     const effectiveSearchQuery = useMemo(() => sanitizeProductSearchQuery(deferredSearchQuery), [deferredSearchQuery])
-    const searchMatchedProducts = useMemo(() => {
+    const searchScopedProducts = useMemo(() => {
         if (!effectiveSearchQuery) {
             return data
         }
 
         return filterProductsBySearch(data, effectiveSearchQuery, productSearchIndex)
     }, [data, effectiveSearchQuery, productSearchIndex])
-    const matchedBrandCounts = useMemo(() => {
-        const counts = new Map<string, number>()
-        searchMatchedProducts.forEach((product) => {
-            const brand = (product.brand ?? '').trim()
-            if (!brand) return
-            counts.set(brand, (counts.get(brand) ?? 0) + 1)
+    const matchesPrimaryFilter = React.useCallback((product: ProductType, filterId: CatalogPrimaryFilterId) => {
+        if (filterId === 'todas') {
+            return true
+        }
+
+        if (filterId === offersFilterId) {
+            return isProductOnSale(product)
+        }
+
+        return matchesPetCategoryFilter(product, getCategoryFilter(filterId))
+    }, [])
+
+    const primaryFilterCounts = useMemo(() => {
+        const counts = new Map<CatalogPrimaryFilterId, number>()
+        CATALOG_PRIMARY_FILTER_IDS.forEach((filterId) => {
+            counts.set(filterId, searchScopedProducts.filter((product) => matchesPrimaryFilter(product, filterId)).length)
         })
         return counts
-    }, [searchMatchedProducts])
-    const matchedBrandCount = useMemo(() => matchedBrandCounts.size, [matchedBrandCounts])
-    const matchedOffersCount = useMemo(
-        () => searchMatchedProducts.filter((product) => isProductOnSale(product)).length,
-        [searchMatchedProducts]
+    }, [matchesPrimaryFilter, searchScopedProducts])
+
+    const primaryScopedProducts = useMemo(
+        () => searchScopedProducts.filter((product) => matchesPrimaryFilter(product, activePrimaryFilter)),
+        [activePrimaryFilter, matchesPrimaryFilter, searchScopedProducts]
     )
-    const brandProductCounts = useMemo(
-        () => new Map(brandStats.map((item) => [item.brand, item.productCount])),
-        [brandStats]
+
+    const secondaryConfig = useMemo(
+        () => getCatalogSecondaryConfig(activePrimaryFilter, primaryScopedProducts),
+        [activePrimaryFilter, primaryScopedProducts]
     )
-    const filteredBrands = useMemo(() => {
-        if (!effectiveSearchQuery) {
-            return brands
+
+    const secondaryOptions = useMemo(() => {
+        if (!secondaryConfig) return []
+        return [getCatalogAllSecondaryOption(primaryScopedProducts.length), ...secondaryConfig.options]
+    }, [primaryScopedProducts.length, secondaryConfig])
+
+    const visibleSecondaryOptions = useMemo(() => {
+        if (!secondaryConfig) return []
+
+        if (showAllSecondaryFilters || secondaryOptions.length <= secondaryConfig.previewCount + 1) {
+            return secondaryOptions
         }
 
-        const visibleBrands = new Set<string>(['todas', offersFilterId, activeBrand])
-        brandStats.forEach((item) => {
-            if (matchedBrandCounts.has(item.brand)) {
-                visibleBrands.add(item.brand)
-            }
-        })
-
-        return brands.filter((brand) => visibleBrands.has(brand))
-    }, [activeBrand, brandStats, brands, effectiveSearchQuery, matchedBrandCounts])
-    const visibleBrands = useMemo(() => {
-        if (effectiveSearchQuery) {
-            return filteredBrands
-        }
-
-        if (brandStats.length <= previewBrandCount || showAllBrands) {
-            return filteredBrands
-        }
-
-        const defaultBrands = new Set([
-            'todas',
-            offersFilterId,
-            ...brandStats.slice(0, previewBrandCount).map((item) => item.brand),
-            activeBrand,
+        const preferredIds = new Set<string>([
+            allSecondaryId,
+            activeSecondaryFilter,
+            ...secondaryConfig.options.slice(0, secondaryConfig.previewCount).map((option) => option.id),
         ])
 
-        return filteredBrands.filter((brand) => defaultBrands.has(brand))
-    }, [activeBrand, brandStats, effectiveSearchQuery, filteredBrands, showAllBrands])
-    const visibleBrandCount = useMemo(
-        () => visibleBrands.filter((brand) => brand !== 'todas' && brand !== offersFilterId).length,
-        [visibleBrands]
+        return secondaryOptions.filter((option) => preferredIds.has(option.id))
+    }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions, showAllSecondaryFilters])
+
+    const visibleSecondaryCount = useMemo(
+        () => visibleSecondaryOptions.filter((option) => option.id !== allSecondaryId).length,
+        [allSecondaryId, visibleSecondaryOptions]
     )
 
-    const filteredData = useMemo(() => {
-        let scopedData = data
-
-        if (activeBrand === offersFilterId) {
-            scopedData = data.filter((product) => isProductOnSale(product))
-        } else if (activeBrand !== 'todas') {
-            scopedData = data.filter((product) => (product.brand ?? '').trim() === activeBrand)
-        }
-
-        if (!effectiveSearchQuery) {
-            return scopedData
-        }
-
-        return filterProductsBySearch(scopedData, effectiveSearchQuery, productSearchIndex)
-    }, [activeBrand, data, effectiveSearchQuery, productSearchIndex])
-
-    useEffect(() => {
-        if (!brands.includes(activeBrand)) {
-            setActiveBrand('todas')
-        }
-    }, [activeBrand, brands])
+    const filteredData = useMemo(
+        () => primaryScopedProducts.filter((product) => matchesCatalogSecondaryFilter(product, activePrimaryFilter, activeSecondaryFilter)),
+        [activePrimaryFilter, activeSecondaryFilter, primaryScopedProducts]
+    )
 
     useEffect(() => {
         setPage(1)
-    }, [effectiveSearchQuery])
+    }, [effectiveSearchQuery, activePrimaryFilter, activeSecondaryFilter])
 
     useEffect(() => {
-        if (brandStats.length <= previewBrandCount && showAllBrands) {
-            setShowAllBrands(false)
+        if (!secondaryConfig) {
+            setShowAllSecondaryFilters(false)
+            if (activeSecondaryFilter !== allSecondaryId) {
+                setActiveSecondaryFilter(allSecondaryId)
+            }
+            return
         }
-    }, [brandStats.length, showAllBrands])
+
+        if (!secondaryOptions.some((option) => option.id === activeSecondaryFilter)) {
+            setActiveSecondaryFilter(allSecondaryId)
+        }
+
+        if (secondaryOptions.length <= secondaryConfig.previewCount + 1 && showAllSecondaryFilters) {
+            setShowAllSecondaryFilters(false)
+        }
+    }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions, showAllSecondaryFilters])
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize))
 
@@ -154,8 +153,16 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         }, 50);
     };
 
-    const handleBrandChange = (brand: string) => {
-        setActiveBrand(brand)
+    const handlePrimaryFilterChange = (filterId: CatalogPrimaryFilterId) => {
+        setActivePrimaryFilter(filterId)
+        setActiveSecondaryFilter(allSecondaryId)
+        setShowAllSecondaryFilters(false)
+        setPage(1)
+        scrollToProducts()
+    }
+
+    const handleSecondaryFilterChange = (filterId: string) => {
+        setActiveSecondaryFilter(filterId)
         setPage(1)
         scrollToProducts()
     }
@@ -209,51 +216,88 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                             <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
                                 {filteredData.length} producto{filteredData.length === 1 ? '' : 's'}
                             </div>
-                            {!effectiveSearchQuery && brandStats.length > previewBrandCount && (
+                            {secondaryConfig && secondaryConfig.options.length > secondaryConfig.previewCount && !effectiveSearchQuery && (
                                 <button
                                     className="inline-flex items-center rounded-full border border-line bg-surface px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-black duration-300 hover:border-[var(--blue)] hover:bg-white hover:text-[var(--blue)]"
-                                    onClick={() => setShowAllBrands((current) => !current)}
+                                    onClick={() => setShowAllSecondaryFilters((current) => !current)}
                                 >
-                                    {showAllBrands ? 'Mostrar menos' : `todas las marcas (${brandStats.length})`}
+                                    {showAllSecondaryFilters ? 'Mostrar menos' : `ver todas las ${secondaryConfig.label.toLowerCase()} (${secondaryConfig.options.length})`}
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap justify-center gap-2.5 lg:justify-start">
-                        {visibleBrands.map((brand) => {
-                            const isActive = activeBrand === brand
-                            const count = effectiveSearchQuery
-                                ? brand === 'todas'
-                                    ? searchMatchedProducts.length
-                                    : brand === offersFilterId
-                                        ? matchedOffersCount
-                                        : (matchedBrandCounts.get(brand) ?? 0)
-                                : brand === 'todas'
-                                    ? data.length
-                                    : brand === offersFilterId
-                                        ? offersCount
-                                        : (brandProductCounts.get(brand) ?? 0)
+                    <div className="mt-5">
+                        <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                            Categorías principales
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-2.5 lg:justify-start">
+                            {CATALOG_PRIMARY_FILTER_IDS.map((filterId) => {
+                                const isActive = activePrimaryFilter === filterId
+                                const count = primaryFilterCounts.get(filterId) ?? 0
 
-                            return (
-                                <button
-                                    key={brand}
-                                    aria-pressed={isActive}
-                                    className={`tab-item inline-flex min-h-[48px] items-center gap-2.5 rounded-full border px-4 py-2.5 text-left font-semibold duration-300 ${isActive ? 'border-[var(--blue)] bg-[var(--blue)] text-white shadow-[0_10px_24px_rgba(0,127,155,0.24)]' : 'border-line bg-white text-secondary shadow-sm hover:-translate-y-0.5 hover:border-[var(--blue)] hover:text-[var(--blue)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'}`}
-                                    onClick={() => handleBrandChange(brand)}
-                                >
-                                    <span className="text-[14px] leading-[20px] sm:text-[15px] sm:leading-[22px]">
-                                        {getBrandLabel(brand, offersFilterId)}
-                                    </span>
-                                    <span className={`min-w-[30px] rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-[1] ${isActive ? 'bg-white/18 text-white' : 'bg-surface text-secondary'}`}>
-                                        {count}
-                                    </span>
-                                </button>
-                            )
-                        })}
+                                return (
+                                    <button
+                                        key={filterId}
+                                        aria-pressed={isActive}
+                                        className={`tab-item inline-flex min-h-[48px] items-center gap-2.5 rounded-full border px-4 py-2.5 text-left font-semibold duration-300 ${isActive ? 'border-[var(--blue)] bg-[var(--blue)] text-white shadow-[0_10px_24px_rgba(0,127,155,0.24)]' : 'border-line bg-white text-secondary shadow-sm hover:-translate-y-0.5 hover:border-[var(--blue)] hover:text-[var(--blue)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'}`}
+                                        onClick={() => handlePrimaryFilterChange(filterId)}
+                                    >
+                                        <span className="text-[14px] leading-[20px] sm:text-[15px] sm:leading-[22px]">
+                                            {getPrimaryFilterLabel(filterId)}
+                                        </span>
+                                        <span className={`min-w-[30px] rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-[1] ${isActive ? 'bg-white/18 text-white' : 'bg-surface text-secondary'}`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                )
+                            })}
+                        </div>
                     </div>
 
-                    {effectiveSearchQuery && matchedBrandCount === 0 && (
+                    {secondaryConfig && (
+                        <div className="mt-5">
+                            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                                    {secondaryConfig.label}
+                                </div>
+                                {secondaryConfig.options.length > secondaryConfig.previewCount && !effectiveSearchQuery && (
+                                    <button
+                                        className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--blue)] duration-300 hover:text-black"
+                                        onClick={() => setShowAllSecondaryFilters((current) => !current)}
+                                        type="button"
+                                    >
+                                        {showAllSecondaryFilters ? 'Mostrar menos' : `Ver todas (${secondaryConfig.options.length})`}
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap justify-center gap-2.5 lg:justify-start">
+                                {visibleSecondaryOptions.map((option) => {
+                                    const isActive = activeSecondaryFilter === option.id
+
+                                    return (
+                                        <button
+                                            key={`${secondaryConfig.id}-${option.id}`}
+                                            aria-pressed={isActive}
+                                            className={`tab-item inline-flex min-h-[46px] items-center gap-2.5 rounded-full border px-4 py-2 text-left font-semibold duration-300 ${isActive ? 'border-black bg-black text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)]' : 'border-line bg-white text-secondary shadow-sm hover:-translate-y-0.5 hover:border-black hover:text-black hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'}`}
+                                            onClick={() => handleSecondaryFilterChange(option.id)}
+                                            type="button"
+                                        >
+                                            <span className="text-[14px] leading-[20px] sm:text-[15px] sm:leading-[22px]">
+                                                {option.label}
+                                            </span>
+                                            <span className={`min-w-[30px] rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-[1] ${isActive ? 'bg-white/18 text-white' : 'bg-surface text-secondary'}`}>
+                                                {option.count}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {effectiveSearchQuery && filteredData.length === 0 && (
                         <div className="mt-4 rounded-[20px] border border-dashed border-line px-4 py-3 text-left">
                             <div className="caption1 text-secondary">
                                 No hubo coincidencias. Prueba con otra palabra o limpia la búsqueda.
@@ -264,7 +308,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                     {effectiveSearchQuery ? (
                         <div className="mt-4 flex flex-col gap-2 rounded-[20px] bg-surface px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
                             <div className="caption1 text-secondary">
-                                {filteredData.length} resultado{filteredData.length === 1 ? '' : 's'} en {matchedBrandCount} filtro{matchedBrandCount === 1 ? '' : 's'} para &quot;{effectiveSearchQuery}&quot;.
+                                {filteredData.length} resultado{filteredData.length === 1 ? '' : 's'} para &quot;{effectiveSearchQuery}&quot; dentro de {getPrimaryFilterLabel(activePrimaryFilter)}.
                             </div>
                             <button
                                 className="text-button font-semibold text-[var(--blue)] duration-300 hover:text-black"
@@ -273,16 +317,16 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                                 Limpiar búsqueda
                             </button>
                         </div>
-                    ) : brandStats.length > previewBrandCount && !showAllBrands && (
+                    ) : secondaryConfig && secondaryConfig.options.length > secondaryConfig.previewCount && !showAllSecondaryFilters && (
                         <div className="mt-4 flex flex-col gap-2 rounded-[20px] bg-surface px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
                             <div className="caption1 text-secondary">
-                                Mostrando {visibleBrandCount} de {brandStats.length} opciones.
+                                Mostrando {visibleSecondaryCount} de {secondaryConfig.options.length} opciones en {secondaryConfig.label.toLowerCase()}.
                             </div>
                             <button
                                 className="text-button font-semibold text-[var(--blue)] duration-300 hover:text-black"
-                                onClick={() => setShowAllBrands(true)}
+                                onClick={() => setShowAllSecondaryFilters(true)}
                             >
-                                Ver el resto del catalogo
+                                Ver todas las opciones
                             </button>
                         </div>
                     )}

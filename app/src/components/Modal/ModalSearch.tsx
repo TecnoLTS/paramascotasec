@@ -35,7 +35,7 @@ const ModalSearch = () => {
       return topBrands
     }
 
-    return ['Ropa', 'Comida', 'Cuidados', 'Accesorios']
+    return ['Ropa', 'Comida', 'Salud', 'Accesorios']
   }, [products])
 
   const handleSearch = (value: string) => {

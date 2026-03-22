@@ -14,11 +14,12 @@ import {
     PRODUCT_TYPE_OPTIONS,
     getCategoryOptionsForProductType,
     getDefaultCategoryForProductType,
-    getDefaultProductTypeForCategory,
     normalizeProductCategory,
     normalizeProductType,
     normalizeProductSpecies,
+    parseSerializedProductCategories,
     resolveAudienceGenderFromSpecies,
+    serializeProductCategories,
 } from '@/lib/productTaxonomy'
 import {
     createEmptyProductSizeGuideRow,
@@ -220,6 +221,10 @@ export default function ProductEditorModal({
         return String(form.attributes?.variantLabel || '').trim()
     }, [form.attributes?.size, form.attributes?.variantLabel, form.attributes?.weight])
     const categoryOptions = React.useMemo(() => getCategoryOptionsForProductType(form.productType), [form.productType])
+    const selectedAdditionalCategories = React.useMemo(
+        () => parseSerializedProductCategories(form.attributes?.catalogCategories),
+        [form.attributes?.catalogCategories]
+    )
     const sizeGuideRows = React.useMemo(() => parseProductSizeGuideRows(form.attributes?.sizeGuideRows), [form.attributes?.sizeGuideRows])
     const brandOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.brands, form.brand), [form.brand, referenceData.brands])
     const supplierOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.suppliers, form.purchaseInvoice?.supplierName || form.attributes?.supplier), [form.attributes?.supplier, form.purchaseInvoice?.supplierName, referenceData.suppliers])
@@ -302,16 +307,11 @@ export default function ProductEditorModal({
     const setCategory = React.useCallback((value: string) => {
         setForm((prev) => {
             const nextCategory = normalizeProductCategory(value, prev.productType)
-            const nextProductType = getDefaultProductTypeForCategory(nextCategory) || normalizeProductType(prev.productType, nextCategory)
-            const previousProductType = normalizeProductType(prev.productType, prev.category)
-            const nextAttributes = nextProductType !== previousProductType
-                ? getAttributesForTypeChange(nextProductType, prev.attributes)
-                : { ...(prev.attributes || {}) }
-
-            if (nextProductType !== 'ropa') {
-                delete nextAttributes.sizeGuideRows
-                delete nextAttributes.sizeGuideNotes
-            }
+            const nextProductType = normalizeProductType(prev.productType, prev.category)
+            const nextAttributes = { ...(prev.attributes || {}) }
+            const nextAdditionalCategories = parseSerializedProductCategories(nextAttributes.catalogCategories)
+                .filter((category) => category !== nextCategory)
+            nextAttributes.catalogCategories = serializeProductCategories(nextAdditionalCategories)
 
             return {
                 ...prev,
@@ -347,8 +347,8 @@ export default function ProductEditorModal({
             const normalizedType = normalizeProductType(value, prev.category)
             const nextAttributes = getAttributesForTypeChange(normalizedType, prev.attributes)
             const defaultCategory = getDefaultCategoryForProductType(normalizedType)
-            const normalizedCurrentCategory = normalizeProductCategory(prev.category, normalizedType)
-            const nextCategory = defaultCategory || normalizedCurrentCategory
+            const normalizedCurrentCategory = normalizeProductCategory(prev.category)
+            const nextCategory = normalizedCurrentCategory || defaultCategory
 
             if (normalizedType !== 'ropa') {
                 delete nextAttributes.sizeGuideRows
@@ -364,6 +364,18 @@ export default function ProductEditorModal({
         })
         clearErrors('productType', 'sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays')
     }, [clearErrors])
+
+    const toggleAdditionalCategory = React.useCallback((value: string) => {
+        const normalizedValue = normalizeProductCategory(value)
+        if (!normalizedValue || normalizedValue === normalizeProductCategory(form.category)) return
+
+        const currentValues = parseSerializedProductCategories(form.attributes?.catalogCategories)
+        const nextValues = currentValues.includes(normalizedValue)
+            ? currentValues.filter((item) => item !== normalizedValue)
+            : [...currentValues, normalizedValue]
+
+        setAttribute('catalogCategories', serializeProductCategories(nextValues))
+    }, [form.attributes?.catalogCategories, form.category, setAttribute])
 
     const persistSizeGuideRows = React.useCallback((rows: ProductSizeGuideRow[]) => {
         const serializedRows = serializeProductSizeGuideRows(rows)
@@ -871,7 +883,7 @@ export default function ProductEditorModal({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {!isDuplicateVariantMode && (
                                 <div>
-                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría pública</label>
+                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría principal</label>
                                     <select
                                         className={getInputClass('category', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
                                         value={normalizeProductCategory(form.category, form.productType)}
@@ -884,7 +896,33 @@ export default function ProductEditorModal({
                                         ))}
                                     </select>
                                     {formErrors.category && <p className="text-xs text-red mt-1">{formErrors.category}</p>}
-                                    <p className="text-secondary text-xs mt-2">Define dónde aparecerá el producto en la tienda. La categoría queda cerrada para evitar mezclas erróneas como comida dentro de accesorios.</p>
+                                    <p className="text-secondary text-xs mt-2">Define la categoría principal visible. La principal ayuda al orden del catálogo, pero no limita las categorías adicionales.</p>
+                                    <div className="mt-4">
+                                        <div className="text-secondary text-xs uppercase font-bold mb-2">También mostrar en</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {PRODUCT_CATEGORY_OPTIONS
+                                                .filter((option) => option.value !== normalizeProductCategory(form.category, form.productType))
+                                                .map((option) => {
+                                                    const isSelected = selectedAdditionalCategories.includes(option.value)
+                                                    return (
+                                                        <button
+                                                            key={`additional-category-${option.value}`}
+                                                            type="button"
+                                                            className={`px-3 py-2 rounded-full border text-sm font-semibold transition-all ${
+                                                                isSelected
+                                                                    ? 'bg-black text-white border-black'
+                                                                    : 'bg-white border-line hover:border-black'
+                                                            }`}
+                                                            onClick={() => toggleAdditionalCategory(option.value)}
+                                                            disabled={saving}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    )
+                                                })}
+                                        </div>
+                                        <p className="text-secondary text-xs mt-2">Ejemplo: un alimento con suplemento puede quedar en Comida y también en Salud.</p>
+                                    </div>
                                 </div>
                             )}
                             <div>

@@ -22,21 +22,21 @@ export const APPAREL_GENDER_OPTIONS = [
 export const PRODUCT_TYPE_OPTIONS = [
   { value: 'comida', label: 'Comida' },
   { value: 'ropa', label: 'Ropa' },
-  { value: 'cuidado', label: 'Cuidados / medicinas' },
+  { value: 'cuidado', label: 'Salud / medicinas' },
   { value: 'accesorios', label: 'Accesorios' },
 ] as const
 
 export const PRODUCT_CATEGORY_OPTIONS = [
   { value: 'comida', label: 'Comida' },
   { value: 'ropa', label: 'Ropa' },
-  { value: 'cuidados', label: 'Cuidados' },
+  { value: 'salud', label: 'Salud' },
   { value: 'accesorios', label: 'Accesorios' },
 ] as const
 
 const CATEGORY_BY_TYPE: Record<string, string> = {
   comida: 'comida',
   ropa: 'ropa',
-  cuidado: 'cuidados',
+  cuidado: 'salud',
   accesorios: 'accesorios',
 }
 
@@ -95,7 +95,7 @@ const resolveCanonicalProductCategory = (token: string) => {
   }
 
   if (matchesAny(token, ['cuidado', 'cuidados', 'higiene', 'medicina', 'medicinas', 'salud', 'farmacia', 'antiparasit', 'pipeta', 'shampoo'])) {
-    return 'cuidados'
+    return 'salud'
   }
 
   if (matchesAny(token, ['comida', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
@@ -116,7 +116,7 @@ export const getDefaultCategoryForProductType = (productType?: string | null) =>
 
 export const getDefaultProductTypeForCategory = (category?: string | null) => {
   const normalizedCategory = resolveCanonicalProductCategory(normalizedToken(category))
-  if (normalizedCategory === 'cuidados') return 'cuidado'
+  if (normalizedCategory === 'salud') return 'cuidado'
   if (normalizedCategory === 'comida') return 'comida'
   if (normalizedCategory === 'ropa') return 'ropa'
   if (normalizedCategory === 'accesorios') return 'accesorios'
@@ -130,12 +130,13 @@ export const normalizeProductType = (value?: string | null, fallbackCategory?: s
 }
 
 export const normalizeProductCategory = (value?: string | null, fallbackProductType?: string | null) => {
-  const normalizedType = normalizeProductType(fallbackProductType)
-  if (normalizedType) {
-    return getDefaultCategoryForProductType(normalizedType)
-  }
+  const normalizedValue = resolveCanonicalProductCategory(normalizedToken(value))
+  if (normalizedValue) return normalizedValue
 
-  return resolveCanonicalProductCategory(normalizedToken(value))
+  const normalizedType = normalizeProductType(fallbackProductType)
+  if (normalizedType) return getDefaultCategoryForProductType(normalizedType)
+
+  return ''
 }
 
 export const normalizeProductSpecies = (value?: string | null, fallbackGender?: string | null) => {
@@ -188,15 +189,44 @@ export const resolveAudienceGenderFromSpecies = (species?: string | null, fallba
 }
 
 export const getCategoryOptionsForProductType = (productType?: string | null) => {
-  const normalizedType = normalizeProductType(productType)
-  const defaultCategory = getDefaultCategoryForProductType(normalizedType)
-  if (!defaultCategory) {
-    return [...PRODUCT_CATEGORY_OPTIONS]
-  }
-
-  return PRODUCT_CATEGORY_OPTIONS.filter((option) => option.value === defaultCategory)
+  void productType
+  return [...PRODUCT_CATEGORY_OPTIONS]
 }
 
 export const getCategorySuggestionsForProductType = (productType?: string | null) => {
   return getCategoryOptionsForProductType(productType).map((option) => option.value)
+}
+
+export const normalizeProductCategoryList = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => normalizeProductCategory(value))
+        .filter(Boolean)
+    )
+  )
+
+export const parseSerializedProductCategories = (value?: string | string[] | null) => {
+  if (Array.isArray(value)) {
+    return normalizeProductCategoryList(value)
+  }
+
+  const trimmed = collapseWhitespace(value)
+  if (!trimmed) return []
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      return normalizeProductCategoryList(parsed.map((item) => String(item || '')))
+    }
+  } catch {
+    // ignore malformed JSON and fall back to comma-separated parsing
+  }
+
+  return normalizeProductCategoryList(trimmed.split(','))
+}
+
+export const serializeProductCategories = (values: Array<string | null | undefined>) => {
+  const normalized = normalizeProductCategoryList(values)
+  return normalized.length > 0 ? JSON.stringify(normalized) : ''
 }

@@ -63,9 +63,10 @@ export const PET_HOME_FEATURED_IMAGE_GUIDE = {
 const PET_IMAGE_VERSION_BY_FILE: Record<string, string> = {
   'catalogo-completo-para-mascotas-4x5.jpg': '20260321-1',
   'ofertas-para-mascotas-4x5.jpg': '20260321-1',
-  'comida-para-mascotas-4x5.jpg': '20260321-1',
-  'cuidados-para-mascotas-4x5.jpg': '20260321-1',
-  'accesorios-para-mascotas-4x5.jpg': '20260321-1',
+  'comida-para-mascotas-4x5.jpg': '20260321-2',
+  'cuidados-para-mascotas-4x5.jpg': '20260321-2',
+  'salud-para-mascotas-4x5.jpg': '20260321-2',
+  'accesorios-para-mascotas-4x5.jpg': '20260321-2',
   'cuidado-para-mascotas-4x5.jpg': '20260321-1',
   'productos-para-gatos-4x5.jpg': '20260321-2',
   'productos-para-perros-4x5.jpg': '20260321-1',
@@ -74,6 +75,7 @@ const PET_IMAGE_VERSION_BY_FILE: Record<string, string> = {
   'ofertas-para-mascotas-square.jpg': '20260321-1',
   'comida-para-mascotas-square.jpg': '20260321-1',
   'cuidados-para-mascotas-square.jpg': '20260321-1',
+  'salud-para-mascotas-square.jpg': '20260321-1',
   'accesorios-para-mascotas-square.jpg': '20260321-1',
   'cuidado-para-mascotas-square.jpg': '20260321-1',
   'productos-para-gatos-square.jpg': '20260321-1',
@@ -152,15 +154,12 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
     showInShopBrowse: true,
   },
   cuidados: {
-    id: 'cuidados',
-    label: 'Cuidados',
-    route: '/shop/breadcrumb1?category=cuidados',
+    id: 'salud',
+    label: 'Salud',
+    route: '/shop/breadcrumb1?category=salud',
     filter: {
-      categories: ['cuidado', 'higiene', 'medicina', 'medicinas', 'salud', 'farmacia'],
-      productTypes: ['cuidado'],
+      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
     },
-    showInFooter: true,
-    showInShopBrowse: true,
   },
   accesorios: {
     id: 'accesorios',
@@ -191,13 +190,22 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
     filter: {},
   },
   cuidado: {
-    id: 'cuidado',
-    label: 'Cuidados',
-    route: '/shop/breadcrumb1?category=cuidados',
+    id: 'salud',
+    label: 'Salud',
+    route: '/shop/breadcrumb1?category=salud',
     filter: {
-      categories: ['cuidado', 'higiene', 'medicina', 'medicinas', 'salud', 'farmacia'],
-      productTypes: ['cuidado'],
+      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
     },
+  },
+  salud: {
+    id: 'salud',
+    label: 'Salud',
+    route: '/shop/breadcrumb1?category=salud',
+    filter: {
+      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
+    },
+    showInFooter: true,
+    showInShopBrowse: true,
   },
   gatos: {
     id: 'gatos',
@@ -234,16 +242,17 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
 }
 
 // Seccion superior del home: Collection.tsx
-export const PET_HOME_TOP_ORDER = ['todos', 'ropa', 'comida', 'cuidados', 'accesorios'] as const
+export const PET_HOME_TOP_ORDER = ['todos', 'ropa', 'comida', 'salud', 'accesorios'] as const
 
 export const PET_HOME_TOP_IMAGES: PetCategoryImageMap = {
   todos: topAsset('catalogo-completo-para-mascotas-4x5.jpg'),
   descuentos: topAsset('ofertas-para-mascotas-4x5.jpg'),
   ropa: topAsset('ropa-para-mascotas-4x5.jpg'),
   comida: topAsset('comida-para-mascotas-4x5.jpg'),
-  cuidados: topAsset('cuidados-para-mascotas-4x5.jpg'),
+  salud: topAsset('salud-para-mascotas-4x5.jpg'),
+  cuidados: topAsset('salud-para-mascotas-4x5.jpg'),
   accesorios: topAsset('accesorios-para-mascotas-4x5.jpg'),
-  cuidado: topAsset('cuidados-para-mascotas-4x5.jpg'),
+  cuidado: topAsset('salud-para-mascotas-4x5.jpg'),
   gatos: topAsset('productos-para-gatos-4x5.jpg'),
   perros: topAsset('productos-para-perros-4x5.jpg'),
   'comida para perros': topAsset('comida-para-mascotas-4x5.jpg'),
@@ -251,16 +260,17 @@ export const PET_HOME_TOP_IMAGES: PetCategoryImageMap = {
 }
 
 // Seccion inferior del home: Collection2.tsx
-export const PET_HOME_FEATURED_ORDER = ['comida', 'cuidados', 'accesorios'] as const
+export const PET_HOME_FEATURED_ORDER = ['comida', 'salud', 'accesorios'] as const
 
 export const PET_HOME_FEATURED_IMAGES: PetCategoryImageMap = {
   todos: featuredAsset('catalogo-completo-para-mascotas-square.jpg'),
   descuentos: featuredAsset('ofertas-para-mascotas-square.jpg'),
   ropa: featuredAsset('ropa-para-mascotas-square.jpg'),
   comida: featuredAsset('comida-para-mascotas-square.jpg'),
-  cuidados: featuredAsset('cuidados-para-mascotas-square.jpg'),
+  salud: featuredAsset('salud-para-mascotas-square.jpg'),
+  cuidados: featuredAsset('salud-para-mascotas-square.jpg'),
   accesorios: featuredAsset('accesorios-para-mascotas-square.jpg'),
-  cuidado: featuredAsset('cuidados-para-mascotas-square.jpg'),
+  cuidado: featuredAsset('salud-para-mascotas-square.jpg'),
   gatos: featuredAsset('productos-para-gatos-square.jpg'),
   perros: featuredAsset('productos-para-perros-square.jpg'),
   'comida para perros': featuredAsset('comida-para-mascotas-square.jpg'),
@@ -353,6 +363,37 @@ const uniqueNormalizedValues = (
 const normalizeGender = (value?: string | null) =>
   (value ?? '').trim().toLowerCase()
 
+const parseAdditionalCategoryValues = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeProductCategory(String(item || '')))
+      .filter(Boolean)
+  }
+
+  if (typeof value !== 'string') {
+    return []
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) return []
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => normalizeProductCategory(String(item || '')))
+        .filter(Boolean)
+    }
+  } catch {
+    // allow legacy comma-separated strings
+  }
+
+  return trimmed
+    .split(',')
+    .map((item) => normalizeProductCategory(item))
+    .filter(Boolean)
+}
+
 export const resolvePetCategoryFilter = (
   filter?: PetCategoryFilter,
   options?: { gender?: string | null }
@@ -379,12 +420,21 @@ export const matchesPetCategoryFilter = (
   const resolvedFilter = resolvePetCategoryFilter(filter, options)
   const productType = normalizeProductType(product.productType, product.category)
   const productCategory = normalizeProductCategory(product.category, productType)
+  const additionalCategories = uniqueNormalizedValues(
+    parseAdditionalCategoryValues(product.attributes?.catalogCategories),
+    normalizeProductCategory
+  )
+  const productCategories = uniqueNormalizedValues(
+    [productCategory, ...additionalCategories],
+    normalizeProductCategory
+  )
   const productGender = normalizeGender(product.gender)
 
   const matchesTaxonomy =
     resolvedFilter.categories.length === 0 && resolvedFilter.productTypes.length === 0
       ? true
-      : resolvedFilter.categories.includes(productCategory) || resolvedFilter.productTypes.includes(productType)
+      : productCategories.some((category) => resolvedFilter.categories.includes(category))
+        || resolvedFilter.productTypes.includes(productType)
 
   const matchesGender =
     resolvedFilter.genders.length === 0 ? true : resolvedFilter.genders.includes(productGender)

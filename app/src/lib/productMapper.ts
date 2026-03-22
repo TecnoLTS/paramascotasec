@@ -1,6 +1,6 @@
 import { ProductType } from '@/type/ProductType'
 import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
-import { resolveAudienceGenderFromSpecies } from '@/lib/productTaxonomy'
+import { normalizeProductCategory, resolveAudienceGenderFromSpecies } from '@/lib/productTaxonomy'
 
 // Tipamos lo mínimo necesario
 type Variation = {
@@ -202,7 +202,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   return {
     id: product.legacyId ?? product.id,
     internalId: product.id,
-    category: product.category,
+    category: normalizeProductCategory(product.category, product.productType ?? ''),
     productType: product.productType ?? '',
     type: product.type ?? '',
     name: product.name,

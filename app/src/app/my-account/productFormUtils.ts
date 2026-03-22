@@ -42,6 +42,7 @@ export const getAdminProductEntityId = (product: {
 export const getEmptyAttributes = (type: string): Record<string, string> => {
     if (type === 'comida') {
         return {
+            catalogCategories: '',
             size: '',
             weight: '',
             flavor: '',
@@ -60,6 +61,7 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
 
     if (type === 'ropa') {
         return {
+            catalogCategories: '',
             size: '',
             material: '',
             color: '',
@@ -75,6 +77,7 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
 
     if (type === 'accesorios') {
         return {
+            catalogCategories: '',
             material: '',
             size: '',
             usage: '',
@@ -89,6 +92,7 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
 
     if (type === 'cuidado') {
         return {
+            catalogCategories: '',
             presentation: '',
             activeIngredient: '',
             usage: '',
@@ -156,6 +160,15 @@ export const normalizeAttributes = (type: string, attrs: any) => {
 
     Object.keys(merged).forEach((key) => {
         const value = (merged as any)[key]
+        if (key === 'catalogCategories') {
+            if (Array.isArray(value) && value.length > 0) {
+                cleaned[key] = JSON.stringify(value)
+            } else if (typeof value === 'string' && value.trim() !== '') {
+                cleaned[key] = value.trim()
+            }
+            return
+        }
+
         if (value !== undefined && value !== null && String(value).trim() !== '') {
             cleaned[key] = String(value).trim()
         }
