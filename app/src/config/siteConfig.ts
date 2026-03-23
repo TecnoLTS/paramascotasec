@@ -112,7 +112,7 @@ export const siteConfig: SiteConfig = {
         links: [
           { id: 'todos', labelOverride: 'Todas' },
           { id: 'ropa' },
-          { id: 'comida' },
+          { id: 'alimento' },
           { id: 'salud' },
           { id: 'accesorios' },
         ],
@@ -142,7 +142,7 @@ export const siteConfig: SiteConfig = {
     },
     departmentLinks: [
       { label: 'Ropa para mascotas', href: '/shop/breadcrumb1?category=ropa' },
-      { label: 'Comida para mascotas', href: '/shop/breadcrumb1?category=comida' },
+      { label: 'Alimento para mascotas', href: '/shop/breadcrumb1?category=alimento' },
       { label: 'Salud', href: '/shop/breadcrumb1?category=salud' },
       { label: 'Accesorios', href: '/shop/breadcrumb1?category=accesorios' },
     ],

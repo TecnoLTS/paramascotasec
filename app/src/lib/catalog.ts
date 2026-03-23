@@ -1,5 +1,5 @@
 import { CategoryCard } from '@/config/siteConfig'
-import { getCategoryImage, getCategoryLabel, getShopBrowseCategoryIds } from '@/data/petCategoryCards'
+import { getCategoryAlt, getCategoryImage, getCategoryLabel, getShopBrowseCategoryIds } from '@/data/petCategoryCards'
 import type { SiteId } from '@/lib/site'
 import { ProductType, ProductVariantOption } from '@/type/ProductType'
 import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
@@ -411,8 +411,8 @@ export const getCatalogCategoryIds = (products: ProductType[], siteId?: SiteId) 
   const hasCatProducts = products.some((product) => normalizeText(product.gender) === 'cat')
 
   const filteredCategories = explicitCategories.filter((categoryId) => {
-    if (hasDogProducts && categoryId === 'comida para perros') return false
-    if (hasCatProducts && categoryId === 'comida para gatos') return false
+    if (hasDogProducts && categoryId === 'alimento para perros') return false
+    if (hasCatProducts && categoryId === 'alimento para gatos') return false
     return true
   })
 
@@ -433,6 +433,7 @@ export const buildCatalogCategoryCards = (products: ProductType[], siteId?: Site
     id: 'todos',
     label: resolveCategoryLabel('todos', siteId),
     image: resolveCategoryImage('todos', siteId),
+    alt: getCategoryAlt('todos', siteId),
   })
 
   if (products.some(isProductOnSale)) {
@@ -440,6 +441,7 @@ export const buildCatalogCategoryCards = (products: ProductType[], siteId?: Site
       id: 'descuentos',
       label: resolveCategoryLabel('descuentos', siteId),
       image: resolveCategoryImage('descuentos', siteId),
+      alt: getCategoryAlt('descuentos', siteId),
     })
   }
 
@@ -448,6 +450,7 @@ export const buildCatalogCategoryCards = (products: ProductType[], siteId?: Site
       id: categoryId,
       label: resolveCategoryLabel(categoryId, siteId),
       image: resolveCategoryImage(categoryId, siteId),
+      alt: getCategoryAlt(categoryId, siteId),
     })
   })
 

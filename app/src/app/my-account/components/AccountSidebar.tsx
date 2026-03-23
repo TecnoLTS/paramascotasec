@@ -1,8 +1,10 @@
 'use client'
 
-import Image from 'next/image'
+import type { ElementType } from 'react'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
+import { PRODUCT_REFERENCE_SECTIONS, type ProductReferenceKey } from '@/lib/productReferenceData'
 import type { AdminMenuGroupKey, AdminReportSection } from '../types'
 import PanelNavButton from './PanelNavButton'
 
@@ -17,9 +19,11 @@ type AccountSidebarProps = {
     activeTab?: string;
     adminReportSection: AdminReportSection;
     adminMenuExpanded: Record<AdminMenuGroupKey, boolean>;
+    focusedReferenceCatalogKey?: ProductReferenceKey | null;
     onToggleAdminMenuGroup: (groupKey: AdminMenuGroupKey) => void;
     onOpenAdminReportSection: (section: AdminReportSection) => void;
     onNavigateToPanelTab: (tab: string) => void;
+    onNavigateToReferenceCatalog: (key: ProductReferenceKey | null) => void;
     onLogout: () => void;
     strategicAlertsCount: number;
     strategicCriticalCount: number;
@@ -30,9 +34,11 @@ export default function AccountSidebar({
     activeTab,
     adminReportSection,
     adminMenuExpanded,
+    focusedReferenceCatalogKey = null,
     onToggleAdminMenuGroup,
     onOpenAdminReportSection,
     onNavigateToPanelTab,
+    onNavigateToReferenceCatalog,
     onLogout,
     strategicAlertsCount,
     strategicCriticalCount,
@@ -57,38 +63,6 @@ export default function AccountSidebar({
             <div className="menu-tab w-full max-w-none lg:mt-10 mt-6">
                 {user.role === 'admin' ? (
                     <div className="space-y-3">
-                        <div className="rounded-xl border border-line overflow-hidden bg-white">
-                            <button
-                                type="button"
-                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
-                                onClick={() => onToggleAdminMenuGroup('monitoring')}
-                            >
-                                <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.ChartBar size={16} />
-                                    <span>Monitoreo</span>
-                                </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.monitoring ? 'rotate-180' : ''}`} />
-                            </button>
-                            {adminMenuExpanded.monitoring && (
-                                <div className="pb-2 px-2 space-y-1.5">
-                                    <PanelNavButton
-                                        className="item flex items-center justify-between gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface"
-                                        isActive={activeTab === 'alerts'}
-                                        onClick={() => onNavigateToPanelTab('alerts')}
-                                        trailing={strategicAlertsCount > 0 ? (
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${strategicCriticalCount > 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                {strategicAlertsCount}
-                                            </span>
-                                        ) : undefined}
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <Icon.Bell size={18} />
-                                            <strong className="heading6">Alertas</strong>
-                                        </span>
-                                    </PanelNavButton>
-                                </div>
-                            )}
-                        </div>
 
                         <div className="rounded-xl border border-line overflow-hidden bg-white">
                             <button
@@ -132,6 +106,40 @@ export default function AccountSidebar({
                             )}
                         </div>
 
+                        
+                        <div className="rounded-xl border border-line overflow-hidden bg-white">
+                            <button
+                                type="button"
+                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface duration-300"
+                                onClick={() => onToggleAdminMenuGroup('monitoring')}
+                            >
+                                <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
+                                    <Icon.ChartBar size={16} />
+                                    <span>Monitoreo</span>
+                                </div>
+                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.monitoring ? 'rotate-180' : ''}`} />
+                            </button>
+                            {adminMenuExpanded.monitoring && (
+                                <div className="pb-2 px-2 space-y-1.5">
+                                    <PanelNavButton
+                                        className="item flex items-center justify-between gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface"
+                                        isActive={activeTab === 'alerts'}
+                                        onClick={() => onNavigateToPanelTab('alerts')}
+                                        trailing={strategicAlertsCount > 0 ? (
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${strategicCriticalCount > 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                {strategicAlertsCount}
+                                            </span>
+                                        ) : undefined}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <Icon.Bell size={18} />
+                                            <strong className="heading6">Alertas</strong>
+                                        </span>
+                                    </PanelNavButton>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="rounded-xl border border-line overflow-hidden bg-white">
                             <button
                                 type="button"
@@ -154,10 +162,26 @@ export default function AccountSidebar({
                                         <Icon.Archive size={18} />
                                         <strong className="heading6">Inventario</strong>
                                     </PanelNavButton>
-                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'catalogs'} onClick={() => onNavigateToPanelTab('catalogs')}>
+                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'catalogs' && !focusedReferenceCatalogKey} onClick={() => onNavigateToReferenceCatalog(null)}>
                                         <Icon.Rows size={18} />
-                                        <strong className="heading6">Catálogos</strong>
+                                        <strong className="heading6">Catálogos operativos</strong>
                                     </PanelNavButton>
+                                    <div className="mt-1 rounded-lg border border-dashed border-line/70 bg-surface/60 p-2 space-y-1">
+                                        {PRODUCT_REFERENCE_SECTIONS.map((section) => {
+                                            const ItemIcon = Icon[section.menuIcon] as ElementType
+                                            return (
+                                                <PanelNavButton
+                                                    key={`reference-catalog-${section.key}`}
+                                                    className="item flex items-center gap-3 w-full px-4 py-2 rounded-lg cursor-pointer duration-300 hover:bg-white"
+                                                    isActive={activeTab === 'catalogs' && focusedReferenceCatalogKey === section.key}
+                                                    onClick={() => onNavigateToReferenceCatalog(section.key)}
+                                                >
+                                                    <ItemIcon size={16} />
+                                                    <strong className="heading7">{section.title}</strong>
+                                                </PanelNavButton>
+                                            )
+                                        })}
+                                    </div>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'users'} onClick={() => onNavigateToPanelTab('users')}>
                                         <Icon.Users size={18} />
                                         <strong className="heading6">Usuarios</strong>

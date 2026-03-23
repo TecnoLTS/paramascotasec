@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import * as Icon from '@phosphor-icons/react/dist/ssr'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useCart } from '@/context/CartContext'
@@ -64,7 +64,7 @@ const ModalQuickview = () => {
     const hasSale = (activeVariant?.sale || selectedProduct?.sale || originPrice > price) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
     const categoryLabel = (selectedProduct?.category ?? '').toLowerCase()
-    const isFoodCategory = ['comida', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
+    const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
     const selectorLabel = isFoodCategory ? 'Tamano del paquete' : ((selectedProduct?.productType ?? '').toLowerCase() === 'ropa' ? 'Talla' : 'Variante')
     const formattedCategory = [selectedProduct?.category, selectedProduct?.gender === 'dog' ? 'Perros' : selectedProduct?.gender === 'cat' ? 'Gatos' : '']
         .filter(Boolean)

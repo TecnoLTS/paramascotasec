@@ -179,7 +179,10 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const galleryFromMeta =
     product.imageMeta?.filter((item) => item?.kind === 'gallery' && item.url).map((item) => normalizeImageUrl(item.url as string)) ?? []
   const resolvedThumbs = thumbImages.length > 0 ? thumbImages : (thumbFromMeta.length > 0 ? thumbFromMeta : images)
-  const resolvedGallery = images.length > 0 ? images : (galleryFromMeta.length > 0 ? galleryFromMeta : images)
+  const galleryWithoutThumbs = images.filter((image) => !resolvedThumbs.includes(image))
+  const resolvedGallery = galleryFromMeta.length > 0
+    ? galleryFromMeta
+    : (galleryWithoutThumbs.length > 0 ? galleryWithoutThumbs : images)
   const variations = product.variations?.map(mapVariation) ?? []
   const lastPurchaseInvoice = mapPurchaseInvoiceSummary(product.lastPurchaseInvoice ?? product.inventory?.lastPurchaseInvoice)
   const variantLabel = [

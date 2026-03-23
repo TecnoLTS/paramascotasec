@@ -379,7 +379,7 @@ export default React.memo(function InventoryManagementPanel({
                                                 {row.stock.toLocaleString('es-EC')} uds
                                             </div>
                                             <div className="text-xs text-secondary">
-                                                {row.isPerishable ? 'Perecedero (comida)' : 'No perecedero'}
+                                                {row.isPerishable ? 'Perecedero (Alimento)' : 'No perecedero'}
                                             </div>
                                             <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${stockBadge.className}`}>
                                                 {stockBadge.label}

@@ -2,7 +2,7 @@
 
 import React, { Component } from "react";
 import Slider from "react-slick";
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 
 import "slick-carousel/slick/slick.css";

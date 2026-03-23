@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 import { Plus, Minus, WhatsappLogo, EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import MenuPet from '@/components/Header/Menu/MenuPet'

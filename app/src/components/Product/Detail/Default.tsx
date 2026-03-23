@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import { useRouter } from 'next/navigation'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, Thumbs } from 'swiper/modules'
@@ -83,7 +83,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const productType = (productFamily.productType ?? '').toLowerCase()
   const isClothing = productType === 'ropa'
   const categoryLabel = (productFamily.category ?? '').toLowerCase()
-  const isFoodCategory = ['comida', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
+  const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
   const selectorLabel = isFoodCategory ? 'Tamano del paquete' : (isClothing ? 'Talla' : 'Variante')
   const sku = getProductSku(activeVariant)
   const price = Number(activeVariant.price ?? 0)
@@ -100,7 +100,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }
 
   const attributeLabels: Record<string, Record<string, string>> = {
-    comida: {
+    Alimento: {
       size: 'Tamano',
       flavor: 'Sabor',
       target: 'Etapa',
@@ -144,8 +144,10 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const variationImages = (activeVariant.variation ?? [])
     .flatMap((variation) => [variation.image, variation.colorImage])
     .filter((img): img is string => typeof img === 'string' && img.length > 0)
-  const galleryImages = Array.from(new Set([...thumbImages, ...productImages, ...variationImages])).filter(Boolean)
-  const resolvedGalleryImages = galleryImages.length > 0 ? galleryImages : ['/images/product/1.jpg']
+  const galleryImages = Array.from(new Set([...productImages, ...variationImages])).filter(Boolean)
+  const resolvedGalleryImages = galleryImages.length > 0
+    ? galleryImages
+    : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.jpg'])
   const colorOptions = (activeVariant.variation ?? []).filter((item) => item.color)
 
   const relatedProducts = useMemo(() => {

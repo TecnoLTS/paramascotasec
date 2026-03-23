@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import { BlogType } from '@/type/BlogType'
 import { useRouter } from 'next/navigation'
 

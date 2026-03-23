@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from 'next/navigation'
 import InlineSpinner from '@/components/Other/InlineSpinner'

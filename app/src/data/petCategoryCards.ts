@@ -1,10 +1,12 @@
 import { normalizeProductCategory, normalizeProductType } from '@/lib/productTaxonomy'
+import { versionStaticAssetPath } from '@/lib/staticAsset'
 import type { ProductType } from '@/type/ProductType'
 
 export interface PetCategoryCard {
   id: string
   label: string
   image: string
+  alt: string
 }
 
 export type PetCategoryFilter = {
@@ -30,9 +32,16 @@ export type PetCategoryImageSpec = {
   minimumResolution: string
 }
 
+export type PetCategoryFeaturedImageVariant =
+  | 'mobilePrimary'
+  | 'mobileSecondary'
+  | 'desktopPrimary'
+  | 'desktopSecondary'
+
 type PetCategoryDefinition = {
   id: string
   label: string
+  alt?: string
   route: string
   filter?: PetCategoryFilter
   showInFooter?: boolean
@@ -41,6 +50,8 @@ type PetCategoryDefinition = {
 
 type PetCategoryDefinitionMap = Record<string, PetCategoryDefinition>
 type PetCategoryImageMap = Record<string, PetCategoryImageSpec>
+type PetCategoryFeaturedImageMap = Partial<Record<PetCategoryFeaturedImageVariant, PetCategoryImageSpec>>
+type PetCategoryFeaturedImageSetMap = Record<string, PetCategoryFeaturedImageMap>
 
 export const PET_HOME_TOP_IMAGE_GUIDE = {
   directory: '/public/images/collection/home-top',
@@ -50,58 +61,62 @@ export const PET_HOME_TOP_IMAGE_GUIDE = {
   usage: 'Carrusel superior de Categorías del home',
 } as const
 
-export const PET_HOME_FEATURED_IMAGE_GUIDE = {
-  directory: '/public/images/collection/home-featured',
-  aspect: '1:1 master flexible',
-  recommendedResolution: '2000x2000',
-  minimumResolution: '1600x1600',
-  usage: 'Bloque grande inferior del home. Esta imagen se recorta a square, 4:5 o 16:10 según el layout.',
+export const PET_HOME_FEATURED_IMAGE_GUIDES = {
+  mobilePrimary: {
+    directory: '/public/images/collection/home-featured',
+    aspect: '16:10',
+    recommendedResolution: '1176x736',
+    minimumResolution: '960x600',
+    usage: 'Collection2 en movil, tarjeta principal superior de Alimento',
+  },
+  mobileSecondary: {
+    directory: '/public/images/collection/home-featured',
+    aspect: '1:1',
+    recommendedResolution: '588x588',
+    minimumResolution: '500x500',
+    usage: 'Collection2 en movil, tarjetas cuadradas secundarias de Salud y Accesorios',
+  },
+  desktopPrimary: {
+    directory: '/public/images/collection/home-featured',
+    aspect: '630:620',
+    recommendedResolution: '1260x1240',
+    minimumResolution: '1000x984',
+    usage: 'Collection2 en desktop, tarjeta grande izquierda de Alimento',
+  },
+  desktopSecondary: {
+    directory: '/public/images/collection/home-featured',
+    aspect: '630:295',
+    recommendedResolution: '1260x590',
+    minimumResolution: '1000x468',
+    usage: 'Collection2 en desktop, tarjetas derechas de Salud y Accesorios',
+  },
 } as const
 
-// Cambia solo el valor del archivo que reemplaces para forzar que clientes y
-// el optimizador de Next descarguen la imagen nueva de inmediato.
-const PET_IMAGE_VERSION_BY_FILE: Record<string, string> = {
-  'catalogo-completo-para-mascotas-4x5.jpg': '20260321-1',
-  'ofertas-para-mascotas-4x5.jpg': '20260321-1',
-  'comida-para-mascotas-4x5.jpg': '20260321-2',
-  'cuidados-para-mascotas-4x5.jpg': '20260321-2',
-  'salud-para-mascotas-4x5.jpg': '20260321-2',
-  'accesorios-para-mascotas-4x5.jpg': '20260321-2',
-  'cuidado-para-mascotas-4x5.jpg': '20260321-1',
-  'productos-para-gatos-4x5.jpg': '20260321-2',
-  'productos-para-perros-4x5.jpg': '20260321-1',
-  'ropa-para-mascotas-4x5.jpg': '20260321-1',
-  'catalogo-completo-para-mascotas-square.jpg': '20260321-1',
-  'ofertas-para-mascotas-square.jpg': '20260321-1',
-  'comida-para-mascotas-square.jpg': '20260321-1',
-  'cuidados-para-mascotas-square.jpg': '20260321-1',
-  'salud-para-mascotas-square.jpg': '20260321-1',
-  'accesorios-para-mascotas-square.jpg': '20260321-1',
-  'cuidado-para-mascotas-square.jpg': '20260321-1',
-  'productos-para-gatos-square.jpg': '20260321-1',
-  'productos-para-perros-square.jpg': '20260321-1',
-  'ropa-para-mascotas-square.jpg': '20260321-1',
-}
-
-const withVersion = (src: string, fileName: string) => {
-  const version = PET_IMAGE_VERSION_BY_FILE[fileName]
-  return version ? `${src}?v=${version}` : src
-}
+export const PET_HOME_FEATURED_IMAGE_GUIDE = {
+  directory: '/public/images/collection/home-featured',
+  aspect: 'slot-specific',
+  recommendedResolution: 'usar PET_HOME_FEATURED_IMAGE_GUIDES por variante',
+  minimumResolution: 'usar PET_HOME_FEATURED_IMAGE_GUIDES por variante',
+  usage: 'Bloque grande inferior del home. Cada slot usa su propia imagen para evitar recortes malos.',
+} as const
 
 const topAsset = (fileName: string): PetCategoryImageSpec => ({
-  src: withVersion(`/images/collection/home-top/${fileName}`, fileName),
+  src: versionStaticAssetPath(`/images/collection/home-top/${fileName}`),
   fileName,
   aspect: PET_HOME_TOP_IMAGE_GUIDE.aspect,
   recommendedResolution: PET_HOME_TOP_IMAGE_GUIDE.recommendedResolution,
   minimumResolution: PET_HOME_TOP_IMAGE_GUIDE.minimumResolution,
 })
 
-const featuredAsset = (fileName: string): PetCategoryImageSpec => ({
-  src: withVersion(`/images/collection/home-featured/${fileName}`, fileName),
+const featuredVariantAsset = (
+  variant: PetCategoryFeaturedImageVariant,
+  fileName: string
+): PetCategoryImageSpec => ({
+  src: versionStaticAssetPath(`/images/collection/home-featured/${fileName}`),
   fileName,
-  aspect: PET_HOME_FEATURED_IMAGE_GUIDE.aspect,
-  recommendedResolution: PET_HOME_FEATURED_IMAGE_GUIDE.recommendedResolution,
-  minimumResolution: PET_HOME_FEATURED_IMAGE_GUIDE.minimumResolution,
+  aspect: PET_HOME_FEATURED_IMAGE_GUIDES[variant].aspect,
+  recommendedResolution: PET_HOME_FEATURED_IMAGE_GUIDES[variant].recommendedResolution,
+  minimumResolution: PET_HOME_FEATURED_IMAGE_GUIDES[variant].minimumResolution,
 })
 
 const toTitleCase = (value?: string) => {
@@ -113,19 +128,24 @@ const toTitleCase = (value?: string) => {
     .join(' ')
 }
 
-const DEFAULT_HOME_TOP_IMAGE = '/images/collection/home-top/catalogo-completo-para-mascotas-4x5.jpg'
-const DEFAULT_HOME_FEATURED_IMAGE = '/images/collection/home-featured/catalogo-completo-para-mascotas-square.jpg'
+const findMapValueCaseInsensitive = <T,>(map: Record<string, T>, key?: string | null) => {
+  if (!key) return undefined
 
-// 1. Catalogo base: aqui editas label, ruta y filtro.
-// 2. Collection (arriba): usa solo PET_HOME_TOP_IMAGES y PET_HOME_TOP_ORDER.
-// 3. Collection2 (abajo): usa solo PET_HOME_FEATURED_IMAGES y PET_HOME_FEATURED_ORDER.
-//
-// Estan separadas a proposito porque son dos secciones distintas del home con
-// resoluciones, recortes y necesidades visuales diferentes.
+  const exact = map[key]
+  if (exact) return exact
+
+  const normalized = key.toLowerCase()
+  const resolvedKey = Object.keys(map).find((candidate) => candidate.toLowerCase() === normalized)
+  return resolvedKey ? map[resolvedKey] : undefined
+}
+
+const DEFAULT_HOME_TOP_IMAGE = versionStaticAssetPath('/images/collection/home-top/catalogo-completo-para-mascotas-4x5.jpg')
+
 const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
   todos: {
     id: 'todos',
     label: 'Todas',
+    alt: 'Catálogo completo de productos para mascotas en Ecuador',
     route: '/shop/breadcrumb1',
     filter: {},
     showInFooter: true,
@@ -134,21 +154,20 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
   ropa: {
     id: 'ropa',
     label: 'Ropa',
+    alt: 'Ropa para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=ropa',
-    filter: {
-      categories: ['ropa'],
-      productTypes: ['ropa'],
-    },
+    filter: { categories: ['ropa'], productTypes: ['ropa'] },
     showInFooter: true,
     showInShopBrowse: true,
   },
-  comida: {
-    id: 'comida',
-    label: 'Comida',
-    route: '/shop/breadcrumb1?category=comida',
+  alimento: {
+    id: 'alimento',
+    label: 'Alimento',
+    alt: 'Alimentos para mascotas en Ecuador',
+    route: '/shop/breadcrumb1?category=alimento',
     filter: {
-      categories: ['comida', 'comida para perros', 'comida para gatos'],
-      productTypes: ['comida'],
+      categories: ['Alimento', 'alimento', 'alimento para perros', 'alimento para gatos'],
+      productTypes: ['Alimento', 'alimento'],
     },
     showInFooter: true,
     showInShopBrowse: true,
@@ -156,28 +175,17 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
   cuidados: {
     id: 'salud',
     label: 'Salud',
+    alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: {
-      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
-    },
+    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
   },
   accesorios: {
     id: 'accesorios',
     label: 'Accesorios',
+    alt: 'Accesorios para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=accesorios',
     filter: {
-      categories: [
-        'accesorios',
-        'juguetes',
-        'camas',
-        'comederos',
-        'transportadoras',
-        'correas',
-        'collares',
-        'arneses',
-        'bolsas',
-        'platos',
-      ],
+      categories: ['accesorios', 'juguetes', 'camas', 'comederos', 'transportadoras', 'correas', 'collares', 'arneses', 'bolsas', 'platos'],
       productTypes: ['accesorios'],
     },
     showInFooter: true,
@@ -186,109 +194,117 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
   descuentos: {
     id: 'descuentos',
     label: 'Ofertas',
+    alt: 'Ofertas y descuentos en productos para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=descuentos',
     filter: {},
   },
   cuidado: {
     id: 'salud',
     label: 'Salud',
+    alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: {
-      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
-    },
+    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
   },
   salud: {
     id: 'salud',
     label: 'Salud',
+    alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: {
-      categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'],
-    },
+    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
     showInFooter: true,
     showInShopBrowse: true,
   },
   gatos: {
     id: 'gatos',
     label: 'Gatos',
+    alt: 'Productos para gatos en Ecuador',
     route: '/shop/breadcrumb1?gender=cat',
     filter: { genders: ['cat'] },
   },
   perros: {
     id: 'perros',
     label: 'Perros',
+    alt: 'Productos para perros en Ecuador',
     route: '/shop/breadcrumb1?gender=dog',
     filter: { genders: ['dog'] },
   },
-  'comida para perros': {
-    id: 'comida para perros',
-    label: 'Comida para perros',
-    route: '/shop/breadcrumb1?category=comida&gender=dog',
+  'alimento para perros': {
+    id: 'alimento para perros',
+    label: 'Alimento para perros',
+    alt: 'Alimento para perros en Ecuador',
+    route: '/shop/breadcrumb1?category=alimento&gender=dog',
     filter: {
-      categories: ['comida', 'comida para perros', 'comida para gatos'],
-      productTypes: ['comida'],
+      categories: ['Alimento', 'alimento', 'alimento para perros', 'alimento para gatos'],
+      productTypes: ['Alimento', 'alimento'],
       genders: ['dog'],
     },
   },
-  'comida para gatos': {
-    id: 'comida para gatos',
-    label: 'Comida para gatos',
-    route: '/shop/breadcrumb1?category=comida&gender=cat',
+  'alimento para gatos': {
+    id: 'alimento para gatos',
+    label: 'Alimento para gatos',
+    alt: 'Alimento para gatos en Ecuador',
+    route: '/shop/breadcrumb1?category=alimento&gender=cat',
     filter: {
-      categories: ['comida', 'comida para perros', 'comida para gatos'],
-      productTypes: ['comida'],
+      categories: ['Alimento', 'alimento', 'alimento para perros', 'alimento para gatos'],
+      productTypes: ['Alimento', 'alimento'],
       genders: ['cat'],
     },
   },
 }
 
-// Seccion superior del home: Collection.tsx
-export const PET_HOME_TOP_ORDER = ['todos', 'ropa', 'comida', 'salud', 'accesorios'] as const
+export const PET_HOME_TOP_ORDER = ['todos', 'ropa', 'alimento', 'salud', 'accesorios'] as const
+
+const topAssetTodos = topAsset('catalogo-completo-para-mascotas-4x5.jpg')
+const topAssetRopa = topAsset('ropa-para-mascotas-4x5.jpg')
+const topAssetAlimento = topAsset('alimento-para-mascotas-4x5.jpg')
+const topAssetSalud = topAsset('salud-para-mascotas-4x5.jpg')
+const topAssetAccesorios = topAsset('accesorios-para-mascotas-4x5.jpg')
 
 export const PET_HOME_TOP_IMAGES: PetCategoryImageMap = {
-  todos: topAsset('catalogo-completo-para-mascotas-4x5.jpg'),
-  descuentos: topAsset('ofertas-para-mascotas-4x5.jpg'),
-  ropa: topAsset('ropa-para-mascotas-4x5.jpg'),
-  comida: topAsset('comida-para-mascotas-4x5.jpg'),
-  salud: topAsset('salud-para-mascotas-4x5.jpg'),
-  cuidados: topAsset('salud-para-mascotas-4x5.jpg'),
-  accesorios: topAsset('accesorios-para-mascotas-4x5.jpg'),
-  cuidado: topAsset('salud-para-mascotas-4x5.jpg'),
-  gatos: topAsset('productos-para-gatos-4x5.jpg'),
-  perros: topAsset('productos-para-perros-4x5.jpg'),
-  'comida para perros': topAsset('comida-para-mascotas-4x5.jpg'),
-  'comida para gatos': topAsset('comida-para-mascotas-4x5.jpg'),
+  todos: topAssetTodos,
+  ropa: topAssetRopa,
+  alimento: topAssetAlimento,
+  salud: topAssetSalud,
+  cuidados: topAssetSalud,
+  cuidado: topAssetSalud,
+  accesorios: topAssetAccesorios,
 }
 
-// Seccion inferior del home: Collection2.tsx
-export const PET_HOME_FEATURED_ORDER = ['comida', 'salud', 'accesorios'] as const
+export const PET_HOME_FEATURED_ORDER = ['alimento', 'salud', 'accesorios'] as const
 
-export const PET_HOME_FEATURED_IMAGES: PetCategoryImageMap = {
-  todos: featuredAsset('catalogo-completo-para-mascotas-square.jpg'),
-  descuentos: featuredAsset('ofertas-para-mascotas-square.jpg'),
-  ropa: featuredAsset('ropa-para-mascotas-square.jpg'),
-  comida: featuredAsset('comida-para-mascotas-square.jpg'),
-  salud: featuredAsset('salud-para-mascotas-square.jpg'),
-  cuidados: featuredAsset('salud-para-mascotas-square.jpg'),
-  accesorios: featuredAsset('accesorios-para-mascotas-square.jpg'),
-  cuidado: featuredAsset('salud-para-mascotas-square.jpg'),
-  gatos: featuredAsset('productos-para-gatos-square.jpg'),
-  perros: featuredAsset('productos-para-perros-square.jpg'),
-  'comida para perros': featuredAsset('comida-para-mascotas-square.jpg'),
-  'comida para gatos': featuredAsset('comida-para-mascotas-square.jpg'),
+const featuredAlimento: PetCategoryFeaturedImageMap = {
+  mobilePrimary: featuredVariantAsset('mobilePrimary', 'alimentos-para-mascotas-en-ecuador-mobile-principal-16x10.jpg'),
+  desktopPrimary: featuredVariantAsset('desktopPrimary', 'alimentos-para-mascotas-en-ecuador-desktop-principal-4x5.jpg'),
+}
+const featuredSalud: PetCategoryFeaturedImageMap = {
+  mobileSecondary: featuredVariantAsset('mobileSecondary', 'salud-para-mascotas-en-ecuador-mobile-secundario-square.jpg'),
+  desktopSecondary: featuredVariantAsset('desktopSecondary', 'salud-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg'),
+}
+const featuredAccesorios: PetCategoryFeaturedImageMap = {
+  mobileSecondary: featuredVariantAsset('mobileSecondary', 'accesorios-para-mascotas-en-ecuador-mobile-secundario-square.jpg'),
+  desktopSecondary: featuredVariantAsset('desktopSecondary', 'accesorios-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg'),
 }
 
-const getCategoryDefinition = (categoryId?: string) => {
-  if (!categoryId) return undefined
-  return PET_CATEGORY_DEFINITIONS[categoryId.toLowerCase()]
+export const PET_HOME_FEATURED_IMAGES: PetCategoryFeaturedImageSetMap = {
+  alimento: featuredAlimento,
+  salud: featuredSalud,
+  cuidados: featuredSalud,
+  cuidado: featuredSalud,
+  accesorios: featuredAccesorios,
 }
+
+const getCategoryDefinition = (categoryId?: string) =>
+  findMapValueCaseInsensitive(PET_CATEGORY_DEFINITIONS, categoryId)
 
 const buildCard = (categoryId: string, image: string): PetCategoryCard => {
   const category = getCategoryDefinition(categoryId)
+  const label = category?.label ?? toTitleCase(categoryId)
 
   return {
     id: category?.id ?? categoryId,
-    label: category?.label ?? toTitleCase(categoryId),
+    label,
     image,
+    alt: category?.alt ?? `${label} para mascotas en Ecuador`,
   }
 }
 
@@ -297,7 +313,15 @@ export const PET_HOME_CATEGORY_CARDS: PetCategoryCard[] = PET_HOME_TOP_ORDER.map
 )
 
 export const PET_HOME_FEATURED_CATEGORY_CARDS: PetCategoryCard[] = PET_HOME_FEATURED_ORDER.map((categoryId) =>
-  buildCard(categoryId, PET_HOME_FEATURED_IMAGES[categoryId]?.src ?? DEFAULT_HOME_FEATURED_IMAGE)
+  buildCard(
+    categoryId,
+    PET_HOME_FEATURED_IMAGES[categoryId]?.desktopPrimary?.src
+      ?? PET_HOME_FEATURED_IMAGES[categoryId]?.desktopSecondary?.src
+      ?? PET_HOME_FEATURED_IMAGES[categoryId]?.mobilePrimary?.src
+      ?? PET_HOME_FEATURED_IMAGES[categoryId]?.mobileSecondary?.src
+      ?? PET_HOME_TOP_IMAGES[categoryId]?.src
+      ?? DEFAULT_HOME_TOP_IMAGE
+  )
 )
 
 export const PET_FOOTER_CATEGORY_IDS = Object.values(PET_CATEGORY_DEFINITIONS)
@@ -335,18 +359,37 @@ export const getCategoryLabel = (categoryId?: string, _tenantId?: string) => {
   return category?.label ?? toTitleCase(categoryId.toLowerCase())
 }
 
+export const getCategoryAlt = (categoryId?: string, _tenantId?: string) => {
+  if (!categoryId) return 'Productos para mascotas en Ecuador'
+
+  const category = getCategoryDefinition(categoryId)
+  if (category?.alt) return category.alt
+
+  const label = category?.label ?? toTitleCase(categoryId.toLowerCase())
+  return `${label} para mascotas en Ecuador`
+}
+
 export const getCategoryImage = (categoryId?: string, _tenantId?: string) => {
   if (!categoryId) return DEFAULT_HOME_TOP_IMAGE
 
-  const normalized = categoryId.toLowerCase()
-  return PET_HOME_TOP_IMAGES[normalized]?.src ?? PET_HOME_FEATURED_IMAGES[normalized]?.src ?? DEFAULT_HOME_TOP_IMAGE
+  return (
+    findMapValueCaseInsensitive(PET_HOME_TOP_IMAGES, categoryId)?.src
+    ?? DEFAULT_HOME_TOP_IMAGE
+  )
 }
 
 export const getHomeTopCategoryImageSpec = (categoryId: string) =>
-  PET_HOME_TOP_IMAGES[categoryId.toLowerCase()] ?? null
+  findMapValueCaseInsensitive(PET_HOME_TOP_IMAGES, categoryId) ?? null
 
-export const getHomeFeaturedCategoryImageSpec = (categoryId: string) =>
-  PET_HOME_FEATURED_IMAGES[categoryId.toLowerCase()] ?? null
+export const getHomeFeaturedCategoryImageSpec = (
+  categoryId: string,
+  variant: PetCategoryFeaturedImageVariant = 'desktopPrimary'
+) => {
+  const imageSet = findMapValueCaseInsensitive(PET_HOME_FEATURED_IMAGES, categoryId)
+
+  return imageSet?.[variant]
+    ?? null
+}
 
 const uniqueNormalizedValues = (
   values: Array<string | null | undefined>,

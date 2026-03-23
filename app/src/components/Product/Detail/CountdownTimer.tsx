@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ProductType } from '@/type/ProductType'

@@ -6,6 +6,11 @@
     "node": ">=20.9.0"
   },
   "scripts": {
+    "images:manifest": "node ./scripts/generate-image-version-manifest.mjs",
+    "predev": "npm run images:manifest",
+    "prebuild": "npm run images:manifest",
+    "prestart": "npm run images:manifest",
+    "prelint": "npm run images:manifest",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

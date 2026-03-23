@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import { Swiper, SwiperSlide } from 'swiper/react'
-import { Autoplay, Navigation } from 'swiper/modules'
+import { Navigation } from 'swiper/modules'
 import { useRouter } from 'next/navigation'
 import { PetCategoryCard, getCategoryCards, getCategoryUrl } from '@/data/petCategoryCards'
 
@@ -34,7 +34,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             navigation
             loop={enableLoop}
             watchOverflow
-            modules={[Navigation, Autoplay]}
+            modules={[Navigation]}
             breakpoints={{
               420: {
                 slidesPerView: 3,
@@ -59,32 +59,36 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             }}
             className="h-full"
           >
-            {resolvedCategories.map((category, index) => (
-              <SwiperSlide key={category.id}>
-                <div
-                  className="trending-item w-full relative cursor-pointer flex flex-col items-center"
-                  onClick={() => handleCategoryClick(category.id)}
-                >
-                  <div className="bg-img mx-auto w-full max-w-[128px] sm:max-w-[150px] md:max-w-none rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-square sm:aspect-[4/5] bg-[#f6f7f9]">
-                    <Image
-                      src={category.image}
-                      alt={category.label}
-                      fill
-                      quality={90}
-                      sizes="(min-width: 1200px) 202px, (min-width: 992px) calc((100vw - 32px - 56px) / 5), (min-width: 768px) calc((100vw - 32px - 36px) / 4), (min-width: 576px) calc((100vw - 32px - 20px) / 3), calc((100vw - 32px - 16px) / 3)"
-                      className="w-full h-full object-cover"
-                      priority={index === 0}
-                      loading={index === 0 ? 'eager' : 'lazy'}
-                      placeholder="blur"
-                      blurDataURL="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-                    />
+            {resolvedCategories.map((category, index) => {
+              const isPriority = index < 6;
+
+              return (
+                <SwiperSlide key={category.id}>
+                  <div
+                    className="trending-item w-full relative cursor-pointer flex flex-col items-center group"
+                    onClick={() => handleCategoryClick(category.id)}
+                  >
+                    <div className="bg-img mx-auto w-full max-w-[128px] sm:max-w-[150px] md:max-w-none rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-[4/5] bg-[#f6f7f9] transition-transform duration-300 group-hover:scale-105">
+                      <Image
+                        src={category.image}
+                        alt={category.alt || category.label}
+                        fill
+                        quality={90}
+                        sizes="(min-width: 1200px) 202px, (min-width: 992px) calc((100vw - 32px - 56px) / 5), (min-width: 768px) calc((100vw - 32px - 36px) / 4), (min-width: 576px) calc((100vw - 32px - 20px) / 3), calc((100vw - 32px - 16px) / 3)"
+                        className="w-full h-full object-cover"
+                        priority={isPriority}
+                        loading={isPriority ? 'eager' : 'lazy'}
+                      />
+                    </div>
+                    <div className="trending-name text-center mt-3 sm:mt-4 duration-500">
+                      <span className="font-semibold text-[13px] leading-[18px] sm:text-[14px] sm:leading-[20px] lg:text-[15px] lg:leading-[22px] text-[var(--blue)]">
+                        {category.label}
+                      </span>
+                    </div>
                   </div>
-                  <div className="trending-name text-center mt-3 sm:mt-4 duration-500">
-                    <span className="font-semibold text-[13px] leading-[18px] sm:text-[14px] sm:leading-[20px] lg:text-[15px] lg:leading-[22px] text-[var(--blue)]">{category.label}</span>
-                  </div>
-                </div>
-              </SwiperSlide>
-            ))}
+                </SwiperSlide>
+              )
+            })}
           </Swiper>
         </div>
       </div>

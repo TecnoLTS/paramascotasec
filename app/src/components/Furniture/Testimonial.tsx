@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import Image from 'next/image';
+import Image from '@/components/Common/AppImage';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation } from 'swiper/modules';
 import 'swiper/css/bundle';

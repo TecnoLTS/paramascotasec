@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 const Banner2 = () => {
@@ -19,22 +20,15 @@ const Banner2 = () => {
                     <div className="w-full lg:w-1/2 flex justify-center lg:justify-end">
                         <div className="relative group">
                             <div className="absolute -inset-1 bg-white/20 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                            <picture className="relative block w-full max-w-[500px] overflow-hidden rounded-3xl shadow-2xl transform transition duration-500 hover:scale-[1.02]">
-                                <source
-                                    media="(min-width: 1280px)"
-                                    srcSet="/images/banner/jornadas-de-adopcion-paramascotas-1920x460.jpg"
-                                />
-                                <source
-                                    media="(min-width: 768px)"
-                                    srcSet="/images/banner/jornadas-de-adopcion-paramascotas-1023x360.jpg"
-                                />
-                                <img
-                                    src="/images/banner/jornadas-de-adopcion-paramascotas-474x280.jpg"
+                            <div className="relative block w-full max-w-[500px] aspect-[1920/460] overflow-hidden rounded-3xl shadow-2xl transform transition duration-500 hover:scale-[1.02]">
+                                <Image
+                                    src="/images/banner/jornadas-de-adopcion-paramascotas-1920x460.jpg"
                                     alt="Jornadas de adopción"
-                                    className="w-full h-auto object-cover"
-                                    loading="lazy"
+                                    fill
+                                    sizes="(min-width: 1280px) 500px, (min-width: 1024px) 42vw, 90vw"
+                                    className="object-cover"
                                 />
-                            </picture>
+                            </div>
                         </div>
                     </div>
 
@@ -70,4 +64,3 @@ const Banner2 = () => {
 }
 
 export default Banner2
-

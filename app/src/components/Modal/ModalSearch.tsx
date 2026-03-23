@@ -3,7 +3,7 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/Common/AppImage';
 import * as Icon from '@phosphor-icons/react/dist/ssr';
 import InlineSpinner from '@/components/Other/InlineSpinner';
 import Product from '../Product/Product';
@@ -35,7 +35,7 @@ const ModalSearch = () => {
       return topBrands
     }
 
-    return ['Ropa', 'Comida', 'Salud', 'Accesorios']
+    return ['Ropa', 'Alimento', 'Salud', 'Accesorios']
   }, [products])
 
   const handleSearch = (value: string) => {

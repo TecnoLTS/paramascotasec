@@ -4,6 +4,7 @@ import React from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import {
+    createProductReferenceKeyRecord,
     PRODUCT_REFERENCE_SECTIONS,
     PRODUCT_SYSTEM_REFERENCE_GROUPS,
     type ProductReferenceData,
@@ -14,6 +15,7 @@ type ProductReferenceDataPanelProps = {
     data: ProductReferenceData;
     loading?: boolean;
     saving?: boolean;
+    focusKey?: ProductReferenceKey | null;
     onChange: (next: ProductReferenceData) => void;
     onSave: () => Promise<void> | void;
 }
@@ -22,23 +24,16 @@ export default React.memo(function ProductReferenceDataPanel({
     data,
     loading = false,
     saving = false,
+    focusKey = null,
     onChange,
     onSave,
 }: ProductReferenceDataPanelProps) {
-    const [draftValues, setDraftValues] = React.useState<Record<ProductReferenceKey, string>>(() => ({
-        brands: '',
-        suppliers: '',
-        sizes: '',
-        materials: '',
-        colors: '',
-        usages: '',
-        presentations: '',
-        activeIngredients: '',
-        storageLocations: '',
-        tags: '',
-        flavors: '',
-        ageRanges: '',
-    }))
+    const sectionRefs = React.useRef<Record<ProductReferenceKey, HTMLDivElement | null>>(
+        createProductReferenceKeyRecord(() => null),
+    )
+    const [draftValues, setDraftValues] = React.useState<Record<ProductReferenceKey, string>>(() =>
+        createProductReferenceKeyRecord(() => ''),
+    )
 
     const setDraftValue = React.useCallback((key: ProductReferenceKey, value: string) => {
         setDraftValues((prev) => ({ ...prev, [key]: value }))
@@ -69,6 +64,13 @@ export default React.memo(function ProductReferenceDataPanel({
             [key]: (data[key] || []).filter((item) => item !== value),
         })
     }, [data, onChange])
+
+    React.useEffect(() => {
+        if (!focusKey) return
+        const node = sectionRefs.current[focusKey]
+        if (!node) return
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [focusKey, loading])
 
     return (
         <div className="tab text-content w-full">
@@ -107,7 +109,15 @@ export default React.memo(function ProductReferenceDataPanel({
                 ) : (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                         {PRODUCT_REFERENCE_SECTIONS.map((section) => (
-                            <div key={section.key} className="rounded-xl border border-line bg-surface p-5">
+                            <div
+                                key={section.key}
+                                ref={(node) => { sectionRefs.current[section.key] = node }}
+                                className={`rounded-xl border p-5 transition-all ${
+                                    focusKey === section.key
+                                        ? 'border-black bg-blue-50/40 ring-1 ring-black/10'
+                                        : 'border-line bg-surface'
+                                }`}
+                            >
                                 <div className="mb-4">
                                     <div className="text-sm font-semibold">{section.title}</div>
                                     <p className="text-secondary text-xs mt-1">{section.description}</p>

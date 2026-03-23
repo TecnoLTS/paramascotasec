@@ -40,7 +40,7 @@ export const getAdminProductEntityId = (product: {
 }
 
 export const getEmptyAttributes = (type: string): Record<string, string> => {
-    if (type === 'comida') {
+    if (type === 'Alimento') {
         return {
             catalogCategories: '',
             size: '',
@@ -132,7 +132,7 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
         }
     })
 
-    if (nextType === 'comida' || nextType === 'cuidado') {
+    if (nextType === 'Alimento' || nextType === 'cuidado') {
         ;['expirationDate', 'expirationAlertDays'].forEach((key) => {
             const value = String(current[key] || '').trim()
             if (value) {

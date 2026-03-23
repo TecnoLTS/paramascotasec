@@ -1,6 +1,7 @@
 'use client'
 import React, { useState } from 'react'
 import Link from 'next/link'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
@@ -152,9 +153,16 @@ const Checkout = () => {
                         <div className="lg:sticky lg:top-24 h-fit lg:max-w-[606px] w-full flex-shrink-0 lg:pl-[80px] pr-[16px] max-lg:pl-[16px]">
                             <div className="list_prd flex flex-col gap-7">
                                 <div className="item flex items-center justify-between gap-6">
-                                    <div className="flex items-center gap-6">
-                                        <div className="bg_img relative flex-shrink-0 w-[100px] h-[100px]">
-                                            <img src="/images/product/1000x1000.png" alt="product/1000x1000" className="w-full h-full object-cover rounded-lg" />
+                                        <div className="flex items-center gap-6">
+                                            <div className="bg_img relative flex-shrink-0 w-[100px] h-[100px]">
+                                            <Image
+                                                src="/images/product/1000x1000.png"
+                                                alt="product/1000x1000"
+                                                width={100}
+                                                height={100}
+                                                sizes="100px"
+                                                className="w-full h-full object-cover rounded-lg"
+                                            />
                                             <span className="quantity flex items-center justify-center absolute -top-3 -right-3 w-7 h-7 rounded-full bg-black text-white">1</span>
                                         </div>
                                         <div>
@@ -171,9 +179,16 @@ const Checkout = () => {
                                     </div>
                                 </div>
                                 <div className="item flex items-center justify-between gap-6">
-                                    <div className="flex items-center gap-6">
-                                        <div className="bg_img relative flex-shrink-0 w-[100px] h-[100px]">
-                                            <img src="/images/product/1000x1000.png" alt="product/1000x1000" className="w-full h-full object-cover rounded-lg" />
+                                        <div className="flex items-center gap-6">
+                                            <div className="bg_img relative flex-shrink-0 w-[100px] h-[100px]">
+                                            <Image
+                                                src="/images/product/1000x1000.png"
+                                                alt="product/1000x1000"
+                                                width={100}
+                                                height={100}
+                                                sizes="100px"
+                                                className="w-full h-full object-cover rounded-lg"
+                                            />
                                             <span className="quantity flex items-center justify-center absolute -top-3 -right-3 w-7 h-7 rounded-full bg-black text-white">1</span>
                                         </div>
                                         <div>

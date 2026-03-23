@@ -5,7 +5,7 @@ export const CATALOG_PRIMARY_FILTER_IDS = [
   'todas',
   'ofertas',
   'ropa',
-  'comida',
+  'alimento',
   'salud',
   'accesorios',
 ] as const
@@ -154,7 +154,7 @@ export const getCatalogSecondaryConfig = (
   primaryFilterId: CatalogPrimaryFilterId,
   products: ProductType[]
 ): CatalogSecondaryConfig | null => {
-  if (primaryFilterId === 'comida') {
+  if (primaryFilterId === 'alimento') {
     const options = getBrandOptions(products)
     return options.length > 0
       ? { id: 'brands', label: 'Marcas', previewCount: 10, options }
@@ -202,7 +202,7 @@ export const matchesCatalogSecondaryFilter = (
     return true
   }
 
-  if (primaryFilterId === 'comida') {
+  if (primaryFilterId === 'alimento') {
     return String(product.brand || '').trim() === secondaryFilterId
   }
 

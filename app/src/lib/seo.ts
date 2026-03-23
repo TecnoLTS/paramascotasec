@@ -1,5 +1,6 @@
 import { ProductType } from '@/type/ProductType'
 import { getProductReviewCount } from '@/lib/catalog'
+import { versionLocalImagePath } from '@/lib/staticAsset'
 
 export function generateProductJsonLd(
     product: ProductType,
@@ -45,7 +46,7 @@ export function generateOrganizationJsonLd(options?: { baseUrl?: string; name?: 
         '@type': 'Organization',
         name,
         url: siteUrl,
-        logo: options?.logo ?? `${siteUrl}/images/logo.png`, // Verify path
+        logo: options?.logo ?? `${siteUrl}${versionLocalImagePath('/images/brand/LogoVerde150.svg')}`,
         sameAs: options?.sameAs ?? [
             'https://www.facebook.com/paramascotasec',
             'https://www.instagram.com/paramascotasec',

@@ -1,14 +1,14 @@
 'use client'
 import React, { useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import dynamic from 'next/dynamic'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { motion } from 'framer-motion'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
 import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateStoreStatus } from '@/lib/api/settings'
 import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
@@ -30,11 +30,76 @@ import {
     RETRYABLE_PANEL_ERROR_PATTERN,
     withTransientRetry,
 } from './utils'
+import {
+    formatAddress,
+    formatAddressLines,
+    getAdminUserResolvedAddress,
+    getDefaultBillingAddress,
+    getItemNetPrice,
+    getOrderContact,
+    getOrderItemsGrossSubtotal,
+    getOrderItemsNetSubtotal,
+    getOrderShipping,
+    getOrderVatAmount,
+    getOrderVatSubtotal,
+    normalizeAddressCandidate,
+    parseAddress,
+    parseJsonValue,
+} from './customerDataUtils'
+import {
+    formatDateEcuador,
+    formatDateTimeEcuador,
+    formatMoney,
+    getLocalSalePaymentMethodLabel,
+} from './formatting'
 import LocalSaleCatalogPanel from './components/LocalSaleCatalogPanel'
 import ProductsManagementPanel from './components/ProductsManagementPanel'
+import { useAdminSidebarNavigation } from './hooks/useAdminSidebarNavigation'
+import { useAuthBootstrap } from './hooks/useAuthBootstrap'
+import { useAdminDataLoader } from './hooks/useAdminDataLoader'
+import { useCustomerAccountData } from './hooks/useCustomerAccountData'
+import { useLocalSaleQuote } from './hooks/useLocalSaleQuote'
+import { usePosShift } from './hooks/usePosShift'
+import {
+    ADMIN_TABS_WITH_ORDERS,
+    ADMIN_TABS_WITH_PRICING_SETTINGS,
+    ADMIN_TABS_WITH_PRODUCTS,
+    ADMIN_TABS_WITH_REFERENCE_DATA,
+    ADMIN_TABS_WITH_SHIPPING_SETTINGS,
+    ADMIN_TABS_WITH_STATS,
+    ADMIN_TABS_WITH_USERS,
+    ADMIN_TABS_WITH_VAT_SETTINGS,
+} from './adminDataScopes'
+import { REPORT_SECTION_META } from './reportSections'
+import {
+    buildInventoryManagementRows,
+    buildLocalSaleCatalog,
+    buildProductPublicationSummary,
+    INVENTORY_LOW_STOCK_THRESHOLD,
+    type LocalSaleCatalogItem,
+} from './adminProductDerivations'
+import {
+    buildInventoryProductBreakdown,
+    buildProductBreakdownMeta,
+    buildSalesProductBreakdown,
+    buildSalesRankingRows,
+    buildSalesTrendPreview,
+    filterStrategicAlerts,
+    summarizeInventoryRows,
+    summarizePurchaseInvoices,
+    summarizeStrategicAlerts,
+} from './reportingUtils'
+import {
+    alertSeverityLabels,
+    enrichAdminUsers,
+    formatIsoDate,
+    getProductExpirationMeta,
+    getStatusBadge,
+    getUserRoleBadge,
+    normalizeStatus,
+} from './statusDisplay'
 import type {
     AddressData,
-    AdminMenuGroupKey,
     AdminReportSection,
     AdminUserSummary,
     DashboardStats,
@@ -95,6 +160,7 @@ const InventoryManagementPanel = dynamic(() => import('./components/InventoryMan
 
 const MyAccount = () => {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [activeTab, setActiveTab] = useState<string | undefined>('dashboard')
     const [activeAddress, setActiveAddress] = useState<string | null>('billing')
     const [activeOrders, setActiveOrders] = useState<string | undefined>('all')
@@ -168,13 +234,6 @@ const MyAccount = () => {
     const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'available' | 'low' | 'out' | 'expiring' | 'expired'>('all')
     const [inventoryTypeFilter, setInventoryTypeFilter] = useState<'all' | 'perishable' | 'nonperishable'>('all')
     const [alertsSeverityFilter, setAlertsSeverityFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all')
-    const [adminMenuExpanded, setAdminMenuExpanded] = useState<Record<AdminMenuGroupKey, boolean>>({
-        monitoring: false,
-        reporting: true,
-        catalog: false,
-        operations: false,
-        finance: false
-    })
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
     const [shippingPickups, setShippingPickups] = useState<ShippingPickup[]>([])
     const [recentPurchaseInvoices, setRecentPurchaseInvoices] = useState<PurchaseInvoiceSummary[]>([])
@@ -233,19 +292,6 @@ const MyAccount = () => {
     const [localSaleLastSubmission, setLocalSaleLastSubmission] = useState<LocalSaleSubmissionResult | null>(null)
     const [localSaleCustomerLookupLoading, setLocalSaleCustomerLookupLoading] = useState(false)
     const [localSaleCustomerLookupMessage, setLocalSaleCustomerLookupMessage] = useState<string | null>(null)
-    const [posActiveShift, setPosActiveShift] = useState<PosShift | null>(null)
-    const [posShiftHistory, setPosShiftHistory] = useState<PosShift[]>([])
-    const [posMovements, setPosMovements] = useState<PosMovement[]>([])
-    const [posLoading, setPosLoading] = useState(false)
-    const [posActionLoading, setPosActionLoading] = useState(false)
-    const [posOpeningCash, setPosOpeningCash] = useState('')
-    const [posOpenNotes, setPosOpenNotes] = useState('')
-    const [posClosingCash, setPosClosingCash] = useState('')
-    const [posCloseNotes, setPosCloseNotes] = useState('')
-    const [posMovementType, setPosMovementType] = useState<PosMovement['type']>('expense')
-    const [posMovementAmount, setPosMovementAmount] = useState('')
-    const [posMovementDescription, setPosMovementDescription] = useState('')
-
     // Modal & Form State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<any | null>(null)
@@ -263,6 +309,24 @@ const MyAccount = () => {
     const deferredAdminUsersSearch = React.useDeferredValue(adminUsersSearch)
     const deferredInventorySearch = React.useDeferredValue(inventorySearch)
     const deferredLocalSaleSearch = React.useDeferredValue(localSaleSearch)
+
+    const {
+        adminMenuExpanded,
+        focusedReferenceCatalogKey,
+        navigateToPanelTab,
+        openReferenceCatalog,
+        navigateToReferenceCatalog,
+        toggleAdminMenuGroup,
+        openAdminReportSection,
+    } = useAdminSidebarNavigation({
+        userRole: user?.role,
+        activeTab,
+        searchParams,
+        startPanelNavigationTransition,
+        setActiveTab,
+        setSelectedDeepDive,
+        setAdminReportSection,
+    })
 
     // Handlers
     const handleNewProduct = React.useCallback(() => {
@@ -380,236 +444,6 @@ const MyAccount = () => {
         }
     }
 
-    const parseAddress = (value: any): AddressData | string | null => {
-        if (!value) return null
-        if (typeof value === 'string') {
-            try {
-                const parsed = JSON.parse(value)
-                if (parsed && typeof parsed === 'object') {
-                    return parsed as AddressData
-                }
-                return value
-            } catch {
-                return value
-            }
-        }
-        if (value && typeof value === 'object') {
-            return value as AddressData
-        }
-        return null
-    }
-
-    const parseJsonValue = (value: any) => {
-        if (value === null || value === undefined) return null
-        if (typeof value === 'string') {
-            const trimmed = value.trim()
-            if (!trimmed) return null
-            try {
-                return JSON.parse(trimmed)
-            } catch {
-                return value
-            }
-        }
-        return value
-    }
-
-    const normalizeAddressCandidate = (value: any): AddressData | null => {
-        const parsed = parseAddress(value)
-        if (!parsed) return null
-        if (typeof parsed === 'string') {
-            const line = parsed.trim()
-            return line ? { street: line } : null
-        }
-        const source = parsed as Record<string, any>
-        const firstName = String(source.firstName ?? source.first_name ?? '').trim()
-        const lastName = String(source.lastName ?? source.last_name ?? '').trim()
-        const company = String(source.company ?? source.businessName ?? source.business_name ?? '').trim()
-        const street = String(source.street ?? source.address ?? source.line1 ?? source.address1 ?? '').trim()
-        const city = String(source.city ?? '').trim()
-        const state = String(source.state ?? source.province ?? '').trim()
-        const zip = String(source.zip ?? source.postalCode ?? source.postal_code ?? '').trim()
-        const country = String(source.country ?? '').trim()
-        const phone = String(source.phone ?? source.mobile ?? '').trim()
-        const email = String(source.email ?? '').trim()
-        const hasData = [firstName, lastName, company, street, city, state, zip, country, phone, email].some(Boolean)
-        if (!hasData) return null
-        return {
-            firstName,
-            lastName,
-            company,
-            street,
-            city,
-            state,
-            zip,
-            country,
-            phone,
-            email
-        }
-    }
-
-    const getAdminUserResolvedAddress = (adminUser: AdminUserSummary, profile: Record<string, any>): AddressData | null => {
-        const rawAddresses = parseJsonValue(adminUser.addresses)
-        if (Array.isArray(rawAddresses)) {
-            for (const entry of rawAddresses) {
-                const candidate = normalizeAddressCandidate((entry as any)?.billing)
-                    || normalizeAddressCandidate((entry as any)?.shipping)
-                    || normalizeAddressCandidate(entry)
-                if (candidate) return candidate
-            }
-        }
-
-        const profileAddress = normalizeAddressCandidate(
-            profile.address
-            || profile.billingAddress
-            || profile.shippingAddress
-            || null
-        )
-        if (profileAddress) return profileAddress
-
-        const profileInlineAddress = normalizeAddressCandidate(profile)
-        if (profileInlineAddress) return profileInlineAddress
-
-        const lastBilling = normalizeAddressCandidate(adminUser.last_billing_address)
-        if (lastBilling) return lastBilling
-        const lastShipping = normalizeAddressCandidate(adminUser.last_shipping_address)
-        if (lastShipping) return lastShipping
-        return null
-    }
-
-    const formatAddress = (value: any) => {
-        const addr = parseAddress(value)
-        if (!addr || typeof addr === 'string') return addr || '-'
-        const parts = [addr.street, addr.city, addr.state, addr.country, addr.zip].filter(Boolean)
-        return parts.length > 0 ? parts.join(', ') : '-'
-    }
-
-    const formatAddressLines = (value: any) => {
-        const addr = parseAddress(value)
-        if (!addr) return []
-        if (typeof addr === 'string') return [addr]
-        const nameLine = [addr.firstName, addr.lastName].filter(Boolean).join(' ')
-        const cityLine = [addr.city, addr.state, addr.zip].filter(Boolean).join(', ')
-        const lines = [
-            nameLine || null,
-            addr.company || null,
-            addr.street || null,
-            cityLine || null,
-            addr.country || null,
-            addr.phone || null,
-            addr.email || null
-        ].filter(Boolean) as string[]
-        return lines
-    }
-
-    const getDefaultBillingAddress = (): AddressData | null => {
-        if (!savedAddresses || savedAddresses.length === 0) return null
-        const primary = savedAddresses[0]
-        return primary?.billing || null
-    }
-
-    const formatMoney = React.useCallback((value: any) => {
-        const num = Number(value ?? 0)
-        return `$${num.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    }, [])
-
-    const formatDateEcuador = (
-        value: string | number | Date,
-        options: Intl.DateTimeFormatOptions = {}
-    ) => {
-        const date = new Date(value)
-        if (Number.isNaN(date.getTime())) return '-'
-        return date.toLocaleDateString('es-EC', { timeZone: 'America/Guayaquil', ...options })
-    }
-
-    const formatDateTimeEcuador = (
-        value: string | number | Date,
-        options: Intl.DateTimeFormatOptions = {}
-    ) => {
-        const date = new Date(value)
-        if (Number.isNaN(date.getTime())) return '-'
-        return date.toLocaleString('es-EC', { timeZone: 'America/Guayaquil', ...options })
-    }
-
-    const getLocalSalePaymentMethodLabel = React.useCallback((method?: string) => {
-        switch ((method || '').toLowerCase()) {
-            case 'cash':
-                return 'Efectivo'
-            case 'card':
-                return 'Tarjeta'
-            case 'transfer':
-                return 'Transferencia'
-            case 'mixed':
-                return 'Mixto'
-            default:
-                return 'Otro'
-        }
-    }, [])
-
-    const getOrderItemsGrossSubtotal = (order: any) => {
-        if (!order) return 0
-        if (Array.isArray(order.items)) {
-            return order.items.reduce((acc: number, item: any) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1), 0)
-        }
-        return Number(order.total ?? 0)
-    }
-
-    const getOrderItemsNetSubtotal = (order: any) => {
-        const grossSubtotal = getOrderItemsGrossSubtotal(order)
-        const rate = Number(order?.vat_rate ?? 0)
-        const multiplier = 1 + rate / 100
-        return multiplier > 0 ? (grossSubtotal / multiplier) : grossSubtotal
-    }
-
-    const getOrderShipping = (order: any) => {
-        if (!order) return 0
-        const stored = Number(order.shipping ?? 0)
-        if (stored > 0) return stored
-        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
-        const total = Number(order.total ?? itemsSubtotal)
-        const shipping = total - itemsSubtotal
-        return shipping > 0 ? shipping : 0
-    }
-
-    const getOrderVatSubtotal = (order: any) => {
-        if (!order) return 0
-        const subtotal = Number(order.vat_subtotal ?? 0)
-        if (subtotal > 0) return subtotal
-        const rate = Number(order.vat_rate ?? 0)
-        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
-        const multiplier = 1 + rate / 100
-        return multiplier > 0 ? (itemsSubtotal / multiplier) : itemsSubtotal
-    }
-
-    const getOrderVatAmount = (order: any) => {
-        if (!order) return 0
-        const amount = Number(order.vat_amount ?? 0)
-        if (amount > 0) return amount
-        const itemsSubtotal = getOrderItemsGrossSubtotal(order)
-        const net = getOrderVatSubtotal(order)
-        return itemsSubtotal - net
-    }
-
-    const getItemNetPrice = (item: any, order: any) => {
-        const rate = Number(order?.vat_rate ?? 0)
-        const price = Number(item?.price ?? 0)
-        const multiplier = 1 + rate / 100
-        return multiplier > 0 ? (price / multiplier) : price
-    }
-
-    const getOrderContact = (order: any) => {
-        if (!order) return { name: '-', email: '-', phone: '-' }
-        const shippingRaw = parseAddress(order.shipping_address)
-        const billingRaw = parseAddress(order.billing_address)
-        const shipping: AddressData = typeof shippingRaw === 'string' || !shippingRaw ? {} : shippingRaw
-        const billing: AddressData = typeof billingRaw === 'string' || !billingRaw ? {} : billingRaw
-        const nameFromAddress = [shipping.firstName || billing.firstName, shipping.lastName || billing.lastName].filter(Boolean).join(' ')
-        const defaultBilling: AddressData = getDefaultBillingAddress() || {}
-        return {
-            name: order.customer_name || nameFromAddress || user?.name || '-',
-            email: order.customer_email || shipping.email || billing.email || defaultBilling.email || user?.email || '-',
-            phone: order.customer_phone || shipping.phone || billing.phone || defaultBilling.phone || '-'
-        }
-    }
     const printOrderInvoiceById = async (orderId: string) => {
         let printWindow: Window | null = null
 
@@ -1093,6 +927,22 @@ const MyAccount = () => {
         }
     }
 
+    const loadProductPageSettings = async () => {
+        try {
+            const settings = await getProductPageSettings()
+            setProductPageSettings(settings)
+        } catch (err) {
+            console.error(err)
+            setProductPageSettings({
+                deliveryEstimate: '14 de enero - 18 de enero',
+                viewerCount: 38,
+                freeShippingThreshold: 75,
+                supportHours: '8:30 AM a 10:00 PM',
+                returnDays: 100
+            })
+        }
+    }
+
     const handleSaveStoreStatus = async (nextSalesEnabled?: boolean) => {
         if (!user || user.role !== 'admin') return
         const payload = normalizeStoreStatus({
@@ -1174,7 +1024,6 @@ const MyAccount = () => {
         }
     }
 
-    const normalizeStatus = (status?: string) => (status || '').toLowerCase()
     const parseMoney = React.useCallback((value: any) => {
         if (typeof value === 'string') {
             const normalized = value.replace(/\./g, '').replace(',', '.')
@@ -1188,6 +1037,37 @@ const MyAccount = () => {
         const parsed = Number(value)
         return Number.isFinite(parsed) ? parsed : 0
     }, [])
+
+    const {
+        posActiveShift,
+        posShiftHistory,
+        posMovements,
+        posLoading,
+        setPosLoading,
+        posActionLoading,
+        posOpeningCash,
+        setPosOpeningCash,
+        posOpenNotes,
+        setPosOpenNotes,
+        posClosingCash,
+        setPosClosingCash,
+        posCloseNotes,
+        setPosCloseNotes,
+        posMovementType,
+        setPosMovementType,
+        posMovementAmount,
+        setPosMovementAmount,
+        posMovementDescription,
+        setPosMovementDescription,
+        syncPosState,
+        loadPosSnapshot,
+        handleOpenPosShift,
+        handleClosePosShift,
+        handleAddPosMovement,
+    } = usePosShift({
+        showNotification,
+        parseDecimalInput,
+    })
 
     const toNumber = (value: any, fallback = 0, min = 0, max?: number) => {
         const parsed = Number(value)
@@ -1232,212 +1112,12 @@ const MyAccount = () => {
         clearanceDiscount: toNumber(input.clearanceDiscount, 15, 0, 90)
     })
 
-    const getStatusBadge = (status?: string) => {
-        const normalized = normalizeStatus(status)
-        if (['processing', 'in_process', 'in-process'].includes(normalized)) {
-            return { label: 'En proceso', className: 'bg-blue-100 text-blue-600' }
-        }
-        if (['completed', 'delivered'].includes(normalized)) {
-            return { label: 'Completado', className: 'bg-success/10 text-success' }
-        }
-        if (['canceled', 'cancelled'].includes(normalized)) {
-            return { label: 'Cancelado', className: 'bg-red/10 text-red' }
-        }
-        if (['shipped', 'shipping', 'delivery', 'delivering'].includes(normalized)) {
-            return { label: 'Enviado', className: 'bg-purple/10 text-purple' }
-        }
-        if (['pickup', 'ready_for_pickup', 'ready'].includes(normalized)) {
-            return { label: 'Esperando Recojo', className: 'bg-amber-400/15 text-amber-600' }
-        }
-        return { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }
-    }
-
-    const getUserRoleBadge = (role?: string | null) => {
-        const normalized = String(role || 'customer').toLowerCase()
-        if (normalized === 'admin') {
-            return { label: 'Admin', className: 'bg-blue-100 text-blue-700' }
-        }
-        if (normalized === 'service') {
-            return { label: 'Servicio', className: 'bg-violet-100 text-violet-700' }
-        }
-        if (normalized === 'client') {
-            return { label: 'Cliente', className: 'bg-emerald-100 text-emerald-700' }
-        }
-        return { label: 'Cliente', className: 'bg-surface text-secondary' }
-    }
-
-    const formatIsoDate = React.useCallback((value?: string | null) => {
-        const raw = String(value || '').trim()
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return '-'
-        const [year, month, day] = raw.split('-')
-        return `${day}/${month}/${year}`
-    }, [])
-
-    const getProductExpirationMeta = (product: any) => {
-        const productType = String(product?.productType || '').toLowerCase()
-        const isFood = productType === 'comida'
-        if (!isFood) {
-            return {
-                isFood: false,
-                expirationDate: '',
-                daysToExpire: null,
-                expirationStatus: 'none',
-                badge: { label: 'No perecedero', className: 'bg-surface text-secondary' },
-                isExpired: false
-            }
-        }
-        const expirationDate = String(
-            product?.expirationDate
-            || product?.attributes?.expirationDate
-            || product?.attributes?.expiryDate
-            || ''
-        ).trim()
-        const statusRaw = String(product?.expirationStatus || '').toLowerCase()
-        const status = ['none', 'ok', 'expiring', 'expired'].includes(statusRaw) ? statusRaw : 'none'
-        const days = Number(product?.daysToExpire)
-        const alertDays = Number(
-            product?.expirationAlertDays
-            ?? product?.attributes?.expirationAlertDays
-            ?? product?.attributes?.expiryAlertDays
-            ?? 30
-        )
-        const normalizedDays = Number.isFinite(days) ? days : null
-        const normalizedAlertDays = Number.isFinite(alertDays) && alertDays >= 0 ? alertDays : 30
-        let effectiveStatus = status
-        if (effectiveStatus === 'none' && expirationDate) {
-            if (normalizedDays !== null) {
-                if (normalizedDays < 0) effectiveStatus = 'expired'
-                else if (normalizedDays <= normalizedAlertDays) effectiveStatus = 'expiring'
-                else effectiveStatus = 'ok'
-            } else {
-                effectiveStatus = 'ok'
-            }
-        }
-
-        const isExpired = effectiveStatus === 'expired'
-        const isExpiring = effectiveStatus === 'expiring'
-        const badge = isExpired
-            ? {
-                label: normalizedDays !== null
-                    ? `Vencido hace ${Math.abs(normalizedDays)} día(s)`
-                    : 'Vencido',
-                className: 'bg-red-100 text-red-700'
-            }
-            : isExpiring
-                ? {
-                    label: normalizedDays !== null
-                        ? `Por vencer (${Math.max(0, normalizedDays)} día(s))`
-                        : 'Por vencer',
-                    className: 'bg-amber-100 text-amber-700'
-                }
-                : effectiveStatus === 'ok'
-                    ? { label: 'Vigente', className: 'bg-emerald-100 text-emerald-700' }
-                    : { label: 'Sin fecha', className: 'bg-surface text-secondary' }
-
-        return {
-            isFood,
-            expirationDate,
-            daysToExpire: normalizedDays,
-            expirationStatus: effectiveStatus,
-            badge,
-            isExpired
-        }
-    }
-
-    const adminTabGroups: Record<AdminMenuGroupKey, string[]> = {
-        monitoring: ['alerts'],
-        reporting: ['reports', 'sales-ranking'],
-        catalog: ['products', 'inventory', 'catalogs', 'users', 'product-page'],
-        operations: ['store-status', 'local-sales', 'admin-orders', 'shipments', 'balances'],
-        finance: ['prices', 'taxes', 'margins', 'calculations', 'pricing-rules']
-    }
-
-    const getAdminGroupForTab = (tab?: string): AdminMenuGroupKey | null => {
-        if (!tab) return null
-        const entries = Object.entries(adminTabGroups) as Array<[AdminMenuGroupKey, string[]]>
-        for (const [groupKey, tabs] of entries) {
-            if (tabs.includes(tab)) return groupKey
-        }
-        return null
-    }
-
-    const navigateToPanelTab = React.useCallback((
-        nextTab: string,
-        options?: {
-            adminReportSection?: AdminReportSection;
-            clearDeepDive?: boolean;
-        }
-    ) => {
-        startPanelNavigationTransition(() => {
-            if (typeof options?.adminReportSection !== 'undefined') {
-                setAdminReportSection(options.adminReportSection)
-            }
-            if (options?.clearDeepDive !== false) {
-                setSelectedDeepDive(null)
-            }
-            setActiveTab((prev) => (prev === nextTab ? prev : nextTab))
-        })
-    }, [])
-
-    const toggleAdminMenuGroup = React.useCallback((groupKey: AdminMenuGroupKey) => {
-        setAdminMenuExpanded((prev) => {
-            const nextState = !prev[groupKey]
-            return {
-                monitoring: false,
-                reporting: false,
-                catalog: false,
-                operations: false,
-                finance: false,
-                [groupKey]: nextState
-            }
-        })
-    }, [])
-
-    const openAdminReportSection = React.useCallback((section: AdminReportSection) => {
-        navigateToPanelTab('reports', { adminReportSection: section })
-    }, [navigateToPanelTab])
-
-    React.useEffect(() => {
-        if (user?.role !== 'admin') return
-        const groupKey = getAdminGroupForTab(activeTab)
-        if (!groupKey) return
-        setAdminMenuExpanded((prev) => {
-            const nextState = {
-                monitoring: groupKey === 'monitoring',
-                reporting: groupKey === 'reporting',
-                catalog: groupKey === 'catalog',
-                operations: groupKey === 'operations',
-                finance: groupKey === 'finance',
-            }
-            const hasChanged =
-                prev.monitoring !== nextState.monitoring ||
-                prev.reporting !== nextState.reporting ||
-                prev.catalog !== nextState.catalog ||
-                prev.operations !== nextState.operations ||
-                prev.finance !== nextState.finance
-
-            return hasChanged ? nextState : prev
-        })
-    }, [activeTab, user?.role])
-
     const strategicAlerts = dashboardStats?.strategicAlerts ?? []
     const strategicAlertSummary = React.useMemo(() => {
-        return strategicAlerts.reduce((acc, alert) => {
-            if (alert.type === 'critical') acc.critical += 1
-            if (alert.type === 'warning') acc.warning += 1
-            if (alert.type === 'info') acc.info += 1
-            return acc
-        }, { critical: 0, warning: 0, info: 0 })
+        return summarizeStrategicAlerts(strategicAlerts)
     }, [strategicAlerts])
-    const alertSeverityLabels: Record<'all' | 'critical' | 'warning' | 'info', string> = {
-        all: 'todas',
-        critical: 'críticas',
-        warning: 'advertencias',
-        info: 'informativas'
-    }
     const filteredStrategicAlerts = React.useMemo(() => {
-        if (alertsSeverityFilter === 'all') return strategicAlerts
-        return strategicAlerts.filter((alert) => alert.type === alertsSeverityFilter)
+        return filterStrategicAlerts(strategicAlerts, alertsSeverityFilter)
     }, [alertsSeverityFilter, strategicAlerts])
 
     const handleStrategicAlertAction = (alert: { type: 'critical' | 'warning' | 'info'; message: string; action: string }) => {
@@ -1487,214 +1167,6 @@ const MyAccount = () => {
         })
     }
 
-    const syncPosState = (payload: any) => {
-        const shift = payload?.shift ? payload.shift as PosShift : null
-        const movements = Array.isArray(payload?.movements) ? payload.movements as PosMovement[] : []
-        const history = Array.isArray(payload?.history) ? payload.history as PosShift[] : []
-        setPosActiveShift(shift)
-        setPosMovements(movements)
-        setPosShiftHistory(history)
-        if (shift?.status === 'open') {
-            setPosClosingCash(String(Number(shift.summary?.expected_cash ?? 0).toFixed(2)))
-        } else {
-            setPosClosingCash('')
-        }
-    }
-
-    const loadPosSnapshot = async (token?: string) => {
-        const authToken = token || localStorage.getItem('authToken')
-        if (!authToken) return
-        const res = await requestApi<any>('/api/admin/pos/shift/active', {
-            headers: { Authorization: `Bearer ${authToken}` }
-        })
-        syncPosState(res.body)
-    }
-
-    // Fetch Admin Data
-    React.useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin' || !activeTab) {
-            setAdminDataLoading(false)
-            setAdminDataError(null)
-            return
-        }
-
-        let cancelled = false
-
-        const headers = { Authorization: `Bearer ${token}` }
-
-        const handleError = (err: any) => {
-            console.error(err)
-            const message = String(err?.message || '')
-            if (message.includes('Error 401') || message.includes('Unauthenticated')) {
-                handleLogout()
-                return
-            }
-            if (!cancelled) {
-                if (RETRYABLE_PANEL_ERROR_PATTERN.test(message)) {
-                    setAdminDataError('Hubo inestabilidad temporal del servidor. Reintenta en unos segundos.')
-                } else {
-                    setAdminDataError('No se pudieron actualizar algunos datos del panel.')
-                }
-            }
-        }
-
-        const tabsWithStats = new Set([
-            'alerts',
-            'reports',
-            'sales-ranking',
-            'inventory',
-            'prices',
-            'taxes',
-            'margins',
-            'calculations',
-            'pricing-rules',
-            'product-page',
-            'balances'
-        ])
-        const tabsWithVatSettings = new Set([
-            'reports',
-            'prices',
-            'taxes',
-            'margins',
-            'calculations',
-            'pricing-rules',
-            'balances',
-            'products',
-            'local-sales'
-        ])
-        const tabsWithShippingSettings = new Set([
-            'reports',
-            'prices',
-            'taxes',
-            'calculations',
-            'shipments',
-            'balances'
-        ])
-        const tabsWithProducts = new Set(['products', 'inventory', 'prices', 'local-sales'])
-        const tabsWithReferenceData = new Set(['products', 'inventory', 'catalogs'])
-        const tabsWithUsers = new Set(['users'])
-        const tabsWithOrders = new Set(['admin-orders', 'shipments', 'balances', 'local-sales'])
-        const tabsWithPricingSettings = new Set(['prices', 'margins', 'calculations', 'pricing-rules'])
-
-        const loadAdminData = async () => {
-            if (!cancelled) {
-                setAdminDataLoading(true)
-                setAdminDataError(null)
-            }
-
-            const tasks: Array<Promise<any>> = []
-
-            if (tabsWithStats.has(activeTab)) {
-                const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
-                    ? `?month=${encodeURIComponent(salesRankingMonth)}`
-                    : ''
-                tasks.push(
-                    withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })).then((res) => {
-                        if (!cancelled) setDashboardStats(res.body)
-                    })
-                )
-            }
-
-            if (tabsWithVatSettings.has(activeTab)) {
-                tasks.push(loadVatRate({ silent: true }))
-            }
-
-            if (tabsWithShippingSettings.has(activeTab)) {
-                tasks.push(loadShippingRates({ silent: true }))
-            }
-
-            if (tabsWithProducts.has(activeTab)) {
-                tasks.push(
-                    withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers })).then((res) => {
-                        if (!cancelled) setAdminProductsList(normalizeAdminProducts(res.body))
-                    })
-                )
-            }
-
-            if (tabsWithReferenceData.has(activeTab)) {
-                tasks.push(loadProductReferenceData({ silent: true }))
-            }
-
-            if (activeTab === 'inventory') {
-                tasks.push(loadRecentPurchaseInvoices({ silent: true }))
-            }
-
-            if (tabsWithUsers.has(activeTab)) {
-                tasks.push(
-                    withTransientRetry(() => requestApi<AdminUserSummary[]>('/api/users', { headers })).then((res) => {
-                        if (!cancelled) {
-                            setAdminUsersList(Array.isArray(res.body) ? res.body : [])
-                        }
-                    })
-                )
-            }
-
-            if (tabsWithOrders.has(activeTab)) {
-                tasks.push(
-                    withTransientRetry(() => requestApi<Order[]>('/api/orders', { headers })).then((res) => {
-                        if (!cancelled) setAdminOrdersList(res.body)
-                    })
-                )
-            }
-
-            if (tabsWithPricingSettings.has(activeTab)) {
-                tasks.push(loadPricingSettings())
-            }
-
-            if (activeTab === 'product-page') {
-                tasks.push(
-                    getProductPageSettings().then((settings) => {
-                        if (!cancelled) setProductPageSettings(settings)
-                    })
-                )
-            }
-
-            if (activeTab === 'store-status') {
-                tasks.push(loadStoreStatus())
-            }
-
-            if (activeTab === 'local-sales') {
-                if (!cancelled) setPosLoading(true)
-                tasks.push(
-                    withTransientRetry(() => requestApi<any>('/api/admin/pos/shift/active', { headers })).then((res) => {
-                        if (!cancelled) syncPosState(res.body)
-                    }).finally(() => {
-                        if (!cancelled) setPosLoading(false)
-                    })
-                )
-            }
-
-            if (activeTab === 'shipments') {
-                tasks.push(
-                    withTransientRetry(() => requestApi<{ providers?: ShippingProvider[]; pickups?: ShippingPickup[] }>('/api/shipments', { headers })).then((res) => {
-                        if (!cancelled) {
-                            setShippingProviders(Array.isArray(res.body.providers) ? res.body.providers : [])
-                            setShippingPickups(Array.isArray(res.body.pickups) ? res.body.pickups : [])
-                        }
-                    })
-                )
-            }
-
-            const results = await Promise.allSettled(tasks)
-            results.forEach((result) => {
-                if (result.status === 'rejected') {
-                    handleError(result.reason)
-                }
-            })
-
-            if (!cancelled) {
-                setAdminDataLoading(false)
-            }
-        }
-
-        loadAdminData()
-
-        return () => {
-            cancelled = true
-        }
-    }, [activeTab, salesRankingMonth, user, adminReloadNonce])
-
     React.useEffect(() => {
         if (user?.role !== 'admin') return
         if (activeTab === 'reports') return
@@ -1702,179 +1174,6 @@ const MyAccount = () => {
             setSelectedDeepDive(null)
         }
     }, [activeTab, selectedDeepDive, user?.role])
-
-    React.useEffect(() => {
-        if (activeTab !== 'local-sales') return
-        if (!user || user.role !== 'admin') return
-        if (localSaleItems.length === 0) {
-            setLocalSaleQuote(null)
-            setLocalSaleError(null)
-            setLocalSaleQuoteLoading(false)
-            return
-        }
-
-        let cancelled = false
-        setLocalSaleQuoteLoading(true)
-        setLocalSaleError(null)
-
-        const normalizedDiscountCode = localSaleDiscountCode.trim().toUpperCase() || null
-        requestApi<LocalSaleQuote>('/api/orders/quote', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                delivery_method: 'pickup',
-                discount_code: normalizedDiscountCode,
-                items: localSaleItems.map((item) => ({
-                    product_id: item.productId,
-                    quantity: item.quantity
-                }))
-            })
-        })
-            .then((res) => {
-                if (cancelled) return
-                setLocalSaleQuote(res.body)
-            })
-            .catch((error: any) => {
-                if (cancelled) return
-                console.error(error)
-                setLocalSaleQuote(null)
-                setLocalSaleError(String(error?.message || 'No se pudo calcular la venta local.'))
-            })
-            .finally(() => {
-                if (!cancelled) setLocalSaleQuoteLoading(false)
-            })
-
-        return () => {
-            cancelled = true
-        }
-    }, [activeTab, localSaleDiscountCode, localSaleItems, user])
-
-    React.useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role === 'admin') return
-
-        setUserOrdersLoading(true)
-        requestApi<Order[]>('/api/orders/my-orders', { headers: { Authorization: `Bearer ${token}` } })
-            .then(res => setUserOrders(res.body))
-            .catch((err) => {
-                console.error(err)
-                if (err?.message && (err.message.includes('Error 401') || err.message.includes('No autorizado'))) {
-                    handleLogout()
-                    return
-                }
-                showNotification('No se pudieron cargar tus pedidos.', 'error')
-                setUserOrders([])
-            })
-            .finally(() => setUserOrdersLoading(false))
-    }, [user])
-
-    React.useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        const userData = localStorage.getItem('user')
-
-        if (!token) {
-            setAuthBootstrapping(false)
-            router.replace('/login')
-            return
-        }
-
-        if (!userData) {
-            localStorage.removeItem('authToken')
-            localStorage.removeItem('user')
-            setAuthBootstrapping(false)
-            router.replace('/login')
-            return
-        }
-
-        try {
-            const parsedUser = JSON.parse(userData)
-            if (!parsedUser?.id || !parsedUser?.name || !parsedUser?.email) {
-                throw new Error('Usuario local inválido')
-            }
-            setUser(parsedUser)
-            if (parsedUser.role === 'admin') {
-                setAdminReportSection('general')
-                setActiveTab('reports')
-            } else {
-                setActiveTab('dashboard')
-            }
-        } catch {
-            localStorage.removeItem('authToken')
-            localStorage.removeItem('user')
-            router.replace('/login')
-        } finally {
-            setAuthBootstrapping(false)
-        }
-    }, [router])
-
-    React.useEffect(() => {
-        if (!user || user.role !== 'admin') return
-        loadPricingSettings()
-        loadStoreStatus()
-        getProductPageSettings()
-            .then((settings) => setProductPageSettings(settings))
-            .catch((err) => {
-                console.error(err)
-                setProductPageSettings({
-                    deliveryEstimate: '14 de enero - 18 de enero',
-                    viewerCount: 38,
-                    freeShippingThreshold: 75,
-                    supportHours: '8:30 AM a 10:00 PM',
-                    returnDays: 100
-                })
-            })
-    }, [user])
-
-    React.useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role === 'admin') return
-
-        setProfileLoading(true)
-        requestApi<{ name?: string; profile?: typeof profile }>('/api/user/profile', {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-            .then(res => {
-                const apiProfile: Partial<typeof profile> = res.body.profile || {}
-                const fallbackName = res.body.name || user.name || ''
-                const [firstName, ...rest] = fallbackName.split(' ')
-                setProfile({
-                    firstName: apiProfile.firstName || firstName || '',
-                    lastName: apiProfile.lastName || rest.join(' ') || '',
-                    phone: apiProfile.phone || '',
-                    gender: apiProfile.gender || '',
-                    birth: apiProfile.birth || '',
-                    documentType: apiProfile.documentType || '',
-                    documentNumber: apiProfile.documentNumber || '',
-                    businessName: apiProfile.businessName || ''
-                })
-            })
-            .catch(err => {
-                console.error(err)
-                showNotification('No se pudieron cargar los datos de perfil.', 'error')
-            })
-            .finally(() => setProfileLoading(false))
-    }, [user])
-
-    React.useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role === 'admin') return
-
-        setAddressLoading(true)
-        requestApi<{ addresses: typeof savedAddresses }>('/api/user/addresses', {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-            .then(res => {
-                if (Array.isArray(res.body.addresses) && res.body.addresses.length > 0) {
-                    setSavedAddresses(res.body.addresses)
-                    setCurrentAddrIndex(0)
-                }
-            })
-            .catch(err => {
-                console.error(err)
-                showNotification('No se pudieron cargar las direcciones guardadas.', 'error')
-            })
-            .finally(() => setAddressLoading(false))
-    }, [user])
 
     React.useEffect(() => {
         if (!isPurchaseInvoiceModalOpen) return
@@ -1901,6 +1200,63 @@ const MyAccount = () => {
         setActiveOrders(order)
     }
 
+    useAdminDataLoader({
+        activeTab,
+        salesRankingMonth,
+        user,
+        adminReloadNonce,
+        handleLogout,
+        setAdminDataLoading,
+        setAdminDataError,
+        setDashboardStats,
+        setAdminProductsList,
+        setAdminUsersList,
+        setAdminOrdersList,
+        setShippingProviders,
+        setShippingPickups,
+        setPosLoading,
+        loadVatRate,
+        loadShippingRates,
+        loadPricingSettings,
+        loadProductReferenceData,
+        loadRecentPurchaseInvoices,
+        loadStoreStatus,
+        loadProductPageSettings,
+        loadPosSnapshot,
+        normalizeAdminProducts,
+    })
+
+    useAuthBootstrap({
+        router,
+        setAuthBootstrapping,
+        setUser,
+        setAdminReportSection,
+        setActiveTab,
+    })
+
+    useCustomerAccountData({
+        user,
+        setUserOrders,
+        setUserOrdersLoading,
+        setProfile,
+        setProfileLoading,
+        setSavedAddresses,
+        setCurrentAddrIndex,
+        setAddressLoading,
+        showNotification,
+        handleLogout,
+    })
+
+    useLocalSaleQuote({
+        activeTab,
+        user,
+        localSaleItems,
+        localSaleDiscountCode,
+        setLocalSaleQuote,
+        setLocalSaleError,
+        setLocalSaleQuoteLoading,
+    })
+
     const currentAddress = savedAddresses[currentAddrIndex]
     const currentDateLabel = formatDateEcuador(new Date(), {
         weekday: 'long',
@@ -1921,42 +1277,7 @@ const MyAccount = () => {
     const selectedRankingMonth = productSalesRanking?.selectedMonth || salesRankingMonth
     const selectedRankingMonthLabel = formatMonthKeyLabel(selectedRankingMonth)
     const salesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
-        if (!productSalesRanking) return []
-        const source = salesRankingView === 'month'
-            ? productSalesRanking.monthlyRanking
-            : productSalesRanking.historicalRanking
-        return source.map((item) => ({
-            product_id: item.product_id,
-            product_name: item.product_name,
-            category: item.category,
-            orders_count: salesRankingView === 'month' ? Number(item.month_orders_count ?? 0) : Number(item.historical_orders_count ?? 0),
-            units_sold: salesRankingView === 'month' ? Number(item.month_units_sold ?? 0) : Number(item.historical_units_sold ?? 0),
-            gross_revenue: salesRankingView === 'month' ? Number(item.month_gross_revenue ?? 0) : Number(item.historical_gross_revenue ?? 0),
-            net_revenue: salesRankingView === 'month' ? Number(item.month_net_revenue ?? 0) : Number(item.historical_net_revenue ?? 0),
-            vat_amount: salesRankingView === 'month' ? Number(item.month_vat_amount ?? 0) : Number(item.historical_vat_amount ?? 0),
-            shipping_amount: salesRankingView === 'month' ? Number(item.month_shipping_amount ?? 0) : Number(item.historical_shipping_amount ?? 0),
-            cost: salesRankingView === 'month' ? Number(item.month_cost ?? 0) : Number(item.historical_cost ?? 0),
-            profit: salesRankingView === 'month' ? Number(item.month_profit ?? 0) : Number(item.historical_profit ?? 0),
-            margin: salesRankingView === 'month' ? Number(item.month_margin ?? 0) : Number(item.historical_margin ?? 0),
-            month_orders_count: Number(item.month_orders_count ?? 0),
-            month_units_sold: Number(item.month_units_sold ?? 0),
-            month_gross_revenue: Number(item.month_gross_revenue ?? 0),
-            month_net_revenue: Number(item.month_net_revenue ?? 0),
-            month_vat_amount: Number(item.month_vat_amount ?? 0),
-            month_shipping_amount: Number(item.month_shipping_amount ?? 0),
-            month_cost: Number(item.month_cost ?? 0),
-            month_profit: Number(item.month_profit ?? 0),
-            month_margin: Number(item.month_margin ?? 0),
-            historical_orders_count: Number(item.historical_orders_count ?? 0),
-            historical_units_sold: Number(item.historical_units_sold ?? 0),
-            historical_gross_revenue: Number(item.historical_gross_revenue ?? 0),
-            historical_net_revenue: Number(item.historical_net_revenue ?? 0),
-            historical_vat_amount: Number(item.historical_vat_amount ?? 0),
-            historical_shipping_amount: Number(item.historical_shipping_amount ?? 0),
-            historical_cost: Number(item.historical_cost ?? 0),
-            historical_profit: Number(item.historical_profit ?? 0),
-            historical_margin: Number(item.historical_margin ?? 0)
-        }))
+        return buildSalesRankingRows(productSalesRanking, salesRankingView)
     }, [productSalesRanking, salesRankingView])
     const monthlySalesRankingTotals = productSalesRanking?.monthlyTotals
     const historicalSalesRankingTotals = productSalesRanking?.historicalTotals
@@ -1964,29 +1285,7 @@ const MyAccount = () => {
     const monthlySalesFinancial = productSalesRanking?.monthlyFinancial
     const historicalSalesFinancial = productSalesRanking?.historicalFinancial
     const salesRankingFinancial = salesRankingView === 'month' ? monthlySalesFinancial : historicalSalesFinancial
-    const reportSectionMeta: Record<AdminReportSection, { title: string; subtitle: string }> = {
-        general: {
-            title: 'Reporte general',
-            subtitle: 'Resumen ejecutivo del negocio con ventas, utilidad, inventario y señales de operación.'
-        },
-        sales: {
-            title: 'Reporte de ventas',
-            subtitle: 'Comportamiento comercial, mix por categoría y ranking de productos vendidos.'
-        },
-        balance: {
-            title: 'Balance general',
-            subtitle: 'Lectura financiera de ingresos, IVA, costos, utilidad y margen operativo.'
-        },
-        inventory: {
-            title: 'Reporte de inventario',
-            subtitle: 'Capital inmovilizado, riesgos de stock y productos críticos para reposición.'
-        },
-        traceability: {
-            title: 'Reporte de trazabilidad',
-            subtitle: 'Soporte de cifras por pedido, producto y categoría para auditar resultados.'
-        }
-    }
-    const activeReportMeta = reportSectionMeta[adminReportSection]
+    const activeReportMeta = REPORT_SECTION_META[adminReportSection]
     const salesSummary = dashboardStats?.businessMetrics?.salesSummary
     const profitStats = dashboardStats?.businessMetrics?.profitStats
     const inventoryValue = dashboardStats?.businessMetrics?.inventoryValue
@@ -1999,8 +1298,10 @@ const MyAccount = () => {
     const salesCategories = dashboardStats?.salesByCategory ?? []
     const salesCategoriesTotal = salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0)
     const salesTrendRows = dashboardStats?.salesTrend30Days ?? []
-    const salesTrendPreview = salesTrendRows.slice(-8)
-    const salesTrendPreviewMax = Math.max(...salesTrendPreview.map((item) => Number(item.total ?? 0)), 1)
+    const { rows: salesTrendPreview, max: salesTrendPreviewMax } = React.useMemo(
+        () => buildSalesTrendPreview(salesTrendRows),
+        [salesTrendRows]
+    )
     const highValueInventoryItems = inventoryDeepDive?.highValueItems ?? []
     const riskInventoryItems = inventoryDeepDive?.riskItems ?? []
     const expiringInventoryItems = inventoryDeepDive?.expiringItems ?? []
@@ -2018,124 +1319,13 @@ const MyAccount = () => {
         setIsSalesProductModalOpen(true)
     }
     const localSaleCatalog = React.useMemo(() => {
-        const query = deferredLocalSaleSearch.trim().toLowerCase()
-        return (adminProductsList || [])
-            .map((product: any) => {
-                const internalId = getAdminProductEntityId(product)
-                const legacyId = String(product.id || internalId).trim()
-                const stock = Math.max(0, Number(product.quantity ?? 0))
-                const sku = String(product.attributes?.sku || '').trim()
-                const expirationMeta = getProductExpirationMeta(product)
-                const image = (Array.isArray(product.thumbImage) && product.thumbImage[0])
-                    || (Array.isArray(product.images) && product.images[0])
-                    || '/images/product/1000x1000.png'
-                return {
-                    internalId,
-                    legacyId,
-                    name: String(product.name || 'Producto sin nombre'),
-                    category: String(product.category || 'Sin categoría'),
-                    sku,
-                    stock,
-                    price: parseMoney(product.price),
-                    cost: parseMoney(product.business?.cost ?? product.cost),
-                    image: String(image),
-                    isExpired: expirationMeta.isExpired,
-                    expirationDate: expirationMeta.expirationDate,
-                    expirationStatus: expirationMeta.expirationStatus,
-                    searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${legacyId}`.toLowerCase()
-                }
-            })
-            .filter((product) => {
-                if (!product.internalId) return false
-                if (!query) return true
-                return product.searchText.includes(query)
-            })
-            .sort((a, b) => {
-                if (b.stock !== a.stock) return b.stock - a.stock
-                return a.name.localeCompare(b.name, 'es')
-            })
+        return buildLocalSaleCatalog(adminProductsList || [], deferredLocalSaleSearch, parseMoney)
     }, [adminProductsList, deferredLocalSaleSearch, parseMoney])
     const localSaleItemQuantityById = React.useMemo(() => {
         return new Map(localSaleItems.map((item) => [item.internalId, item.quantity]))
     }, [localSaleItems])
-    const INVENTORY_LOW_STOCK_THRESHOLD = 5
     const inventoryManagementRows = React.useMemo(() => {
-        const statusOrder: Record<string, number> = { expired: 0, expiring: 1, out: 2, low: 3, available: 4 }
-        return (adminProductsList || [])
-            .map((product: any) => {
-                const internalId = getAdminProductEntityId(product)
-                const legacyId = String(product.id || internalId).trim()
-                const productType = String(product.productType || '').toLowerCase()
-                const isPerishable = productType === 'comida'
-                const expirationMeta = getProductExpirationMeta(product)
-                const stock = Math.max(0, Number(product.quantity ?? 0))
-                const sku = String(product.attributes?.sku || '').trim()
-                const lotCode = String(product.inventory?.lot?.code || product.attributes?.lotCode || '').trim()
-                const storageLocation = String(product.inventory?.lot?.location || product.attributes?.storageLocation || '').trim()
-                const manualSupplier = String(product.inventory?.lot?.supplier || product.attributes?.supplier || '').trim()
-                const lastPurchaseInvoice = product.lastPurchaseInvoice || product.inventory?.lastPurchaseInvoice || null
-                const lastPurchaseInvoiceId = String(lastPurchaseInvoice?.id || '').trim()
-                const lastPurchaseInvoiceNumber = String(lastPurchaseInvoice?.invoiceNumber || '').trim()
-                const lastPurchaseSupplier = String(lastPurchaseInvoice?.supplierName || '').trim()
-                const lastPurchaseIssuedAt = String(lastPurchaseInvoice?.issuedAt || '').trim()
-                const lastPurchaseReceivedAt = String(lastPurchaseInvoice?.receivedAt || '').trim()
-                const lastPurchaseQuantity = Math.max(0, Number(lastPurchaseInvoice?.quantity ?? 0))
-                const lastPurchaseUnitCost = parseMoney(lastPurchaseInvoice?.unitCost)
-                const purchaseEntriesCount = Math.max(0, Number(product.inventory?.purchaseHistory?.entriesCount ?? 0))
-                const purchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.purchasedUnits ?? 0))
-                const remainingPurchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.remainingUnits ?? 0))
-                const supplier = lastPurchaseSupplier || manualSupplier
-                const unitPrice = parseMoney(product.price)
-                const unitCost = parseMoney(product.business?.cost ?? product.cost)
-                const inventoryCost = Math.max(stock * unitCost, 0)
-                const inventoryMarket = Math.max(stock * unitPrice, 0)
-                const stockStatus: 'available' | 'low' | 'out' | 'expiring' | 'expired' = stock <= 0
-                    ? 'out'
-                    : (isPerishable && expirationMeta.isExpired)
-                        ? 'expired'
-                        : (isPerishable && expirationMeta.expirationStatus === 'expiring')
-                            ? 'expiring'
-                            : stock <= INVENTORY_LOW_STOCK_THRESHOLD
-                                ? 'low'
-                                : 'available'
-                return {
-                    internalId,
-                    legacyId,
-                    name: String(product.name || 'Producto sin nombre'),
-                    category: String(product.category || 'Sin categoría'),
-                    productType,
-                    isPerishable,
-                    sku,
-                    stock,
-                    stockStatus,
-                    unitPrice,
-                    unitCost,
-                    inventoryCost,
-                    inventoryMarket,
-                    expirationMeta,
-                    lotCode,
-                    storageLocation,
-                    supplier,
-                    lastPurchaseInvoiceId,
-                    lastPurchaseInvoiceNumber,
-                    lastPurchaseIssuedAt,
-                    lastPurchaseReceivedAt,
-                    lastPurchaseQuantity,
-                    lastPurchaseUnitCost,
-                    purchaseEntriesCount,
-                    purchasedUnits,
-                    remainingPurchasedUnits,
-                    source: product,
-                    searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${lotCode} ${storageLocation} ${supplier} ${lastPurchaseInvoiceNumber} ${legacyId}`.toLowerCase()
-                }
-            })
-            .filter((item) => item.internalId)
-            .sort((a, b) => {
-                const byStatus = (statusOrder[a.stockStatus] ?? 99) - (statusOrder[b.stockStatus] ?? 99)
-                if (byStatus !== 0) return byStatus
-                if (b.inventoryCost !== a.inventoryCost) return b.inventoryCost - a.inventoryCost
-                return a.name.localeCompare(b.name, 'es')
-            })
+        return buildInventoryManagementRows(adminProductsList || [], parseMoney)
     }, [adminProductsList, parseMoney])
     const filteredInventoryRows = React.useMemo(() => {
         const scopedRows = inventoryManagementRows.filter((row) => {
@@ -2169,33 +1359,10 @@ const MyAccount = () => {
             .map((item) => item.row)
     }, [deferredInventorySearch, inventoryManagementRows, inventoryStatusFilter, inventoryTypeFilter])
     const inventorySummary = React.useMemo(() => {
-        return inventoryManagementRows.reduce((acc, row) => {
-            acc.totalSkus += 1
-            acc.totalUnits += row.stock
-            acc.totalCost += row.inventoryCost
-            acc.totalMarket += row.inventoryMarket
-            if (row.stockStatus === 'out') acc.out += 1
-            if (row.stockStatus === 'low') acc.low += 1
-            if (row.stockStatus === 'expiring') acc.expiring += 1
-            if (row.stockStatus === 'expired') acc.expired += 1
-            return acc
-        }, { totalSkus: 0, totalUnits: 0, totalCost: 0, totalMarket: 0, out: 0, low: 0, expiring: 0, expired: 0 })
+        return summarizeInventoryRows(inventoryManagementRows)
     }, [inventoryManagementRows])
     const purchaseInvoicesSummary = React.useMemo(() => {
-        return recentPurchaseInvoices.reduce((acc, invoice) => {
-            acc.totalInvoices += 1
-            acc.totalUnits += Number(invoice.units_total ?? 0)
-            acc.totalAmount += Number(invoice.total ?? 0)
-            if (invoice.supplier_name) {
-                acc.suppliers.add(String(invoice.supplier_name).trim().toUpperCase())
-            }
-            return acc
-        }, {
-            totalInvoices: 0,
-            totalUnits: 0,
-            totalAmount: 0,
-            suppliers: new Set<string>()
-        })
+        return summarizePurchaseInvoices(recentPurchaseInvoices)
     }, [recentPurchaseInvoices])
     const hasPerishableProducts = inventoryManagementRows.some((row) => row.isPerishable)
     const deferredAdminProductsSearch = React.useDeferredValue(adminProductsSearch)
@@ -2208,30 +1375,7 @@ const MyAccount = () => {
         [deferredAdminProductsSearch]
     )
     const productPublicationSummary = React.useMemo(() => {
-        return (adminProductsList || []).reduce((acc, product: any) => {
-            acc.all += 1
-            if (product?.published === false) {
-                acc.hidden += 1
-            } else {
-                acc.published += 1
-            }
-            if (isProductEligibleForPublication(product)) {
-                acc.publishable += 1
-            } else {
-                acc.blocked += 1
-            }
-            if (Number(product?.quantity ?? 0) > 0) {
-                acc.withStock += 1
-            } else {
-                acc.noStock += 1
-            }
-            if (Number(product?.price ?? 0) > 0) {
-                acc.withPrice += 1
-            } else {
-                acc.noPrice += 1
-            }
-            return acc
-        }, { all: 0, published: 0, hidden: 0, publishable: 0, blocked: 0, withStock: 0, noStock: 0, withPrice: 0, noPrice: 0 })
+        return buildProductPublicationSummary(adminProductsList || [])
     }, [adminProductsList])
     const filteredAdminProductsList = React.useMemo(() => {
         const publicationScopedProducts = (adminProductsList || []).filter((product: any) => {
@@ -2442,17 +1586,7 @@ const MyAccount = () => {
     const posFieldFlexClass = 'flex-1 px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
     const posTextareaClass = 'w-full px-3 py-2 rounded-lg border border-[#8FA0B5] bg-white text-[#111827] placeholder:text-[#64748B] text-sm resize-none focus:border-black focus:ring-1 focus:ring-black/15 outline-none'
 
-    const handleAddLocalSaleProduct = React.useCallback((product: {
-        internalId: string;
-        name: string;
-        category: string;
-        sku: string;
-        stock: number;
-        price: number;
-        cost: number;
-        image: string;
-        isExpired?: boolean;
-    }) => {
+    const handleAddLocalSaleProduct = React.useCallback((product: LocalSaleCatalogItem) => {
         if (product.isExpired) {
             showNotification(`"${product.name}" está vencido y no se puede vender.`, 'error')
             return
@@ -2589,98 +1723,6 @@ const MyAccount = () => {
     const handleCompleteMixedWithElectronic = () => {
         const remaining = Math.max(0, localSaleTotal - localSaleCashReceivedValue)
         setLocalSaleElectronicAmount(remaining > 0 ? remaining.toFixed(2) : '0.00')
-    }
-
-    const handleOpenPosShift = async () => {
-        const openingCash = parseDecimalInput(posOpeningCash)
-        if (openingCash < 0) {
-            showNotification('El monto inicial de caja no puede ser negativo.', 'error')
-            return
-        }
-        try {
-            setPosActionLoading(true)
-            const res = await requestApi<any>('/api/admin/pos/shift/open', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    opening_cash: openingCash,
-                    notes: posOpenNotes.trim() || null
-                })
-            })
-            syncPosState(res.body)
-            setPosOpeningCash('')
-            setPosOpenNotes('')
-            showNotification('Caja abierta correctamente.')
-        } catch (error: any) {
-            console.error(error)
-            showNotification(String(error?.message || 'No se pudo abrir la caja.'), 'error')
-        } finally {
-            setPosActionLoading(false)
-        }
-    }
-
-    const handleClosePosShift = async () => {
-        if (!posActiveShift || posActiveShift.status !== 'open') {
-            showNotification('No hay una caja abierta para cerrar.', 'error')
-            return
-        }
-        const closingCash = parseDecimalInput(posClosingCash)
-        if (closingCash < 0) {
-            showNotification('El monto de cierre no puede ser negativo.', 'error')
-            return
-        }
-        try {
-            setPosActionLoading(true)
-            const res = await requestApi<any>('/api/admin/pos/shift/close', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    closing_cash: closingCash,
-                    notes: posCloseNotes.trim() || null
-                })
-            })
-            syncPosState(res.body)
-            setPosCloseNotes('')
-            showNotification('Caja cerrada correctamente.')
-        } catch (error: any) {
-            console.error(error)
-            showNotification(String(error?.message || 'No se pudo cerrar la caja.'), 'error')
-        } finally {
-            setPosActionLoading(false)
-        }
-    }
-
-    const handleAddPosMovement = async () => {
-        const amount = parseDecimalInput(posMovementAmount)
-        if (posMovementType !== 'adjustment' && amount <= 0) {
-            showNotification('El monto debe ser mayor a cero.', 'error')
-            return
-        }
-        if (posMovementType === 'adjustment' && Math.abs(amount) < 0.01) {
-            showNotification('El ajuste no puede ser cero.', 'error')
-            return
-        }
-        try {
-            setPosActionLoading(true)
-            const res = await requestApi<any>('/api/admin/pos/movements', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: posMovementType,
-                    amount,
-                    description: posMovementDescription.trim() || null
-                })
-            })
-            syncPosState(res.body)
-            setPosMovementAmount('')
-            setPosMovementDescription('')
-            showNotification('Movimiento de caja registrado.')
-        } catch (error: any) {
-            console.error(error)
-            showNotification(String(error?.message || 'No se pudo registrar el movimiento.'), 'error')
-        } finally {
-            setPosActionLoading(false)
-        }
     }
 
     const handleCreateLocalSale = async () => {
@@ -2843,117 +1885,21 @@ const MyAccount = () => {
     }
 
     const productBreakdownMeta = React.useMemo(() => {
-        switch (selectedProductMetric) {
-            case 'gross':
-                return {
-                    title: 'Venta Total por Producto',
-                    subtitle: 'Incluye IVA y prorrateo de envío según participación en ventas netas.',
-                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.gross ?? 0)
-                }
-            case 'vat':
-                return {
-                    title: 'IVA Cobrado por Producto',
-                    subtitle: 'Estimación por producto usando la tasa de IVA aplicada al catálogo.',
-                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.vat ?? 0)
-                }
-            case 'shipping':
-                return {
-                    title: 'Envío Cobrado por Producto',
-                    subtitle: 'Distribución proporcional al peso de cada producto en ventas netas.',
-                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.shipping ?? 0)
-                }
-            case 'profit':
-                return {
-                    title: 'Utilidad Bruta por Producto',
-                    subtitle: 'Utilidad estimada = venta neta del producto - costo acumulado vendido.',
-                    total: Number(dashboardStats?.businessMetrics?.profitStats?.profit ?? 0)
-                }
-            case 'inventory':
-                return {
-                    title: 'Valor de Inventario por Producto',
-                    subtitle: 'Costo inmovilizado actual por SKU (stock x costo unitario).',
-                    total: Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0)
-                }
-            case 'net':
-            default:
-                return {
-                    title: 'Venta Neta por Producto',
-                    subtitle: 'Sin IVA ni envío. Basado en pedidos no cancelados.',
-                    total: Number(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0)
-                }
-        }
-    }, [dashboardStats, selectedProductMetric])
+        return buildProductBreakdownMeta(dashboardStats, selectedProductMetric, vatRate)
+    }, [dashboardStats, selectedProductMetric, vatRate])
 
     const salesProductBreakdown = React.useMemo(() => {
-        const products = dashboardStats?.businessMetrics?.traceability?.products || []
-        const vatRateForBreakdown = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
-        const vatMultiplierForBreakdown = 1 + (vatRateForBreakdown / 100)
-        const totalNet = products.reduce((acc, item) => acc + Number(item.net_revenue ?? 0), 0)
-        const totalShipping = Number(dashboardStats?.businessMetrics?.salesSummary?.shipping ?? 0)
-
-        const costByProductId = new Map<string, number>(
-            (adminProductsList || []).map((product: any) => {
-                const productId = String(product.id ?? '')
-                const cost = parseMoney(product.business?.cost ?? product.cost)
-                return [productId, cost]
-            })
+        return buildSalesProductBreakdown(
+            dashboardStats,
+            adminProductsList || [],
+            parseMoney,
+            selectedProductMetric,
+            vatRate
         )
-
-        return products
-            .map((item) => {
-                const net = Number(item.net_revenue ?? 0)
-                const gross = vatMultiplierForBreakdown > 0 ? net * vatMultiplierForBreakdown : net
-                const vat = Math.max(gross - net, 0)
-                const shipping = totalNet > 0 ? (totalShipping * net) / totalNet : 0
-                const units = Number(item.units_sold ?? 0)
-                const unitCost = costByProductId.get(String(item.product_id ?? '')) ?? 0
-                const cost = Math.max(unitCost * units, 0)
-                const profit = net - cost
-                const metricValue = selectedProductMetric === 'gross'
-                    ? gross
-                    : selectedProductMetric === 'vat'
-                        ? vat
-                        : selectedProductMetric === 'shipping'
-                            ? shipping
-                            : selectedProductMetric === 'profit'
-                                ? profit
-                                : net
-
-                return {
-                    ...item,
-                    units,
-                    net,
-                    gross,
-                    vat,
-                    shipping,
-                    cost,
-                    profit,
-                    metricValue
-                }
-            })
-            .sort((a, b) => b.metricValue - a.metricValue)
     }, [adminProductsList, dashboardStats, parseMoney, selectedProductMetric, vatRate])
 
     const inventoryProductBreakdown = React.useMemo(() => {
-        return (adminProductsList || [])
-            .map((product: any) => {
-                const quantity = Number(product.quantity ?? 0)
-                const unitCost = parseMoney(product.business?.cost ?? product.cost)
-                const unitPrice = parseMoney(product.price)
-                const inventoryCost = Math.max(quantity * unitCost, 0)
-                const inventoryMarket = Math.max(quantity * unitPrice, 0)
-                return {
-                    id: String(product.id ?? ''),
-                    name: String(product.name ?? 'Producto sin nombre'),
-                    category: String(product.category ?? 'Sin categoría'),
-                    quantity,
-                    unitCost,
-                    unitPrice,
-                    inventoryCost,
-                    inventoryMarket
-                }
-            })
-            .sort((a, b) => b.inventoryCost - a.inventoryCost)
+        return buildInventoryProductBreakdown(adminProductsList || [], parseMoney)
     }, [adminProductsList, parseMoney])
 
 
@@ -3481,37 +2427,8 @@ const MyAccount = () => {
     }
 
     const adminUsersEnriched = React.useMemo(() => {
-        return adminUsersList.map((item) => {
-            const profileRaw = parseJsonValue(item.profile)
-            const profile = profileRaw && typeof profileRaw === 'object' && !Array.isArray(profileRaw)
-                ? profileRaw as Record<string, any>
-                : {}
-            const resolvedAddress = getAdminUserResolvedAddress(item, profile)
-            const resolvedPhone = String(
-                profile.phone
-                ?? profile.mobile
-                ?? resolvedAddress?.phone
-                ?? ''
-            ).trim()
-            const resolvedCompany = String(
-                item.business_name
-                ?? profile.businessName
-                ?? profile.business_name
-                ?? resolvedAddress?.company
-                ?? ''
-            ).trim()
-            const resolvedAddressText = resolvedAddress ? formatAddress(resolvedAddress) : '-'
-            return {
-                ...item,
-                resolvedAddress,
-                resolvedAddressText,
-                resolvedPhone,
-                resolvedCompany,
-                hasAddress: Boolean(resolvedAddress && resolvedAddressText !== '-'),
-                hasPhone: Boolean(resolvedPhone)
-            }
-        })
-    }, [adminUsersList])
+        return enrichAdminUsers(adminUsersList, parseJsonValue, getAdminUserResolvedAddress, formatAddress)
+    }, [adminUsersList, formatAddress, getAdminUserResolvedAddress, parseJsonValue])
 
     const adminUsersSearchTerm = deferredAdminUsersSearch.trim().toLowerCase()
     const filteredAdminUsers = React.useMemo(() => {
@@ -3603,7 +2520,7 @@ const MyAccount = () => {
             .slice(0, 8)
     }, [adminOrdersList])
     const selectedOrderContact = React.useMemo(
-        () => getOrderContact(selectedOrder),
+        () => getOrderContact(selectedOrder, user, savedAddresses),
         [selectedOrder, savedAddresses, user]
     )
 
@@ -3695,9 +2612,11 @@ const MyAccount = () => {
                                 activeTab={activeTab}
                                 adminReportSection={adminReportSection}
                                 adminMenuExpanded={adminMenuExpanded}
+                                focusedReferenceCatalogKey={focusedReferenceCatalogKey}
                                 onToggleAdminMenuGroup={toggleAdminMenuGroup}
                                 onOpenAdminReportSection={openAdminReportSection}
                                 onNavigateToPanelTab={navigateToPanelTab}
+                                onNavigateToReferenceCatalog={navigateToReferenceCatalog}
                                 onLogout={handleLogout}
                                 strategicAlertsCount={strategicAlerts.length}
                                 strategicCriticalCount={strategicAlertSummary.critical}
@@ -5990,7 +4909,7 @@ const MyAccount = () => {
                                             totalInvoices: purchaseInvoicesSummary.totalInvoices,
                                             totalUnits: purchaseInvoicesSummary.totalUnits,
                                             totalAmount: purchaseInvoicesSummary.totalAmount,
-                                            suppliersCount: purchaseInvoicesSummary.suppliers.size,
+                                            suppliersCount: purchaseInvoicesSummary.suppliersCount,
                                         }}
                                         recentPurchaseInvoices={recentPurchaseInvoices}
                                         purchaseInvoicesLoading={purchaseInvoicesLoading}
@@ -6044,6 +4963,7 @@ const MyAccount = () => {
                                         data={productReferenceData}
                                         loading={productReferenceDataLoading}
                                         saving={productReferenceDataSaving}
+                                        focusKey={focusedReferenceCatalogKey}
                                         onChange={setProductReferenceData}
                                         onSave={async () => {
                                             try {
@@ -7688,6 +6608,7 @@ const MyAccount = () => {
                 normalizedMargins={normalizeMarginSettings(marginSettings)}
                 normalizedCalc={normalizeCalcSettings(calcSettings)}
                 referenceData={productReferenceData}
+                onOpenReferenceCatalog={openReferenceCatalog}
                 activeTab={activeTab}
                 onClose={() => {
                     setIsProductModalOpen(false)

@@ -6,6 +6,7 @@ import ClientModals from './ClientModals'
 import CountdownTimeType from '@/type/CountdownType'
 import { countdownTime } from '@/store/countdownTime'
 import { getSiteConfig } from '@/lib/site'
+import { versionLocalImagePath } from '@/lib/staticAsset'
 
 const instrument = Instrument_Sans({ subsets: ['latin'], preload: false })
 const serverTimeLeft: CountdownTimeType = countdownTime();
@@ -13,6 +14,7 @@ const serverTimeLeft: CountdownTimeType = countdownTime();
 export async function generateMetadata(): Promise<Metadata> {
   const site = getSiteConfig()
   const siteUrl = site.baseUrl.replace(/\/$/, '')
+  const ogImage = versionLocalImagePath('/images/slider/bg-pet1-1.png')
 
   return {
     metadataBase: new URL(siteUrl),
@@ -31,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: 'website',
       images: [
         {
-          url: '/images/slider/bg-pet1-1.png',
+          url: ogImage,
           width: 1200,
           height: 630,
           alt: `${site.name} - Ecommerce`,
@@ -42,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: 'summary_large_image',
       title: site.name,
       description: site.description,
-      images: ['/images/slider/bg-pet1-1.png'],
+      images: [ogImage],
     },
   }
 }
@@ -54,9 +56,10 @@ export default async function RootLayout({
 }) {
   const site = getSiteConfig()
   const siteUrl = site.baseUrl.replace(/\/$/, '')
+  const logoImage = versionLocalImagePath(site.logo.src)
   const sameAs = [site.social.facebook, site.social.instagram, site.social.twitter, site.social.youtube].filter(Boolean)
   return (
-    <html lang="es">
+    <html lang="es" data-scroll-behavior="smooth">
       <body className={instrument.className}>
         <GlobalProvider>
           <div id="app-root">
@@ -71,7 +74,7 @@ export default async function RootLayout({
                 '@type': 'Organization',
                 name: site.name,
                 url: siteUrl,
-                logo: `${siteUrl}${site.logo.src}`,
+                logo: `${siteUrl}${logoImage}`,
                 contactPoint: {
                   '@type': 'ContactPoint',
                   telephone: site.contact.whatsappLabel,

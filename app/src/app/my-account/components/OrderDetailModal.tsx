@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 type OrderDetailModalProps = {
@@ -136,7 +137,14 @@ export default function OrderDetailModal({
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 bg-line rounded-lg overflow-hidden border border-line flex-shrink-0">
-                                                            <img src="/images/product/1000x1000.png" className="w-full h-full object-cover" alt={item.product_name} />
+                                                            <Image
+                                                                src="/images/product/1000x1000.png"
+                                                                alt={item.product_name}
+                                                                width={48}
+                                                                height={48}
+                                                                sizes="48px"
+                                                                className="w-full h-full object-cover"
+                                                            />
                                                         </div>
                                                         <span className="font-medium text-sm">{item.product_name}</span>
                                                     </div>

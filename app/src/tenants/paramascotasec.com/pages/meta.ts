@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { versionLocalImagePath } from '@/lib/staticAsset'
 
 type PageMeta = {
   title: string
@@ -68,7 +69,7 @@ export const buildPageMetadata = (pageKey: string, tenantName: string): Metadata
       ? {
           title: `${meta.title} | ${tenantName}`,
           description: meta.description,
-          images: meta.images,
+          images: meta.images.map(versionLocalImagePath),
         }
       : undefined,
   }

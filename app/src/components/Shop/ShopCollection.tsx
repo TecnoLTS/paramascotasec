@@ -1,5 +1,5 @@
 import React from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 import { ProductType } from '@/type/ProductType'
 import Product from '../Product/Product';

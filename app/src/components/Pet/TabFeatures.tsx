@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Product from '../Product/Product'
 import { ProductType } from '@/type/ProductType'
 import { motion } from 'framer-motion'

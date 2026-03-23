@@ -1,18 +1,22 @@
 'use client'
 
 import React from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import { requestApi } from '@/lib/apiClient'
 import type { PricingCalc, PricingMargins } from '@/lib/api/settings'
-import { getReferenceOptionsWithCurrent, type ProductReferenceData } from '@/lib/productReferenceData'
+import {
+    getReferenceOptionsWithCurrent,
+    PRODUCT_REFERENCE_SECTIONS,
+    type ProductReferenceData,
+    type ProductReferenceKey,
+} from '@/lib/productReferenceData'
 import {
     APPAREL_GENDER_OPTIONS,
     PET_SPECIES_OPTIONS,
     PRODUCT_CATEGORY_OPTIONS,
     PRODUCT_TYPE_OPTIONS,
-    getCategoryOptionsForProductType,
     getDefaultCategoryForProductType,
     normalizeProductCategory,
     normalizeProductType,
@@ -53,6 +57,7 @@ type ProductEditorModalProps = {
     onClose: () => void;
     onProductsUpdated: (products: any[]) => void;
     onRefreshPurchaseInvoices: () => Promise<void>;
+    onOpenReferenceCatalog: (key: ProductReferenceKey) => void;
     onSessionExpired?: () => void;
     showNotification: (text: string, type?: 'success' | 'error') => void;
 }
@@ -74,63 +79,73 @@ const applyDefaultSizes = (
     }))
 }
 
+const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+            const result = typeof reader.result === 'string' ? reader.result : ''
+            if (!result) {
+                reject(new Error('No se pudo leer la imagen.'))
+                return
+            }
+            resolve(result)
+        }
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'))
+        reader.readAsDataURL(file)
+    })
+
+const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+        const img = document.createElement('img')
+        img.onload = () => resolve(img)
+        img.onerror = () => reject(new Error('No se pudo leer la imagen.'))
+        img.src = dataUrl
+    })
+
 const getImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
     new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file)
-        const img = document.createElement('img')
-        img.onload = () => {
-            const width = img.naturalWidth
-            const height = img.naturalHeight
-            URL.revokeObjectURL(url)
-            resolve({ width, height })
-        }
-        img.onerror = () => {
-            URL.revokeObjectURL(url)
-            reject(new Error('No se pudo leer la imagen.'))
-        }
-        img.src = url
+        readFileAsDataUrl(file)
+            .then((dataUrl) => loadImageFromDataUrl(dataUrl))
+            .then((img) => {
+                resolve({ width: img.naturalWidth, height: img.naturalHeight })
+            })
+            .catch((error) => reject(error))
     })
 
 const resizeImage = (file: File, targetWidth: number, targetHeight: number): Promise<File> =>
     new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file)
-        const img = document.createElement('img')
-        img.onload = () => {
-            const canvas = document.createElement('canvas')
-            canvas.width = targetWidth
-            canvas.height = targetHeight
-            const ctx = canvas.getContext('2d')
-            if (!ctx) {
-                URL.revokeObjectURL(url)
-                reject(new Error('No se pudo procesar la imagen.'))
-                return
-            }
-            // Ajusta la imagen sin deformarla: canvas fijo, fondo blanco y centrado proporcional.
-            ctx.fillStyle = '#ffffff'
-            ctx.fillRect(0, 0, targetWidth, targetHeight)
-
-            const scale = Math.min(targetWidth / img.naturalWidth, targetHeight / img.naturalHeight)
-            const drawWidth = img.naturalWidth * scale
-            const drawHeight = img.naturalHeight * scale
-            const offsetX = (targetWidth - drawWidth) / 2
-            const offsetY = (targetHeight - drawHeight) / 2
-
-            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
-            canvas.toBlob((blob) => {
-                URL.revokeObjectURL(url)
-                if (!blob) {
-                    reject(new Error('No se pudo recortar la imagen.'))
+        readFileAsDataUrl(file)
+            .then((dataUrl) => loadImageFromDataUrl(dataUrl))
+            .then((img) => {
+                const canvas = document.createElement('canvas')
+                canvas.width = targetWidth
+                canvas.height = targetHeight
+                const ctx = canvas.getContext('2d')
+                if (!ctx) {
+                    reject(new Error('No se pudo procesar la imagen.'))
                     return
                 }
-                const ext = file.name.split('.').pop() || 'jpg'
-                resolve(new File([blob], `recorte-${Date.now()}.${ext}`, { type: blob.type }))
-            }, file.type || 'image/jpeg', 0.92)
-        }
-        img.onerror = () => {
-            URL.revokeObjectURL(url)
-            reject(new Error('No se pudo procesar la imagen.'))
-        }
-        img.src = url
+                // Ajusta la imagen sin deformarla: canvas fijo, fondo blanco y centrado proporcional.
+                ctx.fillStyle = '#ffffff'
+                ctx.fillRect(0, 0, targetWidth, targetHeight)
+
+                const scale = Math.min(targetWidth / img.naturalWidth, targetHeight / img.naturalHeight)
+                const drawWidth = img.naturalWidth * scale
+                const drawHeight = img.naturalHeight * scale
+                const offsetX = (targetWidth - drawWidth) / 2
+                const offsetY = (targetHeight - drawHeight) / 2
+
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('No se pudo recortar la imagen.'))
+                        return
+                    }
+                    const ext = file.name.split('.').pop() || 'jpg'
+                    resolve(new File([blob], `recorte-${Date.now()}.${ext}`, { type: blob.type }))
+                }, file.type || 'image/jpeg', 0.92)
+            })
+            .catch((error) => reject(error))
     })
 
 const uploadImage = async (file: File, kind: 'thumb' | 'gallery') => {
@@ -185,6 +200,7 @@ export default function ProductEditorModal({
     onClose,
     onProductsUpdated,
     onRefreshPurchaseInvoices,
+    onOpenReferenceCatalog,
     onSessionExpired,
     showNotification,
 }: ProductEditorModalProps) {
@@ -220,7 +236,6 @@ export default function ProductEditorModal({
         if (weight) return weight
         return String(form.attributes?.variantLabel || '').trim()
     }, [form.attributes?.size, form.attributes?.variantLabel, form.attributes?.weight])
-    const categoryOptions = React.useMemo(() => getCategoryOptionsForProductType(form.productType), [form.productType])
     const selectedAdditionalCategories = React.useMemo(
         () => parseSerializedProductCategories(form.attributes?.catalogCategories),
         [form.attributes?.catalogCategories]
@@ -238,11 +253,76 @@ export default function ProductEditorModal({
     const tagOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.tags, form.attributes?.tag), [form.attributes?.tag, referenceData.tags])
     const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
     const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
+    const primaryCategory = React.useMemo(
+        () => normalizeProductCategory(form.category, form.productType),
+        [form.category, form.productType]
+    )
+    const primaryCategoryLabel = React.useMemo(
+        () => PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === primaryCategory)?.label || '',
+        [primaryCategory]
+    )
+    const referenceSectionTitleByKey = React.useMemo(
+        () => PRODUCT_REFERENCE_SECTIONS.reduce<Record<ProductReferenceKey, string>>((acc, section) => {
+            acc[section.key] = section.title
+            return acc
+        }, {} as Record<ProductReferenceKey, string>),
+        []
+    )
 
     const closeModal = React.useCallback(() => {
         if (saving || Object.values(imageUploading).some(Boolean)) return
         onClose()
     }, [imageUploading, onClose, saving])
+
+    const renderReferenceCatalogHint = React.useCallback((
+        key: ProductReferenceKey,
+        options: string[],
+        emptyText: string,
+        customText?: string
+    ) => (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-secondary">
+            <span>{customText || (options.length > 0 ? 'Si falta una opción, agrégala desde Catálogos operativos.' : emptyText)}</span>
+            <button
+                type="button"
+                className="font-semibold text-primary hover:underline"
+                onClick={() => onOpenReferenceCatalog(key)}
+                disabled={saving}
+            >
+                Abrir catálogos
+            </button>
+        </div>
+    ), [onOpenReferenceCatalog, saving])
+
+    const renderReferenceCatalogHints = React.useCallback((
+        items: Array<{ key: ProductReferenceKey; options: string[] }>,
+        emptyText?: string
+    ) => {
+        const uniqueItems = items.filter((item, index, array) => array.findIndex((candidate) => candidate.key === item.key) === index)
+        if (uniqueItems.length === 0) return null
+
+        const hasMissingOptions = uniqueItems.some((item) => item.options.length === 0)
+
+        return (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-secondary">
+                <span>
+                    {hasMissingOptions
+                        ? (emptyText || 'Si falta una opción, regístrala desde Catálogos operativos:')
+                        : 'Gestiona estas opciones desde Catálogos operativos:'}
+                </span>
+                {uniqueItems.map((item) => (
+                    <button
+                        key={`catalog-shortcut-${item.key}`}
+                        type="button"
+                        className="font-semibold text-primary hover:underline"
+                        onClick={() => onOpenReferenceCatalog(item.key)}
+                        disabled={saving}
+                    >
+                        {referenceSectionTitleByKey[item.key] || item.key}
+                    </button>
+                ))}
+            </div>
+        )
+    }, [onOpenReferenceCatalog, referenceSectionTitleByKey, saving])
 
     React.useEffect(() => {
         if (!open) return
@@ -304,25 +384,6 @@ export default function ProductEditorModal({
         }
     }, [clearErrors])
 
-    const setCategory = React.useCallback((value: string) => {
-        setForm((prev) => {
-            const nextCategory = normalizeProductCategory(value, prev.productType)
-            const nextProductType = normalizeProductType(prev.productType, prev.category)
-            const nextAttributes = { ...(prev.attributes || {}) }
-            const nextAdditionalCategories = parseSerializedProductCategories(nextAttributes.catalogCategories)
-                .filter((category) => category !== nextCategory)
-            nextAttributes.catalogCategories = serializeProductCategories(nextAdditionalCategories)
-
-            return {
-                ...prev,
-                category: nextCategory,
-                productType: nextProductType,
-                attributes: nextAttributes,
-            }
-        })
-        clearErrors('category', 'productType', 'species', 'expirationDate', 'expirationAlertDays')
-    }, [clearErrors])
-
     const setSpeciesAttribute = React.useCallback((value: string) => {
         setAttribute('species', normalizeProductSpecies(value))
     }, [setAttribute])
@@ -347,8 +408,15 @@ export default function ProductEditorModal({
             const normalizedType = normalizeProductType(value, prev.category)
             const nextAttributes = getAttributesForTypeChange(normalizedType, prev.attributes)
             const defaultCategory = getDefaultCategoryForProductType(normalizedType)
-            const normalizedCurrentCategory = normalizeProductCategory(prev.category)
-            const nextCategory = normalizedCurrentCategory || defaultCategory
+            const previousPrimaryCategory = normalizeProductCategory(prev.category, prev.productType)
+            const preservedAdditionalCategories = parseSerializedProductCategories(prev.attributes?.catalogCategories)
+                .filter((category) => category !== defaultCategory)
+
+            if (previousPrimaryCategory && previousPrimaryCategory !== defaultCategory && !preservedAdditionalCategories.includes(previousPrimaryCategory)) {
+                preservedAdditionalCategories.unshift(previousPrimaryCategory)
+            }
+
+            nextAttributes.catalogCategories = serializeProductCategories(preservedAdditionalCategories)
 
             if (normalizedType !== 'ropa') {
                 delete nextAttributes.sizeGuideRows
@@ -358,12 +426,28 @@ export default function ProductEditorModal({
             return {
                 ...prev,
                 productType: normalizedType,
-                category: nextCategory,
+                category: defaultCategory,
                 attributes: nextAttributes
             }
         })
         clearErrors('productType', 'sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays')
     }, [clearErrors])
+
+    const setPreferredSupplier = React.useCallback((value: string) => {
+        setForm((prev) => ({
+            ...prev,
+            attributes: {
+                ...(prev.attributes || {}),
+                supplier: value,
+            },
+            purchaseInvoice: !prev.purchaseInvoice?.supplierName && value
+                ? {
+                    ...prev.purchaseInvoice,
+                    supplierName: value,
+                }
+                : prev.purchaseInvoice,
+        }))
+    }, [])
 
     const toggleAdditionalCategory = React.useCallback((value: string) => {
         const normalizedValue = normalizeProductCategory(value)
@@ -569,7 +653,6 @@ export default function ProductEditorModal({
 
             if (name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
-            if (!category) nextErrors.category = 'La categoría es obligatoria.'
             if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(currentCost) || currentCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
@@ -587,18 +670,17 @@ export default function ProductEditorModal({
             }
             if (productType) {
                 if (!normalizedAttributes.sku) nextErrors.sku = 'El SKU es obligatorio.'
-                if (!normalizedAttributes.tag) nextErrors.tag = 'La etiqueta es obligatoria.'
                 if (!normalizedAttributes.species) nextErrors.species = 'La especie/mascota es obligatoria.'
             }
 
             const expirationDateRaw = String(normalizedAttributes.expirationDate || '').trim()
             const alertDaysRaw = String(normalizedAttributes.expirationAlertDays || '').trim()
-            const isPerishableProduct = productType === 'comida'
+            const isPerishableProduct = productType === 'Alimento'
             const isCareProduct = productType === 'cuidado'
             const requiresExpirationDate = isPerishableProduct && quantity > 0
             if (isPerishableProduct || isCareProduct) {
                 if (requiresExpirationDate && !expirationDateRaw) {
-                    nextErrors.expirationDate = 'La fecha de vencimiento es obligatoria para comida.'
+                    nextErrors.expirationDate = 'La fecha de vencimiento es obligatoria para Alimento.'
                 }
                 if (expirationDateRaw) {
                     if (!/^\d{4}-\d{2}-\d{2}$/.test(expirationDateRaw)) {
@@ -785,13 +867,13 @@ export default function ProductEditorModal({
                                     required
                                     disabled={saving || isDuplicateVariantMode}
                                 >
-                                    <option value="">Selecciona marca</option>
+                                    <option value="">{brandOptions.length > 0 ? 'Selecciona marca' : 'No hay marcas registradas'}</option>
                                     {brandOptions.map((option) => (
                                         <option key={`brand-option-${option}`} value={option}>{option}</option>
                                     ))}
                                 </select>
                                 {formErrors.brand && <p className="text-xs text-red mt-1">{formErrors.brand}</p>}
-                                <p className="text-secondary text-xs mt-2">Gestiona marcas disponibles en Catálogo &gt; Catálogos.</p>
+                                {renderReferenceCatalogHint('brands', brandOptions, 'No hay marcas registradas todavía.')}
                             </div>
                         </div>
 
@@ -863,13 +945,13 @@ export default function ProductEditorModal({
                                             onChange={e => setPurchaseInvoiceSupplier(e.target.value)}
                                             disabled={saving}
                                         >
-                                            <option value="">Selecciona proveedor</option>
+                                            <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
                                             {supplierOptions.map((option) => (
                                                 <option key={`purchase-supplier-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
                                         {formErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceSupplierName}</p>}
-                                        <p className="text-secondary text-xs mt-2">Los proveedores se administran desde Catálogo &gt; Catálogos.</p>
+                                        {renderReferenceCatalogHint('suppliers', supplierOptions, 'No hay proveedores registrados todavía.')}
                                     </div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">RUC o documento</label><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.purchaseInvoice.supplierDocument} onChange={e => setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, supplierDocument: e.target.value } })} disabled={saving} /></div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label><input type="date" className={getInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.issuedAt} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, issuedAt: e.target.value } }); clearErrors('purchaseInvoiceIssuedAt') }} disabled={saving} />{formErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceIssuedAt}</p>}</div>
@@ -880,28 +962,33 @@ export default function ProductEditorModal({
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {!isDuplicateVariantMode && (
-                                <div>
-                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría principal</label>
-                                    <select
-                                        className={getInputClass('category', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
-                                        value={normalizeProductCategory(form.category, form.productType)}
-                                        onChange={e => setCategory(e.target.value)}
-                                        disabled={saving}
-                                    >
-                                        <option value="">Selecciona categoría</option>
-                                        {(categoryOptions.length > 0 ? categoryOptions : PRODUCT_CATEGORY_OPTIONS).map((option) => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                    {formErrors.category && <p className="text-xs text-red mt-1">{formErrors.category}</p>}
-                                    <p className="text-secondary text-xs mt-2">Define la categoría principal visible. La principal ayuda al orden del catálogo, pero no limita las categorías adicionales.</p>
-                                    <div className="mt-4">
+                        {!isDuplicateVariantMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-5">
+                                <div className="text-sm font-semibold">Clasificación y visibilidad</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
+                                        <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => handleProductTypeChange(e.target.value)} disabled={saving}>
+                                            <option value="">Selecciona tipo</option>
+                                            {PRODUCT_TYPE_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                        {formErrors.productType && <p className="text-xs text-red mt-1">{formErrors.productType}</p>}
+                                        <p className="text-secondary text-xs mt-2">El tipo define los campos específicos y la categoría principal visible en tienda.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría principal visible</label>
+                                        <div className="border border-line rounded-lg px-4 py-3 w-full bg-white min-h-[52px] flex items-center">
+                                            {primaryCategoryLabel || <span className="text-secondary">Se asigna automáticamente al elegir el tipo</span>}
+                                        </div>
+                                        <p className="text-secondary text-xs mt-2">Se deriva del tipo para evitar inconsistencias entre catálogo, filtros y ficha pública.</p>
+                                    </div>
+                                    <div className="md:col-span-2">
                                         <div className="text-secondary text-xs uppercase font-bold mb-2">También mostrar en</div>
                                         <div className="flex flex-wrap gap-2">
                                             {PRODUCT_CATEGORY_OPTIONS
-                                                .filter((option) => option.value !== normalizeProductCategory(form.category, form.productType))
+                                                .filter((option) => option.value !== primaryCategory)
                                                 .map((option) => {
                                                     const isSelected = selectedAdditionalCategories.includes(option.value)
                                                     return (
@@ -914,29 +1001,29 @@ export default function ProductEditorModal({
                                                                     : 'bg-white border-line hover:border-black'
                                                             }`}
                                                             onClick={() => toggleAdditionalCategory(option.value)}
-                                                            disabled={saving}
+                                                            disabled={saving || !form.productType}
                                                         >
                                                             {option.label}
                                                         </button>
                                                     )
                                                 })}
                                         </div>
-                                        <p className="text-secondary text-xs mt-2">Ejemplo: un alimento con suplemento puede quedar en Comida y también en Salud.</p>
+                                        <p className="text-secondary text-xs mt-2">Úsalo solo cuando el producto deba aparecer en más de una categoría, por ejemplo Alimento y Salud.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Publicado en tienda web</label>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black disabled:bg-surface disabled:text-secondary" value={form.published ? 'yes' : 'no'} onChange={e => setForm({ ...form, published: e.target.value === 'yes' })} disabled={saving || !publicationEligible}>
+                                            <option value="yes">Sí, mostrar en el sitio</option><option value="no">No, ocultar del sitio</option>
+                                        </select>
+                                        <p className="text-secondary text-xs mt-2">
+                                            {publicationEligible
+                                                ? 'Si está en no, el producto seguirá en el panel pero no aparecerá en la web pública.'
+                                                : 'Solo se puede publicar cuando el producto tiene precio y existencia mayor a 0.'}
+                                        </p>
                                     </div>
                                 </div>
-                            )}
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Publicado en tienda web</label>
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black disabled:bg-surface disabled:text-secondary" value={form.published ? 'yes' : 'no'} onChange={e => setForm({ ...form, published: e.target.value === 'yes' })} disabled={saving || !publicationEligible}>
-                                    <option value="yes">Sí, mostrar en el sitio</option><option value="no">No, ocultar del sitio</option>
-                                </select>
-                                <p className="text-secondary text-xs mt-2">
-                                    {publicationEligible
-                                        ? 'Si está en no, el producto seguirá en el panel pero no aparecerá en la web pública.'
-                                        : 'Solo se puede publicar cuando el producto tiene precio y existencia mayor a 0.'}
-                                </p>
                             </div>
-                        </div>
+                        )}
 
                         {!isDuplicateVariantMode && (
                         <div className="p-5 rounded-xl border border-line bg-surface">
@@ -1009,40 +1096,25 @@ export default function ProductEditorModal({
                         </div>
                         )}
 
-                        {!isDuplicateVariantMode && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
-                                <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => handleProductTypeChange(e.target.value)} disabled={saving}>
-                                    <option value="">Selecciona tipo</option>
-                                    {PRODUCT_TYPE_OPTIONS.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                                {formErrors.productType && <p className="text-xs text-red mt-1">{formErrors.productType}</p>}
-                            </div>
-                        </div>
-                        )}
-
-                        {form.productType === 'comida' && (
+                        {form.productType === 'Alimento' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
-                                    <option value="">Tamaño</option>
-                                    {sizeOptions.map((option) => (
-                                        <option key={`food-size-option-${option}`} value={option}>{option}</option>
-                                    ))}
-                                </select>
+                                    <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
+                                        <option value="">{sizeOptions.length > 0 ? 'Tamaño' : 'No hay tallas o tamaños registrados'}</option>
+                                        {sizeOptions.map((option) => (
+                                            <option key={`food-size-option-${option}`} value={option}>{option}</option>
+                                        ))}
+                                    </select>
                                 <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Peso. Ej: 2 kg" value={form.attributes?.weight || ''} onChange={e => setAttribute('weight', e.target.value)} />
                                 {!isDuplicateVariantMode && (
                                     <>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.flavor || ''} onChange={e => setAttribute('flavor', e.target.value)} disabled={saving}>
-                                            <option value="">Sabor</option>
+                                            <option value="">{flavorOptions.length > 0 ? 'Sabor' : 'No hay sabores registrados'}</option>
                                             {flavorOptions.map((option) => (
                                                 <option key={`food-flavor-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.age || ''} onChange={e => setAttribute('age', e.target.value)} disabled={saving}>
-                                            <option value="">Edad</option>
+                                            <option value="">{ageRangeOptions.length > 0 ? 'Edad' : 'No hay rangos de edad registrados'}</option>
                                             {ageRangeOptions.map((option) => (
                                                 <option key={`food-age-option-${option}`} value={option}>{option}</option>
                                             ))}
@@ -1057,13 +1129,19 @@ export default function ProductEditorModal({
                                         <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ingredientes" value={form.attributes?.ingredients || ''} onChange={e => setAttribute('ingredients', e.target.value)} />
                                     </>
                                 )}
-                                <div className="md:col-span-2 text-secondary text-xs">Tallas, sabores y edades se administran en Catálogo &gt; Catálogos para evitar variantes escritas de formas distintas.</div>
+                                <div className="md:col-span-2">
+                                    {renderReferenceCatalogHints([
+                                        { key: 'sizes', options: sizeOptions },
+                                        { key: 'flavors', options: flavorOptions },
+                                        { key: 'ageRanges', options: ageRangeOptions },
+                                    ])}
+                                </div>
                             </div>
                         )}
                         {form.productType === 'ropa' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
-                                    <option value="">Talla</option>
+                                    <option value="">{sizeOptions.length > 0 ? 'Talla' : 'No hay tallas registradas'}</option>
                                     {sizeOptions.map((option) => (
                                         <option key={`apparel-size-option-${option}`} value={option}>{option}</option>
                                     ))}
@@ -1071,13 +1149,13 @@ export default function ProductEditorModal({
                                 {!isDuplicateVariantMode && (
                                     <>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
-                                            <option value="">Material</option>
+                                            <option value="">{materialOptions.length > 0 ? 'Material' : 'No hay materiales registrados'}</option>
                                             {materialOptions.map((option) => (
                                                 <option key={`apparel-material-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.color || ''} onChange={e => setAttribute('color', e.target.value)} disabled={saving}>
-                                            <option value="">Color</option>
+                                            <option value="">{colorOptions.length > 0 ? 'Color' : 'No hay colores registrados'}</option>
                                             {colorOptions.map((option) => (
                                                 <option key={`apparel-color-option-${option}`} value={option}>{option}</option>
                                             ))}
@@ -1096,13 +1174,19 @@ export default function ProductEditorModal({
                                         </div>
                                     </>
                                 )}
-                                <div className="md:col-span-2 text-secondary text-xs">Tallas, materiales y colores se editan en Catálogo &gt; Catálogos para mantener consistencia entre prendas.</div>
+                                <div className="md:col-span-2">
+                                    {renderReferenceCatalogHints([
+                                        { key: 'sizes', options: sizeOptions },
+                                        { key: 'materials', options: materialOptions },
+                                        { key: 'colors', options: colorOptions },
+                                    ])}
+                                </div>
                             </div>
                         )}
                         {form.productType === 'accesorios' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
-                                    <option value="">Tamaño</option>
+                                    <option value="">{sizeOptions.length > 0 ? 'Tamaño' : 'No hay tallas o tamaños registrados'}</option>
                                     {sizeOptions.map((option) => (
                                         <option key={`accessory-size-option-${option}`} value={option}>{option}</option>
                                     ))}
@@ -1110,13 +1194,13 @@ export default function ProductEditorModal({
                                 {!isDuplicateVariantMode && (
                                     <>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
-                                            <option value="">Material</option>
+                                            <option value="">{materialOptions.length > 0 ? 'Material' : 'No hay materiales registrados'}</option>
                                             {materialOptions.map((option) => (
                                                 <option key={`accessory-material-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} disabled={saving}>
-                                            <option value="">Uso</option>
+                                            <option value="">{usageOptions.length > 0 ? 'Uso' : 'No hay usos registrados'}</option>
                                             {usageOptions.map((option) => (
                                                 <option key={`accessory-usage-option-${option}`} value={option}>{option}</option>
                                             ))}
@@ -1130,13 +1214,19 @@ export default function ProductEditorModal({
                                         </div>
                                     </>
                                 )}
-                                <div className="md:col-span-2 text-secondary text-xs">Usa listas controladas para tamaños, materiales y usos. Si falta una opción, agrégala en Catálogo &gt; Catálogos.</div>
+                                <div className="md:col-span-2">
+                                    {renderReferenceCatalogHints([
+                                        { key: 'sizes', options: sizeOptions },
+                                        { key: 'materials', options: materialOptions },
+                                        { key: 'usages', options: usageOptions },
+                                    ])}
+                                </div>
                             </div>
                         )}
                         {form.productType === 'cuidado' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.presentation || ''} onChange={e => setAttribute('presentation', e.target.value)} disabled={saving}>
-                                    <option value="">Presentación</option>
+                                    <option value="">{presentationOptions.length > 0 ? 'Presentación' : 'No hay presentaciones registradas'}</option>
                                     {presentationOptions.map((option) => (
                                         <option key={`care-presentation-option-${option}`} value={option}>{option}</option>
                                     ))}
@@ -1144,13 +1234,13 @@ export default function ProductEditorModal({
                                 {!isDuplicateVariantMode && (
                                     <>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.activeIngredient || ''} onChange={e => setAttribute('activeIngredient', e.target.value)} disabled={saving}>
-                                            <option value="">Ingrediente activo o principio</option>
+                                            <option value="">{activeIngredientOptions.length > 0 ? 'Ingrediente activo o principio' : 'No hay ingredientes activos registrados'}</option>
                                             {activeIngredientOptions.map((option) => (
                                                 <option key={`care-active-ingredient-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} disabled={saving}>
-                                            <option value="">Uso</option>
+                                            <option value="">{usageOptions.length > 0 ? 'Uso' : 'No hay usos registrados'}</option>
                                             {usageOptions.map((option) => (
                                                 <option key={`care-usage-option-${option}`} value={option}>{option}</option>
                                             ))}
@@ -1165,7 +1255,13 @@ export default function ProductEditorModal({
                                         </div>
                                     </>
                                 )}
-                                <div className="md:col-span-2 text-secondary text-xs">Presentación, principio activo y uso se administran desde Catálogo &gt; Catálogos.</div>
+                                <div className="md:col-span-2">
+                                    {renderReferenceCatalogHints([
+                                        { key: 'presentations', options: presentationOptions },
+                                        { key: 'activeIngredients', options: activeIngredientOptions },
+                                        { key: 'usages', options: usageOptions },
+                                    ])}
+                                </div>
                             </div>
                         )}
 
@@ -1209,46 +1305,79 @@ export default function ProductEditorModal({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="SKU" value={form.attributes?.sku || ''} onChange={e => setAttribute('sku', e.target.value)} disabled={saving} />{formErrors.sku && <p className="text-xs text-red mt-1">{formErrors.sku}</p>}</div>
+                        <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                            <div className="text-sm font-semibold">Datos operativos</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">SKU</label>
+                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ej: CAM-DEP-XL-AZUL" value={form.attributes?.sku || ''} onChange={e => setAttribute('sku', e.target.value)} disabled={saving} />
+                                {formErrors.sku && <p className="text-xs text-red mt-1">{formErrors.sku}</p>}
+                            </div>
                             {!isDuplicateVariantMode && (
                                 <div>
+                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Etiqueta comercial</label>
                                     <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.tag || ''} onChange={e => setAttribute('tag', e.target.value)} disabled={saving}>
-                                        <option value="">Etiqueta</option>
+                                        <option value="">{tagOptions.length > 0 ? 'Sin etiqueta' : 'No hay etiquetas registradas'}</option>
                                         {tagOptions.map((option) => (
                                             <option key={`tag-option-${option}`} value={option}>{option}</option>
                                         ))}
                                     </select>
-                                    {formErrors.tag && <p className="text-xs text-red mt-1">{formErrors.tag}</p>}
+                                    <p className="text-secondary text-xs mt-2">Opcional. Úsala para destacar Premium, Nuevo u otra señal comercial.</p>
                                 </div>
                             )}
-                            {(form.productType === 'comida' || form.productType === 'cuidado') && (
+                            {(form.productType === 'Alimento' || form.productType === 'cuidado') && (
                                 <>
-                                    <div><input type="date" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationDate || ''} onChange={e => setAttribute('expirationDate', e.target.value)} disabled={saving} />{formErrors.expirationDate && <p className="text-xs text-red mt-1">{formErrors.expirationDate}</p>}</div>
-                                    <div><input type="number" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationAlertDays || '30'} onChange={e => setAttribute('expirationAlertDays', e.target.value)} disabled={saving} />{formErrors.expirationAlertDays && <p className="text-xs text-red mt-1">{formErrors.expirationAlertDays}</p>}</div>
+                                    <div>
+                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de vencimiento</label>
+                                        <input type="date" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationDate || ''} onChange={e => setAttribute('expirationDate', e.target.value)} disabled={saving} />
+                                        {formErrors.expirationDate && <p className="text-xs text-red mt-1">{formErrors.expirationDate}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">Alerta de vencimiento (días)</label>
+                                        <input type="number" className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.attributes?.expirationAlertDays || '30'} onChange={e => setAttribute('expirationAlertDays', e.target.value)} disabled={saving} />
+                                        {formErrors.expirationAlertDays && <p className="text-xs text-red mt-1">{formErrors.expirationAlertDays}</p>}
+                                    </div>
                                 </>
                             )}
-                            <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Lote" value={form.attributes?.lotCode || ''} onChange={e => setAttribute('lotCode', e.target.value)} disabled={saving} />
-                            <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.storageLocation || ''} onChange={e => setAttribute('storageLocation', e.target.value)} disabled={saving}>
-                                <option value="">Ubicación de almacenamiento</option>
-                                {storageLocationOptions.map((option) => (
-                                    <option key={`storage-location-option-${option}`} value={option}>{option}</option>
-                                ))}
-                            </select>
-                            <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setAttribute('supplier', e.target.value)} disabled={saving}>
-                                <option value="">Proveedor</option>
-                                {supplierOptions.map((option) => (
-                                    <option key={`supplier-option-${option}`} value={option}>{option}</option>
-                                ))}
-                            </select>
-                            <div className="md:col-span-2 text-secondary text-xs">Si falta una opción en etiquetas, proveedores o ubicaciones, agrégala en Catálogo &gt; Catálogos antes de guardar.</div>
+                            <div>
+                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Lote</label>
+                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ej: L-2026-03-001" value={form.attributes?.lotCode || ''} onChange={e => setAttribute('lotCode', e.target.value)} disabled={saving} />
+                            </div>
+                            <div>
+                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Ubicación de almacenamiento</label>
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.storageLocation || ''} onChange={e => setAttribute('storageLocation', e.target.value)} disabled={saving}>
+                                    <option value="">{storageLocationOptions.length > 0 ? 'Selecciona ubicación' : 'No hay ubicaciones registradas'}</option>
+                                    {storageLocationOptions.map((option) => (
+                                        <option key={`storage-location-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor habitual</label>
+                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setPreferredSupplier(e.target.value)} disabled={saving}>
+                                    <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
+                                    {supplierOptions.map((option) => (
+                                        <option key={`supplier-option-${option}`} value={option}>{option}</option>
+                                    ))}
+                                </select>
+                                <p className="text-secondary text-xs mt-2">Opcional. Sirve como proveedor por defecto para próximas compras e ingresos de stock.</p>
+                            </div>
+                            <div className="md:col-span-2">
+                                {renderReferenceCatalogHints([
+                                    { key: 'tags', options: tagOptions },
+                                    { key: 'storageLocations', options: storageLocationOptions },
+                                    { key: 'suppliers', options: supplierOptions },
+                                ], 'Registra primero las opciones operativas que falten en Catálogos operativos:')}
+                            </div>
+                        </div>
                         </div>
 
                         {!isDuplicateVariantMode && (
                             <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción</label>
-                                <textarea className={getInputClass('description', 'border rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[140px]')} value={form.description} onChange={e => { setForm({ ...form, description: e.target.value }); clearErrors('description') }} disabled={saving} />
+                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción del producto</label>
+                                <textarea className={getInputClass('description', 'border rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[140px]')} value={form.description} onChange={e => { setForm({ ...form, description: e.target.value }); clearErrors('description') }} disabled={saving} placeholder="Describe beneficios, uso, material, ingredientes o cualquier dato clave que deba verse en la ficha pública." />
                                 {formErrors.description && <p className="text-xs text-red mt-1">{formErrors.description}</p>}
+                                <p className="text-secondary text-xs mt-2">Se muestra en la ficha del producto. Usa al menos una explicación clara de compra.</p>
                             </div>
                         )}
                     </form>

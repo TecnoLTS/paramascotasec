@@ -28,6 +28,19 @@ export type ProductReferenceSection = {
   title: string
   description: string
   placeholder: string
+  menuIcon:
+    | 'SealCheck'
+    | 'Truck'
+    | 'Ruler'
+    | 'Stack'
+    | 'Palette'
+    | 'ArrowsClockwise'
+    | 'Package'
+    | 'Flask'
+    | 'MapPin'
+    | 'Tag'
+    | 'BowlFood'
+    | 'HourglassMedium'
 }
 
 export type ProductSystemReferenceGroup = {
@@ -52,6 +65,14 @@ export const createEmptyProductReferenceData = (): ProductReferenceData => ({
   flavors: [],
   ageRanges: [],
 })
+
+export const createProductReferenceKeyRecord = <T>(factory: (key: ProductReferenceKey) => T): Record<ProductReferenceKey, T> =>
+  PRODUCT_REFERENCE_KEYS.reduce((acc, key) => {
+    acc[key] = factory(key)
+    return acc
+  }, {} as Record<ProductReferenceKey, T>)
+
+export const PRODUCT_REFERENCE_KEY_SET = new Set<ProductReferenceKey>(PRODUCT_REFERENCE_KEYS)
 
 export const normalizeReferenceList = (input: unknown): string[] => {
   if (!Array.isArray(input)) return []
@@ -98,79 +119,91 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
     title: 'Marcas',
     description: 'Marca comercial visible en catálogo y ficha del producto.',
     placeholder: 'Ej: Frontline',
+    menuIcon: 'SealCheck',
   },
   {
     key: 'suppliers',
     title: 'Proveedores',
     description: 'Opciones para factura de compra y proveedor asociado al producto.',
     placeholder: 'Ej: Agripac',
+    menuIcon: 'Truck',
   },
   {
     key: 'sizes',
     title: 'Tallas y tamaños',
     description: 'Reutiliza medidas y presentaciones frecuentes como S, M, 1 Kg o 500 ml.',
     placeholder: 'Ej: XL',
+    menuIcon: 'Ruler',
   },
   {
     key: 'materials',
     title: 'Materiales',
     description: 'Material principal de accesorios y ropa.',
     placeholder: 'Ej: Nylon',
+    menuIcon: 'Stack',
   },
   {
     key: 'colors',
     title: 'Colores',
     description: 'Colores frecuentes para ropa y accesorios.',
     placeholder: 'Ej: Azul',
+    menuIcon: 'Palette',
   },
   {
     key: 'usages',
     title: 'Usos',
     description: 'Destino o uso del producto, especialmente en accesorios y salud.',
     placeholder: 'Ej: Paseo',
+    menuIcon: 'ArrowsClockwise',
   },
   {
     key: 'presentations',
     title: 'Presentaciones',
     description: 'Formatos comerciales de productos de salud o medicina.',
     placeholder: 'Ej: Spray 120 ml',
+    menuIcon: 'Package',
   },
   {
     key: 'activeIngredients',
     title: 'Ingredientes activos',
     description: 'Principios activos de medicamentos y productos de salud.',
     placeholder: 'Ej: Fipronil',
+    menuIcon: 'Flask',
   },
   {
     key: 'storageLocations',
     title: 'Ubicaciones de almacenamiento',
     description: 'Ubicaciones de bodega o percha reutilizables.',
     placeholder: 'Ej: Percha A-3',
+    menuIcon: 'MapPin',
   },
   {
     key: 'tags',
     title: 'Etiquetas',
     description: 'Etiquetas cortas usadas para panel, ficha o clasificación interna.',
     placeholder: 'Ej: Premium',
+    menuIcon: 'Tag',
   },
   {
     key: 'flavors',
     title: 'Sabores',
-    description: 'Sabores frecuentes para comida y snacks.',
+    description: 'Sabores frecuentes para Alimento y snacks.',
     placeholder: 'Ej: Pollo',
+    menuIcon: 'BowlFood',
   },
   {
     key: 'ageRanges',
     title: 'Edades',
     description: 'Rangos de edad comerciales como cachorro, adulto o senior.',
     placeholder: 'Ej: Adulto',
+    menuIcon: 'HourglassMedium',
   },
 ]
 
 export const PRODUCT_SYSTEM_REFERENCE_GROUPS: ProductSystemReferenceGroup[] = [
   {
     title: 'Categorias publicas',
-    description: 'Se mantienen controladas por el sistema para evitar cruces entre comida, ropa, salud y accesorios.',
+    description: 'Se mantienen controladas por el sistema para evitar cruces entre Alimento, ropa, salud y accesorios.',
     values: PRODUCT_CATEGORY_OPTIONS.map((option) => option.label),
   },
   {

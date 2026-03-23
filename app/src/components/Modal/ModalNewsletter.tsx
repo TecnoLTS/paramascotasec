@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import InlineSpinner from '@/components/Other/InlineSpinner'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
-import Image from 'next/image';
+import Image from '@/components/Common/AppImage';
 import useProducts from '@/hooks/useProducts'
 
 const ModalNewsletter = () => {

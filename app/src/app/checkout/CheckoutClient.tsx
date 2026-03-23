@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { Package, Truck, CreditCard, Building2, Banknote } from 'lucide-react'
@@ -77,6 +77,38 @@ const fallbackItems = [
 ]
 
 const fallbackSubtotal = fallbackItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
+
+type CheckoutSummaryImageProps = {
+    src: string;
+    alt: string;
+}
+
+const CHECKOUT_PLACEHOLDER_IMAGE = '/images/placeholder.jpg'
+
+const CheckoutSummaryImage = ({ src, alt }: CheckoutSummaryImageProps) => {
+    const normalizedSrc = src || CHECKOUT_PLACEHOLDER_IMAGE
+    const [imageSrc, setImageSrc] = useState(normalizedSrc)
+
+    useEffect(() => {
+        setImageSrc(normalizedSrc)
+    }, [normalizedSrc])
+
+    return (
+        <Image
+            src={imageSrc}
+            alt={alt}
+            width={80}
+            height={80}
+            sizes="80px"
+            className="w-full h-full object-cover"
+            onError={() => {
+                if (imageSrc !== CHECKOUT_PLACEHOLDER_IMAGE) {
+                    setImageSrc(CHECKOUT_PLACEHOLDER_IMAGE)
+                }
+            }}
+        />
+    )
+}
 
 const Checkout = () => {
     const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
@@ -1594,17 +1626,9 @@ const Checkout = () => {
                                     {items.map((item) => (
                                         <div key={item.id} className="flex items-center gap-3">
                                             <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#f3f4f6] flex-shrink-0">
-                                                <img
+                                                <CheckoutSummaryImage
                                                     src={item.image}
                                                     alt={item.name}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        const target = e.currentTarget
-                                                        if (!target.dataset.fallback) {
-                                                            target.dataset.fallback = 'true'
-                                                            target.src = '/images/placeholder.jpg'
-                                                        }
-                                                    }}
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0">

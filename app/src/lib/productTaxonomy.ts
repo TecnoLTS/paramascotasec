@@ -20,21 +20,21 @@ export const APPAREL_GENDER_OPTIONS = [
 ] as const
 
 export const PRODUCT_TYPE_OPTIONS = [
-  { value: 'comida', label: 'Comida' },
+  { value: 'Alimento', label: 'Alimento' },
   { value: 'ropa', label: 'Ropa' },
   { value: 'cuidado', label: 'Salud / medicinas' },
   { value: 'accesorios', label: 'Accesorios' },
 ] as const
 
 export const PRODUCT_CATEGORY_OPTIONS = [
-  { value: 'comida', label: 'Comida' },
+  { value: 'Alimento', label: 'Alimento' },
   { value: 'ropa', label: 'Ropa' },
   { value: 'salud', label: 'Salud' },
   { value: 'accesorios', label: 'Accesorios' },
 ] as const
 
 const CATEGORY_BY_TYPE: Record<string, string> = {
-  comida: 'comida',
+  Alimento: 'Alimento',
   ropa: 'ropa',
   cuidado: 'salud',
   accesorios: 'accesorios',
@@ -76,8 +76,8 @@ const resolveCanonicalProductType = (token: string) => {
     return 'cuidado'
   }
 
-  if (matchesAny(token, ['comida', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
-    return 'comida'
+  if (matchesAny(token, ['Alimento', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
+    return 'Alimento'
   }
 
   if (matchesAny(token, ['accesorio', 'accesorios', 'juguete', 'juguetes', 'cama', 'camas', 'comedero', 'comederos', 'plato', 'platos', 'correa', 'correas', 'collar', 'collares', 'arnes', 'arneses', 'transportadora', 'transportadoras', 'bolsa', 'bolsas'])) {
@@ -98,8 +98,8 @@ const resolveCanonicalProductCategory = (token: string) => {
     return 'salud'
   }
 
-  if (matchesAny(token, ['comida', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
-    return 'comida'
+  if (matchesAny(token, ['Alimento', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
+    return 'Alimento'
   }
 
   if (matchesAny(token, ['accesorio', 'accesorios', 'juguete', 'juguetes', 'cama', 'camas', 'comedero', 'comederos', 'plato', 'platos', 'correa', 'correas', 'collar', 'collares', 'arnes', 'arneses', 'transportadora', 'transportadoras', 'bolsa', 'bolsas'])) {
@@ -117,7 +117,7 @@ export const getDefaultCategoryForProductType = (productType?: string | null) =>
 export const getDefaultProductTypeForCategory = (category?: string | null) => {
   const normalizedCategory = resolveCanonicalProductCategory(normalizedToken(category))
   if (normalizedCategory === 'salud') return 'cuidado'
-  if (normalizedCategory === 'comida') return 'comida'
+  if (normalizedCategory === 'Alimento') return 'Alimento'
   if (normalizedCategory === 'ropa') return 'ropa'
   if (normalizedCategory === 'accesorios') return 'accesorios'
   return ''

@@ -1,6 +1,6 @@
 'use client'
 import React, { useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Breadcrumb from '@/components/Breadcrumb/Breadcrumb'

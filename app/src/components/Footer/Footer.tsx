@@ -3,7 +3,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useSite } from '@/context/SiteContext'
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'

@@ -1,5 +1,5 @@
 import React from 'react'
-import Image from 'next/image'
+import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 
 const Banner = () => {
@@ -20,7 +20,7 @@ const Banner = () => {
                             </div>
                             <div className="text-content xl:py-0 md:py-4 absolute top-1/2 left-8 -translate-y-1/2 text-white">
                                 <div className="button-upper-case">15 productos</div>
-                                <div className="heading3 mt-3">Comida para perros</div>
+                                <div className="heading3 mt-3">Alimento para perros</div>
                                 <div className="heading6 font-normal mt-1">Sillón de bambú relajante</div>
                                 <div className="button-main mt-5">Compra ahora</div>
                             </div>
@@ -37,7 +37,7 @@ const Banner = () => {
                             </div>
                             <div className="text-content xl:py-0 md:py-4 absolute top-1/2 left-8 -translate-y-1/2 text-white">
                                 <div className="button-upper-case">15 productos</div>
-                                <div className="heading3 mt-3">Comida para gatos</div>
+                                <div className="heading3 mt-3">Alimento para gatos</div>
                                 <div className="heading6 font-normal mt-1">Sillón de bambú relajante</div>
                                 <div className="button-main mt-5">Compra ahora</div>
                             </div>
