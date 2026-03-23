@@ -4,12 +4,16 @@ import React from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import {
-    createProductReferenceKeyRecord,
+    getSupplierSearchText,
+    normalizeReferenceList,
     PRODUCT_REFERENCE_SECTIONS,
     PRODUCT_SYSTEM_REFERENCE_GROUPS,
     type ProductReferenceData,
     type ProductReferenceKey,
+    type ProductSupplierReference,
 } from '@/lib/productReferenceData'
+import ProductReferenceSectionCard from './ProductReferenceSectionCard'
+import SupplierReferenceSectionCard from './SupplierReferenceSectionCard'
 
 type ProductReferenceDataPanelProps = {
     data: ProductReferenceData;
@@ -28,67 +32,130 @@ export default React.memo(function ProductReferenceDataPanel({
     onChange,
     onSave,
 }: ProductReferenceDataPanelProps) {
-    const sectionRefs = React.useRef<Record<ProductReferenceKey, HTMLDivElement | null>>(
-        createProductReferenceKeyRecord(() => null),
+    const [panelSearch, setPanelSearch] = React.useState('')
+    const [selectedKey, setSelectedKey] = React.useState<ProductReferenceKey>(PRODUCT_REFERENCE_SECTIONS[0].key)
+
+    const normalizedPanelSearch = React.useMemo(
+        () => panelSearch.replace(/\s+/g, ' ').trim().toLocaleLowerCase('es-EC'),
+        [panelSearch]
     )
-    const [draftValues, setDraftValues] = React.useState<Record<ProductReferenceKey, string>>(() =>
-        createProductReferenceKeyRecord(() => ''),
+    const totalEntries = React.useMemo(
+        () => PRODUCT_REFERENCE_SECTIONS.reduce((acc, section) => acc + (data[section.key]?.length || 0), 0),
+        [data]
     )
+    const emptyCatalogCount = React.useMemo(
+        () => PRODUCT_REFERENCE_SECTIONS.filter((section) => (data[section.key] || []).length === 0).length,
+        [data]
+    )
+    const filteredSections = React.useMemo(() => {
+        if (!normalizedPanelSearch) return PRODUCT_REFERENCE_SECTIONS
+        return PRODUCT_REFERENCE_SECTIONS.filter((section) => {
+            const haystack = [
+                section.title,
+                section.sidebarTitle,
+                section.description,
+                ...(section.key === 'suppliers'
+                    ? data.suppliers.map((supplier) => getSupplierSearchText(supplier))
+                    : (data[section.key] || [])),
+            ]
+                .join(' ')
+                .toLocaleLowerCase('es-EC')
 
-    const setDraftValue = React.useCallback((key: ProductReferenceKey, value: string) => {
-        setDraftValues((prev) => ({ ...prev, [key]: value }))
-    }, [])
-
-    const addValue = React.useCallback((key: ProductReferenceKey) => {
-        const nextValue = String(draftValues[key] || '').replace(/\s+/g, ' ').trim()
-        if (!nextValue) return
-
-        const currentValues = Array.isArray(data[key]) ? data[key] : []
-        const exists = currentValues.some((value) => value.localeCompare(nextValue, 'es-EC', { sensitivity: 'accent' }) === 0)
-            || currentValues.some((value) => value.toLocaleLowerCase('es-EC') === nextValue.toLocaleLowerCase('es-EC'))
-        if (exists) {
-            setDraftValue(key, '')
-            return
-        }
-
-        onChange({
-            ...data,
-            [key]: [...currentValues, nextValue],
+            return haystack.includes(normalizedPanelSearch)
         })
-        setDraftValue(key, '')
-    }, [data, draftValues, onChange, setDraftValue])
+    }, [data, normalizedPanelSearch])
 
-    const removeValue = React.useCallback((key: ProductReferenceKey, value: string) => {
+    const updateSectionValues = React.useCallback((key: ProductReferenceKey, nextValues: string[]) => {
         onChange({
             ...data,
-            [key]: (data[key] || []).filter((item) => item !== value),
+            [key]: normalizeReferenceList(nextValues),
+        })
+    }, [data, onChange])
+
+    const updateSuppliers = React.useCallback((nextValues: ProductSupplierReference[]) => {
+        onChange({
+            ...data,
+            suppliers: nextValues,
         })
     }, [data, onChange])
 
     React.useEffect(() => {
-        if (!focusKey) return
-        const node = sectionRefs.current[focusKey]
-        if (!node) return
-        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, [focusKey, loading])
+        if (focusKey) {
+            setSelectedKey(focusKey)
+        }
+    }, [focusKey])
+
+    React.useEffect(() => {
+        if (!filteredSections.some((section) => section.key === selectedKey)) {
+            setSelectedKey(filteredSections[0]?.key ?? PRODUCT_REFERENCE_SECTIONS[0].key)
+        }
+    }, [filteredSections, selectedKey])
+
+    const selectedSection = React.useMemo(
+        () => PRODUCT_REFERENCE_SECTIONS.find((section) => section.key === selectedKey) || PRODUCT_REFERENCE_SECTIONS[0],
+        [selectedKey]
+    )
 
     return (
         <div className="tab text-content w-full">
-            <div className="heading5 pb-4">Catálogos operativos del producto</div>
-            <p className="text-secondary mb-6">
-                Convierte campos repetitivos del editor en opciones seleccionables. Si falta una marca, proveedor, talla
-                o material, regístralo aquí y luego aparecerá como select en el alta de productos.
-            </p>
+            <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 pb-5">
+                <div>
+                    <div className="heading5">Catálogos operativos</div>
+                    <p className="text-secondary mt-2 max-w-3xl">
+                        Administra las opciones reutilizables del editor de productos. Aquí registras, consultas y editas
+                        marcas, proveedores, tallas, materiales y demás listas operativas sin dejar texto libre descontrolado.
+                    </p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 xl:min-w-[420px]">
+                    <div className="rounded-xl border border-line bg-white px-4 py-3">
+                        <div className="text-[10px] uppercase font-bold text-secondary">Catálogos</div>
+                        <div className="text-2xl font-bold mt-1">{PRODUCT_REFERENCE_SECTIONS.length}</div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-white px-4 py-3">
+                        <div className="text-[10px] uppercase font-bold text-secondary">Opciones</div>
+                        <div className="text-2xl font-bold mt-1">{totalEntries}</div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-white px-4 py-3">
+                        <div className="text-[10px] uppercase font-bold text-secondary">Vacíos</div>
+                        <div className="text-2xl font-bold mt-1">{emptyCatalogCount}</div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-white px-4 py-3">
+                        <div className="text-[10px] uppercase font-bold text-secondary">Estado</div>
+                        <div className={`text-sm font-bold mt-2 ${saving ? 'text-orange-600' : 'text-green-700'}`}>
+                            {saving ? 'Guardando' : 'Listo'}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            <div className="p-5 rounded-xl border border-line bg-surface mb-6">
+            <div className="p-5 rounded-2xl border border-line bg-white mb-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <div className="text-sm font-semibold">Buscar catálogo u opción</div>
+                        <p className="text-secondary text-xs mt-1">Busca por nombre de catálogo, descripción u opción existente.</p>
+                    </div>
+                    <div className="relative lg:w-[420px]">
+                        <Icon.MagnifyingGlass size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary" />
+                        <input
+                            className="border border-line rounded-xl pl-10 pr-4 py-3 w-full outline-none transition-all focus:border-black"
+                            value={panelSearch}
+                            placeholder="Buscar marca, proveedor, talla, color..."
+                            onChange={(event) => setPanelSearch(event.target.value)}
+                            disabled={saving || loading}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-line bg-surface mb-6">
                 <div className="text-sm font-semibold mb-3">Taxonomía fija del sistema</div>
                 <p className="text-secondary text-xs mb-4">
-                    Categoría pública, tipo de producto y mascota se mantienen controlados para no romper filtros,
-                    colecciones y reglas de catálogo. Lo editable aquí son las listas operativas que antes estaban libres.
+                    Categoría pública, tipo de producto y mascota se mantienen controlados por el sistema para no romper
+                    filtros, colecciones y reglas del catálogo. Aquí solo administras listas operativas.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     {PRODUCT_SYSTEM_REFERENCE_GROUPS.map((group) => (
-                        <div key={group.title} className="rounded-xl border border-line bg-white p-4">
+                        <div key={group.title} className="rounded-2xl border border-line bg-white p-4">
                             <div className="text-xs uppercase font-bold text-secondary mb-2">{group.title}</div>
                             <p className="text-secondary text-xs mb-3">{group.description}</p>
                             <div className="flex flex-wrap gap-2">
@@ -103,82 +170,84 @@ export default React.memo(function ProductReferenceDataPanel({
                 </div>
             </div>
 
-            <div className="p-6 rounded-xl border border-line bg-white">
+            <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-6">
+                <div className="rounded-2xl border border-line bg-white p-4 h-fit">
+                    <div className="text-sm font-semibold">Catálogos disponibles</div>
+                    <p className="text-secondary text-xs mt-1">
+                        Elige el catálogo que quieres administrar. Esta vista está pensada para crecer sin volverse incómoda.
+                    </p>
+                    <div className="mt-4 space-y-2 max-h-[720px] overflow-y-auto pr-1">
+                        {filteredSections.length > 0 ? filteredSections.map((section) => {
+                            const ItemIcon = Icon[section.menuIcon]
+                            const isActive = selectedSection.key === section.key
+                            return (
+                                <button
+                                    key={`catalog-selector-${section.key}`}
+                                    type="button"
+                                    className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
+                                        isActive
+                                            ? 'border-primary bg-primary/5 ring-1 ring-primary/10'
+                                            : 'border-line bg-surface/40 hover:bg-surface'
+                                    }`}
+                                    onClick={() => setSelectedKey(section.key)}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                                                isActive ? 'bg-primary/10 text-primary' : 'bg-white border border-line'
+                                            }`}>
+                                                <ItemIcon size={18} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-sm leading-tight">{section.title}</div>
+                                                <div className="text-xs text-secondary mt-1 truncate">{section.description}</div>
+                                            </div>
+                                        </div>
+                                        <div className="px-2 py-1 rounded-full bg-white text-[11px] font-bold text-secondary shrink-0">
+                                            {(data[section.key] || []).length}
+                                        </div>
+                                    </div>
+                                </button>
+                            )
+                        }) : (
+                            <div className="rounded-xl border border-dashed border-line px-4 py-6 text-sm text-secondary bg-surface/50">
+                                No hay catálogos que coincidan con la búsqueda actual.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-line bg-white">
                 {loading ? (
                     <div className="py-12 text-center text-secondary">Cargando catálogos...</div>
                 ) : (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        {PRODUCT_REFERENCE_SECTIONS.map((section) => (
-                            <div
-                                key={section.key}
-                                ref={(node) => { sectionRefs.current[section.key] = node }}
-                                className={`rounded-xl border p-5 transition-all ${
-                                    focusKey === section.key
-                                        ? 'border-black bg-blue-50/40 ring-1 ring-black/10'
-                                        : 'border-line bg-surface'
-                                }`}
-                            >
-                                <div className="mb-4">
-                                    <div className="text-sm font-semibold">{section.title}</div>
-                                    <p className="text-secondary text-xs mt-1">{section.description}</p>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <input
-                                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all focus:border-black"
-                                        value={draftValues[section.key]}
-                                        placeholder={section.placeholder}
-                                        onChange={(event) => setDraftValue(section.key, event.target.value)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                                event.preventDefault()
-                                                addValue(section.key)
-                                            }
-                                        }}
-                                        disabled={saving}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="px-4 py-3 rounded-lg border border-black font-semibold hover:bg-black hover:text-white transition-all disabled:opacity-60"
-                                        onClick={() => addValue(section.key)}
-                                        disabled={saving}
-                                    >
-                                        Agregar
-                                    </button>
-                                </div>
-
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    {(data[section.key] || []).length > 0 ? (
-                                        (data[section.key] || []).map((value) => (
-                                            <span
-                                                key={`${section.key}-${value}`}
-                                                className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white border border-line text-sm"
-                                            >
-                                                <span>{value}</span>
-                                                <button
-                                                    type="button"
-                                                    className="text-secondary hover:text-red transition-colors"
-                                                    onClick={() => removeValue(section.key, value)}
-                                                    disabled={saving}
-                                                    aria-label={`Quitar ${value}`}
-                                                >
-                                                    <Icon.X size={14} />
-                                                </button>
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <div className="text-xs text-secondary">Aun no hay opciones registradas.</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    selectedSection.key === 'suppliers' ? (
+                        <SupplierReferenceSectionCard
+                            section={selectedSection}
+                            values={data.suppliers}
+                            saving={saving}
+                            focused={focusKey === selectedSection.key}
+                            onChangeValues={updateSuppliers}
+                        />
+                    ) : (
+                        <ProductReferenceSectionCard
+                            section={selectedSection}
+                            values={data[selectedSection.key] || []}
+                            saving={saving}
+                            focused={focusKey === selectedSection.key}
+                            onChangeValues={(nextValues) => updateSectionValues(selectedSection.key, nextValues)}
+                        />
+                    )
                 )}
 
-                <div className="mt-6 flex justify-end">
-                    <button className="button-main py-2 px-6 disabled:opacity-60" onClick={onSave} disabled={saving || loading}>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+                    <p className="text-xs text-secondary">
+                        Los cambios quedan disponibles en el editor de productos después de guardar este módulo.
+                    </p>
+                    <button className="button-main py-2.5 px-6 disabled:opacity-60" onClick={onSave} disabled={saving || loading}>
                         {saving ? 'Guardando...' : 'Guardar catálogos'}
                     </button>
+                </div>
                 </div>
             </div>
         </div>

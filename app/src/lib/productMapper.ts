@@ -81,6 +81,18 @@ type ProductWithRelations = {
       remainingUnits?: number | string | null
       lastPurchaseAt?: string | null
     } | null
+    procurement?: {
+      openLotsCount?: number | string | null
+      remainingUnitsTotal?: number | string | null
+      remainingCostTotal?: number | string | null
+      weightedUnitCost?: number | string | null
+      minUnitCost?: number | string | null
+      maxUnitCost?: number | string | null
+      weightedProfit?: number | string | null
+      weightedMargin?: number | string | null
+      lastPurchaseProfit?: number | string | null
+      lastPurchaseMargin?: number | string | null
+    } | null
     lastPurchaseInvoice?: PurchaseInvoiceSummary | null
   } | null
   expirationDate?: string | null
@@ -106,6 +118,11 @@ type ProductWithRelations = {
       recommended_price_pvp?: number
       max_price_pvp?: number
     }
+  } | null
+  tax?: {
+    rate?: number | string | null
+    multiplier?: number | string | null
+    exempt?: boolean | string | number | null
   } | null
 }
 
@@ -137,6 +154,17 @@ const normalizeImageUrl = (url: string) => {
   } catch {
     return url
   }
+}
+
+const parseBooleanLike = (value: unknown) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['1', 'true', 'yes', 'y', 'on', 'si', 'sí'].includes(normalized)) return true
+    if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+  }
+  return false
 }
 
 const mapVariation = (variation: Variation) => ({
@@ -223,6 +251,11 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     sold: product.sold,
     quantity: product.quantity,
     cost: Number(product.cost ?? product.business?.cost ?? 0),
+    tax: product.tax ? {
+      rate: Number(product.tax.rate ?? 0),
+      multiplier: Number(product.tax.multiplier ?? 1),
+      exempt: parseBooleanLike(product.tax.exempt),
+    } : undefined,
     business: product.business ?? undefined,
     quantityPurchase: Number(product.quantityPurchase ?? 1),
     sizes: resolvedSizes,
@@ -274,6 +307,18 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
         purchasedUnits: Number(product.inventory.purchaseHistory.purchasedUnits ?? 0),
         remainingUnits: Number(product.inventory.purchaseHistory.remainingUnits ?? 0),
         lastPurchaseAt: product.inventory.purchaseHistory.lastPurchaseAt ?? null,
+      } : undefined,
+      procurement: product.inventory.procurement ? {
+        openLotsCount: Number(product.inventory.procurement.openLotsCount ?? 0),
+        remainingUnitsTotal: Number(product.inventory.procurement.remainingUnitsTotal ?? 0),
+        remainingCostTotal: Number(product.inventory.procurement.remainingCostTotal ?? 0),
+        weightedUnitCost: Number(product.inventory.procurement.weightedUnitCost ?? 0),
+        minUnitCost: Number(product.inventory.procurement.minUnitCost ?? 0),
+        maxUnitCost: Number(product.inventory.procurement.maxUnitCost ?? 0),
+        weightedProfit: Number(product.inventory.procurement.weightedProfit ?? 0),
+        weightedMargin: Number(product.inventory.procurement.weightedMargin ?? 0),
+        lastPurchaseProfit: Number(product.inventory.procurement.lastPurchaseProfit ?? 0),
+        lastPurchaseMargin: Number(product.inventory.procurement.lastPurchaseMargin ?? 0),
       } : undefined,
       lastPurchaseInvoice,
     } : undefined,

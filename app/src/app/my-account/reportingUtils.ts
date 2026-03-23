@@ -122,7 +122,6 @@ export const summarizePurchaseInvoices = (recentPurchaseInvoices: PurchaseInvoic
 export const buildProductBreakdownMeta = (
   dashboardStats: DashboardStats | null,
   selectedProductMetric: ProductDetailMetric,
-  vatRate: number,
 ) => {
   switch (selectedProductMetric) {
     case 'gross':
@@ -134,7 +133,7 @@ export const buildProductBreakdownMeta = (
     case 'vat':
       return {
         title: 'IVA Cobrado por Producto',
-        subtitle: 'Estimación por producto usando la tasa de IVA aplicada al catálogo.',
+        subtitle: 'Calculado con el IVA real aplicado a cada producto, incluyendo exentos.',
         total: Number(dashboardStats?.businessMetrics?.salesSummary?.vat ?? 0),
       }
     case 'shipping':
@@ -170,30 +169,61 @@ export const buildSalesProductBreakdown = (
   adminProductsList: any[],
   parseMoney: (value: any) => number,
   selectedProductMetric: ProductDetailMetric,
-  vatRate: number,
 ) => {
+  const normalizeBooleanLike = (value: unknown) => {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') return value !== 0
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (['1', 'true', 'yes', 'y', 'on', 'si', 'sí'].includes(normalized)) return true
+      if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+    }
+    return false
+  }
   const products = dashboardStats?.businessMetrics?.traceability?.products || []
-  const vatRateForBreakdown = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
-  const vatMultiplierForBreakdown = 1 + (vatRateForBreakdown / 100)
   const totalNet = products.reduce((acc, item) => acc + Number(item.net_revenue ?? 0), 0)
   const totalShipping = Number(dashboardStats?.businessMetrics?.salesSummary?.shipping ?? 0)
 
-  const costByProductId = new Map<string, number>(
-    (adminProductsList || []).map((product: any) => {
-      const productId = String(product.id ?? '')
+  const productMetaEntries = (adminProductsList || []).flatMap((product: any) => {
+      const productIds = Array.from(new Set([
+        String(product.internalId ?? '').trim(),
+        String(product.id ?? '').trim(),
+      ].filter(Boolean)))
       const cost = parseMoney(product.business?.cost ?? product.cost)
-      return [productId, cost]
-    }),
+      const explicitTaxRate = Number(product?.tax?.rate)
+      const taxExempt = normalizeBooleanLike(
+        product?.tax?.exempt
+        ?? product?.taxExempt
+        ?? product?.attributes?.taxExempt
+        ?? product?.attributes?.tax_exempt
+      )
+      const resolvedTaxRate = Number.isFinite(explicitTaxRate)
+        ? Math.max(explicitTaxRate, 0)
+        : (taxExempt ? 0 : Number(dashboardStats?.tax?.rate ?? 0))
+      const explicitTaxMultiplier = Number(product?.tax?.multiplier)
+      const taxMultiplier = Number.isFinite(explicitTaxMultiplier) && explicitTaxMultiplier > 0
+        ? explicitTaxMultiplier
+        : 1 + (resolvedTaxRate / 100)
+
+      return productIds.map((productId) => [productId, {
+        cost,
+        taxMultiplier: taxMultiplier > 0 ? taxMultiplier : 1,
+      }] as const)
+    })
+  const productMetaByProductId = new Map<string, { cost: number; taxMultiplier: number }>(
+    productMetaEntries,
   )
 
   return products
     .map((item) => {
+      const productMeta = productMetaByProductId.get(String(item.product_id ?? ''))
       const net = Number(item.net_revenue ?? 0)
-      const gross = vatMultiplierForBreakdown > 0 ? net * vatMultiplierForBreakdown : net
-      const vat = Math.max(gross - net, 0)
-      const shipping = totalNet > 0 ? (totalShipping * net) / totalNet : 0
+      const shipping = Number(item.shipping_amount ?? (totalNet > 0 ? (totalShipping * net) / totalNet : 0))
+      const fallbackGrossItems = productMeta ? (net * productMeta.taxMultiplier) : net
+      const gross = Number(item.gross_revenue ?? (fallbackGrossItems + shipping))
+      const vat = Number(item.vat_amount ?? Math.max(fallbackGrossItems - net, 0))
       const units = Number(item.units_sold ?? 0)
-      const unitCost = costByProductId.get(String(item.product_id ?? '')) ?? 0
+      const unitCost = productMeta?.cost ?? 0
       const cost = Math.max(unitCost * units, 0)
       const profit = net - cost
       const metricValue = selectedProductMetric === 'gross'
@@ -228,9 +258,9 @@ export const buildInventoryProductBreakdown = (
   return (adminProductsList || [])
     .map((product: any) => {
       const quantity = Number(product.quantity ?? 0)
-      const unitCost = parseMoney(product.business?.cost ?? product.cost)
+      const unitCost = parseMoney(product.inventory?.procurement?.weightedUnitCost ?? product.business?.cost ?? product.cost)
       const unitPrice = parseMoney(product.price)
-      const inventoryCost = Math.max(quantity * unitCost, 0)
+      const inventoryCost = Math.max(parseMoney(product.inventory?.procurement?.remainingCostTotal) || (quantity * unitCost), 0)
       const inventoryMarket = Math.max(quantity * unitPrice, 0)
       return {
         id: String(product.id ?? ''),

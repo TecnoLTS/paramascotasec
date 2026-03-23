@@ -37,6 +37,11 @@ export interface ProductType {
     category: string,
     productType?: string,
     cost?: number,
+    tax?: {
+        rate?: number,
+        multiplier?: number,
+        exempt?: boolean,
+    },
     business?: {
         cost?: number,
         margin?: number,
@@ -88,6 +93,18 @@ export interface ProductType {
             purchasedUnits?: number,
             remainingUnits?: number,
             lastPurchaseAt?: string | null
+        },
+        procurement?: {
+            openLotsCount?: number,
+            remainingUnitsTotal?: number,
+            remainingCostTotal?: number,
+            weightedUnitCost?: number,
+            minUnitCost?: number,
+            maxUnitCost?: number,
+            weightedProfit?: number,
+            weightedMargin?: number,
+            lastPurchaseProfit?: number,
+            lastPurchaseMargin?: number
         },
         lastPurchaseInvoice?: PurchaseInvoiceSummary | null
     },

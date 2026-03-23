@@ -33,6 +33,13 @@ export type InventoryManagementRow = {
   unitCost: number
   inventoryCost: number
   inventoryMarket: number
+  weightedUnitCost: number
+  weightedMargin: number
+  weightedProfit: number
+  lastPurchaseMargin: number
+  lastPurchaseProfit: number
+  openLotsCount: number
+  remainingUnitsTotal: number
   expirationMeta: ReturnType<typeof getProductExpirationMeta>
   lotCode: string
   storageLocation: string
@@ -137,14 +144,22 @@ export const buildInventoryManagementRows = (
       const lastPurchaseReceivedAt = String(lastPurchaseInvoice?.receivedAt || '').trim()
       const lastPurchaseQuantity = Math.max(0, Number(lastPurchaseInvoice?.quantity ?? 0))
       const lastPurchaseUnitCost = parseMoney(lastPurchaseInvoice?.unitCost)
+      const procurement = product.inventory?.procurement || {}
       const purchaseEntriesCount = Math.max(0, Number(product.inventory?.purchaseHistory?.entriesCount ?? 0))
       const purchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.purchasedUnits ?? 0))
       const remainingPurchasedUnits = Math.max(0, Number(product.inventory?.purchaseHistory?.remainingUnits ?? 0))
       const supplier = lastPurchaseSupplier || manualSupplier
       const unitPrice = parseMoney(product.price)
-      const unitCost = parseMoney(product.business?.cost ?? product.cost)
-      const inventoryCost = Math.max(stock * unitCost, 0)
+      const weightedUnitCost = parseMoney(procurement.weightedUnitCost ?? product.business?.cost ?? product.cost)
+      const unitCost = weightedUnitCost
+      const inventoryCost = Math.max(parseMoney(procurement.remainingCostTotal) || (stock * unitCost), 0)
       const inventoryMarket = Math.max(stock * unitPrice, 0)
+      const weightedMargin = Number(procurement.weightedMargin ?? 0)
+      const weightedProfit = parseMoney(procurement.weightedProfit)
+      const lastPurchaseMargin = Number(procurement.lastPurchaseMargin ?? 0)
+      const lastPurchaseProfit = parseMoney(procurement.lastPurchaseProfit)
+      const openLotsCount = Math.max(0, Number(procurement.openLotsCount ?? 0))
+      const remainingUnitsTotal = Math.max(0, Number(procurement.remainingUnitsTotal ?? stock))
       const isPerishable = expirationMeta.isFood
       const stockStatus: InventoryManagementRow['stockStatus'] = stock <= 0
         ? 'out'
@@ -170,6 +185,13 @@ export const buildInventoryManagementRows = (
         unitCost,
         inventoryCost,
         inventoryMarket,
+        weightedUnitCost,
+        weightedMargin,
+        weightedProfit,
+        lastPurchaseMargin,
+        lastPurchaseProfit,
+        openLotsCount,
+        remainingUnitsTotal,
         expirationMeta,
         lotCode,
         storageLocation,

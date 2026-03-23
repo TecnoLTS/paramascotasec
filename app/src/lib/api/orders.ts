@@ -59,6 +59,7 @@ export const getQuote = async (data: { items: any[], delivery_method: string, co
                 vat_rate: 0,
                 vat_subtotal: 0,
                 vat_amount: 0,
+                mixed_vat_rates: false,
                 discount_total: 0,
                 storeDisabled: true,
                 message

@@ -142,13 +142,38 @@ export const getDefaultBillingAddress = (savedAddresses: SavedAddressEntry[]): A
 
 export const getOrderItemsGrossSubtotal = (order: any) => {
   if (!order) return 0
+  if (order.items_subtotal !== undefined && order.items_subtotal !== null) {
+    const storedSubtotal = Number(order.items_subtotal ?? 0)
+    if (Number.isFinite(storedSubtotal) && storedSubtotal >= 0) {
+      return storedSubtotal
+    }
+  }
   if (Array.isArray(order.items)) {
-    return order.items.reduce((acc: number, item: any) => acc + Number(item.price ?? 0) * Number(item.quantity ?? 1), 0)
+    return order.items.reduce((acc: number, item: any) => {
+      const lineNet = Number(item?.net_total ?? NaN)
+      const lineTax = Number(item?.tax_amount ?? NaN)
+      if (Number.isFinite(lineNet) && Number.isFinite(lineTax)) {
+        return acc + lineNet + lineTax
+      }
+      return acc + Number(item.price ?? 0) * Number(item.quantity ?? 1)
+    }, 0)
   }
   return Number(order.total ?? 0)
 }
 
 export const getOrderItemsNetSubtotal = (order: any) => {
+  if (!order) return 0
+  if (Array.isArray(order.items)) {
+    const itemsNetTotal = order.items.reduce((acc: number, item: any) => {
+      const lineNet = Number(item?.net_total ?? NaN)
+      if (Number.isFinite(lineNet)) return acc + lineNet
+      const unitNet = Number(item?.price_net ?? NaN)
+      const quantity = Number(item?.quantity ?? 1)
+      if (Number.isFinite(unitNet)) return acc + unitNet * quantity
+      return acc
+    }, 0)
+    if (itemsNetTotal > 0) return itemsNetTotal
+  }
   const grossSubtotal = getOrderItemsGrossSubtotal(order)
   const rate = Number(order?.vat_rate ?? 0)
   const multiplier = 1 + rate / 100
@@ -179,12 +204,26 @@ export const getOrderVatAmount = (order: any) => {
   if (!order) return 0
   const amount = Number(order.vat_amount ?? 0)
   if (amount > 0) return amount
+  if (Array.isArray(order.items)) {
+    const itemsTaxAmount = order.items.reduce((acc: number, item: any) => {
+      const lineTax = Number(item?.tax_amount ?? NaN)
+      return Number.isFinite(lineTax) ? acc + lineTax : acc
+    }, 0)
+    if (itemsTaxAmount > 0) return itemsTaxAmount
+  }
   const itemsSubtotal = getOrderItemsGrossSubtotal(order)
   const net = getOrderVatSubtotal(order)
   return itemsSubtotal - net
 }
 
 export const getItemNetPrice = (item: any, order: any) => {
+  const storedUnitNet = Number(item?.price_net ?? NaN)
+  if (Number.isFinite(storedUnitNet) && storedUnitNet >= 0) return storedUnitNet
+  const storedLineNet = Number(item?.net_total ?? NaN)
+  const quantity = Number(item?.quantity ?? 1)
+  if (Number.isFinite(storedLineNet) && quantity > 0) {
+    return storedLineNet / quantity
+  }
   const rate = Number(order?.vat_rate ?? 0)
   const price = Number(item?.price ?? 0)
   const multiplier = 1 + rate / 100

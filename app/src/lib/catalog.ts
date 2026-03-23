@@ -208,6 +208,29 @@ const compareVariants = (left: ProductType, right: ProductType) => {
   return leftLabel.localeCompare(rightLabel)
 }
 
+const compareVariantsByDisplayOrder = (left: ProductType, right: ProductType) => {
+  const leftPrice = Number(left.price ?? 0)
+  const rightPrice = Number(right.price ?? 0)
+  const leftHasStock = Number(left.quantity ?? 0) > 0
+  const rightHasStock = Number(right.quantity ?? 0) > 0
+  const leftHasPrice = leftPrice > 0
+  const rightHasPrice = rightPrice > 0
+
+  if (leftHasStock !== rightHasStock) {
+    return leftHasStock ? -1 : 1
+  }
+
+  if (leftHasPrice !== rightHasPrice) {
+    return leftHasPrice ? -1 : 1
+  }
+
+  if (leftPrice !== rightPrice) {
+    return leftPrice - rightPrice
+  }
+
+  return compareVariants(left, right)
+}
+
 const toTimestamp = (value?: string | null) => {
   const parsed = Date.parse(value ?? '')
   return Number.isFinite(parsed) ? parsed : 0
@@ -217,6 +240,33 @@ const pickRepresentativeVariant = (variants: ProductType[]) => {
   const inStock = variants.filter((variant) => Number(variant.quantity ?? 0) > 0)
   const pool = inStock.length > 0 ? inStock : variants
   return pool.slice().sort(compareVariants)[0] ?? variants[0]
+}
+
+const isVariantActuallyOnSale = (variant: ProductType) => {
+  const currentPrice = Number(variant.price ?? 0)
+  const originalPrice = Number(variant.originPrice ?? 0)
+  return Boolean(variant.sale) && originalPrice > 0 && originalPrice > currentPrice
+}
+
+const pickLowestPricedVariant = (variants: ProductType[]) => {
+  const inStockPricedVariants = variants.filter((variant) => Number(variant.quantity ?? 0) > 0 && Number(variant.price ?? 0) > 0)
+  const pricedVariants = variants.filter((variant) => Number(variant.price ?? 0) > 0)
+  const inStockVariants = variants.filter((variant) => Number(variant.quantity ?? 0) > 0)
+  const pool = inStockPricedVariants.length > 0
+    ? inStockPricedVariants
+    : pricedVariants.length > 0
+      ? pricedVariants
+      : inStockVariants.length > 0
+        ? inStockVariants
+        : variants
+  return pool
+    .slice()
+    .sort(compareVariantsByDisplayOrder)[0]
+}
+
+const pickPricingReferenceVariant = (product: ProductType) => {
+  const variants = getProductVariants(product)
+  return pickLowestPricedVariant(variants) ?? product
 }
 
 const toVariantOption = (product: ProductType): ProductVariantOption => ({
@@ -235,27 +285,25 @@ const toVariantOption = (product: ProductType): ProductVariantOption => ({
 
 export const getProductVariants = (product: ProductType): ProductType[] => {
   if (Array.isArray(product.variantOptions) && product.variantOptions.length > 0) {
-    return product.variantOptions.map((option) => option.product).slice().sort(compareVariants)
+    return product.variantOptions.map((option) => option.product).slice().sort(compareVariantsByDisplayOrder)
   }
   return [product]
 }
 
 export const getProductCurrentPrice = (product: ProductType) =>
-  Number(product.priceMin ?? product.price ?? 0)
+  Number(pickPricingReferenceVariant(product)?.price ?? product.priceMin ?? product.price ?? 0)
 
 export const getProductOriginalPrice = (product: ProductType) =>
-  Number(product.originPriceMax ?? product.originPrice ?? 0)
+  Number(pickPricingReferenceVariant(product)?.originPrice ?? product.originPrice ?? 0)
 
 export const isProductOnSale = (product: ProductType) => {
-  const currentPrice = getProductCurrentPrice(product)
-  const originalPrice = getProductOriginalPrice(product)
-
-  return Boolean(product.sale) || (originalPrice > 0 && originalPrice > currentPrice)
+  return isVariantActuallyOnSale(pickPricingReferenceVariant(product))
 }
 
 export const getProductDiscountPercent = (product: ProductType) => {
-  const currentPrice = getProductCurrentPrice(product)
-  const originalPrice = getProductOriginalPrice(product)
+  const pricingVariant = pickPricingReferenceVariant(product)
+  const currentPrice = Number(pricingVariant?.price ?? 0)
+  const originalPrice = Number(pricingVariant?.originPrice ?? 0)
 
   if (originalPrice <= 0 || originalPrice <= currentPrice) {
     return 0
@@ -266,15 +314,22 @@ export const getProductDiscountPercent = (product: ProductType) => {
 
 export const resolveSelectedVariant = (product: ProductType, idOrSlug?: string | null) => {
   const variants = getProductVariants(product)
-  if (idOrSlug) {
+  const requestedValue = (idOrSlug ?? '').trim()
+  const matchesFamilyIdentifier = requestedValue !== '' && (
+    product.id === requestedValue ||
+    product.internalId === requestedValue ||
+    product.slug === requestedValue
+  )
+
+  if (requestedValue && !matchesFamilyIdentifier) {
     const selected = variants.find((variant) =>
-      variant.id === idOrSlug ||
-      variant.internalId === idOrSlug ||
-      variant.slug === idOrSlug
+      variant.id === requestedValue ||
+      variant.internalId === requestedValue ||
+      variant.slug === requestedValue
     )
     if (selected) return selected
   }
-  return pickRepresentativeVariant(variants)
+  return pickLowestPricedVariant(variants) ?? pickRepresentativeVariant(variants)
 }
 
 export const groupCatalogProducts = (products: ProductType[]): ProductType[] => {
@@ -308,6 +363,7 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
   return Array.from(groupedMap.values()).map((variants) => {
     const sortedVariants = variants.slice().sort(compareVariants)
     const representative = pickRepresentativeVariant(sortedVariants)
+    const pricingReference = pickLowestPricedVariant(sortedVariants) ?? representative
     const sizes = normalizeMeasurementLabels(sortedVariants.map((variant) => getProductVariantLabel(variant)))
     const priceValues = sortedVariants.map((variant) => Number(variant.price ?? 0)).filter((value) => value > 0)
     const originValues = sortedVariants.map((variant) => Number(variant.originPrice ?? 0)).filter((value) => value > 0)
@@ -339,11 +395,11 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
       originPriceMin: originValues.length > 0 ? Math.min(...originValues) : Number(representative.originPrice ?? 0),
       originPriceMax: originValues.length > 0 ? Math.max(...originValues) : Number(representative.originPrice ?? 0),
       price: priceValues.length > 0 ? Math.min(...priceValues) : Number(representative.price ?? 0),
-      originPrice: originValues.length > 0 ? Math.max(...originValues) : Number(representative.originPrice ?? 0),
+      originPrice: Number(pricingReference?.originPrice ?? representative.originPrice ?? 0),
       createdAt: latestCreatedAt,
       updatedAt: latestUpdatedAt,
       new: sortedVariants.some((variant) => variant.new),
-      sale: sortedVariants.some((variant) => variant.sale || Number(variant.originPrice ?? 0) > Number(variant.price ?? 0)),
+      sale: isVariantActuallyOnSale(pricingReference),
     }
   })
 }

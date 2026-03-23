@@ -1,8 +1,10 @@
 'use client'
 
 import React from 'react'
+import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import type { AdminUserSummary } from '../types'
+import UserEditorModal from './UserEditorModal'
 
 type UsersManagementPanelProps = {
     users: AdminUserSummary[];
@@ -25,6 +27,9 @@ type UsersManagementPanelProps = {
     formatMoney: (value: number) => string;
     formatDate: (value: string) => string;
     formatDateTime: (value: string) => string;
+    currentUserId?: string | null;
+    onUsersMutated: () => Promise<void> | void;
+    showNotification: (text: string, type?: 'success' | 'error') => void;
 }
 
 const SUMMARY_CARDS: Array<{
@@ -54,18 +59,46 @@ export default React.memo(function UsersManagementPanel({
     formatMoney,
     formatDate,
     formatDateTime,
+    currentUserId,
+    onUsersMutated,
+    showNotification,
 }: UsersManagementPanelProps) {
+    const [isEditorOpen, setIsEditorOpen] = React.useState(false)
+    const [editorMode, setEditorMode] = React.useState<'create' | 'edit'>('create')
+    const [selectedUser, setSelectedUser] = React.useState<AdminUserSummary | null>(null)
+
+    const openCreateModal = React.useCallback(() => {
+        setEditorMode('create')
+        setSelectedUser(null)
+        setIsEditorOpen(true)
+    }, [])
+
+    const openEditModal = React.useCallback((adminUser: AdminUserSummary) => {
+        setEditorMode('edit')
+        setSelectedUser(adminUser)
+        setIsEditorOpen(true)
+    }, [])
+
     return (
         <div className="tab text-content w-full">
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                     <div className="heading5">Usuarios registrados</div>
                     <p className="text-secondary text-sm mt-1">
                         Consulta clientes y administradores con métricas de actividad y compras.
                     </p>
                 </div>
-                <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
-                    Total: {users.length.toLocaleString('es-EC')}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
+                        Total: {users.length.toLocaleString('es-EC')}
+                    </div>
+                    <button
+                        type="button"
+                        className="button-main px-5 py-2"
+                        onClick={openCreateModal}
+                    >
+                        Nuevo usuario
+                    </button>
                 </div>
             </div>
 
@@ -168,6 +201,16 @@ export default React.memo(function UsersManagementPanel({
                                         <div className="mt-3 text-xs text-secondary">
                                             Última compra: {adminUser.last_order_at ? formatDateTime(adminUser.last_order_at) : 'Sin compras'}
                                         </div>
+                                        <div className="mt-4 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => openEditModal(adminUser)}
+                                                className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold hover:bg-surface"
+                                            >
+                                                <Icon.PencilSimple size={14} />
+                                                Editar
+                                            </button>
+                                        </div>
                                     </div>
                                 )
                             })}
@@ -186,6 +229,7 @@ export default React.memo(function UsersManagementPanel({
                                         <th className="text-right px-4 py-3 text-[11px] uppercase font-bold text-secondary">Pedidos</th>
                                         <th className="text-right px-4 py-3 text-[11px] uppercase font-bold text-secondary">Facturado</th>
                                         <th className="text-left px-4 py-3 text-[11px] uppercase font-bold text-secondary">Última compra</th>
+                                        <th className="text-right px-4 py-3 text-[11px] uppercase font-bold text-secondary">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-line">
@@ -241,6 +285,16 @@ export default React.memo(function UsersManagementPanel({
                                                 <td className="px-4 py-3 align-top text-sm">
                                                     {adminUser.last_order_at ? formatDateTime(adminUser.last_order_at) : 'Sin compras'}
                                                 </td>
+                                                <td className="px-4 py-3 align-top text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEditModal(adminUser)}
+                                                        className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold hover:bg-surface"
+                                                    >
+                                                        <Icon.PencilSimple size={14} />
+                                                        Editar
+                                                    </button>
+                                                </td>
                                             </tr>
                                         )
                                     })}
@@ -250,6 +304,16 @@ export default React.memo(function UsersManagementPanel({
                     </>
                 )}
             </div>
+
+            <UserEditorModal
+                isOpen={isEditorOpen}
+                mode={editorMode}
+                user={selectedUser}
+                currentUserId={currentUserId}
+                onClose={() => setIsEditorOpen(false)}
+                onSaved={onUsersMutated}
+                showNotification={showNotification}
+            />
         </div>
     )
 })

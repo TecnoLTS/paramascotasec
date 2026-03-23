@@ -26,6 +26,17 @@ export default function PurchaseInvoiceDetailModal({
 }: PurchaseInvoiceDetailModalProps) {
     if (!open) return null
 
+    const normalizeBooleanLike = (value: unknown) => {
+        if (typeof value === 'boolean') return value
+        if (typeof value === 'number') return value !== 0
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase()
+            if (['1', 'true', 'yes', 'y', 'on', 'si', 'sí'].includes(normalized)) return true
+            if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+        }
+        return false
+    }
+
     return (
         <div
             className="fixed inset-0 z-[215] flex items-center justify-center bg-black bg-opacity-50 p-4"
@@ -85,7 +96,7 @@ export default function PurchaseInvoiceDetailModal({
                                 <div className="p-4 rounded-xl border border-line bg-surface">
                                     <div className="text-[10px] uppercase font-bold text-secondary">Total compra</div>
                                     <div className="text-sm font-semibold mt-1">{formatMoney(invoice.total)}</div>
-                                    <div className="text-xs text-secondary mt-1">Subtotal: {formatMoney(invoice.subtotal)}</div>
+                                    <div className="text-xs text-secondary mt-1">Subtotal: {formatMoney(invoice.subtotal)} • IVA: {formatMoney(invoice.tax_total)}</div>
                                 </div>
                             </div>
 
@@ -106,30 +117,41 @@ export default function PurchaseInvoiceDetailModal({
                             <div className="overflow-x-auto rounded-xl border border-line">
                                 <table className="w-full min-w-[760px] text-left">
                                     <thead className="bg-surface border-b border-line">
-                                        <tr className="text-[11px] uppercase font-bold text-secondary">
-                                            <th className="px-4 py-3">Producto</th>
-                                            <th className="px-4 py-3">Categoría</th>
-                                            <th className="px-4 py-3 text-right">Cantidad</th>
-                                            <th className="px-4 py-3 text-right">Costo unitario</th>
-                                            <th className="px-4 py-3 text-right">Total línea</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-line">
-                                        {invoice.items.map((item) => (
-                                            <tr key={item.id} className="hover:bg-surface/40">
-                                                <td className="px-4 py-3">
-                                                    <div className="text-sm font-semibold">{item.product_name_snapshot || item.product_id || 'Producto sin nombre'}</div>
-                                                    <div className="text-xs text-secondary">{item.brand || 'Sin marca'}</div>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">{item.category || '-'}</td>
-                                                <td className="px-4 py-3 text-right text-sm">{Number(item.quantity ?? 0).toLocaleString('es-EC')}</td>
-                                                <td className="px-4 py-3 text-right text-sm">{formatMoney(item.unit_cost)}</td>
-                                                <td className="px-4 py-3 text-right text-sm font-semibold">{formatMoney(item.line_total)}</td>
+                                            <tr className="text-[11px] uppercase font-bold text-secondary">
+                                                <th className="px-4 py-3">Producto</th>
+                                                <th className="px-4 py-3">Categoría</th>
+                                                <th className="px-4 py-3 text-right">Cantidad</th>
+                                                <th className="px-4 py-3 text-right">Costo unitario</th>
+                                                <th className="px-4 py-3 text-right">IVA</th>
+                                                <th className="px-4 py-3 text-right">Total línea</th>
                                             </tr>
-                                        ))}
+                                        </thead>
+                                        <tbody className="divide-y divide-line">
+                                        {invoice.items.map((item) => {
+                                            const metadata = item.metadata || {}
+                                            const taxRate = Number(metadata.tax_rate ?? 0)
+                                            const taxExempt = normalizeBooleanLike(metadata.tax_exempt ?? false)
+                                            const taxAmount = taxExempt || taxRate <= 0
+                                                ? 0
+                                                : Number(metadata.tax_amount ?? (Number(item.line_total ?? 0) * (taxRate / 100)))
+
+                                            return (
+                                                <tr key={item.id} className="hover:bg-surface/40">
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-sm font-semibold">{item.product_name_snapshot || item.product_id || 'Producto sin nombre'}</div>
+                                                        <div className="text-xs text-secondary">{item.brand || 'Sin marca'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm">{item.category || '-'}</td>
+                                                    <td className="px-4 py-3 text-right text-sm">{Number(item.quantity ?? 0).toLocaleString('es-EC')}</td>
+                                                    <td className="px-4 py-3 text-right text-sm">{formatMoney(item.unit_cost)}</td>
+                                                    <td className="px-4 py-3 text-right text-sm">{formatMoney(taxAmount)}</td>
+                                                    <td className="px-4 py-3 text-right text-sm font-semibold">{formatMoney(Number(item.line_total ?? 0) + taxAmount)}</td>
+                                                </tr>
+                                            )
+                                        })}
                                         {invoice.items.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} className="px-4 py-8 text-center text-sm text-secondary">
+                                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-secondary">
                                                     Esta factura no tiene líneas registradas.
                                                 </td>
                                             </tr>

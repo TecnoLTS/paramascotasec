@@ -697,6 +697,7 @@ const Checkout = () => {
         vat_subtotal?: number
         vat_amount?: number
         discount_total?: number
+        mixed_vat_rates?: boolean
     } | null>(null)
 
     const normalizedCart = useMemo(
@@ -786,6 +787,10 @@ const Checkout = () => {
     const vatNetSubtotal = Number(quote?.vat_subtotal ?? 0)
     const vatAmount = Number(quote?.vat_amount ?? 0)
     const discountTotal = Number(quote?.discount_total ?? 0)
+    const mixedVatRates = Boolean(quote?.mixed_vat_rates)
+    const vatLabel = mixedVatRates
+        ? 'IVA aplicado'
+        : `IVA (${vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
 
     useEffect(() => {
         if (normalizedCart.length === 0) {
@@ -1656,9 +1661,9 @@ const Checkout = () => {
                                         <span className="text-[#6b7280]">Subtotal sin IVA</span>
                                         <span className="text-[#111827] text-right tabular-nums">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
-                                    {vatRateValue > 0 && (
+                                    {vatAmount > 0 && (
                                         <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
-                                            <span className="text-[#6b7280]">IVA ({vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
+                                            <span className="text-[#6b7280]">{vatLabel}</span>
                                             <span className="text-[#111827] text-right tabular-nums">${vatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}

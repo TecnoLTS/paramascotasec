@@ -21,13 +21,40 @@ export const PRODUCT_REFERENCE_KEYS = [
 
 export type ProductReferenceKey = (typeof PRODUCT_REFERENCE_KEYS)[number]
 
-export type ProductReferenceData = Record<ProductReferenceKey, string[]>
+export type ProductSupplierReference = {
+  id: string
+  name: string
+  document: string
+  email: string
+  phone: string
+  contactName: string
+  address: string
+  notes: string
+}
+
+export type ProductReferenceData = {
+  brands: string[]
+  suppliers: ProductSupplierReference[]
+  sizes: string[]
+  materials: string[]
+  colors: string[]
+  usages: string[]
+  presentations: string[]
+  activeIngredients: string[]
+  storageLocations: string[]
+  tags: string[]
+  flavors: string[]
+  ageRanges: string[]
+}
 
 export type ProductReferenceSection = {
   key: ProductReferenceKey
   title: string
+  sidebarTitle: string
   description: string
+  itemLabel: string
   placeholder: string
+  kind?: 'text' | 'supplier'
   menuIcon:
     | 'SealCheck'
     | 'Truck'
@@ -50,6 +77,37 @@ export type ProductSystemReferenceGroup = {
 }
 
 const collapseWhitespace = (value?: string | null) => (value ?? '').replace(/\s+/g, ' ').trim()
+const normalizeComparable = (value?: string | null) => collapseWhitespace(value).toLocaleLowerCase('es-EC')
+const normalizeDocumentComparable = (value?: string | null) =>
+  collapseWhitespace(value)
+    .toLocaleUpperCase('es-EC')
+    .replace(/[^A-Z0-9]+/g, '')
+const normalizeEmail = (value?: string | null) => collapseWhitespace(value).toLocaleLowerCase('es-EC')
+const createSlug = (value?: string | null) =>
+  normalizeDocumentComparable(value)
+    .toLocaleLowerCase('es-EC')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+export const createEmptyProductSupplierReference = (): ProductSupplierReference => ({
+  id: '',
+  name: '',
+  document: '',
+  email: '',
+  phone: '',
+  contactName: '',
+  address: '',
+  notes: '',
+})
+
+export const createProductSupplierReferenceId = (
+  name?: string | null,
+  document?: string | null,
+  fallback = '',
+) => {
+  const slug = createSlug(document || name || fallback)
+  return slug ? `supplier-${slug}` : `supplier-${Date.now()}`
+}
 
 export const createEmptyProductReferenceData = (): ProductReferenceData => ({
   brands: [],
@@ -94,12 +152,101 @@ export const normalizeReferenceList = (input: unknown): string[] => {
   return normalized
 }
 
+export const normalizeProductSupplierRecord = (
+  input: unknown,
+  fallbackId = '',
+): ProductSupplierReference | null => {
+  const source =
+    input && typeof input === 'object' && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : typeof input === 'string'
+        ? { name: input }
+        : null
+
+  if (!source) return null
+
+  const name = collapseWhitespace(
+    typeof source.name === 'string'
+      ? source.name
+      : typeof source.supplierName === 'string'
+        ? source.supplierName
+        : typeof source.label === 'string'
+          ? source.label
+          : '',
+  )
+  if (!name) return null
+
+  const document = collapseWhitespace(
+    typeof source.document === 'string'
+      ? source.document
+      : typeof source.supplierDocument === 'string'
+        ? source.supplierDocument
+        : '',
+  )
+  const email = normalizeEmail(typeof source.email === 'string' ? source.email : '')
+  const phone = collapseWhitespace(typeof source.phone === 'string' ? source.phone : '')
+  const contactName = collapseWhitespace(
+    typeof source.contactName === 'string'
+      ? source.contactName
+      : typeof source.contact_name === 'string'
+        ? source.contact_name
+        : '',
+  )
+  const address = collapseWhitespace(typeof source.address === 'string' ? source.address : '')
+  const notes = collapseWhitespace(typeof source.notes === 'string' ? source.notes : '')
+  const id = collapseWhitespace(typeof source.id === 'string' ? source.id : '')
+
+  return {
+    id: id || createProductSupplierReferenceId(name, document, fallbackId),
+    name,
+    document,
+    email,
+    phone,
+    contactName,
+    address,
+    notes,
+  }
+}
+
+export const normalizeProductSupplierRecords = (input: unknown): ProductSupplierReference[] => {
+  if (!Array.isArray(input)) return []
+
+  const seenNames = new Set<string>()
+  const seenDocuments = new Set<string>()
+  const normalized: ProductSupplierReference[] = []
+
+  input.forEach((item, index) => {
+    const supplier = normalizeProductSupplierRecord(item, String(index + 1))
+    if (!supplier) return
+
+    const nameKey = normalizeComparable(supplier.name)
+    const documentKey = normalizeDocumentComparable(supplier.document)
+
+    if (nameKey && seenNames.has(nameKey)) return
+    if (documentKey && seenDocuments.has(documentKey)) return
+
+    seenNames.add(nameKey)
+    if (documentKey) {
+      seenDocuments.add(documentKey)
+    }
+
+    normalized.push(supplier)
+  })
+
+  return normalized.sort((left, right) => left.name.localeCompare(right.name, 'es-EC', { sensitivity: 'base' }))
+}
+
 export const normalizeProductReferenceData = (input?: Partial<Record<ProductReferenceKey, unknown>> | null): ProductReferenceData => {
   const defaults = createEmptyProductReferenceData()
   const source = input || {}
 
   PRODUCT_REFERENCE_KEYS.forEach((key) => {
-    defaults[key] = normalizeReferenceList(source[key])
+    if (key === 'suppliers') {
+      defaults.suppliers = normalizeProductSupplierRecords(source.suppliers)
+      return
+    }
+
+    defaults[key] = normalizeReferenceList(source[key]) as never
   })
 
   return defaults
@@ -113,88 +260,165 @@ export const getReferenceOptionsWithCurrent = (options: string[], currentValue?:
   return normalizeReferenceList([current, ...normalizedOptions])
 }
 
+export const getSupplierSelectLabel = (supplier: ProductSupplierReference) =>
+  supplier.document ? `${supplier.name} · ${supplier.document}` : supplier.name
+
+export const getSupplierOptionsWithCurrent = (
+  suppliers: ProductSupplierReference[],
+  currentValue?: string | null,
+) => {
+  const normalizedSuppliers = normalizeProductSupplierRecords(suppliers)
+  const options = normalizedSuppliers.map((supplier) => ({
+    value: supplier.name,
+    label: getSupplierSelectLabel(supplier),
+  }))
+  const current = collapseWhitespace(currentValue)
+
+  if (!current || options.some((option) => normalizeComparable(option.value) === normalizeComparable(current))) {
+    return options
+  }
+
+  return [{ value: current, label: current }, ...options]
+}
+
+export const findSupplierReference = (
+  suppliers: ProductSupplierReference[],
+  value?: string | null,
+): ProductSupplierReference | null => {
+  const needle = collapseWhitespace(value)
+  if (!needle) return null
+
+  const comparableValue = normalizeComparable(needle)
+  const comparableDocument = normalizeDocumentComparable(needle)
+
+  return (
+    suppliers.find((supplier) => supplier.id === needle) ||
+    suppliers.find((supplier) => normalizeComparable(supplier.name) === comparableValue) ||
+    suppliers.find((supplier) => normalizeDocumentComparable(supplier.document) === comparableDocument) ||
+    null
+  )
+}
+
+export const getSupplierSearchText = (supplier: ProductSupplierReference) =>
+  [
+    supplier.name,
+    supplier.document,
+    supplier.email,
+    supplier.phone,
+    supplier.contactName,
+    supplier.address,
+    supplier.notes,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
 export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
   {
     key: 'brands',
     title: 'Marcas',
+    sidebarTitle: 'Marcas',
     description: 'Marca comercial visible en catálogo y ficha del producto.',
+    itemLabel: 'marca',
     placeholder: 'Ej: Frontline',
     menuIcon: 'SealCheck',
   },
   {
     key: 'suppliers',
     title: 'Proveedores',
-    description: 'Opciones para factura de compra y proveedor asociado al producto.',
+    sidebarTitle: 'Proveedores',
+    description: 'Ficha completa del proveedor para compras: RUC/documento, contacto, correo y teléfono.',
+    itemLabel: 'proveedor',
     placeholder: 'Ej: Agripac',
+    kind: 'supplier',
     menuIcon: 'Truck',
   },
   {
     key: 'sizes',
     title: 'Tallas y tamaños',
+    sidebarTitle: 'Tallas',
     description: 'Reutiliza medidas y presentaciones frecuentes como S, M, 1 Kg o 500 ml.',
+    itemLabel: 'talla o tamaño',
     placeholder: 'Ej: XL',
     menuIcon: 'Ruler',
   },
   {
     key: 'materials',
     title: 'Materiales',
+    sidebarTitle: 'Materiales',
     description: 'Material principal de accesorios y ropa.',
+    itemLabel: 'material',
     placeholder: 'Ej: Nylon',
     menuIcon: 'Stack',
   },
   {
     key: 'colors',
     title: 'Colores',
+    sidebarTitle: 'Colores',
     description: 'Colores frecuentes para ropa y accesorios.',
+    itemLabel: 'color',
     placeholder: 'Ej: Azul',
     menuIcon: 'Palette',
   },
   {
     key: 'usages',
     title: 'Usos',
+    sidebarTitle: 'Usos',
     description: 'Destino o uso del producto, especialmente en accesorios y salud.',
+    itemLabel: 'uso',
     placeholder: 'Ej: Paseo',
     menuIcon: 'ArrowsClockwise',
   },
   {
     key: 'presentations',
     title: 'Presentaciones',
+    sidebarTitle: 'Presentaciones',
     description: 'Formatos comerciales de productos de salud o medicina.',
+    itemLabel: 'presentación',
     placeholder: 'Ej: Spray 120 ml',
     menuIcon: 'Package',
   },
   {
     key: 'activeIngredients',
     title: 'Ingredientes activos',
+    sidebarTitle: 'Ingredientes',
     description: 'Principios activos de medicamentos y productos de salud.',
+    itemLabel: 'ingrediente activo',
     placeholder: 'Ej: Fipronil',
     menuIcon: 'Flask',
   },
   {
     key: 'storageLocations',
     title: 'Ubicaciones de almacenamiento',
+    sidebarTitle: 'Ubicaciones',
     description: 'Ubicaciones de bodega o percha reutilizables.',
+    itemLabel: 'ubicación',
     placeholder: 'Ej: Percha A-3',
     menuIcon: 'MapPin',
   },
   {
     key: 'tags',
     title: 'Etiquetas',
+    sidebarTitle: 'Etiquetas',
     description: 'Etiquetas cortas usadas para panel, ficha o clasificación interna.',
+    itemLabel: 'etiqueta',
     placeholder: 'Ej: Premium',
     menuIcon: 'Tag',
   },
   {
     key: 'flavors',
     title: 'Sabores',
+    sidebarTitle: 'Sabores',
     description: 'Sabores frecuentes para Alimento y snacks.',
+    itemLabel: 'sabor',
     placeholder: 'Ej: Pollo',
     menuIcon: 'BowlFood',
   },
   {
     key: 'ageRanges',
     title: 'Edades',
+    sidebarTitle: 'Edades',
     description: 'Rangos de edad comerciales como cachorro, adulto o senior.',
+    itemLabel: 'edad',
     placeholder: 'Ej: Adulto',
     menuIcon: 'HourglassMedium',
   },

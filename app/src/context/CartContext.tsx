@@ -8,6 +8,7 @@ interface CartItem extends ProductType {
     quantity: number
     selectedSize: string
     selectedColor: string
+    availableStock?: number
 }
 
 interface CartState {
@@ -42,17 +43,52 @@ const emptyCartContext: CartContextProps = {
     clearCart: () => {},
 }
 
+const resolveAvailableStock = (item: Partial<ProductType> & { availableStock?: number }) => {
+    const explicitAvailableStock = Number(item.availableStock ?? NaN)
+    if (Number.isFinite(explicitAvailableStock)) {
+        return Math.max(0, explicitAvailableStock)
+    }
+
+    const inventoryAvailable = Number(item.inventory?.available ?? NaN)
+    if (Number.isFinite(inventoryAvailable)) {
+        return Math.max(0, inventoryAvailable)
+    }
+
+    const quantity = Number(item.quantity ?? NaN)
+    if (Number.isFinite(quantity)) {
+        return Math.max(0, quantity)
+    }
+
+    return 0
+}
+
+const clampCartQuantity = (requestedQuantity: number, availableStock: number) => {
+    const normalizedQuantity = Math.max(1, Math.floor(Number(requestedQuantity) || 1))
+    if (availableStock <= 0) {
+        return 0
+    }
+    return Math.min(normalizedQuantity, availableStock)
+}
+
 const cartReducer = (state: CartState, action: CartAction): CartState => {
     switch (action.type) {
         case 'ADD_TO_CART': {
-            const quantityToAdd = Number(action.payload.quantityPurchase ?? action.payload.quantity ?? 1)
+            const availableStock = resolveAvailableStock(action.payload)
+            const quantityToAdd = clampCartQuantity(
+                Number(action.payload.quantityPurchase ?? action.payload.quantity ?? 1),
+                availableStock,
+            )
+            if (quantityToAdd <= 0) {
+                return state
+            }
             const existed = state.cartArray.find(item => item.id === action.payload.id)
             if (existed) {
+                const nextQuantity = clampCartQuantity(existed.quantity + quantityToAdd, existed.availableStock ?? availableStock)
                 return {
                     ...state,
                     cartArray: state.cartArray.map(item =>
                         item.id === action.payload.id
-                            ? { ...item, quantity: item.quantity + quantityToAdd }
+                            ? { ...item, quantity: nextQuantity, availableStock: existed.availableStock ?? availableStock }
                             : item
                     ),
                 };
@@ -62,6 +98,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
                 quantity: quantityToAdd,
                 selectedSize: '',
                 selectedColor: '',
+                availableStock,
             }
             return {
                 ...state,
@@ -80,7 +117,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
                     item.id === action.payload.itemId
                         ? {
                             ...item,
-                            quantity: action.payload.quantity,
+                            quantity: clampCartQuantity(action.payload.quantity, item.availableStock ?? resolveAvailableStock(item)),
                             selectedSize: action.payload.selectedSize,
                             selectedColor: action.payload.selectedColor
                         }
@@ -114,7 +151,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const parsed = JSON.parse(stored) as CartItem[];
                 const normalized = parsed.map((item) => ({
                     ...item,
-                    quantity: Number(item.quantity ?? item.quantityPurchase ?? 1),
+                    availableStock: resolveAvailableStock(item),
+                    quantity: clampCartQuantity(
+                        Number(item.quantity ?? item.quantityPurchase ?? 1),
+                        resolveAvailableStock(item),
+                    ),
                     selectedSize: item.selectedSize ?? '',
                     selectedColor: item.selectedColor ?? '',
                 }))

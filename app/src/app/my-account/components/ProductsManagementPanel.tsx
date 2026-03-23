@@ -29,6 +29,7 @@ type ProductsManagementPanelProps = {
     onSearchChange: (value: string) => void;
     onNewProduct: () => void;
     onEditProduct: (product: any) => void;
+    onRestockProduct: (product: any) => void;
     onDuplicateVariant: (product: any) => void;
     onDeleteProduct: (id: string) => void;
     onTogglePublication: (product: any, nextPublished: boolean) => void;
@@ -60,6 +61,7 @@ export default React.memo(function ProductsManagementPanel({
     onSearchChange,
     onNewProduct,
     onEditProduct,
+    onRestockProduct,
     onDuplicateVariant,
     onDeleteProduct,
     onTogglePublication,
@@ -261,6 +263,14 @@ export default React.memo(function ProductsManagementPanel({
                                     <td className="py-4 font-bold">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-4">
                                         <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                className="p-2 hover:bg-line rounded-full transition-colors"
+                                                onClick={() => onRestockProduct(product)}
+                                                title="Registrar compra"
+                                            >
+                                                <Icon.Package size={18} />
+                                            </button>
                                             <button className="p-2 hover:bg-line rounded-full transition-colors" onClick={() => onEditProduct(product)}><Icon.PencilSimple size={18} /></button>
                                             <button
                                                 type="button"

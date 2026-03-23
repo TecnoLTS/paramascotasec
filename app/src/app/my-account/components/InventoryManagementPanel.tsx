@@ -40,7 +40,9 @@ type InventoryManagementPanelProps = {
     onNewProduct: () => void;
     onReloadPurchaseInvoices: () => void;
     onOpenPurchaseInvoice: (id: string) => void;
+    onOpenProductBalance: (product: any) => void;
     onEditProduct: (product: any) => void;
+    onRestockProduct: (product: any) => void;
     formatMoney: (value: number | string | null | undefined) => string;
     formatIsoDate: (value?: string | null) => string;
     formatDateEcuador: (value: string | number | Date, options?: Intl.DateTimeFormatOptions) => string;
@@ -81,7 +83,9 @@ export default React.memo(function InventoryManagementPanel({
     onNewProduct,
     onReloadPurchaseInvoices,
     onOpenPurchaseInvoice,
+    onOpenProductBalance,
     onEditProduct,
+    onRestockProduct,
     formatMoney,
     formatIsoDate,
     formatDateEcuador,
@@ -328,6 +332,8 @@ export default React.memo(function InventoryManagementPanel({
                         {rows.length.toLocaleString('es-EC')} productos encontrados
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-secondary">
+                        <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">Registrar compra:</strong> repone stock con factura</span>
+                        <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">Balance:</strong> abre el detalle por compra/lote</span>
                         <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">Costo unitario:</strong> valor de compra por unidad</span>
                         <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">PVP:</strong> precio de venta por unidad</span>
                         <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">Capital al costo:</strong> costo unitario x stock actual</span>
@@ -434,17 +440,40 @@ export default React.memo(function InventoryManagementPanel({
                                             ) : (
                                                 <div className="text-xs text-secondary pt-1">Sin factura enlazada</div>
                                             )}
+                                            {row.openLotsCount > 1 && (
+                                                <div className="text-xs text-amber-700 pt-1">
+                                                    Mezcla activa de {row.openLotsCount} compras/lotes.
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">
                                         <div className="space-y-1 text-sm">
-                                            <div>Costo unitario: <span className="font-semibold">{formatMoney(row.unitCost)}</span></div>
+                                            <div>Costo ponderado stock: <span className="font-semibold">{formatMoney(row.weightedUnitCost)}</span></div>
                                             <div>PVP unitario: <span className="font-semibold">{formatMoney(row.unitPrice)}</span></div>
+                                            <div>Margen stock actual: <span className={`font-semibold ${row.weightedMargin < 0 ? 'text-red' : 'text-black'}`}>{Number(row.weightedMargin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div>
+                                            {row.lastPurchaseUnitCost > 0 && (
+                                                <div>Margen última compra: <span className={`font-semibold ${row.lastPurchaseMargin < 0 ? 'text-red' : 'text-black'}`}>{Number(row.lastPurchaseMargin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div>
+                                            )}
                                             <div>Capital al costo: <span className="font-semibold">{formatMoney(row.inventoryCost)}</span></div>
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">
                                         <div className="flex flex-col gap-2">
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
+                                                onClick={() => onOpenProductBalance(row.source)}
+                                            >
+                                                Balance
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 rounded-lg border border-black bg-black text-white text-xs font-semibold hover:bg-primary transition-all"
+                                                onClick={() => onRestockProduct(row.source)}
+                                            >
+                                                Registrar compra
+                                            </button>
                                             <button
                                                 type="button"
                                                 className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"

@@ -50,6 +50,10 @@ export default function OrderDetailModal({
     if (!open || !order) return null
 
     const shipping = getShipping(order)
+    const mixedVatRates = Boolean(order?.mixed_vat_rates)
+    const vatRateLabel = mixedVatRates
+        ? 'IVA aplicado'
+        : `IVA (${Number(order?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
     const pendingStatusLabel = pendingStatus === 'processing'
         ? 'marcar el pedido como En proceso'
         : pendingStatus === 'shipped'
@@ -94,9 +98,9 @@ export default function OrderDetailModal({
                                     <span className="text-secondary">Subtotal sin IVA</span>
                                     <span className="font-bold tabular-nums text-right">{formatMoney(getVatSubtotal(order))}</span>
                                 </div>
-                                {Number(order?.vat_rate ?? 0) > 0 && (
+                                {Number(getVatAmount(order)) > 0 && (
                                     <div className="grid grid-cols-[1fr_120px] items-center">
-                                        <span className="text-secondary">IVA ({Number(order?.vat_rate ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</span>
+                                        <span className="text-secondary">{vatRateLabel}</span>
                                         <span className="font-bold tabular-nums text-right">{formatMoney(getVatAmount(order))}</span>
                                     </div>
                                 )}

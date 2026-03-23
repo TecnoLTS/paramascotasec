@@ -10,10 +10,14 @@ import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useRouter } from 'next/navigation'
 import Rate from '../Other/Rate'
 import {
+    getProductCurrentPrice,
+    getProductDiscountPercent,
+    getProductOriginalPrice,
     getProductReviewCount,
     getProductVariantLabel,
     getProductVariants,
     hasRealReviews,
+    isProductOnSale,
     resolveSelectedVariant,
 } from '@/lib/catalog'
 
@@ -102,10 +106,10 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const productType = (data.productType ?? '').toLowerCase()
     const showSizes = productType === 'ropa' && sizes.length > 0
 
-    const price = Number(data.priceMin ?? data.price ?? 0)
-    const originPrice = Number(data.originPriceMax ?? data.originPrice ?? 0)
-    const hasSale = (data.sale || originPrice > price) && originPrice > price
-    const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
+    const price = getProductCurrentPrice(data)
+    const originPrice = getProductOriginalPrice(data)
+    const hasSale = isProductOnSale(data)
+    const percentSale = getProductDiscountPercent(data)
     const percentSold = data.quantity > 0
         ? Math.floor((data.sold / data.quantity) * 100)
         : 0

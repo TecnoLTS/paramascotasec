@@ -1,4 +1,5 @@
 import { mapProductsToDto } from '@/lib/productMapper'
+import { normalizeMeasurementLabel } from '@/lib/measurementLabel'
 import {
     normalizeProductCategory,
     normalizeProductType,
@@ -8,6 +9,86 @@ import type { ProductFormState, PurchaseInvoiceFormState } from './types'
 
 export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
 export const PRODUCT_IMAGE_ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
+
+const escapeRegExp = (value: string) =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const getVariantCandidateValues = (type: string, source: Record<string, any>) => {
+    const normalizedType = normalizeProductType(type, String(source.category || ''))
+    const valuesByType: Record<string, string[]> = {
+        Alimento: ['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'],
+        ropa: ['variantLabel', 'size'],
+        accesorios: ['variantLabel', 'size', 'presentation'],
+        cuidado: ['variantLabel', 'presentation', 'dosage', 'volume', 'size'],
+    }
+
+    const keys = valuesByType[normalizedType] ?? ['variantLabel', 'size', 'presentation', 'weight']
+    return keys
+        .map((key) => String(source[key] || '').trim())
+        .filter(Boolean)
+}
+
+export const getVariantDefinitionFieldLabel = (type: string) => {
+    const normalizedType = normalizeProductType(type)
+    if (normalizedType === 'ropa') return 'talla'
+    if (normalizedType === 'cuidado') return 'presentación'
+    if (normalizedType === 'Alimento') return 'tamaño o peso'
+    if (normalizedType === 'accesorios') return 'tamaño'
+    return 'variante'
+}
+
+export const getVariantDefinitionFieldKey = (type: string) => {
+    const normalizedType = normalizeProductType(type)
+    if (normalizedType === 'cuidado') return 'presentation'
+    return 'size'
+}
+
+export const resolveProductVariantLabel = (
+    type: string,
+    attributes?: Record<string, any> | null,
+    product?: Record<string, any> | null
+) => {
+    const attributeSource = attributes || {}
+    const productSource = product || {}
+    const candidates = [
+        ...getVariantCandidateValues(type, {
+            ...productSource,
+            ...(productSource.attributes || {}),
+        }),
+        ...getVariantCandidateValues(type, attributeSource),
+    ]
+    const resolved = candidates.find(Boolean) || ''
+    return normalizeMeasurementLabel(resolved)
+}
+
+export const resolveProductVariantBaseName = (product: any) => {
+    const explicitBaseName = String(product?.variantBaseName || product?.attributes?.variantBaseName || '').trim()
+    if (explicitBaseName) return explicitBaseName
+
+    const fullName = String(product?.name || '').trim()
+    if (!fullName) return ''
+
+    const type = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
+    const variantLabel = resolveProductVariantLabel(type, product?.attributes, product)
+    if (!variantLabel) return fullName
+
+    const candidates = Array.from(new Set([
+        variantLabel,
+        ...getVariantCandidateValues(type, {
+            ...(product || {}),
+            ...(product?.attributes || {}),
+        }),
+    ].filter(Boolean)))
+
+    let strippedName = fullName
+    candidates.forEach((candidate) => {
+        strippedName = strippedName
+            .replace(new RegExp(`(?:\\s+|-)?${escapeRegExp(candidate).replace(/\s+/g, '\\s*')}$`, 'i'), '')
+            .trim()
+    })
+
+    return strippedName || fullName
+}
 
 export const normalizeAdminProducts = (items: any[]) => {
     try {
@@ -37,6 +118,27 @@ export const getAdminProductEntityId = (product: {
 }) => {
     const resolved = product?.internalId ?? product?.id ?? product?.legacyId ?? product?.legacy_id ?? ''
     return String(resolved || '').trim()
+}
+
+const normalizeBooleanLikeValue = (value: unknown, defaultValue = false) => {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') return value !== 0
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase()
+        if (['1', 'true', 'yes', 'y', 'on', 'si', 'sí'].includes(normalized)) return true
+        if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+    }
+    return defaultValue
+}
+
+export const isTaxExemptProduct = (product?: any) => {
+    const rawValue =
+        product?.tax?.exempt
+        ?? product?.taxExempt
+        ?? product?.attributes?.taxExempt
+        ?? product?.attributes?.tax_exempt
+
+    return normalizeBooleanLikeValue(rawValue, false)
 }
 
 export const getEmptyAttributes = (type: string): Record<string, string> => {
@@ -122,6 +224,7 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
         'lotCode',
         'storageLocation',
         'supplier',
+        'taxExempt',
         'variantLabel',
         'variantBaseName',
         'variantGroupKey',
@@ -159,6 +262,7 @@ export const normalizeAttributes = (type: string, attrs: any) => {
     const cleaned: Record<string, string> = {}
 
     Object.keys(merged).forEach((key) => {
+        if (key.startsWith('__')) return
         const value = (merged as any)[key]
         if (key === 'catalogCategories') {
             if (Array.isArray(value) && value.length > 0) {
@@ -212,6 +316,7 @@ export const createEmptyProductForm = (): ProductFormState => ({
     price: '',
     pvp: '',
     cost: '',
+    taxExempt: false,
     quantity: '',
     category: '',
     brand: 'Generico',
@@ -226,9 +331,11 @@ export const createEmptyProductForm = (): ProductFormState => ({
 
 export const createProductFormFromProduct = (product: any, vatMultiplier: number): ProductFormState => {
     const pvpPrice = Number(product?.price ?? 0)
-    const basePrice = vatMultiplier > 0 ? pvpPrice / vatMultiplier : pvpPrice
     const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const attributes = normalizeAttributes(productType, product?.attributes)
+    const taxExempt = isTaxExemptProduct({ ...product, attributes })
+    const effectiveVatMultiplier = taxExempt ? 1 : Math.max(1, vatMultiplier)
+    const basePrice = effectiveVatMultiplier > 0 ? pvpPrice / effectiveVatMultiplier : pvpPrice
     const imageMeta = Array.isArray(product?.imageMeta) ? product.imageMeta : []
     const thumbMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'thumb')
     const galleryMeta = imageMeta.filter((img: any) => (img.kind || 'gallery') === 'gallery')
@@ -273,6 +380,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         price: Number.isFinite(basePrice) ? basePrice.toFixed(2) : String(product?.price || ''),
         pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : String(product?.price || ''),
         cost: String(product?.business?.cost ?? product?.cost ?? 0),
+        taxExempt,
         quantity: String(product?.quantity ?? ''),
         category: normalizeProductCategory(product?.category || '', productType),
         brand: String(product?.brand || 'Generico'),
@@ -289,10 +397,29 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
 export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplier: number): ProductFormState => {
     const duplicatedForm = createProductFormFromProduct(product, vatMultiplier)
     const duplicatedAttributes = { ...(duplicatedForm.attributes || {}) }
+    const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
+    const sourceVariantLabel = resolveProductVariantLabel(productType, product?.attributes, product)
+
     duplicatedAttributes.sku = ''
     duplicatedAttributes.lotCode = ''
     duplicatedAttributes.expirationDate = ''
     duplicatedAttributes.variantLabel = ''
+    duplicatedAttributes.variantBaseName = resolveProductVariantBaseName(product)
+    duplicatedAttributes.__sourceVariantLabel = sourceVariantLabel
+    delete duplicatedAttributes.variantGroupKey
+
+    if (productType === 'Alimento') {
+        duplicatedAttributes.size = ''
+        duplicatedAttributes.weight = ''
+    }
+
+    if (productType === 'ropa' || productType === 'accesorios') {
+        duplicatedAttributes.size = ''
+    }
+
+    if (productType === 'cuidado') {
+        duplicatedAttributes.presentation = ''
+    }
 
     return {
         ...duplicatedForm,

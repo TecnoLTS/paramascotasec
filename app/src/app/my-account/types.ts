@@ -78,12 +78,18 @@ export interface DashboardStats {
                 product_name: string;
                 category: string;
                 units_sold: number;
+                gross_revenue?: number;
                 net_revenue: number;
+                vat_amount?: number;
+                shipping_amount?: number;
                 order_refs: string[];
             }>;
             categories: Array<{
                 category: string;
+                gross_revenue?: number;
                 net_revenue: number;
+                vat_amount?: number;
+                shipping_amount?: number;
                 order_refs: string[];
             }>;
         };
@@ -231,7 +237,7 @@ export type ProductDetailMetric = 'gross' | 'net' | 'vat' | 'shipping' | 'profit
 export type AdminReportSection = 'general' | 'sales' | 'balance' | 'inventory' | 'traceability'
 export type AdminMenuGroupKey = 'monitoring' | 'reporting' | 'catalog' | 'operations' | 'finance'
 export type ProductPublicationFilter = 'all' | 'published' | 'hidden'
-export type ProductEditorMode = 'create' | 'edit' | 'duplicate-variant'
+export type ProductEditorMode = 'create' | 'edit' | 'duplicate-variant' | 'restock'
 
 export type PurchaseInvoiceFormState = {
     invoiceNumber: string;
@@ -286,12 +292,60 @@ export type PurchaseInvoiceDetail = {
     items: PurchaseInvoiceDetailItem[];
 }
 
+export type ProductProcurementLotDetail = {
+    id: string;
+    source_type: string;
+    source_ref?: string | null;
+    purchase_invoice_id?: string | null;
+    purchase_invoice_item_id?: string | null;
+    invoice_number?: string | null;
+    supplier_name?: string | null;
+    supplier_document?: string | null;
+    issued_at?: string | null;
+    received_at?: string | null;
+    created_at?: string | null;
+    purchased_quantity: number;
+    consumed_quantity: number;
+    remaining_quantity: number;
+    unit_cost: number;
+    purchase_total: number;
+    remaining_cost_total: number;
+    estimated_remaining_net_revenue: number;
+    estimated_remaining_gross_revenue: number;
+    estimated_remaining_profit: number;
+    estimated_remaining_margin: number;
+    status: 'open' | 'consumed';
+}
+
+export type ProductProcurementDetail = {
+    product_id: string;
+    legacy_id?: string | null;
+    product_name: string;
+    category: string;
+    price_gross: number;
+    price_net: number;
+    entries_count: number;
+    open_lots_count: number;
+    purchased_units_total: number;
+    consumed_units_total: number;
+    remaining_units_total: number;
+    remaining_cost_total: number;
+    weighted_unit_cost: number;
+    weighted_margin: number;
+    weighted_profit: number;
+    min_unit_cost: number;
+    max_unit_cost: number;
+    has_unlinked_stock: boolean;
+    lots: ProductProcurementLotDetail[];
+}
+
 export type ProductFormState = {
     id: string;
     name: string;
     price: string;
     pvp: string;
     cost: string;
+    taxExempt: boolean;
     quantity: string;
     category: string;
     brand: string;
@@ -369,6 +423,7 @@ export type LocalSaleQuote = {
     vat_rate: number;
     vat_subtotal: number;
     vat_amount: number;
+    mixed_vat_rates?: boolean;
     shipping: number;
     shipping_base?: number;
     shipping_tax_rate?: number;

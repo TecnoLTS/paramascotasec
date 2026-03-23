@@ -61,7 +61,7 @@ const ModalQuickview = () => {
     const availableStock = Math.max(0, Number(activeVariant?.quantity ?? selectedProduct?.quantity ?? 0))
     const safeQuantity = availableStock > 0 ? Math.min(Math.max(quantity, 1), availableStock) : 0
     const lineTotal = price * safeQuantity
-    const hasSale = (activeVariant?.sale || selectedProduct?.sale || originPrice > price) && originPrice > price
+    const hasSale = Boolean(activeVariant?.sale || selectedProduct?.sale) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
     const categoryLabel = (selectedProduct?.category ?? '').toLowerCase()
     const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))

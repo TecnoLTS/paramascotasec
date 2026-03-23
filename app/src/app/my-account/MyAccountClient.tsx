@@ -18,8 +18,11 @@ import {
     createDuplicateVariantFormFromProduct,
     createProductFormFromProduct,
     getAdminProductEntityId,
+    getVariantDefinitionFieldLabel,
     isProductEligibleForPublication,
+    isTaxExemptProduct,
     normalizeAdminProducts,
+    resolveProductVariantLabel,
 } from './productFormUtils'
 import { buildProductSearchIndex, buildProductSearchText, filterProductsBySearch, getProductSearchScore, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import {
@@ -113,6 +116,7 @@ import type {
     ProductEditorMode,
     ProductDetailMetric,
     ProductFormState,
+    ProductProcurementDetail,
     ProductPublicationFilter,
     PurchaseInvoiceDetail,
     PurchaseInvoiceSummary,
@@ -128,6 +132,9 @@ const ProductEditorModal = dynamic(() => import('./components/ProductEditorModal
     ssr: false,
 })
 const PurchaseInvoiceDetailModal = dynamic(() => import('./components/PurchaseInvoiceDetailModal'), {
+    ssr: false,
+})
+const ProductProcurementDetailModal = dynamic(() => import('./components/ProductProcurementDetailModal'), {
     ssr: false,
 })
 const SalesProductDetailModal = dynamic(() => import('./components/SalesProductDetailModal'), {
@@ -241,6 +248,9 @@ const MyAccount = () => {
     const [selectedPurchaseInvoice, setSelectedPurchaseInvoice] = useState<PurchaseInvoiceDetail | null>(null)
     const [purchaseInvoiceDetailLoading, setPurchaseInvoiceDetailLoading] = useState(false)
     const [isPurchaseInvoiceModalOpen, setIsPurchaseInvoiceModalOpen] = useState(false)
+    const [selectedProductProcurementDetail, setSelectedProductProcurementDetail] = useState<ProductProcurementDetail | null>(null)
+    const [productProcurementDetailLoading, setProductProcurementDetailLoading] = useState(false)
+    const [isProductProcurementModalOpen, setIsProductProcurementModalOpen] = useState(false)
     const [vatRate, setVatRate] = useState<number>(0)
     const [vatLoading, setVatLoading] = useState(false)
     const [vatSaving, setVatSaving] = useState(false)
@@ -341,6 +351,15 @@ const MyAccount = () => {
         const multiplier = 1 + rate / 100
         setEditingProduct(product)
         setProductEditorMode('edit')
+        setProductEditorInitialForm(createProductFormFromProduct(product, multiplier))
+        setIsProductModalOpen(true)
+    }, [dashboardStats?.tax?.rate, vatRate])
+
+    const handleRestockProduct = React.useCallback((product: any) => {
+        const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
+        const multiplier = 1 + rate / 100
+        setEditingProduct(product)
+        setProductEditorMode('restock')
         setProductEditorInitialForm(createProductFormFromProduct(product, multiplier))
         setIsProductModalOpen(true)
     }, [dashboardStats?.tax?.rate, vatRate])
@@ -648,14 +667,34 @@ const MyAccount = () => {
         setTimeout(() => setMessage(null), 5000)
     }, [])
 
+    const reloadAdminUsers = React.useCallback(async () => {
+        const token = localStorage.getItem('authToken')
+        if (!token || !user || user.role !== 'admin') return
+
+        const res = await requestApi<AdminUserSummary[]>('/api/users', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+
+        setAdminUsersList(Array.isArray(res.body) ? res.body : [])
+    }, [user])
+
     const handleDuplicateVariant = React.useCallback((product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
         const multiplier = 1 + rate / 100
+        const productType = String(product?.productType || product?.category || '')
+        const sourceVariantLabel = resolveProductVariantLabel(productType, product?.attributes, product)
+        if (!sourceVariantLabel) {
+            showNotification(
+                `Antes de duplicar, edita el producto base y define su ${getVariantDefinitionFieldLabel(productType)} para que la familia se agrupe correctamente en la tienda.`,
+                'error'
+            )
+            return
+        }
         setEditingProduct(null)
         setProductEditorMode('duplicate-variant')
         setProductEditorInitialForm(createDuplicateVariantFormFromProduct(product, multiplier))
         setIsProductModalOpen(true)
-        showNotification('Se duplicó la variante. Cambia nombre o presentación antes de guardar.')
+        showNotification(`Se creó una copia de la variante. Define una nueva ${getVariantDefinitionFieldLabel(productType)} antes de guardar.`)
     }, [dashboardStats?.tax?.rate, showNotification, vatRate])
 
     const handleToggleProductPublication = React.useCallback(async (product: any, nextPublished: boolean) => {
@@ -801,6 +840,56 @@ const MyAccount = () => {
         })) : []
     })
 
+    const normalizeProductProcurementDetail = (input: any): ProductProcurementDetail => {
+        const rawDetail = input?.inventory?.procurementDetail ?? input ?? {}
+        const lots = Array.isArray(rawDetail?.lots) ? rawDetail.lots : []
+
+        return {
+            product_id: String(rawDetail?.product_id || input?.id || ''),
+            legacy_id: rawDetail?.legacy_id ? String(rawDetail.legacy_id) : null,
+            product_name: String(rawDetail?.product_name || input?.name || ''),
+            category: String(rawDetail?.category || input?.category || ''),
+            price_gross: Number(rawDetail?.price_gross ?? input?.price ?? 0),
+            price_net: Number(rawDetail?.price_net ?? 0),
+            entries_count: Number(rawDetail?.entries_count ?? 0),
+            open_lots_count: Number(rawDetail?.open_lots_count ?? 0),
+            purchased_units_total: Number(rawDetail?.purchased_units_total ?? 0),
+            consumed_units_total: Number(rawDetail?.consumed_units_total ?? 0),
+            remaining_units_total: Number(rawDetail?.remaining_units_total ?? 0),
+            remaining_cost_total: Number(rawDetail?.remaining_cost_total ?? 0),
+            weighted_unit_cost: Number(rawDetail?.weighted_unit_cost ?? 0),
+            weighted_margin: Number(rawDetail?.weighted_margin ?? 0),
+            weighted_profit: Number(rawDetail?.weighted_profit ?? 0),
+            min_unit_cost: Number(rawDetail?.min_unit_cost ?? 0),
+            max_unit_cost: Number(rawDetail?.max_unit_cost ?? 0),
+            has_unlinked_stock: Boolean(rawDetail?.has_unlinked_stock),
+            lots: lots.map((lot: any) => ({
+                id: String(lot?.id || ''),
+                source_type: String(lot?.source_type || ''),
+                source_ref: lot?.source_ref ? String(lot.source_ref) : null,
+                purchase_invoice_id: lot?.purchase_invoice_id ? String(lot.purchase_invoice_id) : null,
+                purchase_invoice_item_id: lot?.purchase_invoice_item_id ? String(lot.purchase_invoice_item_id) : null,
+                invoice_number: lot?.invoice_number ? String(lot.invoice_number) : null,
+                supplier_name: lot?.supplier_name ? String(lot.supplier_name) : null,
+                supplier_document: lot?.supplier_document ? String(lot.supplier_document) : null,
+                issued_at: lot?.issued_at ? String(lot.issued_at) : null,
+                received_at: lot?.received_at ? String(lot.received_at) : null,
+                created_at: lot?.created_at ? String(lot.created_at) : null,
+                purchased_quantity: Number(lot?.purchased_quantity ?? 0),
+                consumed_quantity: Number(lot?.consumed_quantity ?? 0),
+                remaining_quantity: Number(lot?.remaining_quantity ?? 0),
+                unit_cost: Number(lot?.unit_cost ?? 0),
+                purchase_total: Number(lot?.purchase_total ?? 0),
+                remaining_cost_total: Number(lot?.remaining_cost_total ?? 0),
+                estimated_remaining_net_revenue: Number(lot?.estimated_remaining_net_revenue ?? 0),
+                estimated_remaining_gross_revenue: Number(lot?.estimated_remaining_gross_revenue ?? 0),
+                estimated_remaining_profit: Number(lot?.estimated_remaining_profit ?? 0),
+                estimated_remaining_margin: Number(lot?.estimated_remaining_margin ?? 0),
+                status: lot?.status === 'consumed' ? 'consumed' : 'open',
+            })),
+        }
+    }
+
     const loadRecentPurchaseInvoices = async (options?: { silent?: boolean }) => {
         const silent = options?.silent === true
         const token = localStorage.getItem('authToken')
@@ -862,6 +951,45 @@ const MyAccount = () => {
         if (purchaseInvoiceDetailLoading) return
         setIsPurchaseInvoiceModalOpen(false)
         setSelectedPurchaseInvoice(null)
+    }
+
+    const handleOpenProductBalance = async (product: any) => {
+        const productId = String(getAdminProductEntityId(product) || '').trim()
+        if (!productId) {
+            showNotification('El producto no tiene un identificador válido para consultar su balance.', 'error')
+            return
+        }
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+            handleLogout()
+            return
+        }
+
+        setIsProductProcurementModalOpen(true)
+        setProductProcurementDetailLoading(true)
+        try {
+            const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(productId)}?scope=admin&procurement_detail=1`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }))
+            setSelectedProductProcurementDetail(normalizeProductProcurementDetail(res.body))
+        } catch (error) {
+            console.error(error)
+            setIsProductProcurementModalOpen(false)
+            setSelectedProductProcurementDetail(null)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
+            showNotification(String((error as any)?.message || 'No se pudo abrir el balance del producto.'), 'error')
+        } finally {
+            setProductProcurementDetailLoading(false)
+        }
+    }
+
+    const closeProductProcurementModal = () => {
+        if (productProcurementDetailLoading) return
+        setIsProductProcurementModalOpen(false)
+        setSelectedProductProcurementDetail(null)
     }
 
     const loadPricingSettings = async () => {
@@ -1279,6 +1407,10 @@ const MyAccount = () => {
     const salesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
         return buildSalesRankingRows(productSalesRanking, salesRankingView)
     }, [productSalesRanking, salesRankingView])
+    const selectedProcurementSalesProduct = React.useMemo(() => {
+        if (!selectedProductProcurementDetail) return null
+        return salesRankingRows.find((item) => item.product_id === selectedProductProcurementDetail.product_id) || null
+    }, [salesRankingRows, selectedProductProcurementDetail])
     const monthlySalesRankingTotals = productSalesRanking?.monthlyTotals
     const historicalSalesRankingTotals = productSalesRanking?.historicalTotals
     const salesRankingTotals = salesRankingView === 'month' ? monthlySalesRankingTotals : historicalSalesRankingTotals
@@ -1292,6 +1424,30 @@ const MyAccount = () => {
     const inventoryDeepDive = dashboardStats?.businessMetrics?.inventoryDeepDive
     const inventoryHealth = inventoryDeepDive?.health
     const traceabilityData = dashboardStats?.businessMetrics?.traceability
+    const getProductTaxRate = React.useCallback((product: any) => {
+        const explicitRate = Number(product?.tax?.rate)
+        if (Number.isFinite(explicitRate)) {
+            return Math.max(explicitRate, 0)
+        }
+        return isTaxExemptProduct(product) ? 0 : vatDisplayRate
+    }, [vatDisplayRate])
+    const getProductTaxMultiplier = React.useCallback((product: any) => {
+        const explicitMultiplier = Number(product?.tax?.multiplier)
+        if (Number.isFinite(explicitMultiplier) && explicitMultiplier > 0) {
+            return explicitMultiplier
+        }
+        return 1 + (getProductTaxRate(product) / 100)
+    }, [getProductTaxRate])
+    const getProductBasePrice = React.useCallback((product: any) => {
+        const price = Number(product?.price ?? 0)
+        const multiplier = getProductTaxMultiplier(product)
+        return multiplier > 0 ? (price / multiplier) : price
+    }, [getProductTaxMultiplier])
+    const getProductVatPart = React.useCallback((product: any) => {
+        const price = Number(product?.price ?? 0)
+        const basePrice = getProductBasePrice(product)
+        return Math.max(price - basePrice, 0)
+    }, [getProductBasePrice])
     const traceabilityOrders = traceabilityData?.orders ?? []
     const traceabilityProducts = traceabilityData?.products ?? []
     const traceabilityCategories = traceabilityData?.categories ?? []
@@ -1885,18 +2041,17 @@ const MyAccount = () => {
     }
 
     const productBreakdownMeta = React.useMemo(() => {
-        return buildProductBreakdownMeta(dashboardStats, selectedProductMetric, vatRate)
-    }, [dashboardStats, selectedProductMetric, vatRate])
+        return buildProductBreakdownMeta(dashboardStats, selectedProductMetric)
+    }, [dashboardStats, selectedProductMetric])
 
     const salesProductBreakdown = React.useMemo(() => {
         return buildSalesProductBreakdown(
             dashboardStats,
             adminProductsList || [],
             parseMoney,
-            selectedProductMetric,
-            vatRate
+            selectedProductMetric
         )
-    }, [adminProductsList, dashboardStats, parseMoney, selectedProductMetric, vatRate])
+    }, [adminProductsList, dashboardStats, parseMoney, selectedProductMetric])
 
     const inventoryProductBreakdown = React.useMemo(() => {
         return buildInventoryProductBreakdown(adminProductsList || [], parseMoney)
@@ -2351,9 +2506,9 @@ const MyAccount = () => {
                                                     <th className="px-4 py-3">Categoría</th>
                                                     <th className="px-4 py-3 text-right">Unidades</th>
                                                     <th className="px-4 py-3 text-right">Neto</th>
-                                                    <th className="px-4 py-3 text-right">IVA Est.</th>
-                                                    <th className="px-4 py-3 text-right">Envío Est.</th>
-                                                    <th className="px-4 py-3 text-right">Total Est.</th>
+                                                    <th className="px-4 py-3 text-right">IVA</th>
+                                                    <th className="px-4 py-3 text-right">Envío</th>
+                                                    <th className="px-4 py-3 text-right">Total</th>
                                                     <th className="px-4 py-3 text-right">Costo</th>
                                                     <th className="px-4 py-3 text-right">Utilidad</th>
                                                     <th className="px-4 py-3 text-right">Pedidos</th>
@@ -2374,7 +2529,7 @@ const MyAccount = () => {
                                                             <td className="px-4 py-3 text-sm text-right font-semibold">{formatMoney(item.net)}</td>
                                                             <td className="px-4 py-3 text-sm text-right">{formatMoney(item.vat)}</td>
                                                             <td className="px-4 py-3 text-sm text-right">{formatMoney(item.shipping)}</td>
-                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.gross + item.shipping)}</td>
+                                                            <td className="px-4 py-3 text-sm text-right">{formatMoney(item.gross)}</td>
                                                             <td className="px-4 py-3 text-sm text-right">{formatMoney(item.cost)}</td>
                                                             <td className={`px-4 py-3 text-sm text-right font-semibold ${item.profit >= 0 ? 'text-success' : 'text-red'}`}>
                                                                 {formatMoney(item.profit)}
@@ -2839,12 +2994,12 @@ const MyAccount = () => {
                                                 <div>
                                                     <div className="text-secondary text-xs uppercase font-bold mb-1">IVA configurado</div>
                                                     <div className="heading4">{vatRateLabel}%</div>
-                                                    <p className="text-secondary text-xs mt-1">Los precios del catálogo incluyen IVA.</p>
+                                                    <p className="text-secondary text-xs mt-1">Los productos gravados incluyen IVA; los exentos conservan precio final sin IVA.</p>
                                                 </div>
                                                 <div className="text-sm text-secondary">
                                                     Multiplicador aplicado: <span className="font-bold text-black">{vatMultiplierLabel}x</span>
                                                     <span className="mx-2 text-line">•</span>
-                                                    Ejemplo: $100 → <span className="font-bold text-black">${vatExampleTotal}</span>
+                                                    Ejemplo gravado: $100 → <span className="font-bold text-black">${vatExampleTotal}</span>
                                                 </div>
                                             </div>
                                         </button>
@@ -4927,7 +5082,9 @@ const MyAccount = () => {
                                         onNewProduct={handleNewProduct}
                                         onReloadPurchaseInvoices={loadRecentPurchaseInvoices}
                                         onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
+                                        onOpenProductBalance={handleOpenProductBalance}
                                         onEditProduct={handleEditProduct}
+                                        onRestockProduct={handleRestockProduct}
                                         formatMoney={formatMoney}
                                         formatIsoDate={formatIsoDate}
                                         formatDateEcuador={formatDateEcuador}
@@ -4948,6 +5105,7 @@ const MyAccount = () => {
                                         onSearchChange={setAdminProductsSearch}
                                         onNewProduct={handleNewProduct}
                                         onEditProduct={handleEditProduct}
+                                        onRestockProduct={handleRestockProduct}
                                         onDuplicateVariant={handleDuplicateVariant}
                                         onDeleteProduct={handleDeleteProduct}
                                         onTogglePublication={handleToggleProductPublication}
@@ -5245,9 +5403,8 @@ const MyAccount = () => {
                                                 const netSales = Number(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0) || 1
                                                 const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                                 const risks = products.map((product: any) => {
-                                                    const price = Number(product.price) || 0
-                                                    const basePrice = vatDisplayMultiplier > 0 ? (price / vatDisplayMultiplier) : price
-                                                    const cost = parseMoney(product.business?.cost)
+                                                    const basePrice = getProductBasePrice(product)
+                                                    const cost = parseMoney(product.business?.cost ?? product.cost)
                                                     const margin = basePrice > 0 ? ((basePrice - cost) / basePrice) * 100 : 0
                                                     return {
                                                         id: product.id,
@@ -5271,7 +5428,7 @@ const MyAccount = () => {
                                                     share: (Number(cat.total ?? 0) / netSales) * 100
                                                 }))
 
-                                                const missingCostItems = products.filter((p: any) => parseMoney(p.business?.cost) <= 0)
+                                                const missingCostItems = products.filter((p: any) => parseMoney(p.business?.cost ?? p.cost) <= 0)
                                                 const missingCost = missingCostItems.length
 
                                                 return (
@@ -5370,9 +5527,9 @@ const MyAccount = () => {
                                                     <tbody>
                                                         {adminProductsList.length > 0 ? adminProductsList.map((product: any) => {
                                                             const price = Number(product.price) || 0
-                                                            const basePrice = vatDisplayMultiplier > 0 ? (price / vatDisplayMultiplier) : price
-                                                            const vatPart = Math.max(price - basePrice, 0)
-                                                            const cost = parseMoney(product.business?.cost)
+                                                            const basePrice = getProductBasePrice(product)
+                                                            const vatPart = getProductVatPart(product)
+                                                            const cost = parseMoney(product.business?.cost ?? product.cost)
                                                             const utilidad = Math.max(basePrice - cost, 0)
                                                             const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                                             return (
@@ -5883,6 +6040,9 @@ const MyAccount = () => {
                                         formatMoney={formatMoney}
                                         formatDate={formatDateEcuador}
                                         formatDateTime={formatDateTimeEcuador}
+                                        currentUserId={user?.id ?? null}
+                                        onUsersMutated={reloadAdminUsers}
+                                        showNotification={showNotification}
                                     />
                                     )}
 
@@ -6628,6 +6788,19 @@ const MyAccount = () => {
                 formatMoney={formatMoney}
                 formatIsoDate={formatIsoDate}
                 formatDateTime={formatDateTimeEcuador}
+            />
+
+            <ProductProcurementDetailModal
+                open={isProductProcurementModalOpen}
+                loading={productProcurementDetailLoading}
+                detail={selectedProductProcurementDetail}
+                salesProduct={selectedProcurementSalesProduct}
+                currentPeriod={productSalesRanking?.period || { start: null, end: null }}
+                historicalPeriod={productSalesRanking?.historicalPeriod || { start: null, end: null }}
+                formatMoney={formatMoney}
+                formatIsoDate={formatIsoDate}
+                onClose={closeProductProcurementModal}
+                onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
             />
 
             <SalesProductDetailModal

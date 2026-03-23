@@ -8,6 +8,8 @@ export const apiEndpoints = {
     requestOtp: '/api/auth/request-otp',
     verifyOtp: '/api/auth/verify-otp',
   },
+  users: '/api/users',
+  user: (id: string) => `/api/users/${id}`,
   orders: '/api/orders',
   settings: {
     productPage: '/api/admin/settings/product-page',

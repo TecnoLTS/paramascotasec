@@ -163,25 +163,37 @@ export default function AccountSidebar({
                                         <strong className="heading6">Inventario</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'catalogs' && !focusedReferenceCatalogKey} onClick={() => onNavigateToReferenceCatalog(null)}>
-                                        <Icon.Rows size={18} />
-                                        <strong className="heading6">Catálogos operativos</strong>
+                                        <span className="flex items-center gap-3">
+                                            <Icon.Rows size={18} />
+                                            <strong className="heading6">Catálogos operativos</strong>
+                                        </span>
+                                        <Icon.CaretDown size={14} className={`ml-auto duration-300 ${activeTab === 'catalogs' ? 'rotate-180' : ''}`} />
                                     </PanelNavButton>
-                                    <div className="mt-1 rounded-lg border border-dashed border-line/70 bg-surface/60 p-2 space-y-1">
-                                        {PRODUCT_REFERENCE_SECTIONS.map((section) => {
-                                            const ItemIcon = Icon[section.menuIcon] as ElementType
-                                            return (
-                                                <PanelNavButton
-                                                    key={`reference-catalog-${section.key}`}
-                                                    className="item flex items-center gap-3 w-full px-4 py-2 rounded-lg cursor-pointer duration-300 hover:bg-white"
-                                                    isActive={activeTab === 'catalogs' && focusedReferenceCatalogKey === section.key}
-                                                    onClick={() => onNavigateToReferenceCatalog(section.key)}
-                                                >
-                                                    <ItemIcon size={16} />
-                                                    <strong className="heading7">{section.title}</strong>
-                                                </PanelNavButton>
-                                            )
-                                        })}
-                                    </div>
+                                    {activeTab === 'catalogs' && (
+                                        <div className="mt-2 rounded-xl border border-line bg-surface p-2">
+                                            <div className="px-2 pb-2 text-[10px] uppercase font-bold tracking-wide text-secondary">
+                                                Listas operativas
+                                            </div>
+                                            <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+                                            {PRODUCT_REFERENCE_SECTIONS.map((section) => {
+                                                const ItemIcon = Icon[section.menuIcon] as ElementType
+                                                return (
+                                                    <PanelNavButton
+                                                        key={`reference-catalog-${section.key}`}
+                                                        className="item flex items-center gap-3 w-full px-3 py-2.5 rounded-lg cursor-pointer duration-300 border border-transparent hover:bg-white hover:border-line"
+                                                        isActive={focusedReferenceCatalogKey === section.key}
+                                                        onClick={() => onNavigateToReferenceCatalog(section.key)}
+                                                    >
+                                                        <div className="w-8 h-8 rounded-lg bg-white border border-line flex items-center justify-center shrink-0">
+                                                            <ItemIcon size={15} />
+                                                        </div>
+                                                        <span className="text-[13px] font-semibold leading-tight">{section.sidebarTitle}</span>
+                                                    </PanelNavButton>
+                                                )
+                                            })}
+                                            </div>
+                                        </div>
+                                    )}
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'users'} onClick={() => onNavigateToPanelTab('users')}>
                                         <Icon.Users size={18} />
                                         <strong className="heading6">Usuarios</strong>

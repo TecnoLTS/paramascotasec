@@ -52,6 +52,14 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const variantProducts = useMemo(() => getProductVariants(productFamily), [productFamily])
   const defaultVariant = useMemo(() => resolveSelectedVariant(productFamily, requestedId), [productFamily, requestedId])
   const activeVariant = variantProducts.find((product) => getProductVariantLabel(product) === activeSize) ?? defaultVariant
+  const defaultVariantStock = Math.max(
+    0,
+    Number(defaultVariant.inventory?.available ?? defaultVariant.quantity ?? 0),
+  )
+  const availableStock = Math.max(
+    0,
+    Number(activeVariant.inventory?.available ?? activeVariant.quantity ?? 0),
+  )
   const showReviewSummary = hasRealReviews(productFamily)
   const reviewCount = getProductReviewCount(productFamily)
 
@@ -75,10 +83,18 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }, [openPopupImg])
 
   useEffect(() => {
-    setQuantity(productFamily.quantityPurchase ?? 1)
+    setQuantity(defaultVariantStock > 0 ? 1 : 0)
     setActiveColor('')
     setActiveSize(getProductVariantLabel(defaultVariant))
-  }, [productFamily.id, defaultVariant.id, productFamily.quantityPurchase])
+  }, [defaultVariant.id, defaultVariantStock, productFamily.id])
+
+  useEffect(() => {
+    setQuantity((current) => {
+      if (availableStock <= 0) return 0
+      if (current <= 0) return 1
+      return Math.min(current, availableStock)
+    })
+  }, [availableStock, activeVariant.id])
 
   const productType = (productFamily.productType ?? '').toLowerCase()
   const isClothing = productType === 'ropa'
@@ -88,7 +104,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const sku = getProductSku(activeVariant)
   const price = Number(activeVariant.price ?? 0)
   const originPrice = Number(activeVariant.originPrice ?? 0)
-  const hasSale = (activeVariant.sale || productFamily.sale || originPrice > price) && originPrice > price
+  const hasSale = Boolean(activeVariant.sale || productFamily.sale) && originPrice > price
   const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
 
   const pageSettings = productFamily.pageSettings ?? {
@@ -158,7 +174,11 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }, [data, productFamily.gender, productFamily.id, productFamily.variantGroupKey])
 
   const handleAddToCart = () => {
-    const quantityToAdd = quantity ?? 1
+    if (availableStock <= 0) {
+      return
+    }
+
+    const quantityToAdd = Math.min(Math.max(quantity ?? 1, 1), availableStock)
     const existingItem = cartState.cartArray.find((item) => item.id === activeVariant.id)
     const variantLabel = activeSize || getProductVariantLabel(activeVariant)
 
@@ -166,7 +186,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       addToCart({ ...activeVariant, quantityPurchase: quantityToAdd })
       updateCart(activeVariant.id, quantityToAdd, variantLabel, activeColor)
     } else {
-      const nextQuantity = (existingItem.quantity ?? 0) + quantityToAdd
+      const nextQuantity = Math.min((existingItem.quantity ?? 0) + quantityToAdd, availableStock)
       updateCart(activeVariant.id, nextQuantity, variantLabel, activeColor)
     }
 
@@ -416,7 +436,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                 )}
                 <div className="rounded-xl border border-line p-4 bg-white">
                   <div className="caption1 text-secondary">Disponibilidad</div>
-                  <div className="text-title mt-1">{activeVariant.quantity > 0 ? `${activeVariant.quantity} en stock` : 'Sin stock'}</div>
+                  <div className="text-title mt-1">{availableStock > 0 ? `${availableStock} en stock` : 'Sin stock'}</div>
                 </div>
               </div>
 
@@ -426,18 +446,30 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <Icon.Minus
                     size={20}
                     onClick={() => setQuantity((current) => current <= 1 ? current : current - 1)}
-                    className="cursor-pointer"
+                    className={`cursor-pointer ${quantity <= 1 ? 'opacity-40 cursor-not-allowed' : ''}`}
                   />
                   <div className="body1 font-semibold">{quantity}</div>
-                  <Icon.Plus size={20} onClick={() => setQuantity((current) => current + 1)} className="cursor-pointer" />
+                  <Icon.Plus
+                    size={20}
+                    onClick={() => setQuantity((current) => current >= availableStock ? current : current + 1)}
+                    className={`cursor-pointer ${quantity >= availableStock || availableStock <= 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  />
                 </div>
-                <div onClick={handleAddToCart} className="button-main w-full text-center bg-white text-black border border-black">
+                <div
+                  onClick={availableStock > 0 ? handleAddToCart : undefined}
+                  className={`button-main w-full text-center bg-white text-black border border-black ${availableStock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
                   Agregar al carrito
                 </div>
               </div>
 
               <div className="button-block mt-5">
-                <div className="button-main w-full text-center" onClick={handleBuyNow}>Comprar ahora</div>
+                <div
+                  className={`button-main w-full text-center ${availableStock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={availableStock > 0 ? handleBuyNow : undefined}
+                >
+                  Comprar ahora
+                </div>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4 mt-5 pb-6 border-b border-line">

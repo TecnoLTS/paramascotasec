@@ -24,8 +24,18 @@ const Cart = () => {
 
         // Kiểm tra xem sản phẩm có tồn tại không
         if (itemToUpdate) {
+            const availableStock = Math.max(
+                0,
+                Number((itemToUpdate as any).availableStock ?? itemToUpdate.inventory?.available ?? 0),
+            )
+            const boundedQuantity = availableStock > 0
+                ? Math.min(Math.max(1, Math.floor(newQuantity)), availableStock)
+                : 0
+            if (boundedQuantity <= 0) {
+                return
+            }
             // Truyền giá trị hiện tại của selectedSize và selectedColor
-            updateCart(productId, newQuantity, itemToUpdate.selectedSize, itemToUpdate.selectedColor);
+            updateCart(productId, boundedQuantity, itemToUpdate.selectedSize, itemToUpdate.selectedColor);
         }
     };
 
@@ -36,6 +46,7 @@ const Cart = () => {
     const [vatRate, setVatRate] = useState(0)
     const [vatSubtotal, setVatSubtotal] = useState(0)
     const [vatAmount, setVatAmount] = useState(0)
+    const [mixedVatRates, setMixedVatRates] = useState(false)
     const discountCart = 0
     const formattedDiscount = discountCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const formattedCartTotal = totalCart.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -63,6 +74,7 @@ const Cart = () => {
             setVatRate(0)
             setVatSubtotal(0)
             setVatAmount(0)
+            setMixedVatRates(false)
             return
         }
         getQuote({ items, delivery_method: 'pickup' })
@@ -71,11 +83,13 @@ const Cart = () => {
                     setVatRate(0)
                     setVatSubtotal(0)
                     setVatAmount(0)
+                    setMixedVatRates(false)
                     return
                 }
                 setVatRate(Number(res?.vat_rate ?? 0))
                 setVatSubtotal(Number(res?.vat_subtotal ?? 0))
                 setVatAmount(Number(res?.vat_amount ?? 0))
+                setMixedVatRates(Boolean(res?.mixed_vat_rates))
             })
             .catch((err) => {
                 const backendMessage = err instanceof Error ? err.message.trim() : ''
@@ -85,6 +99,7 @@ const Cart = () => {
                 setVatRate(0)
                 setVatSubtotal(0)
                 setVatAmount(0)
+                setMixedVatRates(false)
             })
     }, [cartState.cartArray])
 
@@ -133,6 +148,10 @@ const Cart = () => {
                                             cartState.cartArray.map((product) => {
                                                 const itemPrice = Number((product as any).price ?? 0)
                                                 const itemQuantity = Number((product as any).quantity ?? 1)
+                                                const availableStock = Math.max(
+                                                    0,
+                                                    Number((product as any).availableStock ?? (product as any).inventory?.available ?? 0),
+                                                )
                                                 const itemTotal = itemPrice * itemQuantity
                                                 return (
                                                     <div className="item flex md:mt-7 md:pb-7 mt-5 pb-5 border-b border-line w-full" key={product.id}>
@@ -177,7 +196,7 @@ const Cart = () => {
                                                                 <div className="text-button quantity">{itemQuantity}</div>
                                                                 <Icon.Plus
                                                                     onClick={() => handleQuantityChange(product.id, itemQuantity + 1)}
-                                                                    className='text-base max-md:text-sm'
+                                                                    className={`text-base max-md:text-sm ${availableStock > 0 && itemQuantity >= availableStock ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                                 />
                                                             </div>
                                                         </div>
@@ -208,9 +227,9 @@ const Cart = () => {
                                     <div className="text-title">Subtotal sin IVA</div>
                                     <div className="text-title">$<span className="total-product">{formattedVatSubtotal}</span></div>
                                 </div>
-                                {vatRate > 0 && (
+                                {vatAmount > 0 && (
                                     <div className="discount-block py-5 flex justify-between border-b border-line">
-                                        <div className="text-title">IVA ({vatRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</div>
+                                        <div className="text-title">{mixedVatRates ? 'IVA aplicado' : `IVA (${vatRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`}</div>
                                         <div className="text-title">$<span className="discount">{formattedVatAmount}</span></div>
                                     </div>
                                 )}

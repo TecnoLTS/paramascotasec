@@ -7,7 +7,9 @@ import * as Icon from "@phosphor-icons/react/dist/ssr"
 import { requestApi } from '@/lib/apiClient'
 import type { PricingCalc, PricingMargins } from '@/lib/api/settings'
 import {
+    findSupplierReference,
     getReferenceOptionsWithCurrent,
+    getSupplierOptionsWithCurrent,
     PRODUCT_REFERENCE_SECTIONS,
     type ProductReferenceData,
     type ProductReferenceKey,
@@ -35,11 +37,15 @@ import {
     createEmptyPurchaseInvoice,
     createImageEntry,
     getAttributesForTypeChange,
+    getVariantDefinitionFieldKey,
+    getVariantDefinitionFieldLabel,
     isProductEligibleForPublication,
     MAX_PRODUCT_IMAGE_BYTES,
     normalizeAdminProducts,
     normalizeAttributes,
     PRODUCT_IMAGE_ACCEPTED_TYPES,
+    resolveProductVariantBaseName,
+    resolveProductVariantLabel,
 } from '../productFormUtils'
 import { ADMIN_PRODUCTS_ENDPOINT, withTransientRetry } from '../utils'
 import type { ProductEditorMode, ProductFormState } from '../types'
@@ -187,6 +193,9 @@ const getSuggestedBasePriceForCostPreview = (
     return previewPvp > 0 ? suggestedBase : 0
 }
 
+const getEffectiveVatMultiplier = (taxExempt: boolean, vatMultiplier: number) =>
+    taxExempt ? 1 : Math.max(1, vatMultiplier)
+
 export default function ProductEditorModal({
     open,
     editingProduct,
@@ -208,10 +217,20 @@ export default function ProductEditorModal({
     const [imageUploading, setImageUploading] = React.useState<Record<string, boolean>>({})
     const [saving, setSaving] = React.useState(false)
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
+    const [restockUnitsInput, setRestockUnitsInput] = React.useState('0')
     const formRef = React.useRef<HTMLFormElement | null>(null)
     const deferredForm = React.useDeferredValue(form)
     const deferredEditingProduct = React.useDeferredValue(editingProduct)
     const isDuplicateVariantMode = editorMode === 'duplicate-variant'
+    const isRestockMode = editorMode === 'restock'
+    const effectiveVatMultiplier = React.useMemo(
+        () => getEffectiveVatMultiplier(Boolean(form.taxExempt), vatMultiplier),
+        [form.taxExempt, vatMultiplier]
+    )
+    const persistedVatMultiplier = React.useMemo(
+        () => getEffectiveVatMultiplier(Boolean(initialForm.taxExempt), vatMultiplier),
+        [initialForm.taxExempt, vatMultiplier]
+    )
 
     React.useEffect(() => {
         if (!open) return
@@ -219,30 +238,53 @@ export default function ProductEditorModal({
         setImageUploading({})
         setSaving(false)
         setFormErrors({})
+        setRestockUnitsInput('0')
     }, [open, initialForm, editingProduct])
 
     const duplicateVariantBaseName = React.useMemo(() => {
         const attributeBaseName = String(form.attributes?.variantBaseName || '').trim()
         if (attributeBaseName) return attributeBaseName
-        const editingAttributeBaseName = String(editingProduct?.attributes?.variantBaseName || editingProduct?.variantBaseName || '').trim()
-        if (editingAttributeBaseName) return editingAttributeBaseName
-        const currentName = String(form.name || '').trim()
-        return currentName.replace(/\s+\S+$/, '').trim()
-    }, [editingProduct, form.attributes?.variantBaseName, form.name])
+
+        const sourceBaseName = String(initialForm.attributes?.variantBaseName || '').trim()
+        if (sourceBaseName) return sourceBaseName
+
+        return resolveProductVariantBaseName(editingProduct || initialForm)
+    }, [editingProduct, form.attributes?.variantBaseName, initialForm])
     const duplicateVariantLabel = React.useMemo(() => {
-        const size = String(form.attributes?.size || '').trim()
-        if (size) return size
-        const weight = String(form.attributes?.weight || '').trim()
-        if (weight) return weight
-        return String(form.attributes?.variantLabel || '').trim()
-    }, [form.attributes?.size, form.attributes?.variantLabel, form.attributes?.weight])
+        return resolveProductVariantLabel(form.productType, form.attributes)
+    }, [form.attributes, form.productType])
+    const duplicateVariantFieldLabel = React.useMemo(
+        () => getVariantDefinitionFieldLabel(form.productType),
+        [form.productType]
+    )
+    const duplicateVariantFieldKey = React.useMemo(
+        () => getVariantDefinitionFieldKey(form.productType),
+        [form.productType]
+    )
+    const duplicateVariantInputValue = React.useMemo(() => {
+        const attributes = form.attributes || {}
+        const normalizedType = normalizeProductType(form.productType, form.category)
+
+        if (normalizedType === 'cuidado') {
+            return String(attributes.presentation || attributes.variantLabel || '').trim()
+        }
+
+        if (normalizedType === 'Alimento') {
+            return String(attributes.variantLabel || attributes.size || attributes.weight || '').trim()
+        }
+
+        return String(attributes.size || attributes.variantLabel || '').trim()
+    }, [form.attributes, form.category, form.productType])
     const selectedAdditionalCategories = React.useMemo(
         () => parseSerializedProductCategories(form.attributes?.catalogCategories),
         [form.attributes?.catalogCategories]
     )
     const sizeGuideRows = React.useMemo(() => parseProductSizeGuideRows(form.attributes?.sizeGuideRows), [form.attributes?.sizeGuideRows])
     const brandOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.brands, form.brand), [form.brand, referenceData.brands])
-    const supplierOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.suppliers, form.purchaseInvoice?.supplierName || form.attributes?.supplier), [form.attributes?.supplier, form.purchaseInvoice?.supplierName, referenceData.suppliers])
+    const supplierOptions = React.useMemo(
+        () => getSupplierOptionsWithCurrent(referenceData.suppliers, form.purchaseInvoice?.supplierName || form.attributes?.supplier),
+        [form.attributes?.supplier, form.purchaseInvoice?.supplierName, referenceData.suppliers]
+    )
     const sizeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.sizes, form.attributes?.size), [form.attributes?.size, referenceData.sizes])
     const materialOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.materials, form.attributes?.material), [form.attributes?.material, referenceData.materials])
     const colorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.colors, form.attributes?.color), [form.attributes?.color, referenceData.colors])
@@ -253,6 +295,16 @@ export default function ProductEditorModal({
     const tagOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.tags, form.attributes?.tag), [form.attributes?.tag, referenceData.tags])
     const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
     const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
+    const duplicateVariantOptions = React.useMemo(
+        () => (normalizeProductType(form.productType, form.category) === 'cuidado' ? presentationOptions : sizeOptions),
+        [form.category, form.productType, presentationOptions, sizeOptions]
+    )
+    const duplicateVariantReferenceItems = React.useMemo(
+        () => (normalizeProductType(form.productType, form.category) === 'cuidado'
+            ? [{ key: 'presentations' as ProductReferenceKey, options: presentationOptions }]
+            : [{ key: 'sizes' as ProductReferenceKey, options: sizeOptions }]),
+        [form.category, form.productType, presentationOptions, sizeOptions]
+    )
     const primaryCategory = React.useMemo(
         () => normalizeProductCategory(form.category, form.productType),
         [form.category, form.productType]
@@ -260,6 +312,14 @@ export default function ProductEditorModal({
     const primaryCategoryLabel = React.useMemo(
         () => PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === primaryCategory)?.label || '',
         [primaryCategory]
+    )
+    const selectedPurchaseSupplier = React.useMemo(
+        () => findSupplierReference(referenceData.suppliers, form.purchaseInvoice?.supplierName),
+        [form.purchaseInvoice?.supplierName, referenceData.suppliers]
+    )
+    const selectedPreferredSupplier = React.useMemo(
+        () => findSupplierReference(referenceData.suppliers, form.attributes?.supplier),
+        [form.attributes?.supplier, referenceData.suppliers]
     )
     const referenceSectionTitleByKey = React.useMemo(
         () => PRODUCT_REFERENCE_SECTIONS.reduce<Record<ProductReferenceKey, string>>((acc, section) => {
@@ -276,7 +336,7 @@ export default function ProductEditorModal({
 
     const renderReferenceCatalogHint = React.useCallback((
         key: ProductReferenceKey,
-        options: string[],
+        options: Array<unknown>,
         emptyText: string,
         customText?: string
     ) => (
@@ -294,7 +354,7 @@ export default function ProductEditorModal({
     ), [onOpenReferenceCatalog, saving])
 
     const renderReferenceCatalogHints = React.useCallback((
-        items: Array<{ key: ProductReferenceKey; options: string[] }>,
+        items: Array<{ key: ProductReferenceKey; options: Array<unknown> }>,
         emptyText?: string
     ) => {
         const uniqueItems = items.filter((item, index, array) => array.findIndex((candidate) => candidate.key === item.key) === index)
@@ -389,19 +449,22 @@ export default function ProductEditorModal({
     }, [setAttribute])
 
     const setPurchaseInvoiceSupplier = React.useCallback((value: string) => {
+        const matchedSupplier = findSupplierReference(referenceData.suppliers, value)
+        const supplierName = matchedSupplier?.name || value
         setForm((prev) => ({
             ...prev,
             purchaseInvoice: {
                 ...prev.purchaseInvoice,
-                supplierName: value,
+                supplierName,
+                supplierDocument: matchedSupplier?.document || '',
             },
             attributes: {
                 ...(prev.attributes || {}),
-                supplier: value || String(prev.attributes?.supplier || '').trim(),
+                supplier: supplierName || String(prev.attributes?.supplier || '').trim(),
             },
         }))
-        clearErrors('purchaseInvoiceSupplierName')
-    }, [clearErrors])
+        clearErrors('purchaseInvoiceSupplierName', 'purchaseInvoiceSupplierDocument')
+    }, [clearErrors, referenceData.suppliers])
 
     const handleProductTypeChange = React.useCallback((value: string) => {
         setForm((prev) => {
@@ -434,20 +497,46 @@ export default function ProductEditorModal({
     }, [clearErrors])
 
     const setPreferredSupplier = React.useCallback((value: string) => {
+        const matchedSupplier = findSupplierReference(referenceData.suppliers, value)
+        const supplierName = matchedSupplier?.name || value
         setForm((prev) => ({
             ...prev,
             attributes: {
                 ...(prev.attributes || {}),
-                supplier: value,
+                supplier: supplierName,
             },
-            purchaseInvoice: !prev.purchaseInvoice?.supplierName && value
+            purchaseInvoice: !prev.purchaseInvoice?.supplierName && supplierName
                 ? {
                     ...prev.purchaseInvoice,
-                    supplierName: value,
+                    supplierName,
+                    supplierDocument: matchedSupplier?.document || '',
                 }
                 : prev.purchaseInvoice,
         }))
-    }, [])
+    }, [referenceData.suppliers])
+
+    React.useEffect(() => {
+        const supplierName = String(form.purchaseInvoice?.supplierName || '').trim()
+        if (!supplierName) return
+        const matchedSupplier = findSupplierReference(referenceData.suppliers, supplierName)
+        if (!matchedSupplier) return
+
+        if (
+            matchedSupplier.name === supplierName &&
+            String(form.purchaseInvoice?.supplierDocument || '').trim() === matchedSupplier.document
+        ) {
+            return
+        }
+
+        setForm((prev) => ({
+            ...prev,
+            purchaseInvoice: {
+                ...prev.purchaseInvoice,
+                supplierName: matchedSupplier.name,
+                supplierDocument: matchedSupplier.document,
+            },
+        }))
+    }, [form.purchaseInvoice?.supplierDocument, form.purchaseInvoice?.supplierName, referenceData.suppliers])
 
     const toggleAdditionalCategory = React.useCallback((value: string) => {
         const normalizedValue = normalizeProductCategory(value)
@@ -553,39 +642,89 @@ export default function ProductEditorModal({
 
     const handleBasePriceChange = React.useCallback((value: string) => {
         const baseValue = Number(value || 0)
-        const pvpValue = vatMultiplier > 0 ? (baseValue * vatMultiplier) : baseValue
+        const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
         setForm((prev) => ({
             ...prev,
             price: value,
             pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : ''
         }))
-    }, [vatMultiplier])
+    }, [effectiveVatMultiplier])
 
     const handlePvpPriceChange = React.useCallback((value: string) => {
         const pvpValue = Number(value || 0)
-        const baseValue = vatMultiplier > 0 ? (pvpValue / vatMultiplier) : pvpValue
+        const baseValue = effectiveVatMultiplier > 0 ? (pvpValue / effectiveVatMultiplier) : pvpValue
         setForm((prev) => ({
             ...prev,
             pvp: value,
             price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : ''
         }))
+    }, [effectiveVatMultiplier])
+
+    const handleMarkupChange = React.useCallback((value: string) => {
+        const markupValue = Number(value || 0)
+        const currentCost = Number(form.cost || 0)
+        const normalizedMarkup = Number.isFinite(markupValue) ? Math.max(0, markupValue) : 0
+
+        if (!Number.isFinite(currentCost) || currentCost < 0) {
+            setForm((prev) => ({
+                ...prev,
+                price: '',
+                pvp: '',
+            }))
+            return
+        }
+
+        const baseValue = currentCost * (1 + (normalizedMarkup / 100))
+        const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
+        setForm((prev) => ({
+            ...prev,
+            price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : '',
+            pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : '',
+        }))
+    }, [effectiveVatMultiplier, form.cost])
+
+    const handleTaxExemptChange = React.useCallback((value: string) => {
+        const nextTaxExempt = value === 'exempt'
+        setForm((prev) => {
+            const previousMultiplier = getEffectiveVatMultiplier(Boolean(prev.taxExempt), vatMultiplier)
+            const nextMultiplier = getEffectiveVatMultiplier(nextTaxExempt, vatMultiplier)
+            const currentPvp = Number(prev.pvp || 0)
+            const currentBase = Number(prev.price || 0)
+            const resolvedBase = Number.isFinite(currentBase) && currentBase >= 0
+                ? currentBase
+                : (previousMultiplier > 0 ? (currentPvp / previousMultiplier) : currentPvp)
+            const nextPvp = nextMultiplier > 0 ? (resolvedBase * nextMultiplier) : resolvedBase
+
+            return {
+                ...prev,
+                taxExempt: nextTaxExempt,
+                price: Number.isFinite(resolvedBase) ? resolvedBase.toFixed(2) : '',
+                pvp: Number.isFinite(nextPvp) ? nextPvp.toFixed(2) : '',
+            }
+        })
     }, [vatMultiplier])
 
     const productBasePrice = Number(deferredForm.price || 0)
     const productCost = Number(deferredForm.cost || 0)
-    const productPvpPrice = Number(deferredForm.pvp || 0) || (productBasePrice * vatMultiplier)
+    const productPvpPrice = Number(deferredForm.pvp || 0) || (productBasePrice * effectiveVatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productGrossProfit = Math.max(productBasePrice - productCost, 0)
     const productGrossMargin = productBasePrice > 0 ? (productGrossProfit / productBasePrice) * 100 : 0
     const productMarkup = productCost > 0 ? (productGrossProfit / productCost) * 100 : 0
+    const productVatAmount = Math.max(productPvpPrice - productBasePrice, 0)
     const productProfitLabel = productGrossProfit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productVatAmountLabel = productVatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productMarkupInputValue = Number.isFinite(productMarkup) ? String(Number(productMarkup.toFixed(2))) : ''
     const persistedProductPvpPrice = Number(deferredEditingProduct?.price ?? 0)
-    const persistedProductBasePrice = vatMultiplier > 0 ? (persistedProductPvpPrice / vatMultiplier) : persistedProductPvpPrice
+    const persistedProductBasePrice = persistedVatMultiplier > 0 ? (persistedProductPvpPrice / persistedVatMultiplier) : persistedProductPvpPrice
     const persistedProductCost = Number(deferredEditingProduct?.business?.cost ?? deferredEditingProduct?.cost ?? 0)
     const persistedProductQuantity = Number(deferredEditingProduct?.quantity ?? 0)
-    const requestedProductQuantity = Number(deferredForm.quantity || 0)
+    const restockUnits = isRestockMode ? Math.max(0, Math.trunc(Number(restockUnitsInput || 0))) : 0
+    const requestedProductQuantity = isRestockMode && deferredEditingProduct
+        ? persistedProductQuantity + restockUnits
+        : Number(deferredForm.quantity || 0)
     const stockEntryDelta = deferredEditingProduct
         ? Math.max(0, requestedProductQuantity - persistedProductQuantity)
         : Math.max(0, requestedProductQuantity)
@@ -595,16 +734,16 @@ export default function ProductEditorModal({
         : `Factura para stock inicial de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
     const hasProductCostPreview = Number.isFinite(productCost) && productCost > 0
     const suggestedBasePricePreview = hasProductCostPreview
-        ? getSuggestedBasePriceForCostPreview(productCost, vatMultiplier, normalizedMargins, normalizedCalc)
+        ? getSuggestedBasePriceForCostPreview(productCost, effectiveVatMultiplier, normalizedMargins, normalizedCalc)
         : 0
-    const suggestedPvpPricePreview = suggestedBasePricePreview * vatMultiplier
+    const suggestedPvpPricePreview = suggestedBasePricePreview * effectiveVatMultiplier
     const costChangedForAutoPricing = Boolean(deferredEditingProduct)
         && Number.isFinite(productCost)
         && Math.abs(productCost - persistedProductCost) > 0.00001
     const automaticAppliedBasePrice = costChangedForAutoPricing
         ? Math.max(suggestedBasePricePreview, persistedProductBasePrice, Number.isFinite(productBasePrice) ? productBasePrice : 0)
         : (Number.isFinite(productBasePrice) ? productBasePrice : 0)
-    const automaticAppliedPvpPrice = automaticAppliedBasePrice * vatMultiplier
+    const automaticAppliedPvpPrice = automaticAppliedBasePrice * effectiveVatMultiplier
     const automaticPriceWillIncrease = costChangedForAutoPricing
         && automaticAppliedBasePrice > (Number.isFinite(productBasePrice) ? productBasePrice : 0) + 0.00001
     const suggestedBasePriceLabel = suggestedBasePricePreview.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -613,16 +752,254 @@ export default function ProductEditorModal({
     const automaticAppliedPvpPriceLabel = automaticAppliedPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const isUploadingProductImages = Object.values(imageUploading).some(Boolean)
     const productFormErrorEntries = Object.entries(formErrors)
+    const duplicateVariantFieldError = formErrors[duplicateVariantFieldKey]
+    const duplicateVariantBaseError = formErrors.variantBaseName
     const publicationEligible = isProductEligibleForPublication({
         price: form.price,
-        quantity: form.quantity,
+        quantity: String(requestedProductQuantity),
     })
+    const modalTitle = isDuplicateVariantMode
+        ? 'Duplicar Variante'
+        : isRestockMode
+            ? 'Registrar Compra'
+            : (editingProduct ? 'Editar Producto' : 'Nuevo Producto')
+    const modalSubtitle = isDuplicateVariantMode
+        ? 'Crea una nueva variante sin romper la familia visible del producto en tienda.'
+        : isRestockMode
+            ? 'Registra una compra asociada al producto y aumenta el stock con respaldo de factura.'
+            : (editingProduct
+                ? 'Actualiza catálogo, precio, stock, compra e información pública del producto.'
+                : 'Carga el producto con clasificación, precio, stock, medios e información operativa.')
+    const modeChipLabel = isDuplicateVariantMode ? 'Variante' : (isRestockMode ? 'Compra' : (editingProduct ? 'Edición' : 'Alta'))
+    const modeChipClass = isDuplicateVariantMode
+        ? 'bg-blue-100 text-blue-800'
+        : isRestockMode
+            ? 'bg-emerald-100 text-emerald-800'
+            : editingProduct
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-slate-100 text-slate-800'
+    const productTypeLabel = PRODUCT_TYPE_OPTIONS.find((option) => option.value === form.productType)?.label || 'Sin definir'
+    const summaryThumbCount = (form.thumbImages || []).filter((img: any) => img.url && img.url.trim()).length
+    const summaryGalleryCount = (form.galleryImages || []).filter((img: any) => img.url && img.url.trim()).length
+    const summaryStockLabel = `${requestedProductQuantity.toLocaleString('es-EC')} uds`
+    const summaryTaxLabel = form.taxExempt
+        ? 'Exento de IVA'
+        : `Grava IVA (${((effectiveVatMultiplier - 1) * 100).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
+    const summaryPublicationLabel = form.published && publicationEligible ? 'Publicado' : (publicationEligible ? 'Oculto' : 'Bloqueado')
+    const summaryPublicationClass = form.published && publicationEligible
+        ? 'text-emerald-700'
+        : publicationEligible
+            ? 'text-slate-700'
+            : 'text-amber-700'
+    const hasPositivePrice = Number.isFinite(productBasePrice) && productBasePrice > 0
+    const hasPositiveCost = Number.isFinite(productCost) && productCost > 0
+    const hasPositiveStock = Number.isFinite(requestedProductQuantity) && requestedProductQuantity > 0
+    const hasSku = String(form.attributes?.sku || '').trim().length > 0
+    const hasDescription = String(form.description || '').trim().length >= 10
+    const checklistItems = React.useMemo(() => {
+        if (isDuplicateVariantMode) {
+            return [
+                {
+                    label: 'Familia',
+                    value: duplicateVariantBaseName || 'Pendiente',
+                    complete: duplicateVariantBaseName.length >= 3,
+                },
+                {
+                    label: `Nueva ${duplicateVariantFieldLabel}`,
+                    value: duplicateVariantLabel || 'Pendiente',
+                    complete: !!duplicateVariantLabel,
+                },
+                {
+                    label: 'SKU',
+                    value: String(form.attributes?.sku || '').trim() || 'Pendiente',
+                    complete: hasSku,
+                },
+                {
+                    label: 'Precio base',
+                    value: hasPositivePrice ? `$${Number(form.price || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                    complete: hasPositivePrice,
+                },
+                {
+                    label: 'Stock',
+                    value: summaryStockLabel,
+                    complete: hasPositiveStock,
+                },
+            ]
+        }
+
+        if (isRestockMode) {
+            return [
+                {
+                    label: 'Ingreso',
+                    value: stockEntryDelta > 0 ? `+${stockEntryDelta.toLocaleString('es-EC')} uds` : 'Pendiente',
+                    complete: stockEntryDelta > 0,
+                },
+                {
+                    label: 'Factura',
+                    value: String(form.purchaseInvoice?.invoiceNumber || '').trim() || 'Pendiente',
+                    complete: !!String(form.purchaseInvoice?.invoiceNumber || '').trim(),
+                },
+                {
+                    label: 'Proveedor',
+                    value: String(form.purchaseInvoice?.supplierName || '').trim() || 'Pendiente',
+                    complete: !!String(form.purchaseInvoice?.supplierName || '').trim() && !!selectedPurchaseSupplier?.document,
+                },
+                {
+                    label: 'Fecha',
+                    value: String(form.purchaseInvoice?.issuedAt || '').trim() || 'Pendiente',
+                    complete: /^\d{4}-\d{2}-\d{2}$/.test(String(form.purchaseInvoice?.issuedAt || '').trim()),
+                },
+                {
+                    label: 'Stock final',
+                    value: summaryStockLabel,
+                    complete: hasPositiveStock,
+                },
+            ]
+        }
+
+        return [
+            {
+                label: 'Precio base',
+                value: hasPositivePrice ? `$${Number(form.price || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                complete: hasPositivePrice,
+            },
+            {
+                label: 'Costo',
+                value: Number.isFinite(productCost) && productCost >= 0 ? `$${Number(form.cost || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                complete: hasPositiveCost,
+            },
+            {
+                label: 'Stock',
+                value: summaryStockLabel,
+                complete: hasPositiveStock,
+            },
+            {
+                label: 'IVA',
+                value: summaryTaxLabel,
+                complete: true,
+            },
+            {
+                label: 'SKU',
+                value: String(form.attributes?.sku || '').trim() || 'Pendiente',
+                complete: hasSku,
+            },
+            {
+                label: 'Descripción',
+                value: hasDescription ? 'Lista para ficha' : 'Mínimo 10 caracteres',
+                complete: hasDescription,
+            },
+            {
+                label: 'Miniaturas',
+                value: `${summaryThumbCount} cargada${summaryThumbCount === 1 ? '' : 's'}`,
+                complete: summaryThumbCount > 0,
+            },
+            {
+                label: 'Galería',
+                value: `${summaryGalleryCount} cargada${summaryGalleryCount === 1 ? '' : 's'}`,
+                complete: summaryGalleryCount > 0,
+            },
+        ]
+    }, [
+        duplicateVariantBaseName,
+        duplicateVariantFieldLabel,
+        duplicateVariantLabel,
+        form.attributes?.sku,
+        form.cost,
+        form.price,
+        form.purchaseInvoice?.invoiceNumber,
+        form.purchaseInvoice?.issuedAt,
+        form.purchaseInvoice?.supplierName,
+        form.description,
+        hasDescription,
+        hasPositiveCost,
+        hasPositivePrice,
+        hasPositiveStock,
+        hasSku,
+        isDuplicateVariantMode,
+        isRestockMode,
+        productCost,
+        selectedPurchaseSupplier?.document,
+        stockEntryDelta,
+        summaryTaxLabel,
+        summaryGalleryCount,
+        summaryStockLabel,
+        summaryThumbCount,
+    ])
+    const publicationSupportText = publicationEligible
+        ? (form.published
+            ? 'Cumple precio y stock, y ya está visible en la tienda.'
+            : 'Cumple precio y stock, pero sigue oculto en la web pública.')
+        : 'Para publicar necesita al menos precio base mayor a 0 y stock disponible.'
 
     React.useEffect(() => {
         if (!publicationEligible && form.published) {
             setForm((prev) => ({ ...prev, published: false }))
         }
     }, [form.published, publicationEligible])
+
+    const handleRestockUnitsChange = React.useCallback((value: string) => {
+        const cleanedValue = value === '' ? '' : String(Math.max(0, Math.trunc(Number(value || 0))))
+        setRestockUnitsInput(cleanedValue)
+        if (!editingProduct) return
+        const units = cleanedValue === '' ? 0 : Math.max(0, Math.trunc(Number(cleanedValue)))
+        setForm((prev) => ({
+            ...prev,
+            quantity: String(persistedProductQuantity + units),
+        }))
+        clearErrors('quantity')
+    }, [clearErrors, editingProduct, persistedProductQuantity])
+
+    const applyDuplicateVariantDefinition = React.useCallback((value: string) => {
+        setForm((prev) => {
+            const normalizedType = normalizeProductType(prev.productType, prev.category)
+            const nextAttributes: Record<string, string> = {
+                ...(prev.attributes || {}),
+                variantLabel: value,
+            }
+
+            if (normalizedType === 'cuidado') {
+                nextAttributes.presentation = value
+            } else {
+                nextAttributes.size = value
+                if (normalizedType === 'Alimento') {
+                    nextAttributes.weight = ''
+                }
+            }
+
+            return {
+                ...prev,
+                attributes: nextAttributes,
+            }
+        })
+        clearErrors(duplicateVariantFieldKey, 'name')
+    }, [clearErrors, duplicateVariantFieldKey])
+
+    const renderDuplicateVariantSelector = React.useCallback((emptyLabel: string) => (
+        <div className="md:col-span-2">
+            <label className="text-secondary text-xs uppercase font-bold mb-2 block">Nueva {duplicateVariantFieldLabel}</label>
+            <select
+                className={getInputClass(duplicateVariantFieldKey, 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                value={duplicateVariantInputValue}
+                onChange={e => applyDuplicateVariantDefinition(e.target.value)}
+                disabled={saving}
+            >
+                <option value="">{duplicateVariantOptions.length > 0 ? `Selecciona ${duplicateVariantFieldLabel}` : emptyLabel}</option>
+                {duplicateVariantOptions.map((option) => (
+                    <option key={`duplicate-variant-option-${option}`} value={option}>{option}</option>
+                ))}
+            </select>
+            {duplicateVariantFieldError && <p className="text-xs text-red mt-1">{duplicateVariantFieldError}</p>}
+        </div>
+    ), [
+        applyDuplicateVariantDefinition,
+        duplicateVariantFieldError,
+        duplicateVariantFieldKey,
+        duplicateVariantFieldLabel,
+        duplicateVariantInputValue,
+        duplicateVariantOptions,
+        getInputClass,
+        saving,
+    ])
 
     const handleSave = React.useCallback(async (event: React.FormEvent) => {
         event.preventDefault()
@@ -647,20 +1024,28 @@ export default function ProductEditorModal({
             const description = String(form.description || '').trim()
             const basePrice = Number(form.price)
             const currentCost = Number(form.cost)
-            const quantity = Number(form.quantity)
             const previousQuantity = Number(editingProduct?.quantity ?? 0)
+            const quantity = isRestockMode && editingProduct
+                ? previousQuantity + Math.max(0, Math.trunc(Number(restockUnitsInput || 0)))
+                : Number(form.quantity)
             const stockIncrease = editingProduct ? Math.max(0, quantity - previousQuantity) : Math.max(0, quantity)
 
-            if (name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
+            if (!isDuplicateVariantMode && name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
             if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(currentCost) || currentCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) nextErrors.quantity = 'El stock debe ser un número entero mayor o igual a 0.'
             if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
+            if (isRestockMode && stockIncrease <= 0) nextErrors.quantity = 'Debes indicar al menos 1 unidad a ingresar en la compra.'
 
             const normalizedAttributes = normalizeAttributes(productType, form.attributes)
+            normalizedAttributes.taxExempt = form.taxExempt ? 'true' : 'false'
             const normalizedSpecies = normalizeProductSpecies(normalizedAttributes.species, editingProduct?.gender ?? '')
+            const duplicateSourceVariantLabel = String(form.attributes?.__sourceVariantLabel || '').trim()
+            const nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
+            const variantDefinitionField = getVariantDefinitionFieldKey(productType)
+            const variantDefinitionFieldLabel = getVariantDefinitionFieldLabel(productType)
             if (normalizedSpecies) {
                 normalizedAttributes.species = normalizedSpecies
             }
@@ -668,6 +1053,21 @@ export default function ProductEditorModal({
                 delete normalizedAttributes.sizeGuideRows
                 delete normalizedAttributes.sizeGuideNotes
             }
+            if (isDuplicateVariantMode) {
+                if (duplicateVariantBaseName.length < 3) {
+                    nextErrors.variantBaseName = 'La familia del producto debe tener al menos 3 caracteres.'
+                }
+                normalizedAttributes.variantBaseName = duplicateVariantBaseName
+                if (!nextVariantLabel) {
+                    nextErrors[variantDefinitionField] = `Debes definir la ${variantDefinitionFieldLabel} de la nueva variante.`
+                } else {
+                    normalizedAttributes.variantLabel = nextVariantLabel
+                    if (duplicateSourceVariantLabel && duplicateSourceVariantLabel.toLowerCase() === nextVariantLabel.toLowerCase()) {
+                        nextErrors[variantDefinitionField] = `La nueva variante debe usar una ${variantDefinitionFieldLabel} distinta a ${duplicateSourceVariantLabel}.`
+                    }
+                }
+            }
+            delete normalizedAttributes.__sourceVariantLabel
             if (productType) {
                 if (!normalizedAttributes.sku) nextErrors.sku = 'El SKU es obligatorio.'
                 if (!normalizedAttributes.species) nextErrors.species = 'La especie/mascota es obligatoria.'
@@ -713,13 +1113,23 @@ export default function ProductEditorModal({
             const purchaseInvoice = {
                 invoiceNumber: String(form.purchaseInvoice?.invoiceNumber || '').trim(),
                 supplierName: String(form.purchaseInvoice?.supplierName || '').trim(),
-                supplierDocument: String(form.purchaseInvoice?.supplierDocument || '').trim(),
+                supplierDocument: selectedPurchaseSupplier?.document || String(form.purchaseInvoice?.supplierDocument || '').trim(),
                 issuedAt: String(form.purchaseInvoice?.issuedAt || '').trim(),
-                notes: String(form.purchaseInvoice?.notes || '').trim()
+                notes: String(form.purchaseInvoice?.notes || '').trim(),
+                metadata: selectedPurchaseSupplier ? {
+                    supplierId: selectedPurchaseSupplier.id,
+                    supplierEmail: selectedPurchaseSupplier.email || null,
+                    supplierPhone: selectedPurchaseSupplier.phone || null,
+                    supplierContactName: selectedPurchaseSupplier.contactName || null,
+                    supplierAddress: selectedPurchaseSupplier.address || null,
+                } : undefined,
             }
             if (stockIncrease > 0) {
                 if (!purchaseInvoice.invoiceNumber) nextErrors.purchaseInvoiceNumber = 'El número de factura de compra es obligatorio para ingresar stock.'
                 if (!purchaseInvoice.supplierName) nextErrors.purchaseInvoiceSupplierName = 'El proveedor es obligatorio para ingresar stock.'
+                if (purchaseInvoice.supplierName && !purchaseInvoice.supplierDocument) {
+                    nextErrors.purchaseInvoiceSupplierDocument = 'El proveedor seleccionado debe tener RUC o documento registrado en Catálogos operativos.'
+                }
                 if (!purchaseInvoice.issuedAt || !/^\d{4}-\d{2}-\d{2}$/.test(purchaseInvoice.issuedAt)) {
                     nextErrors.purchaseInvoiceIssuedAt = 'La fecha de la factura de compra es obligatoria y debe usar formato YYYY-MM-DD.'
                 }
@@ -755,7 +1165,9 @@ export default function ProductEditorModal({
             setSaving(true)
 
             const data = {
-                name,
+                name: isDuplicateVariantMode
+                    ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
+                    : name,
                 price: basePrice,
                 cost: currentCost,
                 quantity,
@@ -787,7 +1199,7 @@ export default function ProductEditorModal({
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 }))
-                showNotification('Producto actualizado correctamente')
+                showNotification(isRestockMode ? 'Compra registrada correctamente' : 'Producto actualizado correctamente')
             } else {
                 await withTransientRetry(() => requestApi('/api/products', {
                     method: 'POST',
@@ -812,24 +1224,46 @@ export default function ProductEditorModal({
         } finally {
             setSaving(false)
         }
-    }, [activeTab, editingProduct, form, imageUploading, onClose, onProductsUpdated, onRefreshPurchaseInvoices, onSessionExpired, saving, showNotification])
+    }, [activeTab, editingProduct, form, imageUploading, isRestockMode, onClose, onProductsUpdated, onRefreshPurchaseInvoices, onSessionExpired, publicationEligible, restockUnitsInput, saving, showNotification])
 
     if (!open) return null
 
     return (
         <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 p-2 sm:p-4">
-            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[92vh] flex flex-col shadow-2xl" onClick={(event: React.MouseEvent) => event.stopPropagation()}>
-                <div className="p-4 sm:p-6 border-b border-line flex justify-between items-center bg-white rounded-t-2xl sticky top-0 z-10">
-                    <h3 className="heading4">
-                        {isDuplicateVariantMode ? 'Duplicar Variante' : (editingProduct ? 'Editar Producto' : 'Nuevo Producto')}
-                    </h3>
+            <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[92vh] flex flex-col shadow-2xl" onClick={(event: React.MouseEvent) => event.stopPropagation()}>
+                <div className="p-4 sm:p-6 border-b border-line flex justify-between items-start gap-4 bg-white rounded-t-2xl sticky top-0 z-10">
+                    <div className="min-w-0">
+                        <h3 className="heading4">{modalTitle}</h3>
+                        <p className="text-sm text-secondary mt-1">{modalSubtitle}</p>
+                    </div>
                     <button onClick={closeModal} className="text-secondary hover:text-black" disabled={saving}>
                         <Icon.X size={24} />
                     </button>
                 </div>
+                <div className="px-4 sm:px-6 py-3 border-b border-line bg-white sticky top-[88px] sm:top-[96px] z-[9]">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 font-semibold ${modeChipClass}`}>
+                            {modeChipLabel}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-surface px-3 py-1 font-semibold text-black">
+                            Tipo: {productTypeLabel}
+                        </span>
+                        {isDuplicateVariantMode && (
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-800">
+                                Variante nueva: {duplicateVariantLabel || `define ${duplicateVariantFieldLabel}`}
+                            </span>
+                        )}
+                        {isRestockMode && (
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-800">
+                                Stock final: {summaryStockLabel}
+                            </span>
+                        )}
+                    </div>
+                </div>
 
                 <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-                    <form id="product-form" ref={formRef} onSubmit={handleSave} className="space-y-6">
+                    <form id="product-form" ref={formRef} onSubmit={handleSave} className="xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6 xl:items-start">
+                        <div className="space-y-6 min-w-0">
                         {productFormErrorEntries.length > 0 && (
                             <div className="p-4 rounded-xl border border-red/30 bg-red/5">
                                 <div className="text-sm font-bold text-red mb-2">Revisa los siguientes campos:</div>
@@ -845,84 +1279,211 @@ export default function ProductEditorModal({
                             <div className="p-4 rounded-xl border border-blue-200 bg-blue-50">
                                 <div className="text-sm font-bold text-blue-900 mb-1">Modo variante</div>
                                 <p className="text-xs text-blue-900/80">
-                                    Esta copia mantiene bloqueados los datos que definen la familia del producto. Aquí solo puedes cambiar
-                                    la presentación, SKU, precio, costo, stock y datos de inventario para no romper la variante.
+                                    Esta copia mantiene bloqueados los datos que definen la familia del producto. Aquí debes registrar una nueva {duplicateVariantFieldLabel}
+                                    para que en la tienda se vea un solo producto y la ficha publique sus variantes correctamente.
                                 </p>
                             </div>
                         )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {isDuplicateVariantMode && (
                             <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
-                                <input type="text" className={getInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); clearErrors('name') }} required placeholder="Ej: Camiseta Deportiva" disabled={saving || isDuplicateVariantMode} />
-                                {formErrors.name && <p className="text-xs text-red mt-1">{formErrors.name}</p>}
-                                {isDuplicateVariantMode && <p className="text-secondary text-xs mt-2">El nombre se genera automáticamente con la familia y la presentación para no romper la variante.</p>}
-                            </div>
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
-                                <select
-                                    className={getInputClass('brand', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
-                                    value={form.brand || ''}
-                                    onChange={e => { setForm({ ...form, brand: e.target.value }); clearErrors('brand') }}
-                                    required
-                                    disabled={saving || isDuplicateVariantMode}
-                                >
-                                    <option value="">{brandOptions.length > 0 ? 'Selecciona marca' : 'No hay marcas registradas'}</option>
-                                    {brandOptions.map((option) => (
-                                        <option key={`brand-option-${option}`} value={option}>{option}</option>
-                                    ))}
-                                </select>
-                                {formErrors.brand && <p className="text-xs text-red mt-1">{formErrors.brand}</p>}
-                                {renderReferenceCatalogHint('brands', brandOptions, 'No hay marcas registradas todavía.')}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                    <input type="number" step="0.01" min="0" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.price} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} />
+                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Familia del producto</label>
+                                <div className={getInputClass('variantBaseName', 'border rounded-lg px-4 py-3 w-full bg-surface text-black')}>
+                                    {duplicateVariantBaseName || 'Sin familia base definida'}
                                 </div>
-                                {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
-                                <label className="text-secondary text-xs font-bold uppercase mt-3 mb-2 block">Precio PVP (con IVA)</label>
-                                <input type="number" step="0.01" min="0" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all" value={form.pvp} onChange={e => handlePvpPriceChange(e.target.value)} disabled={saving} />
-                                <p className="text-secondary text-xs mt-1">PVP estimado actual: ${productPvpPriceLabel}</p>
-                                {hasProductCostPreview && (
-                                    <div className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 space-y-2">
-                                        <div className="text-[10px] uppercase font-bold text-secondary">Vista previa por costo</div>
-                                        <p className="text-xs text-secondary">Sugerido por costo: <span className="font-semibold text-black">${suggestedBasePriceLabel}</span> base / <span className="font-semibold text-black">${suggestedPvpPriceLabel}</span> PVP</p>
-                                        {costChangedForAutoPricing && (
-                                            <p className={`text-xs ${automaticPriceWillIncrease ? 'text-orange-600' : 'text-green-700'}`}>Precio aplicado al guardar: <span className="font-semibold">${automaticAppliedBasePriceLabel}</span> base / <span className="font-semibold">${automaticAppliedPvpPriceLabel}</span> PVP</p>
-                                        )}
-                                        {costChangedForAutoPricing && automaticPriceWillIncrease && <p className="text-[11px] text-orange-700">El backend subirá el precio al guardar para no quedar por debajo del piso calculado por costo.</p>}
-                                        {costChangedForAutoPricing && !automaticPriceWillIncrease && <p className="text-[11px] text-green-700">Tu precio actual ya está por encima del piso automático. El backend no lo bajará.</p>}
-                                        {!editingProduct && <p className="text-[11px] text-secondary">En productos nuevos esto se muestra como referencia; si quieres usarlo, copia ese precio antes de guardar.</p>}
+                                {duplicateVariantBaseError && <p className="text-xs text-red mt-1">{duplicateVariantBaseError}</p>}
+                                <p className="text-secondary text-xs mt-2">Se toma del producto original y queda bloqueado para no romper la agrupación de variantes en la tienda.</p>
+                            </div>
+                        )}
+                        {isRestockMode && editingProduct && (
+                            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50">
+                                <div className="text-sm font-bold text-emerald-900 mb-1">Modo compra / reposición</div>
+                                <p className="text-xs text-emerald-900/80">
+                                    Usa este flujo para registrar una compra de un producto existente. El stock aumenta por las unidades ingresadas y la factura queda guardada como respaldo. Las ventas y pedidos descuentan stock automáticamente.
+                                </p>
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                    <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                                        <div className="text-[10px] uppercase font-bold text-secondary">Stock actual</div>
+                                        <div className="text-lg font-bold">{persistedProductQuantity.toLocaleString('es-EC')} uds</div>
                                     </div>
-                                )}
-                            </div>
-                            <div className="md:col-span-2">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-surface rounded-xl border border-line">
-                                    <div><div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div><div className="text-lg font-bold text-success">${productProfitLabel}</div><div className="text-xs text-secondary">Base sin IVA</div></div>
-                                    <div><div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div><div className="text-lg font-bold">{productGrossMarginLabel}%</div><div className="text-xs text-secondary">Utilidad / precio base</div></div>
-                                    <div><div className="text-[10px] uppercase font-bold text-secondary">Markup</div><div className="text-lg font-bold">{productMarkupLabel}%</div><div className="text-xs text-secondary">Utilidad / costo</div></div>
-                                    <div><div className="text-[10px] uppercase font-bold text-secondary">Utilidad real</div><div className="text-lg font-bold text-success">${productProfitLabel}</div><div className="text-xs text-secondary">El IVA no es utilidad</div></div>
+                                    <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                                        <div className="text-[10px] uppercase font-bold text-secondary">Ingreso</div>
+                                        <div className="text-lg font-bold text-emerald-700">+{stockEntryDelta.toLocaleString('es-EC')} uds</div>
+                                    </div>
+                                    <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                                        <div className="text-[10px] uppercase font-bold text-secondary">Stock resultante</div>
+                                        <div className="text-lg font-bold">{requestedProductQuantity.toLocaleString('es-EC')} uds</div>
+                                    </div>
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                    <input type="number" step="0.01" min="0" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.cost} placeholder={editingProduct ? 'Costo unitario' : 'Ej: 9.90'} onChange={e => { setForm({ ...form, cost: e.target.value }); clearErrors('cost') }} required disabled={saving} />
+                        )}
+
+                        <div className="rounded-2xl border border-line bg-white p-5 shadow-sm space-y-6">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                                <div>
+                                    <div className="text-sm font-semibold">Identidad, precio y stock</div>
+                                    <p className="text-xs text-secondary mt-1">Define lo comercial primero. Aquí controlas nombre, marca, costo, precio y existencias.</p>
                                 </div>
-                                {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
-                                <p className="text-secondary text-xs mt-2">{editingProduct ? 'Costo real de compra (base para margen).' : 'Referencia editable. Ejemplo sugerido: 9.90.'}</p>
+                                <div className="text-xs text-secondary">
+                                    {isRestockMode ? 'La compra actualiza el stock y puede ajustar el costo unitario.' : 'El margen se recalcula en tiempo real mientras editas.'}
+                                </div>
                             </div>
-                            <div>
-                                <label className="text-secondary text-sm font-bold uppercase mb-2 block">Stock Disponible</label>
-                                <input type="number" step="1" min="0" className={getInputClass('quantity', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.quantity} placeholder={editingProduct ? 'Stock disponible' : 'Ej: 12'} onChange={e => { setForm({ ...form, quantity: e.target.value }); clearErrors('quantity') }} required disabled={saving} />
-                                {formErrors.quantity && <p className="text-xs text-red mt-1">{formErrors.quantity}</p>}
-                                <p className="text-secondary text-xs mt-2">{editingProduct ? 'Existencia actual del producto.' : 'Referencia editable. Cambia este ejemplo antes de guardar si necesitas otro stock inicial.'}</p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
+                                    <input type="text" className={getInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); clearErrors('name') }} required placeholder="Ej: Camiseta Deportiva" disabled={saving || isDuplicateVariantMode || isRestockMode} />
+                                    {formErrors.name && <p className="text-xs text-red mt-1">{formErrors.name}</p>}
+                                    {isDuplicateVariantMode && <p className="text-secondary text-xs mt-2">El nombre se genera automáticamente con la familia y la nueva {duplicateVariantFieldLabel} para mantener la agrupación.</p>}
+                                    {isRestockMode && <p className="text-secondary text-xs mt-2">Queda bloqueado en reposición para evitar cambios accidentales.</p>}
+                                </div>
+                                <div>
+                                    <label className="text-secondary text-sm font-bold uppercase mb-2 block">Marca</label>
+                                    <select
+                                        className={getInputClass('brand', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                                        value={form.brand || ''}
+                                        onChange={e => { setForm({ ...form, brand: e.target.value }); clearErrors('brand') }}
+                                        required
+                                        disabled={saving || isDuplicateVariantMode || isRestockMode}
+                                    >
+                                        <option value="">{brandOptions.length > 0 ? 'Selecciona marca' : 'No hay marcas registradas'}</option>
+                                        {brandOptions.map((option) => (
+                                            <option key={`brand-option-${option}`} value={option}>{option}</option>
+                                        ))}
+                                    </select>
+                                    {formErrors.brand && <p className="text-xs text-red mt-1">{formErrors.brand}</p>}
+                                    {renderReferenceCatalogHint('brands', brandOptions, 'No hay marcas registradas todavía.')}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input type="number" step="0.01" min="0" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.price} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} />
+                                        </div>
+                                        {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input type="number" step="0.01" min="0" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.cost} placeholder={editingProduct ? 'Costo unitario' : 'Ej: 9.90'} onChange={e => { setForm({ ...form, cost: e.target.value }); clearErrors('cost') }} required disabled={saving} />
+                                        </div>
+                                        {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
+                                        <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Actualiza el costo unitario si esta compra llegó con un valor diferente.' : (editingProduct ? 'Costo real de compra (base para margen).' : 'Referencia editable. Ejemplo sugerido: 9.90.')}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">{form.taxExempt ? 'Precio final de venta' : 'Precio PVP (con IVA)'}</label>
+                                        <input type="number" step="0.01" min="0" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all" value={form.pvp} onChange={e => handlePvpPriceChange(e.target.value)} disabled={saving} />
+                                        <p className="text-secondary text-xs mt-2">
+                                            {form.taxExempt
+                                                ? `Producto exento: precio final actual $${productPvpPriceLabel}.`
+                                                : `PVP estimado actual: $${productPvpPriceLabel}`}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Markup (%)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all focus:border-black"
+                                                value={productMarkupInputValue}
+                                                placeholder={Number(form.cost || 0) > 0 ? 'Ej: 35' : 'Primero define costo'}
+                                                onChange={e => handleMarkupChange(e.target.value)}
+                                                disabled={saving || Number(form.cost || 0) <= 0}
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary">%</span>
+                                        </div>
+                                        <p className="text-secondary text-xs mt-2">
+                                            Recalcula el precio base y el PVP usando el costo actual.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tratamiento de IVA</label>
+                                        <select
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                            value={form.taxExempt ? 'exempt' : 'taxed'}
+                                            onChange={e => handleTaxExemptChange(e.target.value)}
+                                            disabled={saving}
+                                        >
+                                            <option value="taxed">Grava IVA</option>
+                                            <option value="exempt">Exento de IVA</option>
+                                        </select>
+                                        <p className="text-secondary text-xs mt-2">
+                                            {form.taxExempt
+                                                ? 'Compra y venta sin IVA para este producto. El precio base y el precio final son iguales.'
+                                                : 'Se aplica el IVA configurado del sistema sobre el precio base para calcular el PVP.'}
+                                        </p>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">{isRestockMode ? 'Unidades a ingresar' : 'Stock Disponible'}</label>
+                                        <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            className={getInputClass('quantity', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                            value={isRestockMode ? restockUnitsInput : form.quantity}
+                                            placeholder={isRestockMode ? 'Ej: 24' : (editingProduct ? 'Stock disponible' : 'Ej: 12')}
+                                            onChange={e => {
+                                                if (isRestockMode) {
+                                                    handleRestockUnitsChange(e.target.value)
+                                                } else {
+                                                    setForm({ ...form, quantity: e.target.value })
+                                                    clearErrors('quantity')
+                                                }
+                                            }}
+                                            required
+                                            disabled={saving}
+                                        />
+                                        {formErrors.quantity && <p className="text-xs text-red mt-1">{formErrors.quantity}</p>}
+                                        <p className="text-secondary text-xs mt-2">
+                                            {isRestockMode
+                                                ? `Stock actual: ${persistedProductQuantity.toLocaleString('es-EC')} uds. Resultado: ${requestedProductQuantity.toLocaleString('es-EC')} uds.`
+                                                : (editingProduct ? 'Existencia actual del producto.' : 'Referencia editable. Cambia este ejemplo antes de guardar si necesitas otro stock inicial.')}
+                                        </p>
+                                    </div>
+                                    {hasProductCostPreview && (
+                                        <div className="md:col-span-2 rounded-xl border border-line bg-surface px-4 py-3 space-y-2">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">Vista previa por costo</div>
+                                            <p className="text-xs text-secondary">Sugerido por costo: <span className="font-semibold text-black">${suggestedBasePriceLabel}</span> base / <span className="font-semibold text-black">${suggestedPvpPriceLabel}</span> {form.taxExempt ? 'final' : 'PVP'}</p>
+                                            {costChangedForAutoPricing && (
+                                                <p className={`text-xs ${automaticPriceWillIncrease ? 'text-orange-600' : 'text-green-700'}`}>Precio aplicado al guardar: <span className="font-semibold">${automaticAppliedBasePriceLabel}</span> base / <span className="font-semibold">${automaticAppliedPvpPriceLabel}</span> {form.taxExempt ? 'final' : 'PVP'}</p>
+                                            )}
+                                            {costChangedForAutoPricing && automaticPriceWillIncrease && <p className="text-[11px] text-orange-700">El backend subirá el precio al guardar para no quedar por debajo del piso calculado por costo.</p>}
+                                            {costChangedForAutoPricing && !automaticPriceWillIncrease && <p className="text-[11px] text-green-700">Tu precio actual ya está por encima del piso automático. El backend no lo bajará.</p>}
+                                            {!editingProduct && <p className="text-[11px] text-secondary">En productos nuevos esto se muestra como referencia; si quieres usarlo, copia ese precio antes de guardar.</p>}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="rounded-2xl border border-line bg-surface p-4">
+                                    <div className="text-xs uppercase font-bold text-secondary mb-3">Resultado financiero</div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div>
+                                            <div className="text-lg font-bold text-success">${productProfitLabel}</div>
+                                            <div className="text-xs text-secondary">Base sin IVA</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div>
+                                            <div className="text-lg font-bold">{productGrossMarginLabel}%</div>
+                                            <div className="text-xs text-secondary">Utilidad / precio base</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">Markup</div>
+                                            <div className="text-lg font-bold">{productMarkupLabel}%</div>
+                                            <div className="text-xs text-secondary">Utilidad / costo</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">IVA estimado</div>
+                                            <div className="text-lg font-bold">${productVatAmountLabel}</div>
+                                            <div className="text-xs text-secondary">{form.taxExempt ? 'Producto exento, sin recargo de IVA.' : 'Diferencia entre PVP y base'}</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -947,14 +1508,42 @@ export default function ProductEditorModal({
                                         >
                                             <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
                                             {supplierOptions.map((option) => (
-                                                <option key={`purchase-supplier-option-${option}`} value={option}>{option}</option>
+                                                <option key={`purchase-supplier-option-${option.value}`} value={option.value}>{option.label}</option>
                                             ))}
                                         </select>
                                         {formErrors.purchaseInvoiceSupplierName && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceSupplierName}</p>}
+                                        {formErrors.purchaseInvoiceSupplierDocument && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceSupplierDocument}</p>}
                                         {renderReferenceCatalogHint('suppliers', supplierOptions, 'No hay proveedores registrados todavía.')}
                                     </div>
-                                    <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">RUC o documento</label><input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" value={form.purchaseInvoice.supplierDocument} onChange={e => setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, supplierDocument: e.target.value } })} disabled={saving} /></div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label><input type="date" className={getInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.issuedAt} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, issuedAt: e.target.value } }); clearErrors('purchaseInvoiceIssuedAt') }} disabled={saving} />{formErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceIssuedAt}</p>}</div>
+                                    <div className="md:col-span-2 rounded-xl border border-line bg-white p-4">
+                                        <div className="text-[11px] uppercase font-bold text-secondary mb-3">Proveedor seleccionado</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                                            <div>
+                                                <div className="text-secondary text-[11px] uppercase font-bold mb-1">RUC o documento</div>
+                                                <div className="font-semibold break-words">
+                                                    {selectedPurchaseSupplier?.document || form.purchaseInvoice.supplierDocument || 'Completa este dato en Catálogos operativos.'}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div className="text-secondary text-[11px] uppercase font-bold mb-1">Contacto</div>
+                                                <div className="font-semibold break-words">{selectedPurchaseSupplier?.contactName || 'No registrado'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-secondary text-[11px] uppercase font-bold mb-1">Correo</div>
+                                                <div className="font-semibold break-words">{selectedPurchaseSupplier?.email || 'No registrado'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-secondary text-[11px] uppercase font-bold mb-1">Teléfono</div>
+                                                <div className="font-semibold break-words">{selectedPurchaseSupplier?.phone || 'No registrado'}</div>
+                                            </div>
+                                        </div>
+                                        {selectedPurchaseSupplier?.address && (
+                                            <div className="mt-3 text-xs text-secondary break-words">
+                                                Dirección: {selectedPurchaseSupplier.address}
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="md:col-span-2"><label className="text-secondary text-xs uppercase font-bold mb-2 block">Notas de compra</label><textarea className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[96px]" value={form.purchaseInvoice.notes} onChange={e => setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, notes: e.target.value } })} disabled={saving} /></div>
                                 </div>
                             ) : (
@@ -968,7 +1557,7 @@ export default function ProductEditorModal({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tipo de producto</label>
-                                        <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => handleProductTypeChange(e.target.value)} disabled={saving}>
+                                        <select required className={getInputClass('productType', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.productType} onChange={(e) => handleProductTypeChange(e.target.value)} disabled={saving || isRestockMode}>
                                             <option value="">Selecciona tipo</option>
                                             {PRODUCT_TYPE_OPTIONS.map((option) => (
                                                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -1001,7 +1590,7 @@ export default function ProductEditorModal({
                                                                     : 'bg-white border-line hover:border-black'
                                                             }`}
                                                             onClick={() => toggleAdditionalCategory(option.value)}
-                                                            disabled={saving || !form.productType}
+                                                            disabled={saving || !form.productType || isRestockMode}
                                                         >
                                                             {option.label}
                                                         </button>
@@ -1012,7 +1601,7 @@ export default function ProductEditorModal({
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Publicado en tienda web</label>
-                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black disabled:bg-surface disabled:text-secondary" value={form.published ? 'yes' : 'no'} onChange={e => setForm({ ...form, published: e.target.value === 'yes' })} disabled={saving || !publicationEligible}>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black disabled:bg-surface disabled:text-secondary" value={form.published ? 'yes' : 'no'} onChange={e => setForm({ ...form, published: e.target.value === 'yes' })} disabled={saving || !publicationEligible || isRestockMode}>
                                             <option value="yes">Sí, mostrar en el sitio</option><option value="no">No, ocultar del sitio</option>
                                         </select>
                                         <p className="text-secondary text-xs mt-2">
@@ -1025,7 +1614,7 @@ export default function ProductEditorModal({
                             </div>
                         )}
 
-                        {!isDuplicateVariantMode && (
+                        {!isDuplicateVariantMode && !isRestockMode && (
                         <div className="p-5 rounded-xl border border-line bg-surface">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="text-xs uppercase font-bold text-secondary">Imágenes del producto</div>
@@ -1097,16 +1686,22 @@ export default function ProductEditorModal({
                         )}
 
                         {form.productType === 'Alimento' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                                <div className="text-sm font-semibold">Atributos de alimento</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {isDuplicateVariantMode ? (
+                                    <>
+                                        {renderDuplicateVariantSelector('No hay tallas o tamaños registrados')}
+                                    </>
+                                ) : (
+                                    <>
+                                    <select className={getInputClass('size', 'border rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.size || ''} onChange={e => { setAttribute('size', e.target.value); clearErrors('size') }} disabled={saving}>
                                         <option value="">{sizeOptions.length > 0 ? 'Tamaño' : 'No hay tallas o tamaños registrados'}</option>
                                         {sizeOptions.map((option) => (
                                             <option key={`food-size-option-${option}`} value={option}>{option}</option>
                                         ))}
                                     </select>
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Peso. Ej: 2 kg" value={form.attributes?.weight || ''} onChange={e => setAttribute('weight', e.target.value)} />
-                                {!isDuplicateVariantMode && (
-                                    <>
+                                        <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Peso. Ej: 2 kg" value={form.attributes?.weight || ''} onChange={e => { setAttribute('weight', e.target.value); clearErrors('size') }} disabled={saving} />
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.flavor || ''} onChange={e => setAttribute('flavor', e.target.value)} disabled={saving}>
                                             <option value="">{flavorOptions.length > 0 ? 'Sabor' : 'No hay sabores registrados'}</option>
                                             {flavorOptions.map((option) => (
@@ -1130,24 +1725,31 @@ export default function ProductEditorModal({
                                     </>
                                 )}
                                 <div className="md:col-span-2">
-                                    {renderReferenceCatalogHints([
-                                        { key: 'sizes', options: sizeOptions },
-                                        { key: 'flavors', options: flavorOptions },
-                                        { key: 'ageRanges', options: ageRangeOptions },
-                                    ])}
+                                    {isDuplicateVariantMode
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas o tamaños en Catálogos operativos:')
+                                        : renderReferenceCatalogHints([
+                                            { key: 'sizes', options: sizeOptions },
+                                            { key: 'flavors', options: flavorOptions },
+                                            { key: 'ageRanges', options: ageRangeOptions },
+                                        ])}
                                 </div>
+                            </div>
                             </div>
                         )}
                         {form.productType === 'ropa' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
-                                    <option value="">{sizeOptions.length > 0 ? 'Talla' : 'No hay tallas registradas'}</option>
-                                    {sizeOptions.map((option) => (
-                                        <option key={`apparel-size-option-${option}`} value={option}>{option}</option>
-                                    ))}
-                                </select>
-                                {!isDuplicateVariantMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                                <div className="text-sm font-semibold">Atributos de ropa</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {isDuplicateVariantMode ? (
+                                    renderDuplicateVariantSelector('No hay tallas registradas')
+                                ) : (
                                     <>
+                                        <select className={getInputClass('size', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.size || ''} onChange={e => { setAttribute('size', e.target.value); clearErrors('size') }} disabled={saving}>
+                                            <option value="">{sizeOptions.length > 0 ? 'Talla' : 'No hay tallas registradas'}</option>
+                                            {sizeOptions.map((option) => (
+                                                <option key={`apparel-size-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
                                             <option value="">{materialOptions.length > 0 ? 'Material' : 'No hay materiales registrados'}</option>
                                             {materialOptions.map((option) => (
@@ -1175,24 +1777,31 @@ export default function ProductEditorModal({
                                     </>
                                 )}
                                 <div className="md:col-span-2">
-                                    {renderReferenceCatalogHints([
-                                        { key: 'sizes', options: sizeOptions },
-                                        { key: 'materials', options: materialOptions },
-                                        { key: 'colors', options: colorOptions },
-                                    ])}
+                                    {isDuplicateVariantMode
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas en Catálogos operativos:')
+                                        : renderReferenceCatalogHints([
+                                            { key: 'sizes', options: sizeOptions },
+                                            { key: 'materials', options: materialOptions },
+                                            { key: 'colors', options: colorOptions },
+                                        ])}
                                 </div>
+                            </div>
                             </div>
                         )}
                         {form.productType === 'accesorios' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.size || ''} onChange={e => setAttribute('size', e.target.value)} disabled={saving}>
-                                    <option value="">{sizeOptions.length > 0 ? 'Tamaño' : 'No hay tallas o tamaños registrados'}</option>
-                                    {sizeOptions.map((option) => (
-                                        <option key={`accessory-size-option-${option}`} value={option}>{option}</option>
-                                    ))}
-                                </select>
-                                {!isDuplicateVariantMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                                <div className="text-sm font-semibold">Atributos de accesorios</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {isDuplicateVariantMode ? (
+                                    renderDuplicateVariantSelector('No hay tallas o tamaños registrados')
+                                ) : (
                                     <>
+                                        <select className={getInputClass('size', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.size || ''} onChange={e => { setAttribute('size', e.target.value); clearErrors('size') }} disabled={saving}>
+                                            <option value="">{sizeOptions.length > 0 ? 'Tamaño' : 'No hay tallas o tamaños registrados'}</option>
+                                            {sizeOptions.map((option) => (
+                                                <option key={`accessory-size-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.material || ''} onChange={e => setAttribute('material', e.target.value)} disabled={saving}>
                                             <option value="">{materialOptions.length > 0 ? 'Material' : 'No hay materiales registrados'}</option>
                                             {materialOptions.map((option) => (
@@ -1215,24 +1824,31 @@ export default function ProductEditorModal({
                                     </>
                                 )}
                                 <div className="md:col-span-2">
-                                    {renderReferenceCatalogHints([
-                                        { key: 'sizes', options: sizeOptions },
-                                        { key: 'materials', options: materialOptions },
-                                        { key: 'usages', options: usageOptions },
-                                    ])}
+                                    {isDuplicateVariantMode
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas o tamaños en Catálogos operativos:')
+                                        : renderReferenceCatalogHints([
+                                            { key: 'sizes', options: sizeOptions },
+                                            { key: 'materials', options: materialOptions },
+                                            { key: 'usages', options: usageOptions },
+                                        ])}
                                 </div>
+                            </div>
                             </div>
                         )}
                         {form.productType === 'cuidado' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.presentation || ''} onChange={e => setAttribute('presentation', e.target.value)} disabled={saving}>
-                                    <option value="">{presentationOptions.length > 0 ? 'Presentación' : 'No hay presentaciones registradas'}</option>
-                                    {presentationOptions.map((option) => (
-                                        <option key={`care-presentation-option-${option}`} value={option}>{option}</option>
-                                    ))}
-                                </select>
-                                {!isDuplicateVariantMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+                                <div className="text-sm font-semibold">Atributos de salud</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {isDuplicateVariantMode ? (
+                                    renderDuplicateVariantSelector('No hay presentaciones registradas')
+                                ) : (
                                     <>
+                                        <select className={getInputClass('presentation', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.presentation || ''} onChange={e => { setAttribute('presentation', e.target.value); clearErrors('presentation') }} disabled={saving}>
+                                            <option value="">{presentationOptions.length > 0 ? 'Presentación' : 'No hay presentaciones registradas'}</option>
+                                            {presentationOptions.map((option) => (
+                                                <option key={`care-presentation-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.activeIngredient || ''} onChange={e => setAttribute('activeIngredient', e.target.value)} disabled={saving}>
                                             <option value="">{activeIngredientOptions.length > 0 ? 'Ingrediente activo o principio' : 'No hay ingredientes activos registrados'}</option>
                                             {activeIngredientOptions.map((option) => (
@@ -1256,12 +1872,15 @@ export default function ProductEditorModal({
                                     </>
                                 )}
                                 <div className="md:col-span-2">
-                                    {renderReferenceCatalogHints([
-                                        { key: 'presentations', options: presentationOptions },
-                                        { key: 'activeIngredients', options: activeIngredientOptions },
-                                        { key: 'usages', options: usageOptions },
-                                    ])}
+                                    {isDuplicateVariantMode
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las presentaciones en Catálogos operativos:')
+                                        : renderReferenceCatalogHints([
+                                            { key: 'presentations', options: presentationOptions },
+                                            { key: 'activeIngredients', options: activeIngredientOptions },
+                                            { key: 'usages', options: usageOptions },
+                                        ])}
                                 </div>
+                            </div>
                             </div>
                         )}
 
@@ -1357,10 +1976,16 @@ export default function ProductEditorModal({
                                 <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setPreferredSupplier(e.target.value)} disabled={saving}>
                                     <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
                                     {supplierOptions.map((option) => (
-                                        <option key={`supplier-option-${option}`} value={option}>{option}</option>
+                                        <option key={`supplier-option-${option.value}`} value={option.value}>{option.label}</option>
                                     ))}
                                 </select>
                                 <p className="text-secondary text-xs mt-2">Opcional. Sirve como proveedor por defecto para próximas compras e ingresos de stock.</p>
+                                {selectedPreferredSupplier && (
+                                    <p className="text-secondary text-xs mt-2 break-words">
+                                        {selectedPreferredSupplier.document ? `RUC: ${selectedPreferredSupplier.document}` : 'Proveedor sin RUC registrado.'}
+                                        {(selectedPreferredSupplier.email || selectedPreferredSupplier.phone) ? ` · ${selectedPreferredSupplier.email || 'Sin correo'} · ${selectedPreferredSupplier.phone || 'Sin teléfono'}` : ''}
+                                    </p>
+                                )}
                             </div>
                             <div className="md:col-span-2">
                                 {renderReferenceCatalogHints([
@@ -1380,13 +2005,60 @@ export default function ProductEditorModal({
                                 <p className="text-secondary text-xs mt-2">Se muestra en la ficha del producto. Usa al menos una explicación clara de compra.</p>
                             </div>
                         )}
+                        </div>
+
+                        <aside className="hidden xl:block xl:sticky xl:top-4 space-y-4">
+                            <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+                                <div className="text-sm font-semibold">Checklist útil</div>
+                                <div className="mt-4 space-y-2">
+                                    {checklistItems.map((item) => (
+                                        <div key={`checklist-${item.label}`} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2.5">
+                                            <div className="min-w-0">
+                                                <div className="text-[11px] uppercase font-bold text-secondary">{item.label}</div>
+                                                <div className="text-sm font-semibold break-words">{item.value}</div>
+                                            </div>
+                                            <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {item.complete ? 'OK' : 'Pendiente'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {!isDuplicateVariantMode && (
+                                <div className="rounded-2xl border border-line bg-surface p-5">
+                                    <div className="text-sm font-semibold">Estado web</div>
+                                    <div className={`mt-4 text-base font-bold ${summaryPublicationClass}`}>{summaryPublicationLabel}</div>
+                                    <p className="text-xs text-secondary mt-2">{publicationSupportText}</p>
+                                    {!isRestockMode && (
+                                        <div className="mt-4 grid grid-cols-2 gap-3">
+                                            <div className="rounded-xl border border-line bg-white px-4 py-3">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Miniaturas</div>
+                                                <div className="text-lg font-bold">{summaryThumbCount}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-line bg-white px-4 py-3">
+                                                <div className="text-[10px] uppercase font-bold text-secondary">Galería</div>
+                                                <div className="text-lg font-bold">{summaryGalleryCount}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {isDuplicateVariantMode && (
+                                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                                    <div className="text-sm font-semibold text-blue-900">Regla de variante</div>
+                                    <p className="text-xs text-blue-900/80 mt-2">En este modo solo debes cambiar el dato que diferencia la variante, por ejemplo talla o presentación. La familia queda fija para que el producto siga agrupado en tienda.</p>
+                                </div>
+                            )}
+                        </aside>
                     </form>
                 </div>
 
                 <div className="p-4 sm:p-6 border-t border-line flex flex-col sm:flex-row gap-3 justify-end bg-white rounded-b-2xl">
                     <button type="button" className="px-6 sm:px-8 py-3 rounded-full border border-line hover:bg-surface transition-all font-bold disabled:opacity-60" onClick={closeModal} disabled={saving}>Cancelar</button>
                     <button type="button" className="button-main px-6 sm:px-8 py-3 rounded-full bg-black text-white hover:bg-primary transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed" disabled={saving || isUploadingProductImages} onClick={() => { if (formRef.current?.requestSubmit) { formRef.current.requestSubmit(); return } if (formRef.current) { formRef.current.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) } }}>
-                        {saving ? 'Guardando...' : (isUploadingProductImages ? 'Esperando imágenes...' : 'Guardar cambios')}
+                        {saving ? 'Guardando...' : (isUploadingProductImages ? 'Esperando imágenes...' : (isRestockMode ? 'Registrar compra' : 'Guardar cambios'))}
                     </button>
                 </div>
             </div>
