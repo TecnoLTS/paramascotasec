@@ -340,5 +340,5 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   }
 }
 
-export const mapProductsToDto = (products: ProductWithRelations[]): ProductType[] =>
-  products.map(mapProductToDto)
+export const mapProductsToDto = (products: ProductWithRelations[] | unknown): ProductType[] =>
+  Array.isArray(products) ? products.map(mapProductToDto) : []

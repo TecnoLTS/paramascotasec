@@ -4,7 +4,15 @@ import { ProductType } from '@/type/ProductType'
 import { mapProductToDto, mapProductsToDto } from '@/lib/productMapper'
 
 export const listProducts = async () => {
-  const data = await fetchJson<any[]>(apiEndpoints.products)
+  const data = await fetchJson<unknown>(apiEndpoints.products)
+
+  if (!Array.isArray(data)) {
+    if (typeof window === 'undefined') {
+      console.error('listProducts recibió un payload no válido:', data)
+    }
+    return []
+  }
+
   return mapProductsToDto(data)
 }
 
