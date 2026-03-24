@@ -6762,6 +6762,7 @@ const MyAccount = () => {
             <ProductEditorModal
                 open={isProductModalOpen}
                 editingProduct={editingProduct}
+                existingProducts={adminProductsList}
                 editorMode={productEditorMode}
                 initialForm={productEditorInitialForm}
                 vatMultiplier={vatMultiplier}

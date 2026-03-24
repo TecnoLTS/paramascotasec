@@ -36,6 +36,7 @@ import {
 import {
     createEmptyPurchaseInvoice,
     createImageEntry,
+    getAdminProductEntityId,
     getAttributesForTypeChange,
     getVariantDefinitionFieldKey,
     getVariantDefinitionFieldLabel,
@@ -53,6 +54,7 @@ import type { ProductEditorMode, ProductFormState } from '../types'
 type ProductEditorModalProps = {
     open: boolean;
     editingProduct: any | null;
+    existingProducts: any[];
     editorMode: ProductEditorMode;
     initialForm: ProductFormState;
     vatMultiplier: number;
@@ -196,9 +198,176 @@ const getSuggestedBasePriceForCostPreview = (
 const getEffectiveVatMultiplier = (taxExempt: boolean, vatMultiplier: number) =>
     taxExempt ? 1 : Math.max(1, vatMultiplier)
 
+const PRODUCT_TYPE_SKU_PREFIX: Record<string, string> = {
+    Alimento: 'ALI',
+    ropa: 'ROP',
+    accesorios: 'ACC',
+    cuidado: 'SAL',
+}
+
+const SKU_STOPWORDS = new Set(['DE', 'DEL', 'LA', 'LAS', 'EL', 'LOS', 'PARA', 'CON', 'Y', 'EN', 'POR'])
+
+const normalizeSuggestionTokens = (value: string, maxLength = 4) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((token) => token.slice(0, maxLength))
+        .filter(Boolean)
+
+const normalizeSkuComponent = (value: string, maxLength = 6) =>
+    normalizeSuggestionTokens(value, maxLength)
+        .filter((token) => !SKU_STOPWORDS.has(token))
+
+const getSkuBrandComponent = (brand: string) => {
+    const tokens = normalizeSkuComponent(brand, 6)
+    if (tokens.length === 0) return ''
+    if (tokens.length === 1) return tokens[0]
+
+    const acronym = tokens.map((token) => token.slice(0, 1)).join('')
+    return acronym.slice(0, 6) || tokens[0]
+}
+
+const getSkuNameComponents = (name: string) => {
+    const tokens = normalizeSkuComponent(name, 6)
+    if (tokens.length === 0) return []
+    if (tokens.length === 1) return [tokens[0]]
+    return tokens.slice(0, 2)
+}
+
+const getSkuVariantComponent = (variantLabel: string) => {
+    const compact = variantLabel
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '')
+        .trim()
+
+    if (compact) return compact.slice(0, 8)
+    const fallback = normalizeSkuComponent(variantLabel, 8)
+    return fallback[0] || ''
+}
+
+const getSkuSimpleComponent = (value: string, maxLength = 5) => {
+    const tokens = normalizeSkuComponent(value, maxLength)
+    return tokens[0] || ''
+}
+
+const getSuggestionDateToken = (dateValue?: string) => {
+    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue.trim())) {
+        return dateValue.trim().replace(/-/g, '')
+    }
+
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}${month}${day}`
+}
+
+const buildSuggestedSku = ({
+    productType,
+    category,
+    brand,
+    name,
+    variantLabel,
+    color,
+    species,
+}: {
+    productType: string;
+    category: string;
+    brand: string;
+    name: string;
+    variantLabel: string;
+    color: string;
+    species: string;
+}) => {
+    const normalizedType = normalizeProductType(productType, category)
+    const typePrefix = PRODUCT_TYPE_SKU_PREFIX[normalizedType] || 'SKU'
+    const parts = [typePrefix]
+    const seen = new Set(parts)
+
+    const pushUnique = (tokens: string[], limit = tokens.length) => {
+        tokens.slice(0, limit).forEach((token) => {
+            if (!token || seen.has(token)) return
+            seen.add(token)
+            parts.push(token)
+        })
+    }
+
+    pushUnique([getSkuBrandComponent(brand)], 1)
+    pushUnique(getSkuNameComponents(name), 2)
+    pushUnique([getSkuVariantComponent(variantLabel)], 1)
+    pushUnique([getSkuSimpleComponent(color, 5)], 1)
+    pushUnique([getSkuSimpleComponent(species, 5)], 1)
+
+    if (parts.length === 1) {
+        parts.push(getSuggestionDateToken())
+    }
+
+    return parts.join('-').slice(0, 64)
+}
+
+const ensureUniqueSkuSuggestion = (candidate: string, existingSkus: Set<string>) => {
+    const normalizedCandidate = candidate.trim().toUpperCase()
+    if (!normalizedCandidate) return ''
+    if (!existingSkus.has(normalizedCandidate)) return normalizedCandidate
+
+    const base = normalizedCandidate.slice(0, 58)
+    for (let index = 2; index < 1000; index += 1) {
+        const suffix = String(index).padStart(2, '0')
+        const nextCandidate = `${base}-${suffix}`.slice(0, 64)
+        if (!existingSkus.has(nextCandidate)) {
+            return nextCandidate
+        }
+    }
+
+    return `${base}-${Date.now().toString().slice(-4)}`.slice(0, 64)
+}
+
+const buildSuggestedLotCode = ({
+    issuedAt,
+    supplierName,
+    name,
+    variantLabel,
+    seed,
+}: {
+    issuedAt?: string;
+    supplierName?: string;
+    name: string;
+    variantLabel: string;
+    seed: string;
+}) => {
+    const parts = ['LOT', getSuggestionDateToken(issuedAt)]
+    const seen = new Set(parts)
+
+    const pushUnique = (tokens: string[], limit = tokens.length) => {
+        tokens.slice(0, limit).forEach((token) => {
+            if (!token || seen.has(token)) return
+            seen.add(token)
+            parts.push(token)
+        })
+    }
+
+    pushUnique(normalizeSuggestionTokens(supplierName || '', 4), 1)
+    pushUnique(normalizeSuggestionTokens(name, 4), 1)
+    pushUnique(normalizeSuggestionTokens(variantLabel, 4), 1)
+
+    if (seed) {
+        parts.push(seed)
+    }
+
+    return parts.join('-').slice(0, 64)
+}
+
 export default function ProductEditorModal({
     open,
     editingProduct,
+    existingProducts,
     editorMode,
     initialForm,
     vatMultiplier,
@@ -219,6 +388,9 @@ export default function ProductEditorModal({
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
     const [restockUnitsInput, setRestockUnitsInput] = React.useState('0')
     const formRef = React.useRef<HTMLFormElement | null>(null)
+    const skuManuallyEditedRef = React.useRef(false)
+    const lotManuallyEditedRef = React.useRef(false)
+    const lotSuggestionSeedRef = React.useRef('001')
     const deferredForm = React.useDeferredValue(form)
     const deferredEditingProduct = React.useDeferredValue(editingProduct)
     const isDuplicateVariantMode = editorMode === 'duplicate-variant'
@@ -239,7 +411,10 @@ export default function ProductEditorModal({
         setSaving(false)
         setFormErrors({})
         setRestockUnitsInput('0')
-    }, [open, initialForm, editingProduct])
+        skuManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.sku || '').trim())
+        lotManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.lotCode || '').trim())
+        lotSuggestionSeedRef.current = String(Math.floor(Math.random() * 900) + 100)
+    }, [open, initialForm, editingProduct, editorMode])
 
     const duplicateVariantBaseName = React.useMemo(() => {
         const attributeBaseName = String(form.attributes?.variantBaseName || '').trim()
@@ -320,6 +495,46 @@ export default function ProductEditorModal({
     const selectedPreferredSupplier = React.useMemo(
         () => findSupplierReference(referenceData.suppliers, form.attributes?.supplier),
         [form.attributes?.supplier, referenceData.suppliers]
+    )
+    const reservedSkuSet = React.useMemo(() => {
+        const currentEntityId = getAdminProductEntityId(editingProduct || {})
+        const shouldExcludeCurrent = editorMode === 'edit' || editorMode === 'restock'
+
+        return new Set(
+            (existingProducts || [])
+                .filter((product) => {
+                    if (!shouldExcludeCurrent) return true
+                    return getAdminProductEntityId(product) !== currentEntityId
+                })
+                .map((product) => String(product?.attributes?.sku || '').trim().toUpperCase())
+                .filter(Boolean)
+        )
+    }, [editingProduct, editorMode, existingProducts])
+    const currentVariantLabel = React.useMemo(
+        () => resolveProductVariantLabel(form.productType, form.attributes),
+        [form.attributes, form.productType]
+    )
+    const suggestedSku = React.useMemo(
+        () => ensureUniqueSkuSuggestion(buildSuggestedSku({
+            productType: form.productType,
+            category: form.category,
+            brand: String(form.brand || '').trim(),
+            name: String(form.name || '').trim(),
+            variantLabel: currentVariantLabel,
+            color: String(form.attributes?.color || '').trim(),
+            species: String(form.attributes?.species || '').trim(),
+        }), reservedSkuSet),
+        [currentVariantLabel, form.attributes?.color, form.attributes?.species, form.brand, form.category, form.name, form.productType, reservedSkuSet]
+    )
+    const suggestedLotCode = React.useMemo(
+        () => buildSuggestedLotCode({
+            issuedAt: String(form.purchaseInvoice?.issuedAt || '').trim(),
+            supplierName: String(form.purchaseInvoice?.supplierName || form.attributes?.supplier || '').trim(),
+            name: String(form.name || '').trim(),
+            variantLabel: currentVariantLabel,
+            seed: lotSuggestionSeedRef.current,
+        }),
+        [currentVariantLabel, form.attributes?.supplier, form.name, form.purchaseInvoice?.issuedAt, form.purchaseInvoice?.supplierName]
     )
     const referenceSectionTitleByKey = React.useMemo(
         () => PRODUCT_REFERENCE_SECTIONS.reduce<Record<ProductReferenceKey, string>>((acc, section) => {
@@ -432,6 +647,13 @@ export default function ProductEditorModal({
     }, [])
 
     const setAttribute = React.useCallback((key: string, value: string) => {
+        const trimmedValue = value.trim()
+        if (key === 'sku') {
+            skuManuallyEditedRef.current = trimmedValue !== '' && trimmedValue !== suggestedSku
+        }
+        if (key === 'lotCode') {
+            lotManuallyEditedRef.current = trimmedValue !== '' && trimmedValue !== suggestedLotCode
+        }
         setForm((prev) => ({
             ...prev,
             attributes: {
@@ -442,11 +664,50 @@ export default function ProductEditorModal({
         if (['sku', 'tag', 'species', 'expirationDate', 'expirationAlertDays'].includes(key)) {
             clearErrors(key)
         }
-    }, [clearErrors])
+    }, [clearErrors, suggestedLotCode, suggestedSku])
 
     const setSpeciesAttribute = React.useCallback((value: string) => {
         setAttribute('species', normalizeProductSpecies(value))
     }, [setAttribute])
+
+    React.useEffect(() => {
+        if (!open) return
+        let autoFilledSku = false
+
+        setForm((prev) => {
+            const previousAttributes = prev.attributes || {}
+            const nextAttributes = { ...previousAttributes }
+            let changed = false
+
+            const currentSku = String(previousAttributes.sku || '').trim()
+            if (suggestedSku && !skuManuallyEditedRef.current) {
+                if (currentSku !== suggestedSku) {
+                    nextAttributes.sku = suggestedSku
+                    changed = true
+                    autoFilledSku = true
+                }
+            }
+
+            const currentLotCode = String(previousAttributes.lotCode || '').trim()
+            if (suggestedLotCode && !lotManuallyEditedRef.current) {
+                if (currentLotCode !== suggestedLotCode) {
+                    nextAttributes.lotCode = suggestedLotCode
+                    changed = true
+                }
+            }
+
+            if (!changed) return prev
+
+            return {
+                ...prev,
+                attributes: nextAttributes,
+            }
+        })
+
+        if (autoFilledSku) {
+            clearErrors('sku')
+        }
+    }, [clearErrors, open, suggestedLotCode, suggestedSku])
 
     const setPurchaseInvoiceSupplier = React.useCallback((value: string) => {
         const matchedSupplier = findSupplierReference(referenceData.suppliers, value)
@@ -1070,6 +1331,7 @@ export default function ProductEditorModal({
             delete normalizedAttributes.__sourceVariantLabel
             if (productType) {
                 if (!normalizedAttributes.sku) nextErrors.sku = 'El SKU es obligatorio.'
+                else if (reservedSkuSet.has(String(normalizedAttributes.sku).trim().toUpperCase())) nextErrors.sku = 'Ya existe un producto con ese SKU.'
                 if (!normalizedAttributes.species) nextErrors.species = 'La especie/mascota es obligatoria.'
             }
 
@@ -1220,6 +1482,9 @@ export default function ProductEditorModal({
             if (message.includes('401')) {
                 onSessionExpired?.()
             }
+            if (message.toLowerCase().includes('sku')) {
+                setFormErrors((prev) => ({ ...prev, sku: message || 'Ya existe un producto con ese SKU.' }))
+            }
             showNotification(message || 'Error al guardar producto', 'error')
         } finally {
             setSaving(false)
@@ -1366,15 +1631,6 @@ export default function ProductEditorModal({
                                         {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
                                     </div>
                                     <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
-                                        <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="number" step="0.01" min="0" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.cost} placeholder={editingProduct ? 'Costo unitario' : 'Ej: 9.90'} onChange={e => { setForm({ ...form, cost: e.target.value }); clearErrors('cost') }} required disabled={saving} />
-                                        </div>
-                                        {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
-                                        <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Actualiza el costo unitario si esta compra llegó con un valor diferente.' : (editingProduct ? 'Costo real de compra (base para margen).' : 'Referencia editable. Ejemplo sugerido: 9.90.')}</p>
-                                    </div>
-                                    <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">{form.taxExempt ? 'Precio final de venta' : 'Precio PVP (con IVA)'}</label>
                                         <input type="number" step="0.01" min="0" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all" value={form.pvp} onChange={e => handlePvpPriceChange(e.target.value)} disabled={saving} />
                                         <p className="text-secondary text-xs mt-2">
@@ -1382,6 +1638,15 @@ export default function ProductEditorModal({
                                                 ? `Producto exento: precio final actual $${productPvpPriceLabel}.`
                                                 : `PVP estimado actual: $${productPvpPriceLabel}`}
                                         </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input type="number" step="0.01" min="0" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.cost} placeholder={editingProduct ? 'Costo unitario' : 'Ej: 9.90'} onChange={e => { setForm({ ...form, cost: e.target.value }); clearErrors('cost') }} required disabled={saving} />
+                                        </div>
+                                        {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
+                                        <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Actualiza el costo unitario si esta compra llegó con un valor diferente.' : (editingProduct ? 'Costo real de compra (base para margen).' : 'Referencia editable. Ejemplo sugerido: 9.90.')}</p>
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Markup (%)</label>
@@ -1889,7 +2154,10 @@ export default function ProductEditorModal({
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                     <div>
                                         <div className="text-sm font-semibold">Guía de tallas</div>
-                                        <p className="text-secondary text-xs mt-1">Se muestra en la ficha del producto y en la vista rápida. Usa medidas reales de la mascota.</p>
+                                        <p className="text-secondary text-xs mt-1">
+                                            Se abre desde el enlace <span className="font-semibold text-black">“Guía de tallas”</span> junto al selector de talla en la ficha del producto y en la vista rápida.
+                                            Usa medidas reales de la mascota para que el cliente pueda elegir mejor.
+                                        </p>
                                     </div>
                                     <button type="button" className="text-sm text-primary font-semibold disabled:opacity-50" onClick={addSizeGuideRow} disabled={saving}>+ Agregar talla</button>
                                 </div>
@@ -1902,6 +2170,9 @@ export default function ProductEditorModal({
                                     <div className="space-y-3">
                                         {sizeGuideRows.map((row, index) => (
                                             <div key={`size-guide-row-${index}`} className="rounded-xl border border-line bg-white p-4">
+                                                <p className="text-secondary text-xs mb-3">
+                                                    Esta fila se mostrará como una opción de talla y sus medidas dentro del modal público de guía de tallas.
+                                                </p>
                                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                                                     <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Talla" value={row.size} onChange={e => updateSizeGuideRow(index, 'size', e.target.value)} disabled={saving} />
                                                     <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Cuello. Ej: 24-28 cm" value={row.neck} onChange={e => updateSizeGuideRow(index, 'neck', e.target.value)} disabled={saving} />
@@ -1920,6 +2191,9 @@ export default function ProductEditorModal({
                                 <div>
                                     <label className="text-secondary text-xs uppercase font-bold mb-2 block">Nota adicional</label>
                                     <textarea className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[88px]" placeholder="Ej: Si tu mascota está entre dos tallas, elige la mayor." value={form.attributes?.sizeGuideNotes || ''} onChange={e => setAttribute('sizeGuideNotes', e.target.value)} disabled={saving} />
+                                    <p className="text-secondary text-xs mt-2">
+                                        Esta nota aparece arriba de la tabla dentro del modal público de guía de tallas.
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -1929,8 +2203,11 @@ export default function ProductEditorModal({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-secondary text-xs uppercase font-bold mb-2 block">SKU</label>
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ej: CAM-DEP-XL-AZUL" value={form.attributes?.sku || ''} onChange={e => setAttribute('sku', e.target.value)} disabled={saving} />
+                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder={suggestedSku || 'Ej: CAM-DEP-XL-AZUL'} value={form.attributes?.sku || ''} onChange={e => setAttribute('sku', e.target.value)} disabled={saving} />
                                 {formErrors.sku && <p className="text-xs text-red mt-1">{formErrors.sku}</p>}
+                                <p className="text-secondary text-xs mt-2">
+                                    Sugerido automáticamente sin repetir otros SKU. Si lo cambias, se guardará tu valor siempre que no esté repetido.
+                                </p>
                             </div>
                             {!isDuplicateVariantMode && (
                                 <div>
@@ -1960,7 +2237,10 @@ export default function ProductEditorModal({
                             )}
                             <div>
                                 <label className="text-secondary text-xs uppercase font-bold mb-2 block">Lote</label>
-                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder="Ej: L-2026-03-001" value={form.attributes?.lotCode || ''} onChange={e => setAttribute('lotCode', e.target.value)} disabled={saving} />
+                                <input className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all" placeholder={suggestedLotCode || 'Ej: L-2026-03-001'} value={form.attributes?.lotCode || ''} onChange={e => setAttribute('lotCode', e.target.value)} disabled={saving} />
+                                <p className="text-secondary text-xs mt-2">
+                                    Se propone automáticamente con fecha y referencia del producto. Si lo cambias, se usará el lote que escribas.
+                                </p>
                             </div>
                             <div>
                                 <label className="text-secondary text-xs uppercase font-bold mb-2 block">Ubicación de almacenamiento</label>
@@ -2002,7 +2282,10 @@ export default function ProductEditorModal({
                                 <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción del producto</label>
                                 <textarea className={getInputClass('description', 'border rounded-lg px-4 py-3 w-full outline-none transition-all min-h-[140px]')} value={form.description} onChange={e => { setForm({ ...form, description: e.target.value }); clearErrors('description') }} disabled={saving} placeholder="Describe beneficios, uso, material, ingredientes o cualquier dato clave que deba verse en la ficha pública." />
                                 {formErrors.description && <p className="text-xs text-red mt-1">{formErrors.description}</p>}
-                                <p className="text-secondary text-xs mt-2">Se muestra en la ficha del producto. Usa al menos una explicación clara de compra.</p>
+                                <p className="text-secondary text-xs mt-2">
+                                    Se muestra debajo del precio en la ficha del producto y también en la pestaña <span className="font-semibold text-black">Descripción</span>.
+                                    Usa aquí la explicación comercial que debe leer el cliente antes de comprar.
+                                </p>
                             </div>
                         )}
                         </div>
