@@ -359,7 +359,7 @@ const MyAccount = () => {
             await requestApi(`/api/products/${id}`, {
                 method: 'DELETE',
             });
-            showNotification('Producto eliminado correctamente');
+            showNotification('Producto retirado correctamente');
             const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT);
             setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
