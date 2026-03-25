@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
+import { attachInternalProxyToken } from '@/lib/internalProxy'
 
 const resolveBackendUrl = () => {
   const base = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api'
@@ -7,11 +8,6 @@ const resolveBackendUrl = () => {
 }
 
 export async function POST(req: Request) {
-  const token = process.env.BACKEND_SERVICE_TOKEN
-  if (!token) {
-    return NextResponse.json({ error: 'Service token missing' }, { status: 500 })
-  }
-
   const payload = await req.json().catch(() => null)
   if (!payload) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
@@ -21,13 +17,13 @@ export async function POST(req: Request) {
   const proto = resolveRequestProto(req.headers.get('x-forwarded-proto'), req.url)
   const outboundHeaders = new Headers({
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
   })
   if (host) {
     outboundHeaders.set('host', host)
     outboundHeaders.set('x-forwarded-host', host)
   }
   outboundHeaders.set('x-forwarded-proto', proto)
+  attachInternalProxyToken(outboundHeaders)
 
   const url = resolveBackendUrl()
   const res = await fetch(url, {

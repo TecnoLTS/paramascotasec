@@ -14,6 +14,7 @@ const Register = () => {
     const router = useRouter()
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
+    const [phone, setPhone] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [documentType, setDocumentType] = useState('')
@@ -43,7 +44,21 @@ const Register = () => {
         setLoading(true)
 
         try {
-            await register({ name, email, password, documentType, documentNumber, businessName })
+            await register({
+                name,
+                email,
+                phone,
+                password,
+                documentType,
+                documentNumber,
+                businessName,
+                profile: {
+                    phone,
+                    documentType,
+                    documentNumber,
+                    businessName,
+                },
+            })
             // Redirigir al login tras registro exitoso
             router.push('/login?registered=true')
         } catch (err: any) {
@@ -87,6 +102,17 @@ const Register = () => {
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div className="phone mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="phone"
+                                        type="tel"
+                                        placeholder="Teléfono *"
+                                        required
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
                                     />
                                 </div>
                                 <div className="document-type mt-5">

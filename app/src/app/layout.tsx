@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { Instrument_Sans } from 'next/font/google'
+import 'swiper/css/bundle'
 import '@/styles/styles.scss'
 import GlobalProvider from './GlobalProvider'
 import ClientModals from './ClientModals'
@@ -54,6 +56,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const requestHeaders = await headers()
+  const nonce = requestHeaders.get('x-nonce') || undefined
   const site = getSiteConfig()
   const siteUrl = site.baseUrl.replace(/\/$/, '')
   const logoImage = versionLocalImagePath(site.logo.src)
@@ -67,6 +71,7 @@ export default async function RootLayout({
           </div>
           <ClientModals serverTimeLeft={serverTimeLeft} />
           <script
+            nonce={nonce}
             type="application/ld+json"
             dangerouslySetInnerHTML={{
               __html: JSON.stringify({

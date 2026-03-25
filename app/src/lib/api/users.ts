@@ -28,3 +28,8 @@ export const updateAdminUser = (id: string, payload: AdminManagedUserPayload) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+
+export const unlockAdminUser = (id: string) =>
+  requestApi<any>(`${apiEndpoints.user(id)}/unlock`, {
+    method: 'POST',
+  })

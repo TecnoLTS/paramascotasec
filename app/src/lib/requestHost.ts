@@ -1,5 +1,20 @@
 const readConfiguredBase = () => process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
 
+const INTERNAL_HOST_PATTERNS = [
+  /^next-test-app$/i,
+  /^app-dev$/i,
+  /^app$/i,
+  /-app-dev$/i,
+  /-app$/i,
+  /-backend-web$/i,
+  /^backend-web$/i,
+]
+
+const isInternalHost = (host: string) => {
+  if (!host) return false
+  return INTERNAL_HOST_PATTERNS.some((pattern) => pattern.test(host))
+}
+
 export const getConfiguredTenantHost = () => {
   const base = readConfiguredBase()
   if (!base) return null
@@ -33,7 +48,10 @@ export const normalizeHost = (host?: string | null) => {
 
 export const resolveTenantHost = (incomingHost?: string | null) => {
   const normalizedIncoming = normalizeHost(incomingHost)
-  return normalizedIncoming || getConfiguredTenantHost() || null
+  if (normalizedIncoming && !isInternalHost(normalizedIncoming)) {
+    return normalizedIncoming
+  }
+  return getConfiguredTenantHost() || null
 }
 
 export const resolveRequestProto = (forwardedProto?: string | null, requestUrl?: string | null) => {

@@ -17,13 +17,9 @@ export interface CreateOrderData {
 }
 
 export const createOrder = async (data: any) => {
-    const token = localStorage.getItem('authToken');
     const headers: Record<string, string> = {
         'Content-Type': 'application/json'
     };
-    if (token) {
-        headers.Authorization = `Bearer ${token}`;
-    }
     return fetchJson<any>(apiEndpoints.orders, {
         method: 'POST',
         headers: {

@@ -18,12 +18,15 @@ services:
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME:-pm_csrf}
       BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
-      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
+      INTERNAL_PROXY_TOKEN: ${INTERNAL_PROXY_TOKEN}
+      PANEL_IP_MODE: ${PANEL_IP_MODE:-off}
+      PANEL_IP_ALLOWLIST: ${PANEL_IP_ALLOWLIST:-}
     working_dir: /app
     command: npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${APP_BIND_IP:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
     networks:
       edge:
         aliases:
@@ -48,15 +51,19 @@ services:
       NEXT_PUBLIC_CONTAINER_NAME: next-test
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME:-pm_csrf}
       BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
-      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN}
+      INTERNAL_PROXY_TOKEN: ${INTERNAL_PROXY_TOKEN}
+      PANEL_IP_MODE: ${PANEL_IP_MODE:-off}
+      PANEL_IP_ALLOWLIST: ${PANEL_IP_ALLOWLIST:-}
     working_dir: /app
-    command: npm run dev -- --hostname 0.0.0.0 --port ${PORT:-3000}
+    command: sh -lc "mkdir -p .next && find .next -mindepth 1 -maxdepth 1 -exec rm -rf {} + && npm run dev -- --webpack --hostname 0.0.0.0 --port ${PORT:-3000}"
     volumes:
       - ./app:/app
       - paramascotasec_node_modules:/app/node_modules
+      - /app/.next
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${APP_DEV_BIND_IP:-0.0.0.0}:${PORT:-3000}:${PORT:-3000}"
     networks:
       edge:
         aliases:

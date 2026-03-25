@@ -51,7 +51,7 @@ type UseAdminDataLoaderParams = {
   loadRecentPurchaseInvoices: (options?: { silent?: boolean }) => Promise<void>
   loadStoreStatus: () => Promise<void>
   loadProductPageSettings: () => Promise<void>
-  loadPosSnapshot: (token?: string) => Promise<void>
+  loadPosSnapshot: () => Promise<void>
   normalizeAdminProducts: (products: any[]) => any[]
 }
 
@@ -147,17 +147,16 @@ export const useAdminDataLoader = ({
   ])
 
   React.useEffect(() => {
-    const token = localStorage.getItem('authToken')
     const current = handlersRef.current
 
-    if (!token || !user || user.role !== 'admin' || !activeTab) {
+    if (!user || user.role !== 'admin' || !activeTab) {
       current.setAdminDataLoading(false)
       current.setAdminDataError(null)
       return
     }
 
     let cancelled = false
-    const headers = { Authorization: `Bearer ${token}` }
+    const headers = {}
 
     const handleError = (error: any) => {
       console.error(error)
@@ -252,7 +251,7 @@ export const useAdminDataLoader = ({
       if (activeTab === 'local-sales') {
         if (!cancelled) current.setPosLoading(true)
         tasks.push(
-          current.loadPosSnapshot(token).finally(() => {
+          current.loadPosSnapshot().finally(() => {
             if (!cancelled) current.setPosLoading(false)
           }),
         )

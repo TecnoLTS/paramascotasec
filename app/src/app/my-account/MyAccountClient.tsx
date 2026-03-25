@@ -10,8 +10,10 @@ import { motion } from 'framer-motion'
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
+import { clearStoredSession, setStoredSessionUser } from '@/lib/authSession'
 import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateStoreStatus } from '@/lib/api/settings'
 import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
+import { unlockAdminUser } from '@/lib/api/users'
 import { createEmptyProductReferenceData, type ProductReferenceData } from '@/lib/productReferenceData'
 import {
     createEmptyProductForm,
@@ -34,20 +36,24 @@ import {
     withTransientRetry,
 } from './utils'
 import {
+    createEmptySavedAddressEntry,
     formatAddress,
     formatAddressLines,
     getAdminUserResolvedAddress,
-    getDefaultBillingAddress,
     getItemNetPrice,
     getOrderContact,
     getOrderItemsGrossSubtotal,
     getOrderItemsNetSubtotal,
+    isDynamicOrderItemImage,
     getOrderShipping,
     getOrderVatAmount,
     getOrderVatSubtotal,
+    normalizeSavedAddresses,
+    normalizeOrderItemImage,
     normalizeAddressCandidate,
     parseAddress,
     parseJsonValue,
+    type SavedAddressEntry,
 } from './customerDataUtils'
 import {
     formatDateEcuador,
@@ -169,33 +175,15 @@ const MyAccount = () => {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [activeTab, setActiveTab] = useState<string | undefined>('dashboard')
-    const [activeAddress, setActiveAddress] = useState<string | null>('billing')
+    const [activeAddress, setActiveAddress] = useState<'shipping' | 'billing' | null>('shipping')
     const [activeOrders, setActiveOrders] = useState<string | undefined>('all')
     const [authBootstrapping, setAuthBootstrapping] = useState(true)
     const [user, setUser] = useState<{ id: string, name: string, email: string, role?: 'customer' | 'admin' } | null>(null)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
 
     // Address management
-    const emptyAddress = {
-        firstName: '',
-        lastName: '',
-        company: '',
-        country: '',
-        street: '',
-        city: '',
-        state: '',
-        zip: '',
-        phone: '',
-        email: ''
-    }
-    const [savedAddresses, setSavedAddresses] = useState<Array<{
-        id: number,
-        title: string,
-        billing: typeof emptyAddress,
-        shipping: typeof emptyAddress,
-        isSame: boolean
-    }>>([
-        { id: Date.now(), title: 'Dirección Principal', billing: { ...emptyAddress }, shipping: { ...emptyAddress }, isSame: false }
+    const [savedAddresses, setSavedAddresses] = useState<SavedAddressEntry[]>([
+        createEmptySavedAddressEntry('Dirección principal')
     ])
     const [currentAddrIndex, setCurrentAddrIndex] = useState(0)
     const [addressSaving, setAddressSaving] = useState(false)
@@ -368,14 +356,11 @@ const MyAccount = () => {
         if (!confirm('¿Estás seguro de eliminar este producto?')) return;
 
         try {
-            const token = localStorage.getItem('authToken');
             await requestApi(`/api/products/${id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` }
             });
             showNotification('Producto eliminado correctamente');
-            // Refresh list
-            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT);
             setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
@@ -395,18 +380,15 @@ const MyAccount = () => {
         }
 
         try {
-            const token = localStorage.getItem('authToken');
             await requestApi(`/api/products/${productId}`, {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ price: newPrice })
             });
             showNotification(`Precio optimizado a $${newPrice}`);
-            // Refresh list
-            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT);
             setAdminProductsList(normalizeAdminProducts(res.body));
         } catch (error) {
             console.error(error);
@@ -416,10 +398,7 @@ const MyAccount = () => {
 
     const handleViewOrder = async (orderId: string) => {
         try {
-            const token = localStorage.getItem('authToken');
-            const res = await requestApi<any>(`/api/orders/${orderId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await requestApi<any>(`/api/orders/${orderId}`);
             setSelectedOrder(res.body);
             setIsOrderModalOpen(true);
         } catch (error) {
@@ -430,27 +409,20 @@ const MyAccount = () => {
 
     const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
         try {
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                showNotification('Debes iniciar sesión para actualizar el pedido.', 'error');
-                return;
-            }
             await requestApi(`/api/orders/${orderId}/status`, {
                 method: 'PATCH',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })
             });
             showNotification(`Pedido ${newStatus === 'delivered' ? 'entregado' : 'actualizado'} correctamente`);
             setIsOrderModalOpen(false);
-            // Refresh orders
             if (user?.role === 'admin') {
-                const res = await requestApi<Order[]>('/api/orders', { headers: { Authorization: `Bearer ${token}` } });
+                const res = await requestApi<Order[]>('/api/orders');
                 setAdminOrdersList(res.body);
             } else {
-                const res = await requestApi<Order[]>('/api/orders/my-orders', { headers: { Authorization: `Bearer ${token}` } });
+                const res = await requestApi<Order[]>('/api/orders/my-orders');
                 setUserOrders(res.body);
             }
         } catch (error: any) {
@@ -467,9 +439,8 @@ const MyAccount = () => {
         let printWindow: Window | null = null
 
         try {
-            const token = localStorage.getItem('authToken')
             const res = await fetch(`/api/orders/${orderId}/invoice`, {
-                headers: { Authorization: `Bearer ${token}` }
+                credentials: 'include'
             })
             if (!res.ok) {
                 throw new Error('No se pudo preparar la factura para impresión.')
@@ -542,17 +513,17 @@ const MyAccount = () => {
         e.preventDefault();
         try {
             setAddressSaving(true)
-            const token = localStorage.getItem('authToken');
-            const res = await requestApi<{ addresses: typeof savedAddresses }>('/api/user/addresses', {
+            const normalizedAddresses = normalizeSavedAddresses(savedAddresses)
+            const res = await requestApi<{ addresses: SavedAddressEntry[] }>('/api/user/addresses', {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ addresses: savedAddresses })
+                body: JSON.stringify({ addresses: normalizedAddresses })
             });
-            if (Array.isArray(res.body.addresses)) {
-                setSavedAddresses(res.body.addresses)
+            const persistedAddresses = normalizeSavedAddresses(res.body.addresses)
+            if (persistedAddresses.length > 0) {
+                setSavedAddresses(persistedAddresses)
                 setCurrentAddrIndex(0)
             }
             showNotification('Direcciones guardadas correctamente');
@@ -592,16 +563,10 @@ const MyAccount = () => {
         let profileUpdated = false
         try {
             setProfileSaving(true)
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                handleLogout()
-                return
-            }
             const name = `${profile.firstName} ${profile.lastName}`.trim()
             const res = await requestApi<{ name?: string; profile?: typeof profile }>('/api/user/profile', {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ name, profile })
@@ -624,14 +589,13 @@ const MyAccount = () => {
             if (res.body.name && user) {
                 const updatedUser = { ...user, name: res.body.name }
                 setUser(updatedUser)
-                localStorage.setItem('user', JSON.stringify(updatedUser))
+                setStoredSessionUser(updatedUser)
             }
 
             if (wantsPasswordChange) {
                 await requestApi('/api/user/password', {
                     method: 'PUT',
                     headers: {
-                        Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -668,15 +632,27 @@ const MyAccount = () => {
     }, [])
 
     const reloadAdminUsers = React.useCallback(async () => {
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin') return
+        if (!user || user.role !== 'admin') return
 
-        const res = await requestApi<AdminUserSummary[]>('/api/users', {
-            headers: { Authorization: `Bearer ${token}` }
-        })
+        const res = await requestApi<AdminUserSummary[]>('/api/users')
 
         setAdminUsersList(Array.isArray(res.body) ? res.body : [])
     }, [user])
+
+    const handleUnlockUser = React.useCallback(async (adminUser: AdminUserSummary) => {
+        if (!adminUser?.id) return
+
+        try {
+            await unlockAdminUser(adminUser.id)
+            await reloadAdminUsers()
+            showNotification(`Acceso restablecido para ${adminUser.name || adminUser.email || 'el usuario'}.`)
+        } catch (error) {
+            const message = error instanceof Error && error.message.trim()
+                ? error.message
+                : 'No se pudo desbloquear el usuario.'
+            showNotification(message, 'error')
+        }
+    }, [reloadAdminUsers, showNotification])
 
     const handleDuplicateVariant = React.useCallback((product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
@@ -708,11 +684,9 @@ const MyAccount = () => {
 
         setProductPublicationPendingIds((prev) => ({ ...prev, [productId]: true }))
         try {
-            const token = localStorage.getItem('authToken')
             await requestApi(`/api/products/${productId}`, {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ published: nextPublished })
@@ -728,8 +702,10 @@ const MyAccount = () => {
             }))
             showNotification(nextPublished ? 'Artículo publicado.' : 'Artículo ocultado del sitio.')
         } catch (error) {
-            console.error(error)
-            showNotification('No se pudo actualizar la publicación del artículo.', 'error')
+            const message = error instanceof Error && error.message.trim()
+                ? error.message
+                : 'No se pudo actualizar la publicación del artículo.'
+            showNotification(message, 'error')
         } finally {
             setProductPublicationPendingIds((prev) => {
                 const next = { ...prev }
@@ -741,13 +717,10 @@ const MyAccount = () => {
 
     const loadVatRate = async (options?: { silent?: boolean }) => {
         const silent = options?.silent === true
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin') return
+        if (!user || user.role !== 'admin') return
         setVatLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<{ rate: number }>('/api/admin/settings/tax', {
-                headers: { Authorization: `Bearer ${token}` }
-            }))
+            const res = await withTransientRetry(() => requestApi<{ rate: number }>('/api/admin/settings/tax'))
             setVatRate(Number(res.body.rate ?? 0))
         } catch (error) {
             console.error(error)
@@ -765,13 +738,10 @@ const MyAccount = () => {
 
     const loadShippingRates = async (options?: { silent?: boolean }) => {
         const silent = options?.silent === true
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin') return
+        if (!user || user.role !== 'admin') return
         setShippingLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping', {
-                headers: { Authorization: `Bearer ${token}` }
-            }))
+            const res = await withTransientRetry(() => requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping'))
             setShippingRates({
                 delivery: Number(res.body.delivery ?? 0),
                 pickup: Number(res.body.pickup ?? 0),
@@ -892,13 +862,10 @@ const MyAccount = () => {
 
     const loadRecentPurchaseInvoices = async (options?: { silent?: boolean }) => {
         const silent = options?.silent === true
-        const token = localStorage.getItem('authToken')
-        if (!token || !user || user.role !== 'admin') return
+        if (!user || user.role !== 'admin') return
         setPurchaseInvoicesLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=15', {
-                headers: { Authorization: `Bearer ${token}` }
-            }))
+            const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=15'))
             const rows = Array.isArray(res.body) ? res.body.map(normalizePurchaseInvoiceSummary) : []
             setRecentPurchaseInvoices(rows)
         } catch (error) {
@@ -921,17 +888,10 @@ const MyAccount = () => {
             showNotification('La factura de compra no tiene un identificador válido.', 'error')
             return
         }
-        const token = localStorage.getItem('authToken')
-        if (!token) {
-            handleLogout()
-            return
-        }
         setIsPurchaseInvoiceModalOpen(true)
         setPurchaseInvoiceDetailLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<any>(`/api/admin/purchase-invoices/${encodeURIComponent(normalizedId)}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            }))
+            const res = await withTransientRetry(() => requestApi<any>(`/api/admin/purchase-invoices/${encodeURIComponent(normalizedId)}`))
             setSelectedPurchaseInvoice(normalizePurchaseInvoiceDetail(res.body))
         } catch (error) {
             console.error(error)
@@ -959,18 +919,10 @@ const MyAccount = () => {
             showNotification('El producto no tiene un identificador válido para consultar su balance.', 'error')
             return
         }
-        const token = localStorage.getItem('authToken')
-        if (!token) {
-            handleLogout()
-            return
-        }
-
         setIsProductProcurementModalOpen(true)
         setProductProcurementDetailLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(productId)}?scope=admin&procurement_detail=1`, {
-                headers: { Authorization: `Bearer ${token}` }
-            }))
+            const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(productId)}?scope=admin&procurement_detail=1`))
             setSelectedProductProcurementDetail(normalizeProductProcurementDetail(res.body))
         } catch (error) {
             console.error(error)
@@ -1099,14 +1051,11 @@ const MyAccount = () => {
     }
 
     const handleSaveVat = async () => {
-        const token = localStorage.getItem('authToken')
-        if (!token) return
         setVatSaving(true)
         try {
             const res = await requestApi<{ rate: number }>('/api/admin/settings/tax', {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ rate: vatRate })
@@ -1122,14 +1071,11 @@ const MyAccount = () => {
     }
 
     const handleSaveShipping = async () => {
-        const token = localStorage.getItem('authToken')
-        if (!token) return
         setShippingSaving(true)
         try {
             const res = await requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping', {
                 method: 'PUT',
                 headers: {
-                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -1314,13 +1260,13 @@ const MyAccount = () => {
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [isPurchaseInvoiceModalOpen, purchaseInvoiceDetailLoading])
 
-    const handleLogout = () => {
-        localStorage.removeItem('authToken')
-        localStorage.removeItem('user')
+    const handleLogout = React.useCallback(() => {
+        requestApi('/api/auth/logout', { method: 'POST' }).catch(() => null)
+        clearStoredSession()
         router.push('/login')
-    }
+    }, [router])
 
-    const handleActiveAddress = (order: string) => {
+    const handleActiveAddress = (order: 'shipping' | 'billing') => {
         setActiveAddress((prevOrder: string | null) => prevOrder === order ? null : order)
     }
 
@@ -1385,7 +1331,7 @@ const MyAccount = () => {
         setLocalSaleQuoteLoading,
     })
 
-    const currentAddress = savedAddresses[currentAddrIndex]
+    const currentAddress = savedAddresses[currentAddrIndex] || createEmptySavedAddressEntry('Dirección principal')
     const currentDateLabel = formatDateEcuador(new Date(), {
         weekday: 'long',
         year: 'numeric',
@@ -1985,32 +1931,26 @@ const MyAccount = () => {
                 await printOrderInvoiceById(createdOrderId)
             }
 
-            const token = localStorage.getItem('authToken')
-
             // El XML del SRI se genera automáticamente en el backend
             // No es necesario hacer una llamada adicional
-            
-            if (token) {
-                const headers = { Authorization: `Bearer ${token}` }
-                const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
-                    ? `?month=${encodeURIComponent(salesRankingMonth)}`
-                    : ''
-                const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
-                    requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers }),
-                    requestApi<Order[]>('/api/orders', { headers }),
-                    requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })
-                ])
-                if (productsResult.status === 'fulfilled') {
-                    setAdminProductsList(normalizeAdminProducts(productsResult.value.body))
-                }
-                if (ordersResult.status === 'fulfilled') {
-                    setAdminOrdersList(ordersResult.value.body)
-                }
-                if (statsResult.status === 'fulfilled') {
-                    setDashboardStats(statsResult.value.body)
-                }
-                await loadPosSnapshot(token)
+            const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
+                ? `?month=${encodeURIComponent(salesRankingMonth)}`
+                : ''
+            const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
+                requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT),
+                requestApi<Order[]>('/api/orders'),
+                requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`)
+            ])
+            if (productsResult.status === 'fulfilled') {
+                setAdminProductsList(normalizeAdminProducts(productsResult.value.body))
             }
+            if (ordersResult.status === 'fulfilled') {
+                setAdminOrdersList(ordersResult.value.body)
+            }
+            if (statsResult.status === 'fulfilled') {
+                setDashboardStats(statsResult.value.body)
+            }
+            await loadPosSnapshot()
         } catch (error: any) {
             console.error(error)
             const message = String(error?.message || 'No se pudo registrar la venta local.')
@@ -2061,6 +2001,7 @@ const MyAccount = () => {
     const updateAddressData = (type: 'billing' | 'shipping', field: string, value: string) => {
         const newAddresses = [...savedAddresses]
         const addr = newAddresses[currentAddrIndex]
+        if (!addr) return
         addr[type] = { ...addr[type], [field]: value }
 
         if (addr.isSame) {
@@ -2083,25 +2024,20 @@ const MyAccount = () => {
         updateAddressData('shipping', field, value)
     }
 
-    const toggleSameAsBilling = () => {
+    const toggleSameAsShipping = () => {
         const newAddresses = [...savedAddresses]
         const addr = newAddresses[currentAddrIndex]
+        if (!addr) return
         addr.isSame = !addr.isSame
         if (addr.isSame) {
-            addr.shipping = { ...addr.billing }
+            addr.billing = { ...addr.shipping }
         }
         setSavedAddresses(newAddresses)
     }
 
     const addNewAddress = () => {
         if (savedAddresses.length < 3) {
-            const newAddr = {
-                id: Date.now(),
-                title: `Dirección ${savedAddresses.length + 1}`,
-                billing: { ...emptyAddress },
-                shipping: { ...emptyAddress },
-                isSame: false
-            }
+            const newAddr = createEmptySavedAddressEntry(`Dirección ${savedAddresses.length + 1}`, savedAddresses.length)
             setSavedAddresses([...savedAddresses, newAddr])
             setCurrentAddrIndex(savedAddresses.length)
             showNotification('Nueva ranura de dirección añadida.')
@@ -2679,7 +2615,7 @@ const MyAccount = () => {
         [selectedOrder, savedAddresses, user]
     )
 
-    if (!user) {
+    if (authBootstrapping || !user) {
         return (
             <>
                 <div id="header" className='relative w-full'>
@@ -6042,6 +5978,7 @@ const MyAccount = () => {
                                         formatDateTime={formatDateTimeEcuador}
                                         currentUserId={user?.id ?? null}
                                         onUsersMutated={reloadAdminUsers}
+                                        onUnlockUser={handleUnlockUser}
                                         showNotification={showNotification}
                                     />
                                     )}
@@ -6345,7 +6282,14 @@ const MyAccount = () => {
                                                                     <td className="py-3">
                                                                         {firstItem ? (
                                                                             <div className="product flex items-center gap-3">
-                                                                                <Image src={firstItem.product_image || '/images/product/1000x1000.png'} width={400} height={400} alt={firstItem.product_name} className="flex-shrink-0 w-12 h-12 rounded" />
+                                                                                <Image
+                                                                                    src={normalizeOrderItemImage(firstItem.product_image)}
+                                                                                    width={400}
+                                                                                    height={400}
+                                                                                    alt={firstItem.product_name}
+                                                                                    className="flex-shrink-0 w-12 h-12 rounded object-cover"
+                                                                                    unoptimized={isDynamicOrderItemImage(firstItem.product_image)}
+                                                                                />
                                                                                 <div className="info flex flex-col">
                                                                                     <strong className="product_name text-button">{firstItem.product_name}</strong>
                                                                                     <span className="product_tag caption1 text-secondary">{itemsCount > 1 ? `${itemsCount} productos` : '1 producto'}</span>
@@ -6384,7 +6328,7 @@ const MyAccount = () => {
                                     )}
                                     {activeTab === 'address' && (
                                     <div className="tab_address text-content w-full p-7 border border-line rounded-xl">
-                                        <div className="heading5 pb-4">Direcciones de envío</div>
+                                        <div className="heading5 pb-4">Direcciones guardadas</div>
                                         <form onSubmit={handleSaveAddresses}>
                                             <div className="flex items-center justify-between mb-8 border-b border-line pb-4">
                                                 <div className="flex gap-4">
@@ -6421,125 +6365,120 @@ const MyAccount = () => {
 
                                             <button
                                                 type='button'
-                                                className={`tab_btn flex items-center justify-between w-full pb-1.5 border-b border-line ${activeAddress === 'billing' ? 'active' : ''}`}
-                                                onClick={() => handleActiveAddress('billing')}
-                                            >
-                                                <strong className="heading6">Dirección de facturación</strong>
-                                                <Icon.CaretDown className='text-2xl ic_down duration-300' />
-                                            </button>
-                                            <div className={`form_address ${activeAddress === 'billing' ? 'block' : 'hidden'}`}>
-                                                <div className="flex items-center gap-3 mt-4 px-4 py-3 bg-surface rounded-lg border border-line">
-                                                    <input
-                                                        type="checkbox"
-                                                        id="sameAsBillingTop"
-                                                        checked={currentAddress.isSame}
-                                                        onChange={toggleSameAsBilling}
-                                                        className="w-4 h-4 cursor-pointer"
-                                                    />
-                                                    <label htmlFor="sameAsBillingTop" className="caption1 cursor-pointer font-bold">Usar esta información también para el envío</label>
-                                                </div>
-                                                <div className='grid sm:grid-cols-2 gap-4 gap-y-5 mt-5'>
-                                                    <div className="first-name">
-                                                        <label htmlFor="billingFirstName" className='caption1 capitalize'>Nombre <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingFirstName" type="text" value={currentAddress.billing.firstName} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="last-name">
-                                                        <label htmlFor="billingLastName" className='caption1 capitalize'>Apellido <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingLastName" type="text" value={currentAddress.billing.lastName} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="company">
-                                                        <label htmlFor="billingCompany" className='caption1 capitalize'>Nombre de la empresa (opcional)</label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingCompany" type="text" value={currentAddress.billing.company} onChange={handleBillingChange} />
-                                                    </div>
-                                                    <div className="country">
-                                                        <label htmlFor="billingCountry" className='caption1 capitalize'>País / Región <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingCountry" type="text" value={currentAddress.billing.country} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="street">
-                                                        <label htmlFor="billingStreet" className='caption1 capitalize'>Dirección <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingStreet" type="text" value={currentAddress.billing.street} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="city">
-                                                        <label htmlFor="billingCity" className='caption1 capitalize'>Ciudad <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingCity" type="text" value={currentAddress.billing.city} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="state">
-                                                        <label htmlFor="billingState" className='caption1 capitalize'>Estado / Provincia <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingState" type="text" value={currentAddress.billing.state} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="zip">
-                                                        <label htmlFor="billingZip" className='caption1 capitalize'>Código Postal <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingZip" type="text" value={currentAddress.billing.zip} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="phone">
-                                                        <label htmlFor="billingPhone" className='caption1 capitalize'>Teléfono <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingPhone" type="text" value={currentAddress.billing.phone} onChange={handleBillingChange} required />
-                                                    </div>
-                                                    <div className="email">
-                                                        <label htmlFor="billingEmail" className='caption1 capitalize'>Correo electrónico <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="billingEmail" type="email" value={currentAddress.billing.email} onChange={handleBillingChange} required />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type='button'
-                                                className={`tab_btn flex items-center justify-between w-full mt-8 pb-1.5 border-b border-line ${activeAddress === 'shipping' ? 'active' : ''}`}
+                                                className={`tab_btn flex items-center justify-between w-full pb-1.5 border-b border-line ${activeAddress === 'shipping' ? 'active' : ''}`}
                                                 onClick={() => handleActiveAddress('shipping')}
                                             >
                                                 <strong className="heading6">Dirección de envío</strong>
                                                 <Icon.CaretDown className='text-2xl ic_down duration-300' />
                                             </button>
                                             <div className={`form_address ${activeAddress === 'shipping' ? 'block' : 'hidden'}`}>
-                                                <div className={`flex items-center gap-3 mt-4 px-4 py-3 bg-surface rounded-lg border border-line ${currentAddress.isSame ? 'bg-success/5 border-success/30' : ''}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        id="sameAsBillingBottom"
-                                                        checked={currentAddress.isSame}
-                                                        onChange={toggleSameAsBilling}
-                                                        className="w-4 h-4 cursor-pointer"
-                                                    />
-                                                    <label htmlFor="sameAsBillingBottom" className="caption1 cursor-pointer font-bold text-secondary">La dirección de envío es la misma que la de facturación</label>
-                                                </div>
                                                 <div className='grid sm:grid-cols-2 gap-4 gap-y-5 mt-5'>
                                                     <div className="first-name">
                                                         <label htmlFor="shippingFirstName" className='caption1 capitalize'>Nombre <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingFirstName" type="text" value={currentAddress.shipping.firstName} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingFirstName" type="text" value={currentAddress.shipping.firstName} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="last-name">
                                                         <label htmlFor="shippingLastName" className='caption1 capitalize'>Apellido <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingLastName" type="text" value={currentAddress.shipping.lastName} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingLastName" type="text" value={currentAddress.shipping.lastName} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="company">
                                                         <label htmlFor="shippingCompany" className='caption1 capitalize'>Nombre de la empresa (opcional)</label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingCompany" type="text" value={currentAddress.shipping.company} onChange={handleShippingChange} disabled={currentAddress.isSame} />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingCompany" type="text" value={currentAddress.shipping.company} onChange={handleShippingChange} />
                                                     </div>
                                                     <div className="country">
                                                         <label htmlFor="shippingCountry" className='caption1 capitalize'>País / Región <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingCountry" type="text" value={currentAddress.shipping.country} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingCountry" type="text" value={currentAddress.shipping.country} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="street">
                                                         <label htmlFor="shippingStreet" className='caption1 capitalize'>Dirección <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingStreet" type="text" value={currentAddress.shipping.street} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingStreet" type="text" value={currentAddress.shipping.street} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="city">
                                                         <label htmlFor="shippingCity" className='caption1 capitalize'>Ciudad <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingCity" type="text" value={currentAddress.shipping.city} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingCity" type="text" value={currentAddress.shipping.city} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="state">
                                                         <label htmlFor="shippingState" className='caption1 capitalize'>Estado / Provincia <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingState" type="text" value={currentAddress.shipping.state} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingState" type="text" value={currentAddress.shipping.state} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="zip">
                                                         <label htmlFor="shippingZip" className='caption1 capitalize'>Código Postal <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingZip" type="text" value={currentAddress.shipping.zip} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingZip" type="text" value={currentAddress.shipping.zip} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="phone">
                                                         <label htmlFor="shippingPhone" className='caption1 capitalize'>Teléfono <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingPhone" type="text" value={currentAddress.shipping.phone} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingPhone" type="text" value={currentAddress.shipping.phone} onChange={handleShippingChange} required />
                                                     </div>
                                                     <div className="email">
                                                         <label htmlFor="shippingEmail" className='caption1 capitalize'>Correo electrónico <span className='text-red'>*</span></label>
-                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="shippingEmail" type="email" value={currentAddress.shipping.email} onChange={handleShippingChange} disabled={currentAddress.isSame} required />
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingEmail" type="email" value={currentAddress.shipping.email} onChange={handleShippingChange} required />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type='button'
+                                                className={`tab_btn flex items-center justify-between w-full mt-8 pb-1.5 border-b border-line ${activeAddress === 'billing' ? 'active' : ''}`}
+                                                onClick={() => handleActiveAddress('billing')}
+                                            >
+                                                <strong className="heading6">Dirección de facturación</strong>
+                                                <Icon.CaretDown className='text-2xl ic_down duration-300' />
+                                            </button>
+                                            <div className={`form_address ${activeAddress === 'billing' ? 'block' : 'hidden'}`}>
+                                                <div className={`flex items-center gap-3 mt-4 px-4 py-3 bg-surface rounded-lg border border-line ${currentAddress.isSame ? 'bg-success/5 border-success/30' : ''}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        id="sameAsShippingBilling"
+                                                        checked={currentAddress.isSame}
+                                                        onChange={toggleSameAsShipping}
+                                                        className="w-4 h-4 cursor-pointer"
+                                                    />
+                                                    <label htmlFor="sameAsShippingBilling" className="caption1 cursor-pointer font-bold text-secondary">Usar la misma dirección de envío también para facturación</label>
+                                                </div>
+                                                {currentAddress.isSame && (
+                                                    <div className="mt-4 px-4 py-3 rounded-lg border border-success/25 bg-success/5 text-sm text-secondary">
+                                                        La facturación usará exactamente los mismos datos de la dirección de envío actual.
+                                                    </div>
+                                                )}
+                                                <div className={`grid sm:grid-cols-2 gap-4 gap-y-5 mt-5 ${currentAddress.isSame ? 'opacity-60' : ''}`}>
+                                                    <div className="first-name">
+                                                        <label htmlFor="billingFirstName" className='caption1 capitalize'>Nombre <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingFirstName" type="text" value={currentAddress.billing.firstName} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="last-name">
+                                                        <label htmlFor="billingLastName" className='caption1 capitalize'>Apellido <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingLastName" type="text" value={currentAddress.billing.lastName} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="company">
+                                                        <label htmlFor="billingCompany" className='caption1 capitalize'>Nombre de la empresa (opcional)</label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingCompany" type="text" value={currentAddress.billing.company} onChange={handleBillingChange} disabled={currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="country">
+                                                        <label htmlFor="billingCountry" className='caption1 capitalize'>País / Región <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingCountry" type="text" value={currentAddress.billing.country} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="street">
+                                                        <label htmlFor="billingStreet" className='caption1 capitalize'>Dirección <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingStreet" type="text" value={currentAddress.billing.street} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="city">
+                                                        <label htmlFor="billingCity" className='caption1 capitalize'>Ciudad <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingCity" type="text" value={currentAddress.billing.city} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="state">
+                                                        <label htmlFor="billingState" className='caption1 capitalize'>Estado / Provincia <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingState" type="text" value={currentAddress.billing.state} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="zip">
+                                                        <label htmlFor="billingZip" className='caption1 capitalize'>Código Postal <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingZip" type="text" value={currentAddress.billing.zip} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="phone">
+                                                        <label htmlFor="billingPhone" className='caption1 capitalize'>Teléfono <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingPhone" type="text" value={currentAddress.billing.phone} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                    </div>
+                                                    <div className="email">
+                                                        <label htmlFor="billingEmail" className='caption1 capitalize'>Correo electrónico <span className='text-red'>*</span></label>
+                                                        <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingEmail" type="email" value={currentAddress.billing.email} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
                                                     </div>
                                                 </div>
                                             </div>
@@ -6821,7 +6760,7 @@ const MyAccount = () => {
                 order={selectedOrder}
                 orderContact={selectedOrderContact}
                 statusBadge={selectedOrder ? getStatusBadge(selectedOrder.status) : { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }}
-                canViewInvoice={(user?.role === 'admin' || user?.role === 'customer') && selectedOrder?.status !== 'canceled'}
+                canViewInvoice={(user?.role === 'admin' || user?.role === 'customer') && ['completed', 'delivered'].includes(normalizeStatus(selectedOrder?.status))}
                 canManageStatus={user?.role === 'admin' && selectedOrder?.status !== 'canceled' && selectedOrder?.status !== 'delivered'}
                 onClose={() => setIsOrderModalOpen(false)}
                 onViewInvoice={handleGenerateInvoice}

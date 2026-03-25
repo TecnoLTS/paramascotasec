@@ -1,5 +1,6 @@
 import React from 'react'
 import { Metadata, ResolvingMetadata } from 'next'
+import { headers } from 'next/headers'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
@@ -56,6 +57,8 @@ export async function generateMetadata(
 }
 
 const ProductDefault = async ({ searchParams }: Props) => {
+    const requestHeaders = await headers()
+    const nonce = requestHeaders.get('x-nonce') || undefined
     const site = getSiteConfig()
     const resolvedSearchParams = await searchParams
     const [rawProducts, pageSettings] = await Promise.all([
@@ -77,6 +80,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
         <>
             {currentProduct && (
                 <script
+                    nonce={nonce}
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{
                         __html: JSON.stringify(

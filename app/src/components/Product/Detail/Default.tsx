@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import { useRouter } from 'next/navigation'
 import { Swiper, SwiperSlide } from 'swiper/react'
-import { Navigation, Thumbs } from 'swiper/modules'
+import { Navigation } from 'swiper/modules'
 import SwiperCore from 'swiper/core'
 import * as Icon from '@phosphor-icons/react/dist/ssr'
 import 'swiper/css/bundle'
@@ -32,10 +32,8 @@ interface Props {
 
 const Default: React.FC<Props> = ({ data, productId }) => {
   const router = useRouter()
-  const mainSwiperRef = useRef<SwiperCore | null>(null)
   const popupSwiperRef = useRef<SwiperCore | null>(null)
 
-  const [thumbsSwiper, setThumbsSwiper] = useState<SwiperCore | null>(null)
   const [openPopupImg, setOpenPopupImg] = useState(false)
   const [openSizeGuide, setOpenSizeGuide] = useState(false)
   const [photoIndex, setPhotoIndex] = useState(0)
@@ -86,6 +84,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     setQuantity(defaultVariantStock > 0 ? 1 : 0)
     setActiveColor('')
     setActiveSize(getProductVariantLabel(defaultVariant))
+    setPhotoIndex(0)
   }, [defaultVariant.id, defaultVariantStock, productFamily.id])
 
   useEffect(() => {
@@ -95,6 +94,12 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       return Math.min(current, availableStock)
     })
   }, [availableStock, activeVariant.id])
+
+  useEffect(() => {
+    if (openPopupImg) {
+      popupSwiperRef.current?.slideTo(photoIndex, 0)
+    }
+  }, [openPopupImg, photoIndex])
 
   const productType = (productFamily.productType ?? '').toLowerCase()
   const isClothing = productType === 'ropa'
@@ -165,6 +170,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     ? galleryImages
     : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.jpg'])
   const colorOptions = (activeVariant.variation ?? []).filter((item) => item.color)
+  const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.jpg'
 
   const relatedProducts = useMemo(() => {
     return data
@@ -207,69 +213,60 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       <div className="featured-product underwear md:py-20 py-10">
         <div className="container grid md:grid-cols-2 gap-x-10 gap-y-8">
           <div className="list-img w-full">
-            <Swiper
-              slidesPerView={1}
-              spaceBetween={0}
-              thumbs={thumbsSwiper ? { swiper: thumbsSwiper } : undefined}
-              modules={[Thumbs]}
-              className="mySwiper2 rounded-2xl overflow-hidden"
-              onSwiper={(swiper) => {
-                mainSwiperRef.current = swiper
-              }}
-            >
-              {resolvedGalleryImages.map((image, index) => (
-                <SwiperSlide
-                  key={`${image}-${index}`}
-                  onClick={() => {
-                    mainSwiperRef.current?.slideTo(index, 0)
-                    setPhotoIndex(index)
-                    setOpenPopupImg(true)
-                  }}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+              <div className="order-2 w-full sm:order-1 sm:w-[84px] sm:flex-shrink-0">
+                <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-col sm:overflow-visible sm:pb-0">
+                  {resolvedGalleryImages.map((image, index) => {
+                    const isActive = photoIndex === index
+                    return (
+                      <button
+                        type="button"
+                        key={`${image}-thumb-${index}`}
+                        onClick={() => {
+                          setPhotoIndex(index)
+                        }}
+                        className={`w-[72px] flex-shrink-0 overflow-hidden rounded-xl border bg-white transition-all sm:w-full ${
+                          isActive ? 'border-black shadow-sm' : 'border-line opacity-80'
+                        }`}
+                        aria-label={`Ver imagen ${index + 1} de ${productFamily.name}`}
+                        aria-pressed={isActive}
+                      >
+                        <Image
+                          src={image}
+                          width={240}
+                          height={300}
+                          alt={`${productFamily.name} - Miniatura ${index + 1}`}
+                          sizes="72px"
+                          quality={85}
+                          unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                          className="w-full aspect-[4/5] object-contain bg-white"
+                        />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="order-1 min-w-0 flex-1 sm:order-2">
+                <button
+                  type="button"
+                  className="block w-full overflow-hidden rounded-2xl bg-white"
+                  onClick={() => setOpenPopupImg(true)}
+                  aria-label={`Abrir imagen principal de ${productFamily.name}`}
                 >
                   <Image
-                    src={image}
+                    src={currentGalleryImage}
                     width={1200}
                     height={1400}
-                    alt={`${productFamily.name} - Vista ${index + 1}`}
-                    sizes="(min-width: 1024px) 560px, 90vw"
+                    alt={`${productFamily.name} - Vista ${photoIndex + 1}`}
+                    sizes="(min-width: 1024px) 500px, (min-width: 640px) calc(100vw - 180px), 100vw"
                     quality={90}
-                    unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                    unoptimized={currentGalleryImage.startsWith('/uploads/') || currentGalleryImage.startsWith('/images/')}
                     className="w-full aspect-[4/5] object-contain bg-white"
                   />
-                </SwiperSlide>
-              ))}
-            </Swiper>
-
-            <Swiper
-              onSwiper={setThumbsSwiper}
-              spaceBetween={12}
-              slidesPerView={4}
-              freeMode
-              watchSlidesProgress
-              modules={[Navigation, Thumbs]}
-              className="mySwiper mt-3"
-            >
-              {resolvedGalleryImages.map((image, index) => (
-                <SwiperSlide
-                  key={`${image}-thumb-${index}`}
-                  onClick={() => {
-                    mainSwiperRef.current?.slideTo(index, 0)
-                    setPhotoIndex(index)
-                  }}
-                >
-                  <Image
-                    src={image}
-                    width={240}
-                    height={300}
-                    alt={`${productFamily.name} - Miniatura ${index + 1}`}
-                    sizes="80px"
-                    quality={85}
-                    unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
-                    className="w-full aspect-[4/5] object-contain bg-white rounded-xl"
-                  />
-                </SwiperSlide>
-              ))}
-            </Swiper>
+                </button>
+              </div>
+            </div>
 
             <div
               className={`popup-img ${openPopupImg ? 'open' : ''}`}

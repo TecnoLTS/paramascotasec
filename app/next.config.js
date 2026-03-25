@@ -1,8 +1,16 @@
 /** @type {import('next').NextConfig} */
 const imageOptimizationDisabled = process.env.NEXT_IMAGE_UNOPTIMIZED === '1'
+const allowedDevOrigins = [
+    'paramascotasec.com',
+    'www.paramascotasec.com',
+    '192.168.100.229',
+    'localhost',
+    '127.0.0.1',
+]
 
 const nextConfig = {
     reactStrictMode: true,
+    allowedDevOrigins,
     images: {
         minimumCacheTTL: 0,
         unoptimized: imageOptimizationDisabled,

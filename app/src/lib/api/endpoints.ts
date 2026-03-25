@@ -4,6 +4,8 @@ export const apiEndpoints = {
   health: '/api/health',
   auth: {
     login: '/api/auth/login',
+    logout: '/api/auth/logout',
+    session: '/api/auth/session',
     register: '/api/auth/register',
     requestOtp: '/api/auth/request-otp',
     verifyOtp: '/api/auth/verify-otp',

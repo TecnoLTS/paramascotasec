@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from '@/components/Common/AppImage'
 
 import type { Order } from '../types'
+import { isDynamicOrderItemImage, normalizeOrderItemImage } from '../customerDataUtils'
 
 type CustomerOrdersPanelProps = {
     activeOrders: string | undefined;
@@ -79,13 +80,19 @@ export default React.memo(function CustomerOrdersPanel({
                                         <div key={`${order.id}-${idx}`} className="prd_item flex flex-wrap items-center justify-between gap-3 py-5 border-b border-line last:border-0">
                                             <Link href="/product/default" className="flex items-center gap-5">
                                                 <div className="bg-img flex-shrink-0 md:w-[100px] w-20 aspect-square rounded-lg overflow-hidden">
+                                                    {(() => {
+                                                        const imageSrc = normalizeOrderItemImage(item.product_image)
+                                                        return (
                                                     <Image
-                                                        src={item.product_image || '/images/product/1000x1000.png'}
+                                                        src={imageSrc}
                                                         width={1000}
                                                         height={1000}
                                                         alt={item.product_name}
                                                         className="w-full h-full object-cover"
+                                                        unoptimized={isDynamicOrderItemImage(item.product_image)}
                                                     />
+                                                        )
+                                                    })()}
                                                 </div>
                                                 <div>
                                                     <div className="prd_name text-title">{item.product_name}</div>

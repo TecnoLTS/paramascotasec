@@ -2,13 +2,21 @@ import { fetchJson } from '@/lib/apiClient'
 import { apiEndpoints } from './endpoints'
 
 export interface LoginResponse {
-    token: string
-    user: {
+    token?: string
+    mfaRequired?: boolean
+    mfaMethod?: 'email_otp' | 'recovery_code'
+    user?: {
         id: string
         email: string
         name: string
         role?: 'customer' | 'admin'
     }
+    message?: string
+}
+
+export interface OtpResponse {
+    sent?: boolean
+    delivery?: 'email'
 }
 
 export const login = (body: any) =>
@@ -26,14 +34,14 @@ export const register = (body: any) =>
     })
 
 export const requestOtp = (body: { email: string }) =>
-    fetchJson<any>(apiEndpoints.auth.requestOtp, {
+    fetchJson<OtpResponse>(apiEndpoints.auth.requestOtp, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     })
 
 export const verifyOtp = (body: { email: string; code: string }) =>
-    fetchJson<any>(apiEndpoints.auth.verifyOtp, {
+    fetchJson<{ verified?: boolean }>(apiEndpoints.auth.verifyOtp, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

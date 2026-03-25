@@ -2,6 +2,8 @@
 
 import React from 'react'
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
+import { requestApi } from '@/lib/apiClient'
+import { clearStoredSession, setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
 
 import type { AdminReportSection } from '../types'
 
@@ -28,42 +30,38 @@ export const useAuthBootstrap = ({
   setActiveTab,
 }: UseAuthBootstrapParams) => {
   React.useEffect(() => {
-    const token = localStorage.getItem('authToken')
-    const userData = localStorage.getItem('user')
+    let cancelled = false
 
-    if (!token) {
-      setAuthBootstrapping(false)
-      router.replace('/login')
-      return
-    }
+    requestApi<{ user?: AccountUser }>('/api/auth/session')
+      .then((res) => {
+        if (cancelled) return
+        const sessionUser = res.body.user
+        if (!sessionUser?.id || !sessionUser?.name || !sessionUser?.email) {
+          throw new Error('Sesión inválida')
+        }
+        setCookieSessionMarker()
+        setStoredSessionUser(sessionUser)
+        setUser(sessionUser)
+        if (sessionUser.role === 'admin') {
+          setAdminReportSection('general')
+          setActiveTab('reports')
+        } else {
+          setActiveTab('dashboard')
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        clearStoredSession()
+        router.replace('/login')
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthBootstrapping(false)
+        }
+      })
 
-    if (!userData) {
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('user')
-      setAuthBootstrapping(false)
-      router.replace('/login')
-      return
-    }
-
-    try {
-      const parsedUser = JSON.parse(userData)
-      if (!parsedUser?.id || !parsedUser?.name || !parsedUser?.email) {
-        throw new Error('Usuario local inválido')
-      }
-
-      setUser(parsedUser)
-      if (parsedUser.role === 'admin') {
-        setAdminReportSection('general')
-        setActiveTab('reports')
-      } else {
-        setActiveTab('dashboard')
-      }
-    } catch {
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('user')
-      router.replace('/login')
-    } finally {
-      setAuthBootstrapping(false)
+    return () => {
+      cancelled = true
     }
   }, [router, setActiveTab, setAdminReportSection, setAuthBootstrapping, setUser])
 }

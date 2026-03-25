@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
+import { attachInternalProxyToken } from '@/lib/internalProxy'
 import { mapProductsToDto } from '@/lib/productMapper'
 import { groupCatalogProducts } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
@@ -16,21 +17,15 @@ export async function GET(req: Request) {
     const rawLimit = Number(searchParams.get('limit') ?? 0)
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 0
 
-    const token = process.env.BACKEND_SERVICE_TOKEN
-    if (!token) {
-      return NextResponse.json({ error: 'Service token missing' }, { status: 500 })
-    }
-
     const host = resolveTenantHost(req.headers.get('x-forwarded-host') || req.headers.get('host'))
     const proto = resolveRequestProto(req.headers.get('x-forwarded-proto'), req.url)
-    const outboundHeaders = new Headers({
-      Authorization: `Bearer ${token}`,
-    })
+    const outboundHeaders = new Headers()
     if (host) {
       outboundHeaders.set('host', host)
       outboundHeaders.set('x-forwarded-host', host)
     }
     outboundHeaders.set('x-forwarded-proto', proto)
+    attachInternalProxyToken(outboundHeaders)
 
     const res = await fetch(resolveBackendUrl(), {
       cache: 'no-store',

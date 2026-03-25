@@ -41,8 +41,16 @@ docker network create edge || true
 - `COMPOSE_PROFILES`: `development` o `production` (debe coincidir con `APP_ENV`).
 - `NEXT_PUBLIC_BASE_URL`: URL publica del frontend.
 - `NEXT_PUBLIC_BACKEND_URL`: URL publica del backend (`.../api`).
+- `NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME`: nombre de la cookie CSRF legible por navegador para operaciones autenticadas.
 - `BACKEND_URL_INTERNAL`: URL interna Docker del backend (recomendado `http://paramascotasec-backend-web/api`).
-- `BACKEND_SERVICE_TOKEN`: token SSR generado desde backend.
+- `INTERNAL_PROXY_TOKEN`: secreto compartido para validar el proxy interno Next.js -> backend.
+- `PANEL_IP_MODE`: `off`, `private` o `custom`.
+  - `private` permite loopback + redes privadas RFC1918 sin tener que conocer IPs.
+- `PANEL_IP_ALLOWLIST`: IP/CIDR opcionales.
+  - en `private` se suman como excepciones
+  - en `custom` se vuelven la lista efectiva
+- `APP_BIND_IP`: en produccion conviene dejarlo en `127.0.0.1` para no exponer Next directo fuera del gateway.
+- `APP_DEV_BIND_IP`: en desarrollo puedes dejar `0.0.0.0` si necesitas entrar desde la LAN.
 
 Para desarrollo local persistente puedes usar `.env.development`.
 
@@ -113,6 +121,13 @@ docker compose --env-file .env --profile production down --remove-orphans
 
 ## Nota de seguridad
 - No guardar tokens, contrasenas ni llaves en este archivo.
+- Si no conoces tus IPs, usa `PANEL_IP_MODE=private`.
+- Para obtener candidatas de IP/CIDR antes de activar reglas `custom`:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+./scripts/recommend-allowlist.sh
+```
 
 
 
@@ -145,4 +160,3 @@ cd /home/admincenter/contenedores/gateway
 ./scripts/setup-ssl-local.sh
 ./scripts/deploy-gateway-production.sh
 ./scripts/renew-letsencrypt.sh
-

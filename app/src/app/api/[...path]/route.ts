@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
+import { attachInternalProxyToken } from '@/lib/internalProxy'
 
 const getBackendBase = () => {
   return (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api').replace(/\/$/, '')
@@ -15,6 +16,7 @@ const forward = async (req: NextRequest) => {
   const targetUrl = buildTargetUrl(req)
   const headers = new Headers(req.headers)
   headers.delete('content-length')
+  headers.delete('x-internal-proxy-token')
   const tenantHost = resolveTenantHost(req.headers.get('x-forwarded-host') || req.headers.get('host'))
   const forwardedProto = resolveRequestProto(req.headers.get('x-forwarded-proto'), req.url)
   if (tenantHost) {
@@ -22,26 +24,7 @@ const forward = async (req: NextRequest) => {
     headers.set('x-forwarded-host', tenantHost)
   }
   headers.set('x-forwarded-proto', forwardedProto)
-
-  const pathname = req.nextUrl.pathname.replace(/^\/api/, '')
-  const hasAuth = headers.has('authorization')
-  const serviceToken = process.env.BACKEND_SERVICE_TOKEN
-  if (!hasAuth && serviceToken) {
-    if (req.method === 'GET') {
-      if (
-        pathname === '/products' ||
-        pathname.startsWith('/products/') ||
-        pathname === '/settings/shipping' ||
-        pathname === '/settings/store-status' ||
-        pathname === '/health'
-      ) {
-        headers.set('Authorization', `Bearer ${serviceToken}`)
-      }
-    }
-    if (req.method === 'POST' && pathname === '/orders/quote') {
-      headers.set('Authorization', `Bearer ${serviceToken}`)
-    }
-  }
+  attachInternalProxyToken(headers)
 
   const init: RequestInit = {
     method: req.method,

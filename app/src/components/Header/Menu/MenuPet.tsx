@@ -26,7 +26,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const searchParams = useSearchParams()
     const { openLoginPopup, handleLoginPopup } = useLoginPopup()
     const { openShopDepartmentPopup, handleShopDepartmentPopup } = useShopDepartmentPopup()
-    const { openMenuMobile, handleMenuMobile } = useMenuMobile()
+    const { openMenuMobile, handleMenuMobile, closeMenuMobile } = useMenuMobile()
     const [openSubNavMobile, setOpenSubNavMobile] = useState<number | null>(null)
     const { openModalCart } = useModalCartContext()
     const { cartState } = useCart()
@@ -36,7 +36,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const router = useRouter()
     const [hasMounted, setHasMounted] = useState(false)
     const searchContainerRef = useRef<HTMLDivElement>(null)
-    const minAutocompleteQueryLength = 2
+    const minAutocompleteQueryLength = 1
+    const searchParamsKey = searchParams.toString()
 
     const handleSearch = (value: string) => {
         const trimmedValue = sanitizeProductSearchQuery(value)
@@ -111,7 +112,9 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
         if (pathname.startsWith('/shop/')) {
             setSearchKeyword(searchParams.get('query') ?? '')
         }
-    }, [pathname, searchParams])
+        closeMenuMobile()
+        setOpenSubNavMobile(null)
+    }, [pathname, searchParamsKey, closeMenuMobile])
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -133,12 +136,16 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
     const handleCategoryClick = (category: string, gender?: string) => {
         const options = gender ? { gender } : undefined
+        closeMenuMobile()
+        setOpenSubNavMobile(null)
         router.push(getCategoryUrl(category, options));
     };
 
     const handleSuggestionSelect = (product: ProductType) => {
         setSearchKeyword(product.name)
         setIsSearchFocused(false)
+        closeMenuMobile()
+        setOpenSubNavMobile(null)
         router.push(`/product/default?id=${product.id}`)
     }
 
@@ -170,6 +177,52 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
     const companyLinks: MegaNavLink[] = site.menu.companyLinks
 
+    const mainMenuItems = [
+        {
+            key: 'home',
+            label: 'Inicio',
+            href: '/',
+            icon: Icon.House,
+            isActive: hasMounted && pathname === '/',
+        },
+        {
+            key: 'shop',
+            label: 'Tienda',
+            href: '/shop/breadcrumb1',
+            icon: Icon.Storefront,
+            isActive: hasMounted && pathname === '/shop/breadcrumb1',
+        },
+        {
+            key: 'services',
+            label: 'Servicios',
+            href: '#!',
+            icon: Icon.Wrench,
+            isActive: false,
+        },
+        {
+            key: 'about',
+            label: 'Conócenos',
+            href: '/pages/about',
+            icon: Icon.Star,
+            isActive: hasMounted && pathname === '/pages/about',
+        },
+        {
+            key: 'contact',
+            label: 'Contacto',
+            href: '/pages/contact',
+            icon: Icon.EnvelopeSimple,
+            isActive: hasMounted && pathname === '/pages/contact',
+        },
+    ] as const
+
+    const mobileMenuDescriptions: Record<(typeof mainMenuItems)[number]['key'], string> = {
+        home: 'Novedades y destacados',
+        shop: 'Categorías y mascotas',
+        services: 'Envíos, ayuda y soporte',
+        about: 'Historia y esencia de la marca',
+        contact: 'Canales de atención directa',
+    }
+
     const renderMegaMenu = (
         sections: MegaMenuSection[],
         banner: { title: string; subtitle: string; image: string }
@@ -193,12 +246,16 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                                     {link.labelOverride ?? getCategoryLabel(link.id)}
                                                 </div>
                                             ) : (
-                                                <Link
-                                                    href={link.href}
-                                                    className="link text-secondary duration-300 hover:text-black"
-                                                >
-                                                    {link.label}
-                                                </Link>
+                        <Link
+                            href={link.href}
+                            className="link text-secondary duration-300 hover:text-black"
+                            onClick={() => {
+                                closeMenuMobile()
+                                setOpenSubNavMobile(null)
+                            }}
+                        >
+                            {link.label}
+                        </Link>
                                             )}
                                         </li>
                                     ))}
@@ -237,23 +294,27 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const renderMobileLinkItems = (links: MegaMenuLink[]) => (
         <>
             {links.map((link) => (
-                <li
-                    key={isCategoryLink(link) ? `${link.id}-${link.gender ?? 'none'}` : link.label}
-                    className="pb-2"
-                >
+                <li key={isCategoryLink(link) ? `${link.id}-${link.gender ?? 'none'}` : link.label}>
                     {isCategoryLink(link) ? (
-                        <div
+                        <button
+                            type="button"
                             onClick={() => handleCategoryClick(link.id, link.gender)}
-                            className="nav-item-mobile text-secondary duration-300 cursor-pointer"
+                            className="nav-item-mobile mobile-subnav-link text-secondary duration-300 cursor-pointer"
                         >
-                            {link.labelOverride ?? getCategoryLabel(link.id)}
-                        </div>
+                            <span>{link.labelOverride ?? getCategoryLabel(link.id)}</span>
+                            <Icon.ArrowRight size={16} />
+                        </button>
                     ) : (
                         <Link
                             href={link.href}
-                            className="nav-item-mobile text-secondary duration-300"
+                            className="nav-item-mobile mobile-subnav-link text-secondary duration-300"
+                            onClick={() => {
+                                closeMenuMobile()
+                                setOpenSubNavMobile(null)
+                            }}
                         >
-                            {link.label}
+                            <span>{link.label}</span>
+                            <Icon.ArrowRight size={16} />
                         </Link>
                     )}
                 </li>
@@ -270,6 +331,11 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     }
 
     const departmentLinks = site.menu.departmentLinks ?? []
+    const HomeMenuIcon = mainMenuItems[0].icon
+    const ShopMenuIcon = mainMenuItems[1].icon
+    const ServicesMenuIcon = mainMenuItems[2].icon
+    const AboutMenuIcon = mainMenuItems[3].icon
+    const ContactMenuIcon = mainMenuItems[4].icon
     const normalizedSearchKeyword = sanitizeProductSearchQuery(searchKeyword)
     const shouldShowSearchPanel =
         isSearchFocused &&
@@ -481,6 +547,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                             <Link
                                                 href={link.href}
                                                 className={`caption1 py-4 px-5 whitespace-nowrap block ${index < departmentLinks.length - 1 ? 'border-b border-line' : ''}`}
+                                                onClick={() => {
+                                                    closeMenuMobile()
+                                                    setOpenSubNavMobile(null)
+                                                }}
                                             >
                                                 {link.label}
                                             </Link>
@@ -492,15 +562,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                 <ul className='flex items-center gap-8 h-full'>
                                     <li className='h-full'>
                                         <Link
-                                            href="/"
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/' ? 'active' : ''}`}
+                                            href={mainMenuItems[0].href}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${mainMenuItems[0].isActive ? 'active' : ''}`}
                                         >
-                                            Inicio
+                                            {mainMenuItems[0].label}
                                         </Link>
                                     </li>
                                     <li className='h-full'>
-                                        <Link href="/shop/breadcrumb1" className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${hasMounted && pathname === '/shop/breadcrumb1' ? 'active' : ''}`}>
-                                            Tienda
+                                        <Link href={mainMenuItems[1].href} className={`text-button-uppercase duration-300 h-full flex items-center justify-center gap-1 ${mainMenuItems[1].isActive ? 'active' : ''}`}>
+                                            {mainMenuItems[1].label}
                                         </Link>
                                         {renderMegaMenu(
                                             categoriesSections,
@@ -509,7 +579,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                     </li>
                                     <li className='h-full'>
                                         <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
-                                            Servicios
+                                            {mainMenuItems[2].label}
                                         </Link>
                                         {renderMegaMenu(
                                             [{ title: 'Servicios', links: serviceLinks }],
@@ -519,19 +589,19 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
                                     <li className='h-full '>
                                         <Link
-                                            href="/pages/about"
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${hasMounted && pathname === '/pages/about' ? 'active' : ''}`}
+                                            href={mainMenuItems[3].href}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${mainMenuItems[3].isActive ? 'active' : ''}`}
                                         >
-                                            Conócenos
+                                            {mainMenuItems[3].label}
                                         </Link>
                                     </li>
 
                                     <li className='h-full'>
                                         <Link
-                                            href="/pages/contact"
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${hasMounted && pathname === '/pages/contact' ? 'active' : ''}`}
+                                            href={mainMenuItems[4].href}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${mainMenuItems[4].isActive ? 'active' : ''}`}
                                         >
-                                            Contacto
+                                            {mainMenuItems[4].label}
                                         </Link>
                                     </li>
 
@@ -552,86 +622,84 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                     className="menu-container bg-white h-full"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="container h-full">
+                    <div className="menu-mobile-shell h-full">
                         <div className="menu-main h-full overflow-hidden relative">
-                            <div className="heading py-2 relative flex items-center justify-center">
-                                <div
-                                    className="close-menu-mobile-btn absolute left-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white flex items-center justify-center"
-                                    onClick={handleMenuMobile}
-                                >
-                                    <Icon.X size={14} />
+                            <div className="heading menu-mobile-header">
+                                <div className="menu-mobile-header__copy">
+                                    <div className="menu-mobile-title">Menú</div>
                                 </div>
-                                <Link href={'/'} className='logo text-3xl font-semibold text-center'>
-                                    <div className="relative mx-auto h-14 w-[160px]">
-                                        <Image
-                                            src={site.logo.mobileSrc ?? site.logo.src}
-                                            alt={`${site.name} logo`}
-                                            fill
-                                            className="object-contain"
-                                            priority
-                                            sizes="160px"
-                                        />
-                                    </div>
-                                </Link>
-                            </div>
-                            <div className="form-search relative mt-2">
-                                <Icon.MagnifyingGlass
-                                    size={20}
-                                    className='absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer'
-                                    onClick={() => handleSearch(searchKeyword)}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder='Buscar por marca, producto, categoría o SKU'
-                                    className=' h-12 rounded-lg border border-line text-sm w-full pl-10 pr-4'
-                                    value={searchKeyword}
-                                    onChange={(e) => setSearchKeyword(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchKeyword)}
-                                />
+                                <button
+                                    type="button"
+                                    className="close-menu-mobile-btn"
+                                    onClick={handleMenuMobile}
+                                    aria-label="Cerrar menú"
+                                >
+                                    <Icon.X size={16} />
+                                </button>
                             </div>
                             <div className="list-nav mt-6">
+                                <div className="menu-mobile-section-title">Menú principal</div>
                                 <ul>
 
-                                    {/* INICIO */}
-                                    <li className="mt-5">
+                                    <li>
                                         <Link
-                                            href="/"
-                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/' ? 'active' : ''}`}
+                                            href={mainMenuItems[0].href}
+                                            className={`menu-primary-link ${mainMenuItems[0].isActive ? 'active' : ''}`}
+                                            onClick={() => {
+                                                closeMenuMobile()
+                                                setOpenSubNavMobile(null)
+                                            }}
                                         >
-                                            <span className="flex items-center gap-3">
-                                                <Icon.House size={20} />
-                                                Inicio
+                                            <span className="menu-primary-link__icon">
+                                                <HomeMenuIcon size={19} />
+                                            </span>
+                                            <span className="menu-primary-link__body">
+                                                <span className="menu-primary-link__label">{mainMenuItems[0].label}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.home}</span>
+                                            </span>
+                                            <span className="menu-primary-link__chevron">
+                                                <Icon.ArrowUpRight size={18} />
                                             </span>
                                         </Link>
                                     </li>
 
-                                    {/* CATEGORÍAS */}
-                                    <li
-                                        className={`${openSubNavMobile === 1 ? 'open' : ''} mt-5`}
-                                        onClick={() => handleOpenSubNavMobile(1)}
-                                    >
-                                        <a href="#!" className="text-xl font-semibold flex items-center justify-between">
-                                            <span className="flex items-center gap-3">
-                                                <Icon.Folder size={20} />
-                                                Categorías
+                                    <li className={`${openSubNavMobile === 1 ? 'open' : ''}`}>
+                                        <button
+                                            type="button"
+                                            className="menu-primary-link menu-primary-link--button"
+                                            onClick={() => handleOpenSubNavMobile(1)}
+                                        >
+                                            <span className="menu-primary-link__icon">
+                                                <ShopMenuIcon size={19} />
                                             </span>
-                                            <Icon.CaretRight size={20} />
-                                        </a>
+                                            <span className="menu-primary-link__body">
+                                                <span className="menu-primary-link__label">{mainMenuItems[1].label}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.shop}</span>
+                                            </span>
+                                            <span className="menu-primary-link__chevron">
+                                                <Icon.CaretRight size={18} />
+                                            </span>
+                                        </button>
 
-                                        <div className="sub-nav-mobile absolute inset-0 bg-white z-10">
-                                            <div
-                                                className="back-btn flex items-center gap-3"
-                                                onClick={() => handleOpenSubNavMobile(1)}
-                                            >
-                                                <Icon.CaretLeft size={20} />
-                                                Atrás
+                                        <div className="sub-nav-mobile">
+                                            <div className="sub-nav-mobile__header">
+                                                <button
+                                                    type="button"
+                                                    className="back-btn"
+                                                    onClick={() => handleOpenSubNavMobile(1)}
+                                                >
+                                                    <Icon.CaretLeft size={18} />
+                                                    <span>Atrás</span>
+                                                </button>
+                                                <div className="sub-nav-mobile__title">Tienda</div>
+                                                <div className="sub-nav-mobile__subtitle">Explora por categoría pública o por mascota.</div>
                                             </div>
 
-                                            <div className="list-nav-item w-full pt-3 pb-6 space-y-6">
+                                            <div className="list-nav-item">
                                                 {categoriesSections.map((section) => (
-                                                    <div className="nav-item" key={section.title}>
-                                                        <div className="text-button-uppercase pb-1">{section.title}</div>
-                                                        <ul>
+                                                    <div className="mobile-nav-section-card" key={section.title}>
+                                                        <div className="mobile-nav-section-card__title">{section.title}</div>
+                                                        <ul className="mobile-nav-section-card__list">
                                                             {renderMobileLinkItems(section.links ?? [])}
                                                         </ul>
                                                     </div>
@@ -640,70 +708,104 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                         </div>
                                     </li>
 
-                                    {/* SERVICIOS */}
-                                    <li
-                                        className={`${openSubNavMobile === 2 ? 'open' : ''} mt-5`}
-                                        onClick={() => handleOpenSubNavMobile(2)}
-                                    >
-                                        <a href="#!" className="text-xl font-semibold flex items-center justify-between">
-                                            <span className="flex items-center gap-3">
-                                                <Icon.Wrench size={20} />
-                                                Servicios
+                                    <li className={`${openSubNavMobile === 2 ? 'open' : ''}`}>
+                                        <button
+                                            type="button"
+                                            className="menu-primary-link menu-primary-link--button"
+                                            onClick={() => handleOpenSubNavMobile(2)}
+                                        >
+                                            <span className="menu-primary-link__icon">
+                                                <ServicesMenuIcon size={19} />
                                             </span>
-                                            <Icon.CaretRight size={20} />
-                                        </a>
+                                            <span className="menu-primary-link__body">
+                                                <span className="menu-primary-link__label">{mainMenuItems[2].label}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.services}</span>
+                                            </span>
+                                            <span className="menu-primary-link__chevron">
+                                                <Icon.CaretRight size={18} />
+                                            </span>
+                                        </button>
 
-                                        <div className="sub-nav-mobile absolute inset-0 bg-white z-10">
-                                            <div
-                                                className="back-btn flex items-center gap-3"
-                                                onClick={() => handleOpenSubNavMobile(2)}
-                                            >
-                                                <Icon.CaretLeft size={20} />
-                                                Atrás
+                                        <div className="sub-nav-mobile">
+                                            <div className="sub-nav-mobile__header">
+                                                <button
+                                                    type="button"
+                                                    className="back-btn"
+                                                    onClick={() => handleOpenSubNavMobile(2)}
+                                                >
+                                                    <Icon.CaretLeft size={18} />
+                                                    <span>Atrás</span>
+                                                </button>
+                                                <div className="sub-nav-mobile__title">Servicios</div>
+                                                <div className="sub-nav-mobile__subtitle">Información útil para compras, entregas, cambios y soporte.</div>
                                             </div>
 
-                                            <div className="list-nav-item w-full pt-3 pb-6">
-                                                <ul className="space-y-4">
-                                                    {serviceLinks.map((link) => (
-                                                        <li key={link.label}>
-                                                            <Link
-                                                                href={link.href}
-                                                                className="nav-item-mobile flex items-center gap-3"
-                                                            >
-                                                                <Icon.ArrowRight size={16} />
-                                                                {link.label}
-                                                            </Link>
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                            <div className="list-nav-item">
+                                                <div className="mobile-nav-section-card mobile-nav-section-card--services">
+                                                    <div className="mobile-nav-section-card__title">Atención y soporte</div>
+                                                    <ul className="mobile-nav-section-card__list">
+                                                        {serviceLinks.map((link) => (
+                                                            <li key={link.label}>
+                                                                <Link
+                                                                    href={link.href}
+                                                                    className="nav-item-mobile mobile-subnav-link"
+                                                                    onClick={() => {
+                                                                        closeMenuMobile()
+                                                                        setOpenSubNavMobile(null)
+                                                                    }}
+                                                                >
+                                                                    <span>{link.label}</span>
+                                                                    <Icon.ArrowRight size={16} />
+                                                                </Link>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
                                             </div>
 
                                         </div>
                                     </li>
 
-                                    {/* --- CAMBIO AQUÍ: CONÓCENOS MÓVIL --- */}
-                                    <li className="mt-5">
+                                    <li>
                                         <Link
-                                            href="/pages/about"
-                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/pages/about' ? 'active' : ''}`}
+                                            href={mainMenuItems[3].href}
+                                            className={`menu-primary-link ${mainMenuItems[3].isActive ? 'active' : ''}`}
+                                            onClick={() => {
+                                                closeMenuMobile()
+                                                setOpenSubNavMobile(null)
+                                            }}
                                         >
-                                            <span className="flex items-center gap-3">
-                                                <Icon.Star size={20} />
-                                                Conócenos
+                                            <span className="menu-primary-link__icon">
+                                                <AboutMenuIcon size={19} />
+                                            </span>
+                                            <span className="menu-primary-link__body">
+                                                <span className="menu-primary-link__label">{mainMenuItems[3].label}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.about}</span>
+                                            </span>
+                                            <span className="menu-primary-link__chevron">
+                                                <Icon.ArrowUpRight size={18} />
                                             </span>
                                         </Link>
                                     </li>
-                                    {/* ------------------------------------ */}
 
-                                    {/* CONTACTO */}
-                                    <li className="mt-5">
+                                    <li>
                                         <Link
-                                            href="/pages/contact"
-                                            className={`text-xl font-semibold flex items-center justify-between ${hasMounted && pathname === '/pages/contact' ? 'active' : ''}`}
+                                            href={mainMenuItems[4].href}
+                                            className={`menu-primary-link ${mainMenuItems[4].isActive ? 'active' : ''}`}
+                                            onClick={() => {
+                                                closeMenuMobile()
+                                                setOpenSubNavMobile(null)
+                                            }}
                                         >
-                                            <span className="flex items-center gap-3">
-                                                <Icon.EnvelopeSimple size={20} />
-                                                Contacto
+                                            <span className="menu-primary-link__icon">
+                                                <ContactMenuIcon size={19} />
+                                            </span>
+                                            <span className="menu-primary-link__body">
+                                                <span className="menu-primary-link__label">{mainMenuItems[4].label}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.contact}</span>
+                                            </span>
+                                            <span className="menu-primary-link__chevron">
+                                                <Icon.ArrowUpRight size={18} />
                                             </span>
                                         </Link>
                                     </li>

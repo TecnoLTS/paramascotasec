@@ -145,6 +145,8 @@ export const enrichAdminUsers = (
       ?? resolvedAddress?.company
       ?? '',
     ).trim()
+    const emailRaw = String(item.email ?? '').trim()
+    const resolvedEmail = emailRaw.toLowerCase().endsWith('@local-pos.invalid') ? '' : emailRaw
     const resolvedAddressText = resolvedAddress ? formatAddress(resolvedAddress) : '-'
     return {
       ...item,
@@ -152,6 +154,7 @@ export const enrichAdminUsers = (
       resolvedAddressText,
       resolvedPhone,
       resolvedCompany,
+      resolvedEmail,
       hasAddress: Boolean(resolvedAddress && resolvedAddressText !== '-'),
       hasPhone: Boolean(resolvedPhone),
     }

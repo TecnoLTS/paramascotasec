@@ -1,4 +1,23 @@
 import { getConfiguredTenantProto, resolveTenantHost } from '@/lib/requestHost'
+import { attachInternalProxyToken } from '@/lib/internalProxy'
+import { clearStoredSession } from '@/lib/authSession'
+
+const getCsrfCookieName = () => {
+  const fromEnv = process.env.NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME
+  return fromEnv?.trim() || 'pm_csrf'
+}
+
+const readCookieValue = (cookieHeader: string | null | undefined, cookieName: string) => {
+  if (!cookieHeader) return null
+  const parts = cookieHeader.split(';')
+  for (const part of parts) {
+    const [rawName, ...rawValue] = part.split('=')
+    if (rawName?.trim() !== cookieName) continue
+    const value = rawValue.join('=').trim()
+    return value ? decodeURIComponent(value) : null
+  }
+  return null
+}
 
 const buildBaseUrl = () => {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
@@ -37,6 +56,23 @@ const getServerForwardedProto = async () => {
   }
 }
 
+const getServerCookieHeader = async () => {
+  if (typeof window !== 'undefined') return null
+  try {
+    const mod = await import('next/headers')
+    const headerList = await mod.headers()
+    const utils = await import('@/lib/headerUtils')
+    return utils.getHeaderValue(headerList, 'cookie')
+  } catch {
+    return null
+  }
+}
+
+const getServerCsrfToken = async () => {
+  const cookieHeader = await getServerCookieHeader()
+  return readCookieValue(cookieHeader, getCsrfCookieName())
+}
+
 const resolveForwardedHost = (forwardedHost?: string | null) => {
   return resolveTenantHost(forwardedHost)
 }
@@ -58,15 +94,24 @@ const resolveUrl = (path: string) => {
 const authFreePaths = new Set([
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/request-otp',
+  '/api/auth/verify-otp',
   '/api/auth/verify',
+  '/api/auth/session',
 ])
 
-const isPublicEcomPath = (pathname: string, method?: string) => {
-  if (pathname === '/api/products' || pathname.startsWith('/api/products/')) return true
-  if (pathname === '/api/settings/shipping') return true
-  if (pathname === '/api/settings/store-status') return true
-  if (pathname === '/api/health') return true
-  if (pathname === '/api/orders/quote') return true
+const isPublicApiPath = (pathname: string, method?: string) => {
+  const normalizedMethod = (method || 'GET').toUpperCase()
+
+  if (normalizedMethod === 'GET' || normalizedMethod === 'HEAD') {
+    if (pathname === '/api/products' || pathname.startsWith('/api/products/')) return true
+    if (pathname === '/api/settings/shipping') return true
+    if (pathname === '/api/settings/store-status') return true
+    if (pathname === '/api/health') return true
+  }
+
+  if (normalizedMethod === 'POST' && pathname === '/api/orders/quote') return true
+
   return false
 }
 
@@ -89,21 +134,36 @@ const normalizeHeaders = (init?: RequestInit) => {
   return headers
 }
 
-const getStoredToken = () => {
-  if (typeof window === 'undefined') return null
-  try {
-    return localStorage.getItem('authToken')
-  } catch {
-    return null
-  }
+const methodRequiresCsrf = (method?: string) => {
+  const normalizedMethod = (method || 'GET').toUpperCase()
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)
 }
 
-const clearStoredToken = () => {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('user')
-  } catch {}
+const getBrowserCsrfToken = () => {
+  if (typeof document === 'undefined') return null
+  return readCookieValue(document.cookie, getCsrfCookieName())
+}
+
+let browserCsrfRefreshPromise: Promise<string | null> | null = null
+
+const refreshBrowserCsrfToken = async () => {
+  if (typeof window === 'undefined') return null
+  if (browserCsrfRefreshPromise) {
+    return browserCsrfRefreshPromise
+  }
+
+  browserCsrfRefreshPromise = fetch('/api/auth/session', {
+    method: 'GET',
+    credentials: 'include',
+    cache: 'no-store',
+  })
+    .catch(() => null)
+    .then(() => getBrowserCsrfToken())
+    .finally(() => {
+      browserCsrfRefreshPromise = null
+    })
+
+  return browserCsrfRefreshPromise
 }
 
 const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> => {
@@ -116,6 +176,9 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
   if (typeof window === 'undefined') {
     const forwardedHost = await getServerForwardedHost()
     const forwardedProto = await getServerForwardedProto()
+    const cookieHeader = await getServerCookieHeader()
+    const csrfToken = methodRequiresCsrf(init?.method) ? await getServerCsrfToken() : null
+    attachInternalProxyToken(headers)
     if (authFreePaths.has(pathname)) {
       const tenantHost = resolveForwardedHost(forwardedHost)
       const tenantProto = forwardedProto || getConfiguredTenantProto()
@@ -126,9 +189,14 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
       if (tenantProto) {
         headers.set('x-forwarded-proto', tenantProto)
       }
+      if (cookieHeader) {
+        headers.set('cookie', cookieHeader)
+      }
+      if (csrfToken && !headers.has('x-csrf-token')) {
+        headers.set('x-csrf-token', csrfToken)
+      }
       return { ...init, headers }
     }
-    const serviceToken = process.env.BACKEND_SERVICE_TOKEN
     const tenantHost = resolveForwardedHost(forwardedHost)
     const tenantProto = forwardedProto || getConfiguredTenantProto()
     if (tenantHost) {
@@ -138,14 +206,14 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
     if (tenantProto) {
       headers.set('x-forwarded-proto', tenantProto)
     }
-    if (isPublicEcomPath(pathname, init?.method)) {
-      if (serviceToken) {
-        headers.set('Authorization', `Bearer ${serviceToken}`)
-      }
-      return { ...init, headers }
+    if (cookieHeader) {
+      headers.set('cookie', cookieHeader)
     }
-    if (serviceToken) {
-      headers.set('Authorization', `Bearer ${serviceToken}`)
+    if (csrfToken && !headers.has('x-csrf-token')) {
+      headers.set('x-csrf-token', csrfToken)
+    }
+    if (isPublicApiPath(pathname, init?.method)) {
+      return { ...init, headers }
     }
     return { ...init, headers }
   }
@@ -153,15 +221,20 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
   if (authFreePaths.has(pathname)) {
     return { ...init, headers }
   }
-  if (isPublicEcomPath(pathname, init?.method)) {
+  if (isPublicApiPath(pathname, init?.method)) {
     return { ...init, headers }
   }
-
-  const token = getStoredToken()
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+  if (methodRequiresCsrf(init?.method) && !headers.has('x-csrf-token')) {
+    let csrfToken = getBrowserCsrfToken()
+    if (!csrfToken) {
+      csrfToken = await refreshBrowserCsrfToken()
+    }
+    if (csrfToken) {
+      headers.set('x-csrf-token', csrfToken)
+    }
   }
-  return { ...init, headers }
+
+  return { ...init, headers, credentials: init?.credentials || 'include' }
 }
 
 const shouldRedirectToLogin = (status: number, body: unknown) => {
@@ -179,10 +252,7 @@ const isPanelRoute = (pathname: string) => {
 const handleAuthFailure = (status: number, body: unknown) => {
   if (typeof window === 'undefined') return
   if (!shouldRedirectToLogin(status, body)) return
-  try {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('user')
-  } catch {}
+  clearStoredSession()
   const current = window.location.pathname + window.location.search
   if (!isPanelRoute(window.location.pathname)) {
     return
@@ -209,6 +279,34 @@ export type ApiEnvelope<T> = {
 const isEnvelope = (value: unknown): value is ApiEnvelope<unknown> => {
   if (!value || typeof value !== 'object') return false
   return Object.prototype.hasOwnProperty.call(value, 'ok')
+}
+
+const getApiErrorCode = (body: unknown) => {
+  if (!body || typeof body !== 'object') return null
+  const code = (body as any)?.error?.code
+  return typeof code === 'string' && code.trim() ? code.trim() : null
+}
+
+const shouldRetryWithFreshCsrf = (path: string, init: RequestInit | undefined, status: number, body: unknown) => {
+  if (typeof window === 'undefined') return false
+  if (!methodRequiresCsrf(init?.method)) return false
+  if (authFreePaths.has(getPathname(path))) return false
+  return status === 403 && getApiErrorCode(body) === 'CSRF_TOKEN_INVALID'
+}
+
+const retryBrowserRequestWithFreshCsrf = async (
+  path: string,
+  init: RequestInit | undefined,
+  cache: RequestCache
+) => {
+  await refreshBrowserCsrfToken()
+  const url = resolveUrl(path)
+  const authedInit = await withAuth(path, init)
+  return fetchWithTimeout(url, {
+    credentials: authedInit.credentials || 'include',
+    cache,
+    ...authedInit,
+  })
 }
 
 const readResponseBody = async (res: Response): Promise<{ body: unknown; isJson: boolean }> => {
@@ -265,6 +363,9 @@ const normalizeHttpErrorMessage = (
     const raw = body.trim()
     const looksLikeHtml = /<\/?[a-z][^>]*>/i.test(raw)
     const text = looksLikeHtml ? extractTextFromHtml(raw) : compactWhitespace(raw)
+    if (/too many requests/i.test(text) || status === 429) {
+      return 'Demasiados intentos en poco tiempo. Espera un momento y vuelve a intentarlo.'
+    }
     if (/bad gateway/i.test(text)) {
       return 'Error 502: servicio temporalmente no disponible. Intenta nuevamente en unos segundos.'
     }
@@ -288,6 +389,53 @@ const getFetchTimeoutMs = () => {
     return fromEnv
   }
   return 15000
+}
+
+type PreparedApiResult = {
+  status: number
+  ok: boolean
+  body: unknown
+  isJson: boolean
+  envelope: ApiEnvelope<unknown> | null
+  url: string
+}
+
+const inFlightReadableRequests = new Map<string, Promise<PreparedApiResult>>()
+
+const REQUEST_DEDUPE_HEADER_NAMES = [
+  'accept',
+  'authorization',
+  'content-type',
+  'cookie',
+  'host',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+]
+
+const serializeRequestHeaders = (headersInit?: HeadersInit) => {
+  const headers = new Headers(headersInit || {})
+  return REQUEST_DEDUPE_HEADER_NAMES
+    .map((name) => {
+      const value = headers.get(name)
+      return value ? `${name}:${value}` : null
+    })
+    .filter(Boolean)
+    .join('|')
+}
+
+const buildReadableRequestKey = (url: string, init: RequestInit & { next?: { revalidate?: number | false } }) => {
+  const method = (init.method || 'GET').toUpperCase()
+  if (!['GET', 'HEAD'].includes(method)) return null
+  if (init.signal) return null
+  const nextOptions = 'next' in init ? JSON.stringify(init.next || null) : ''
+  return [
+    method,
+    url,
+    `cache:${init.cache || 'default'}`,
+    `credentials:${init.credentials || 'same-origin'}`,
+    `headers:${serializeRequestHeaders(init.headers)}`,
+    `next:${nextOptions}`,
+  ].join('|')
 }
 
 const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
@@ -324,88 +472,116 @@ const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Respon
   }
 }
 
-export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+const performReadableRequest = async (
+  path: string,
+  init: RequestInit | undefined,
+  cache: RequestCache,
+  nextOptions?: { revalidate?: number | false }
+): Promise<PreparedApiResult> => {
   const url = resolveUrl(path)
   const authedInit = await withAuth(path, init)
+  const fetchOptions: RequestInit & { next?: { revalidate?: number | false } } = {
+    credentials: authedInit.credentials || 'include',
+    ...authedInit,
+    cache,
+  }
+
+  if (nextOptions) {
+    fetchOptions.next = nextOptions
+  }
+
+  const requestKey = buildReadableRequestKey(url, fetchOptions)
+  const executeRequest = async (): Promise<PreparedApiResult> => {
+    let res = await fetchWithTimeout(url, fetchOptions)
+    let { body, isJson } = await readResponseBody(res)
+
+    if (!res.ok && shouldRetryWithFreshCsrf(path, init, res.status, body)) {
+      res = await retryBrowserRequestWithFreshCsrf(path, init, cache)
+      ;({ body, isJson } = await readResponseBody(res))
+    }
+
+    const envelope = isJson && isEnvelope(body) ? (body as ApiEnvelope<unknown>) : null
+    return {
+      status: res.status,
+      ok: res.ok,
+      body,
+      isJson,
+      envelope,
+      url,
+    }
+  }
+
+  if (!requestKey) {
+    return executeRequest()
+  }
+
+  const existingRequest = inFlightReadableRequests.get(requestKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const requestPromise = executeRequest().finally(() => {
+    inFlightReadableRequests.delete(requestKey)
+  })
+  inFlightReadableRequests.set(requestKey, requestPromise)
+  return requestPromise
+}
+
+export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase()
   const pathname = getPathname(path)
   const shouldCacheOnServer =
     typeof window === 'undefined' &&
     method === 'GET' &&
-    isPublicEcomPath(pathname, method) &&
+    isPublicApiPath(pathname, method) &&
     !shouldDisableServerCache(pathname)
   const cache = init?.cache || (shouldCacheOnServer ? 'force-cache' : 'no-store')
   const nextOptions = shouldCacheOnServer ? { revalidate: 60 } : undefined
-  const fetchOptions: RequestInit & { next?: { revalidate?: number | false } } = { ...authedInit, cache }
-  if (nextOptions) {
-    fetchOptions.next = nextOptions
-  }
-  const res = await fetchWithTimeout(url, fetchOptions)
-  const { body, isJson } = await readResponseBody(res)
+  const result = await performReadableRequest(path, init, cache, nextOptions)
 
-  const envelope = isJson && isEnvelope(body) ? (body as ApiEnvelope<T>) : null
-
-  if (!res.ok && res.status === 401 && isPublicEcomPath(getPathname(path), init?.method)) {
-    const token = getStoredToken()
-    if (token) {
-      clearStoredToken()
-      const retryInit = await withAuth(path, { ...init, headers: undefined })
-      const retryRes = await fetchWithTimeout(url, { cache: 'no-store', ...retryInit })
-      const { body: retryBody, isJson: retryIsJson } = await readResponseBody(retryRes)
-      if (retryRes.ok) {
-        const retryEnvelope = retryIsJson && isEnvelope(retryBody) ? (retryBody as ApiEnvelope<T>) : null
-        if (retryEnvelope) {
-          if (!retryEnvelope.ok) {
-            throw new Error(retryEnvelope.error?.message || retryEnvelope.message || 'Error desconocido')
-          }
-          return retryEnvelope.data as T
-        }
-        return retryBody as T
-      }
-      handleAuthFailure(retryRes.status, retryBody)
-      const message = normalizeHttpErrorMessage(retryRes.status, url, retryBody)
-      throw new Error(message)
-    }
-  }
-
-  if (!res.ok) {
-    handleAuthFailure(res.status, body)
-    const message = normalizeHttpErrorMessage(res.status, url, body, envelope?.error?.message)
+  if (!result.ok) {
+    handleAuthFailure(result.status, result.body)
+    const message = normalizeHttpErrorMessage(
+      result.status,
+      result.url,
+      result.body,
+      result.envelope?.error?.message
+    )
     throw new Error(message)
   }
 
-  if (envelope) {
-    if (!envelope.ok) {
-      throw new Error(envelope.error?.message || envelope.message || 'Error desconocido')
+  if (result.envelope) {
+    if (!result.envelope.ok) {
+      throw new Error(result.envelope.error?.message || result.envelope.message || 'Error desconocido')
     }
-    return envelope.data as T
+    return result.envelope.data as T
   }
 
-  return body as T
+  return result.body as T
 }
 
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T }> {
-  const url = resolveUrl(path)
-  const authedInit = await withAuth(path, init)
-  const res = await fetchWithTimeout(url, { cache: 'no-store', ...authedInit })
-  const { body, isJson } = await readResponseBody(res)
+  const result = await performReadableRequest(path, init, 'no-store')
 
-  const envelope = isJson && isEnvelope(body) ? (body as ApiEnvelope<T>) : null
-
-  if (!res.ok) {
-    handleAuthFailure(res.status, body)
-    const message = normalizeHttpErrorMessage(res.status, url, body, envelope?.error?.message)
+  if (!result.ok) {
+    handleAuthFailure(result.status, result.body)
+    const message = normalizeHttpErrorMessage(
+      result.status,
+      result.url,
+      result.body,
+      result.envelope?.error?.message
+    )
     throw new Error(message)
   }
 
-  if (envelope) {
-    if (!envelope.ok) {
-      throw new Error(envelope.error?.message || envelope.message || 'Error desconocido')
+  if (result.envelope) {
+    if (!result.envelope.ok) {
+      throw new Error(result.envelope.error?.message || result.envelope.message || 'Error desconocido')
     }
-    return { ok: true, status: res.status, body: envelope.data as T }
+    return { ok: true, status: result.status, body: result.envelope.data as T }
   }
 
-  return { ok: true, status: res.status, body: body as T }
+  return { ok: true, status: result.status, body: result.body as T }
 }
 /*
 // Ejemplo de wrapper estandarizado para reuso

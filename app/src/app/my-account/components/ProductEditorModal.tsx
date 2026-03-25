@@ -163,8 +163,8 @@ const uploadImage = async (file: File, kind: 'thumb' | 'gallery') => {
 
     const url =
         typeof window !== 'undefined'
-            ? `${window.location.origin}/uploads-api/images`
-            : '/uploads-api/images'
+            ? `${window.location.origin}/api/uploads/images`
+            : '/api/uploads/images'
 
     const res = await requestApi<{ url: string; width?: number; height?: number; kind: string }>(url, {
         method: 'POST',
@@ -1270,12 +1270,6 @@ export default function ProductEditorModal({
                 showNotification('Espera a que terminen de subir las imágenes.', 'error')
                 return
             }
-            const token = localStorage.getItem('authToken')
-            if (!token) {
-                showNotification('Sesión no válida. Inicia sesión nuevamente.', 'error')
-                onSessionExpired?.()
-                return
-            }
 
             const nextErrors: Record<string, string> = {}
             const name = String(form.name || '').trim()
@@ -1458,20 +1452,20 @@ export default function ProductEditorModal({
             if (editingProduct) {
                 await withTransientRetry(() => requestApi(`/api/products/${form.id}`, {
                     method: 'PUT',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 }))
                 showNotification(isRestockMode ? 'Compra registrada correctamente' : 'Producto actualizado correctamente')
             } else {
                 await withTransientRetry(() => requestApi('/api/products', {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 }))
                 showNotification('Producto creado correctamente')
             }
 
-            const res = await withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers: { Authorization: `Bearer ${token}` } }))
+            const res = await withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT))
             onProductsUpdated(normalizeAdminProducts(res.body))
             if (activeTab === 'inventory') {
                 await onRefreshPurchaseInvoices()

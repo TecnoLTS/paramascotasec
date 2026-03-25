@@ -217,9 +217,13 @@ export interface AdminUserSummary {
     business_name?: string | null;
     resolvedCompany?: string | null;
     resolvedPhone?: string | null;
+    resolvedEmail?: string | null;
     resolvedAddressText?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
+    failed_login_attempts?: number | string | null;
+    login_locked_until?: string | null;
+    last_login_at?: string | null;
     orders_total?: number | string | null;
     orders_active?: number | string | null;
     orders_completed?: number | string | null;

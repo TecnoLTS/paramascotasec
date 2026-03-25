@@ -10,6 +10,7 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { createOrder, getQuote } from '@/lib/api'
 import { login, register, requestOtp, verifyOtp } from '@/lib/api/auth'
 import { fetchJson, requestApi } from '@/lib/apiClient'
+import { getStoredSessionUser, hasCookieSessionMarker, setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
 import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCountryToEcuador, saveCheckoutDraft } from '@/lib/checkoutDraft'
 
 interface AddressData {
@@ -84,6 +85,9 @@ type CheckoutSummaryImageProps = {
 }
 
 const CHECKOUT_PLACEHOLDER_IMAGE = '/images/placeholder.jpg'
+const ACCOUNT_ADDRESSES_STORAGE_KEY = 'userAddresses'
+const LEGACY_ADDRESSES_STORAGE_KEY = 'savedAddresses'
+const PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY = 'checkoutPendingAddresses'
 
 const CheckoutSummaryImage = ({ src, alt }: CheckoutSummaryImageProps) => {
     const normalizedSrc = src || CHECKOUT_PLACEHOLDER_IMAGE
@@ -159,6 +163,8 @@ const Checkout = () => {
     const [otpLoading, setOtpLoading] = useState(false)
     const [otpVerified, setOtpVerified] = useState(false)
     const [otpModalOpen, setOtpModalOpen] = useState(false)
+    const [otpSendError, setOtpSendError] = useState<string | null>(null)
+    const [orderCompletionInProgress, setOrderCompletionInProgress] = useState(false)
     const keepOneTimeSelectionRef = useRef(false)
 
     const mergeAddressFields = (current: AddressData, incoming?: Partial<AddressData>) => {
@@ -179,7 +185,9 @@ const Checkout = () => {
         setTempAddress((prev) => mergeAddressFields(prev, draft.shipping))
         setBillingAddress((prev) => mergeAddressFields(prev, { country: 'Ecuador' }))
 
-        const saved = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
+        if (!hasCookieSessionMarker()) return
+
+        const saved = localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY) || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
         if (saved) {
             try {
                 const parsed = JSON.parse(saved)
@@ -212,25 +220,15 @@ const Checkout = () => {
     }, [])
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        setIsLoggedIn(!!token)
-        if (!token) return
+        const hasSession = hasCookieSessionMarker()
+        setIsLoggedIn(hasSession)
+        if (!hasSession) return
 
-        const userRaw = localStorage.getItem('user')
-        let email = ''
-        let name = ''
-        if (userRaw) {
-            try {
-                const user = JSON.parse(userRaw)
-                email = user?.email || ''
-                name = user?.name || ''
-            } catch (e) {
-                console.error('Error parsing user', e)
-            }
-        }
+        const storedUser = getStoredSessionUser()
+        const email = storedUser?.email || ''
+        const name = storedUser?.name || ''
 
         requestApi<{ name?: string; profile?: { firstName?: string; lastName?: string; phone?: string; documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
-            headers: { Authorization: `Bearer ${token}` }
         })
             .then((res) => {
                 const profile = res.body.profile || {}
@@ -265,10 +263,7 @@ const Checkout = () => {
 
     useEffect(() => {
         if (!isLoggedIn) return
-        const token = localStorage.getItem('authToken')
-        if (!token) return
         requestApi<{ profile?: { documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
-            headers: { Authorization: `Bearer ${token}` }
         })
             .then((res) => {
                 const profile = res.body.profile || {}
@@ -289,8 +284,14 @@ const Checkout = () => {
         setLoginLoading(true)
         try {
             const res = await login({ email: loginForm.email, password: loginForm.password })
-            localStorage.setItem('authToken', res.token)
-            localStorage.setItem('user', JSON.stringify(res.user))
+            if (res.mfaRequired) {
+                throw new Error('La cuenta administrativa requiere MFA y debe iniciar sesión desde el panel.')
+            }
+            if (!res.user) {
+                throw new Error('No se pudo iniciar la sesión.')
+            }
+            setCookieSessionMarker()
+            setStoredSessionUser(res.user)
             setIsLoggedIn(true)
             setShowLogin(false)
             setMessage({ text: 'Sesión iniciada correctamente.', type: 'success' })
@@ -302,15 +303,15 @@ const Checkout = () => {
     }
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken')
-        if (!token) return
+        if (!hasCookieSessionMarker()) return
         requestApi<{ addresses: SavedAddress[] }>('/api/user/addresses', {
-            headers: { Authorization: `Bearer ${token}` }
         })
             .then((res) => {
                 const addresses = Array.isArray(res.body.addresses) ? res.body.addresses : []
                 if (addresses.length > 0) {
                     setSavedAddresses(addresses)
+                    localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
+                    localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
                     setSelectedAddressId(addresses[0].id)
                     setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), addresses[0].shipping))
                     setBillingAddress((prev) => mergeAddressFields(prev, addresses[0].billing))
@@ -318,8 +319,11 @@ const Checkout = () => {
                     return
                 }
 
-                // Fallback: use local addresses if backend has none, then sync to account
-                const stored = localStorage.getItem('savedAddresses') || localStorage.getItem('userAddresses')
+                // Fallback: if checkout created a pending address before verification, persist it now.
+                const stored =
+                    localStorage.getItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
+                    || localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY)
+                    || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
                 if (stored) {
                     try {
                         const parsed = JSON.parse(stored) as SavedAddress[]
@@ -332,10 +336,13 @@ const Checkout = () => {
                             requestApi('/api/user/addresses', {
                                 method: 'PUT',
                                 headers: {
-                                    Authorization: `Bearer ${token}`,
                                     'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({ addresses: parsed })
+                            }).then(() => {
+                                localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
+                                localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
+                                localStorage.removeItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
                             }).catch(() => {})
                         }
                     } catch {
@@ -537,26 +544,32 @@ const Checkout = () => {
             await register({
                 name: fullName,
                 email: contactInfo.email,
+                phone: contactInfo.phone,
                 password: contactInfo.password,
                 documentType: contactInfo.documentType,
                 documentNumber: contactInfo.documentNumber,
                 businessName: contactInfo.businessName,
-                skipVerificationEmail: true
+                profile: {
+                    firstName: contactInfo.firstName,
+                    lastName: contactInfo.lastName,
+                    phone: contactInfo.phone,
+                    documentType: contactInfo.documentType,
+                    documentNumber: contactInfo.documentNumber,
+                    businessName: contactInfo.businessName,
+                },
+                addresses: [newAddress],
+                skipVerificationEmail: true,
+                sendOtpOnCreate: true
             })
-            await requestOtp({ email: contactInfo.email })
             setOtpSent(true)
             setOtpModalOpen(true)
+            setOtpCode('')
+            setOtpSendError(null)
             setMessage({
                 text: 'Cuenta creada. Te enviamos un código al correo para verificarlo.',
                 type: 'success'
             })
-            setSavedAddresses([newAddress])
-            setSelectedAddressId(newAddress.id.toString())
-            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), newAddress.shipping))
-            setBillingAddress((prev) => mergeAddressFields(prev, newAddress.billing))
-            const localAddresses = [newAddress]
-            localStorage.setItem('savedAddresses', JSON.stringify(localAddresses))
-            localStorage.setItem('userAddresses', JSON.stringify(localAddresses))
+            localStorage.setItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY, JSON.stringify([newAddress]))
         } catch (err: any) {
             setMessage({ text: err?.message || 'No se pudo crear la cuenta.', type: 'error' })
         } finally {
@@ -573,12 +586,18 @@ const Checkout = () => {
         try {
             await verifyOtp({ email: contactInfo.email, code: otpCode.trim() })
             const res = await login({ email: contactInfo.email, password: contactInfo.password })
-            localStorage.setItem('authToken', res.token)
-            localStorage.setItem('user', JSON.stringify(res.user))
+            if (!res.user) {
+                throw new Error('No se pudo iniciar la sesión tras verificar el correo.')
+            }
+            setCookieSessionMarker()
+            setStoredSessionUser(res.user)
             setIsLoggedIn(true)
             setOtpVerified(true)
             setOtpModalOpen(false)
-            const pending = localStorage.getItem('userAddresses') || localStorage.getItem('savedAddresses')
+            const pending =
+                localStorage.getItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
+                || localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY)
+                || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
             if (pending) {
                 try {
                     const parsed = JSON.parse(pending)
@@ -586,7 +605,6 @@ const Checkout = () => {
                         await requestApi('/api/user/addresses', {
                             method: 'PUT',
                             headers: {
-                                Authorization: `Bearer ${res.token}`,
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify({ addresses: parsed })
@@ -596,6 +614,9 @@ const Checkout = () => {
                         setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
                         setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
                         setUseBillingSame(!!parsed[0].isSame)
+                        localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
+                        localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
+                        localStorage.removeItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
                     }
                 } catch {
                     // ignore sync errors
@@ -614,9 +635,14 @@ const Checkout = () => {
         setOtpLoading(true)
         try {
             await requestOtp({ email: contactInfo.email })
-            setMessage({ text: 'Te enviamos un nuevo código.', type: 'success' })
+            setOtpSendError(null)
+            setMessage({
+                text: 'Te enviamos un nuevo código.',
+                type: 'success'
+            })
         } catch (err: any) {
-            setMessage({ text: err?.message || 'No se pudo reenviar el código.', type: 'error' })
+            const errorText = err?.message || 'No se pudo reenviar el código.'
+            setOtpSendError(errorText)
         } finally {
             setOtpLoading(false)
         }
@@ -628,10 +654,8 @@ const Checkout = () => {
         if (!validateBillingAddress()) {
             if (isLoggedIn) {
                 try {
-                    const token = localStorage.getItem('authToken')
-                    if (token) {
+                    if (hasCookieSessionMarker()) {
                         const res = await requestApi<{ profile?: { documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
-                            headers: { Authorization: `Bearer ${token}` }
                         })
                         const profile = res.body.profile || {}
                         if (profile.documentType && profile.documentNumber) {
@@ -684,7 +708,8 @@ const Checkout = () => {
                     : addr
             )
             setSavedAddresses(updated)
-            localStorage.setItem('userAddresses', JSON.stringify(updated))
+            localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(updated))
+            localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(updated))
         }
         setCurrentStep(2)
     }
@@ -793,10 +818,11 @@ const Checkout = () => {
         : `IVA (${vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
 
     useEffect(() => {
+        if (orderCompletionInProgress) return
         if (normalizedCart.length === 0) {
             router.push('/cart')
         }
-    }, [normalizedCart, router])
+    }, [normalizedCart, orderCompletionInProgress, router])
 
     useEffect(() => {
         if (paymentMethod !== 'transfer') {
@@ -885,6 +911,7 @@ const Checkout = () => {
 
             const created = await createOrder(orderData);
             const orderId = created?.id || created?.order?.id || null
+            setOrderCompletionInProgress(true)
             if (!isLoggedIn && orderId) {
                 setGuestOrderId(orderId)
                 setMessage({ text: `¡Pedido realizado con éxito! Tu número de pedido es ${orderId}.`, type: 'success' })
@@ -894,14 +921,13 @@ const Checkout = () => {
             clearCheckoutDraft();
             clearCart();
 
-            setTimeout(() => {
-                if (isLoggedIn) {
-                    router.push('/my-account');
-                }
-            }, 2000);
+            if (isLoggedIn) {
+                router.replace('/my-account?tab=orders');
+            }
 
         } catch (err: any) {
             setMessage({ text: err.message || 'Error al procesar el pedido', type: 'error' });
+            setOrderCompletionInProgress(false)
         } finally {
             setLoading(false);
         }
@@ -909,11 +935,51 @@ const Checkout = () => {
 
     return (
         <>
-            {message && (
+            {message?.type === 'success' && (
                 <div className={`fixed top-5 right-5 z-[200] p-4 rounded-lg shadow-2xl border ${message.type === 'success' ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'} animate-fadeIn`}>
                     <div className="flex items-center gap-3">
-                        {message.type === 'success' ? <Icon.CheckCircle size={24} weight="fill" /> : <Icon.Warning size={24} weight="fill" />}
+                        <Icon.CheckCircle size={24} weight="fill" />
                         <span className="font-semibold">{message.text}</span>
+                        <button
+                            type="button"
+                            onClick={() => setMessage(null)}
+                            className="ml-2 text-current/70 hover:text-current"
+                            aria-label="Cerrar notificación"
+                        >
+                            <Icon.X size={16} weight="bold" />
+                        </button>
+                    </div>
+                </div>
+            )}
+            {message?.type === 'error' && (
+                <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 px-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#ef4444]">
+                        <div className="flex items-start gap-3">
+                            <div className="mt-1 text-[#ef4444]">
+                                <Icon.Warning size={22} weight="fill" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-semibold text-[#111827]">Atención</h3>
+                                <p className="mt-2 text-sm text-[#374151]">{message.text}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMessage(null)}
+                                className="text-[#9ca3af] hover:text-[#111827]"
+                                aria-label="Cerrar alerta"
+                            >
+                                <Icon.X size={18} weight="bold" />
+                            </button>
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setMessage(null)}
+                                className="rounded-lg bg-[#1f3b3b] px-4 py-2 text-sm font-medium text-white hover:bg-[#2e4d4d] transition-colors"
+                            >
+                                Entendido
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -932,8 +998,15 @@ const Checkout = () => {
                             </button>
                         </div>
                         <p className="mt-2 text-sm text-[#6b7280]">
-                            Te enviamos un código de 6 dígitos a <span className="font-medium text-[#111827]">{contactInfo.email}</span>.
+                            {otpSendError
+                                ? <>No pudimos enviar el código a <span className="font-medium text-[#111827]">{contactInfo.email}</span>. Revisa tu correo y vuelve a intentarlo con el botón de reenvío.</>
+                                : <>Te enviamos un código de 6 dígitos a <span className="font-medium text-[#111827]">{contactInfo.email}</span>.</>}
                         </p>
+                        {otpSendError && (
+                            <div className="mt-4 rounded-xl border border-[#ef4444]/30 bg-[#fef2f2] px-4 py-3 text-sm text-[#991b1b]">
+                                {otpSendError}
+                            </div>
+                        )}
                         <form
                             className="mt-4 space-y-4"
                             onSubmit={(e) => {
@@ -1005,7 +1078,7 @@ const Checkout = () => {
                         </div>
                     </div>
 
-                    <div className="grid lg:grid-cols-3 gap-8">
+                    <div className="grid items-start lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
                             {isStep1 && (
                                 <>
@@ -1217,7 +1290,7 @@ const Checkout = () => {
                                             <div className="mt-6 space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <h3 className="font-medium text-[#111827]">Dirección de envío</h3>
-                                                    {savedAddresses.length > 0 && (
+                                                    {isLoggedIn && savedAddresses.length > 0 && (
                                                         <select
                                                             className="text-sm border border-[#e5e7eb] rounded-lg px-3 py-1.5"
                                                             value={selectedAddressId}
@@ -1291,7 +1364,7 @@ const Checkout = () => {
                                                             className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
                                                         />
 
-                                                        {selectedAddressId !== 'one-time' && (
+                                                        {isLoggedIn && savedAddresses.length > 0 && selectedAddressId !== 'one-time' && (
                                                             <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
                                                                 <input
                                                                     type="checkbox"
@@ -1623,11 +1696,11 @@ const Checkout = () => {
                             )}
                         </div>
 
-                        <div className="lg:col-span-1">
-                            <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb] sticky top-8">
+                        <div className="lg:col-span-1 lg:self-start lg:sticky lg:top-32">
+                            <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb] lg:max-h-[calc(100vh-9rem)] lg:flex lg:flex-col">
                                 <h2 className="text-xl font-semibold text-[#111827] mb-4">Resumen del pedido</h2>
 
-                                <div className="space-y-4 mb-6">
+                                <div className="space-y-4 mb-6 lg:overflow-y-auto lg:pr-1">
                                     {items.map((item) => (
                                         <div key={item.id} className="flex items-center gap-3">
                                             <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#f3f4f6] flex-shrink-0">
@@ -1656,7 +1729,7 @@ const Checkout = () => {
                                     ))}
                                 </div>
 
-                                <div className="border-t border-[#e5e7eb] pt-4 space-y-2">
+                                <div className="border-t border-[#e5e7eb] pt-4 space-y-2 lg:mt-auto bg-white">
                                     <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                         <span className="text-[#6b7280]">Subtotal sin IVA</span>
                                         <span className="text-[#111827] text-right tabular-nums">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

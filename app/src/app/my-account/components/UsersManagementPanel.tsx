@@ -29,6 +29,7 @@ type UsersManagementPanelProps = {
     formatDateTime: (value: string) => string;
     currentUserId?: string | null;
     onUsersMutated: () => Promise<void> | void;
+    onUnlockUser: (user: AdminUserSummary) => Promise<void> | void;
     showNotification: (text: string, type?: 'success' | 'error') => void;
 }
 
@@ -61,6 +62,7 @@ export default React.memo(function UsersManagementPanel({
     formatDateTime,
     currentUserId,
     onUsersMutated,
+    onUnlockUser,
     showNotification,
 }: UsersManagementPanelProps) {
     const [isEditorOpen, setIsEditorOpen] = React.useState(false)
@@ -77,6 +79,13 @@ export default React.memo(function UsersManagementPanel({
         setEditorMode('edit')
         setSelectedUser(adminUser)
         setIsEditorOpen(true)
+    }, [])
+
+    const isUserLocked = React.useCallback((adminUser: AdminUserSummary) => {
+        const lockedUntil = String(adminUser.login_locked_until || '').trim()
+        if (!lockedUntil) return false
+        const lockDate = new Date(lockedUntil)
+        return !Number.isNaN(lockDate.getTime()) && lockDate.getTime() > Date.now()
     }, [])
 
     return (
@@ -155,13 +164,15 @@ export default React.memo(function UsersManagementPanel({
                                 const ordersTotal = Number(adminUser.orders_total ?? 0)
                                 const ordersCompleted = Number(adminUser.orders_completed ?? 0)
                                 const totalSpent = Number(adminUser.total_spent ?? 0)
+                                const failedAttempts = Number(adminUser.failed_login_attempts ?? 0)
+                                const isLocked = isUserLocked(adminUser)
 
                                 return (
                                     <div key={adminUser.id} className="p-4 bg-white rounded-xl border border-line shadow-sm">
                                         <div className="flex items-start justify-between gap-3">
                                             <div>
                                                 <div className="font-semibold">{adminUser.name || 'Sin nombre'}</div>
-                                                <div className="text-xs text-secondary break-all">{adminUser.email || '-'}</div>
+                                                <div className="text-xs text-secondary break-all">{adminUser.resolvedEmail || '-'}</div>
                                                 {adminUser.resolvedCompany && (
                                                     <div className="text-[11px] text-secondary mt-1">
                                                         Empresa: {adminUser.resolvedCompany}
@@ -180,6 +191,13 @@ export default React.memo(function UsersManagementPanel({
                                             <div>
                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">Verificación</div>
                                                 <div>{adminUser.email_verified ? 'Verificado' : 'Pendiente'}</div>
+                                                <div className={`mt-1 text-[11px] font-medium ${isLocked ? 'text-red-600' : 'text-secondary'}`}>
+                                                    {isLocked
+                                                        ? `Bloqueado hasta ${formatDateTime(adminUser.login_locked_until || '')}`
+                                                        : failedAttempts > 0
+                                                            ? `${failedAttempts} intentos fallidos`
+                                                            : 'Sin bloqueo'}
+                                                </div>
                                             </div>
                                             <div>
                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">Pedidos</div>
@@ -201,7 +219,17 @@ export default React.memo(function UsersManagementPanel({
                                         <div className="mt-3 text-xs text-secondary">
                                             Última compra: {adminUser.last_order_at ? formatDateTime(adminUser.last_order_at) : 'Sin compras'}
                                         </div>
-                                        <div className="mt-4 flex justify-end">
+                                        <div className="mt-4 flex justify-end gap-2">
+                                            {isLocked && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onUnlockUser(adminUser)}
+                                                    className="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                >
+                                                    <Icon.LockOpen size={14} />
+                                                    Desbloquear
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => openEditModal(adminUser)}
@@ -238,12 +266,14 @@ export default React.memo(function UsersManagementPanel({
                                         const ordersTotal = Number(adminUser.orders_total ?? 0)
                                         const ordersCompleted = Number(adminUser.orders_completed ?? 0)
                                         const totalSpent = Number(adminUser.total_spent ?? 0)
+                                        const failedAttempts = Number(adminUser.failed_login_attempts ?? 0)
+                                        const isLocked = isUserLocked(adminUser)
 
                                         return (
                                             <tr key={adminUser.id} className="hover:bg-surface/40">
                                                 <td className="px-4 py-3 align-top">
                                                     <div className="font-semibold">{adminUser.name || 'Sin nombre'}</div>
-                                                    <div className="text-xs text-secondary">{adminUser.email || '-'}</div>
+                                                    <div className="text-xs text-secondary">{adminUser.resolvedEmail || '-'}</div>
                                                     {adminUser.resolvedCompany && (
                                                         <div className="text-[11px] text-secondary mt-1">
                                                             Empresa: {adminUser.resolvedCompany}
@@ -265,7 +295,14 @@ export default React.memo(function UsersManagementPanel({
                                                     {adminUser.created_at ? formatDate(adminUser.created_at) : '-'}
                                                 </td>
                                                 <td className="px-4 py-3 align-top text-sm">
-                                                    {adminUser.email_verified ? 'Verificado' : 'Pendiente'}
+                                                    <div>{adminUser.email_verified ? 'Verificado' : 'Pendiente'}</div>
+                                                    <div className={`mt-1 text-[11px] ${isLocked ? 'font-medium text-red-600' : 'text-secondary'}`}>
+                                                        {isLocked
+                                                            ? `Bloqueado hasta ${formatDateTime(adminUser.login_locked_until || '')}`
+                                                            : failedAttempts > 0
+                                                                ? `${failedAttempts} intentos fallidos`
+                                                                : 'Sin bloqueo'}
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3 align-top text-sm">
                                                     <div className="font-semibold">{adminUser.resolvedPhone || '-'}</div>
@@ -286,6 +323,17 @@ export default React.memo(function UsersManagementPanel({
                                                     {adminUser.last_order_at ? formatDateTime(adminUser.last_order_at) : 'Sin compras'}
                                                 </td>
                                                 <td className="px-4 py-3 align-top text-right">
+                                                    <div className="inline-flex items-center gap-2">
+                                                    {isLocked && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onUnlockUser(adminUser)}
+                                                            className="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                        >
+                                                            <Icon.LockOpen size={14} />
+                                                            Desbloquear
+                                                        </button>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() => openEditModal(adminUser)}
@@ -294,6 +342,7 @@ export default React.memo(function UsersManagementPanel({
                                                         <Icon.PencilSimple size={14} />
                                                         Editar
                                                     </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )

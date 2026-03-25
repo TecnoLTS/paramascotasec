@@ -34,13 +34,6 @@ const SEARCH_ALIAS_MAP: Record<string, string[]> = {
   new: ['nuevo', 'nueva', 'novedad', 'novedades'],
 }
 
-const SHORT_QUERY_ALIAS_MAP: Record<string, string> = {
-  a: 'ad',
-  ad: 'ad',
-  c: 'ca',
-  ca: 'ca',
-}
-
 const UNIT_TOKENS = new Set([
   'gr',
   'g',
@@ -126,7 +119,7 @@ const expandSearchAliases = (tokens: string[]) => {
 }
 
 export const getProductSearchTerms = (value: string) =>
-  mergeMeasurementTerms(getRawSearchTokens(value)).map((term) => SHORT_QUERY_ALIAS_MAP[term] ?? term)
+  mergeMeasurementTerms(getRawSearchTokens(value))
 
 export const getProductSearchTokens = (value: string) =>
   expandSearchAliases(mergeMeasurementTerms(getRawSearchTokens(value)))
@@ -235,6 +228,10 @@ export const matchesProductSearch = (searchText: string, query: string) => {
     const strictMatches = STRICT_ALIAS_MATCHES[term]
 
     if (strictMatches) {
+      if (token.startsWith(term)) {
+        return true
+      }
+
       return strictMatches.some((strictTerm) =>
         strictTerm.length <= 2
           ? token === strictTerm

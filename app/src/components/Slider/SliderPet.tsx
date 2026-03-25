@@ -58,9 +58,10 @@ type SliderImageProps = {
   slide: 1 | 2 | 3
   suffix: SliderSuffix
   priority?: boolean
+  eager?: boolean
 }
 
-const SliderImage = ({ alt, slide, suffix, priority }: SliderImageProps) => {
+const SliderImage = ({ alt, slide, suffix, priority, eager }: SliderImageProps) => {
   const candidates = useMemo(() => buildCandidateSources(slide, suffix), [slide, suffix])
   const [candidateIndex, setCandidateIndex] = useState(0)
 
@@ -77,6 +78,7 @@ const SliderImage = ({ alt, slide, suffix, priority }: SliderImageProps) => {
       fill
       priority={priority}
       sizes="100vw"
+      loading={eager ? 'eager' : undefined}
       onError={() => {
         setCandidateIndex((prev) => {
           if (prev >= candidates.length - 1) return prev
@@ -85,6 +87,45 @@ const SliderImage = ({ alt, slide, suffix, priority }: SliderImageProps) => {
       }}
       className="absolute left-0 top-0 h-full w-full object-cover object-right sm:object-center"
     />
+  )
+}
+
+const SliderSlideContent = ({ slide, suffix, priority }: { slide: 1 | 2 | 3; suffix: SliderSuffix; priority?: boolean }) => {
+  const content = {
+    1: {
+      subtitle: '¡Oferta! Hasta 50% de descuento',
+      title: 'La tienda perfecta para tu mascota',
+    },
+    2: {
+      subtitle: '¡Oferta! Hasta 50% de descuento',
+      title: 'Alimenta el apetito de tu mascota',
+    },
+    3: {
+      subtitle: '¡Oferta! Hasta 50% de descuento',
+      title: 'Alimenta el apetito de tu mascota',
+    },
+  }[slide]
+
+  return (
+    <div className="slider-item h-full w-full relative overflow-hidden">
+      <SliderImage alt={`bg-pet1-${slide}`} slide={slide} suffix={suffix} priority={priority} eager />
+      <div className="container w-full h-full flex items-center relative">
+        <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
+          <div className="text-sub-display slider-text-sub normal-case">
+            {content.subtitle}
+          </div>
+          <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">
+            {content.title}
+          </div>
+          <Link
+            href="/shop/breadcrumb1"
+            className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
+          >
+            Compra ahora
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -109,8 +150,11 @@ const SliderPet = () => {
     <div
       className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden slider-height"
     >
-      {/* Mientras no esté montado, mantenemos solo el contenedor (sin Swiper) */}
-      {mounted && (
+      {!mounted ? (
+        <div className="slider-main h-full w-full">
+          <SliderSlideContent slide={1} suffix={suffix} priority />
+        </div>
+      ) : (
         <div className="slider-main h-full w-full">
           <Swiper
             spaceBetween={0}
@@ -123,69 +167,15 @@ const SliderPet = () => {
             autoplay={{ delay: 7000 }}
           >
             <SwiperSlide>
-              <div className="slider-item h-full w-full relative overflow-hidden">
-                <SliderImage alt="bg-pet1-1" slide={1} suffix={suffix} priority />
-                <div className="container w-full h-full flex items-center relative">
-                  <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
-                    <div className="text-sub-display slider-text-sub normal-case">
-                      ¡Oferta! Hasta 50% de descuento
-                    </div>
-                    <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">
-                      La tienda perfecta para tu mascota
-                    </div>
-                    <Link
-                      href="/shop/breadcrumb1"
-                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
-                    >
-                      Compra ahora
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              <SliderSlideContent slide={1} suffix={suffix} priority />
             </SwiperSlide>
 
             <SwiperSlide>
-              <div className="slider-item h-full w-full relative overflow-hidden">
-                <SliderImage alt="bg-pet1-2" slide={2} suffix={suffix} />
-                <div className="container w-full h-full flex items-center relative">
-                  <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
-                    <div className="text-sub-display slider-text-sub normal-case">
-                      ¡Oferta! Hasta 50% de descuento
-                    </div>
-                    <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">
-                      Alimenta el apetito de tu mascota
-                    </div>
-                    <Link
-                      href="/shop/breadcrumb1"
-                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
-                    >
-                      Compra ahora
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              <SliderSlideContent slide={2} suffix={suffix} />
             </SwiperSlide>
 
             <SwiperSlide>
-              <div className="slider-item h-full w-full relative overflow-hidden">
-                <SliderImage alt="bg-pet1-3" slide={3} suffix={suffix} />
-                <div className="container w-full h-full flex items-center relative">
-                  <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
-                    <div className="text-sub-display slider-text-sub normal-case">
-                      ¡Oferta! Hasta 50% de descuento
-                    </div>
-                    <div className="text-display slider-text-display md:mt-5 mt-2 normal-case">
-                      Alimenta el apetito de tu mascota
-                    </div>
-                    <Link
-                      href="/shop/breadcrumb1"
-                      className="button-main md:mt-8 mt-3 normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white"
-                    >
-                      Compra ahora
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              <SliderSlideContent slide={3} suffix={suffix} />
             </SwiperSlide>
           </Swiper>
         </div>

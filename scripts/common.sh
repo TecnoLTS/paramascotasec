@@ -73,15 +73,63 @@ compose_cmd() {
   )
 }
 
+frontend_container_name() {
+  local mode="${1:-development}"
+
+  if [[ "${mode}" == "development" ]]; then
+    printf '%s\n' "paramascotasec-app-dev"
+    return 0
+  fi
+
+  printf '%s\n' "paramascotasec-app"
+}
+
+remove_container_if_exists() {
+  local container_name="$1"
+
+  if docker ps -a --format '{{.Names}}' | grep -qx "${container_name}"; then
+    docker rm -f "${container_name}" >/dev/null
+  fi
+}
+
+assert_frontend_mode() {
+  local mode="${1:-development}"
+  local expected_container unexpected_container
+
+  expected_container="$(frontend_container_name "${mode}")"
+  if [[ "${mode}" == "development" ]]; then
+    unexpected_container="$(frontend_container_name production)"
+  else
+    unexpected_container="$(frontend_container_name development)"
+  fi
+
+  if ! docker ps --format '{{.Names}}' | grep -qx "${expected_container}"; then
+    echo "No quedo levantado el contenedor esperado para ${mode}: ${expected_container}" >&2
+    exit 1
+  fi
+
+  if docker ps --format '{{.Names}}' | grep -qx "${unexpected_container}"; then
+    echo "Quedo levantado el contenedor del otro entorno (${unexpected_container}) despues del deploy ${mode}" >&2
+    exit 1
+  fi
+}
+
 deploy_frontend() {
   local mode="${1:-development}"
-  local env_file
+  local env_file unexpected_container
 
   ensure_docker_ready
   env_file="$(resolve_env_file "${mode}")"
+  if [[ "${mode}" == "development" ]]; then
+    unexpected_container="$(frontend_container_name production)"
+  else
+    unexpected_container="$(frontend_container_name development)"
+  fi
 
   echo "Levantando Paramascotasec en ${mode} usando ${env_file}..."
+  remove_container_if_exists "${unexpected_container}"
   compose_cmd "${env_file}" "${mode}" up -d --build --remove-orphans
+  assert_frontend_mode "${mode}"
   compose_cmd "${env_file}" "${mode}" ps
   echo "Paramascotasec ${mode} listo"
 }

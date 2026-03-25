@@ -3,9 +3,13 @@ import { useState, useEffect, useCallback } from 'react';
 const useMenuMobile = () => {
     const [openMenuMobile, setOpenMenuMobile] = useState(false)
 
-    const handleMenuMobile = () => {
+    const handleMenuMobile = useCallback(() => {
         setOpenMenuMobile((toggleOpen) => !toggleOpen)
-    }
+    }, [])
+
+    const closeMenuMobile = useCallback(() => {
+        setOpenMenuMobile(false)
+    }, [])
 
     const handleClickOutsideMenuMobile = useCallback((event: Event) => {
         const targetElement = event.target as Element;
@@ -26,6 +30,7 @@ const useMenuMobile = () => {
     return {
         openMenuMobile,
         handleMenuMobile,
+        closeMenuMobile,
     }
 }
 

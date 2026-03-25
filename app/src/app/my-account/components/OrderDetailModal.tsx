@@ -3,6 +3,8 @@
 import React from 'react'
 import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
+import { isDynamicOrderItemImage, normalizeOrderItemImage } from '../customerDataUtils'
+import { normalizeStatus } from '../statusDisplay'
 
 type OrderDetailModalProps = {
     open: boolean;
@@ -63,6 +65,7 @@ export default function OrderDetailModal({
                 : pendingStatus === 'canceled'
                     ? 'cancelar el pedido'
                     : ''
+    const showInvoiceButton = canViewInvoice && ['completed', 'delivered'].includes(normalizeStatus(order?.status))
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -136,18 +139,20 @@ export default function OrderDetailModal({
                                 <tbody className="divide-y divide-line">
                                     {order.items?.map((item: any) => {
                                         const unitNetPrice = Number(getItemNetPrice(item, order))
+                                        const imageSrc = normalizeOrderItemImage(item.product_image)
                                         return (
                                             <tr key={item.id} className="hover:bg-surface/50 transition-colors">
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 bg-line rounded-lg overflow-hidden border border-line flex-shrink-0">
                                                             <Image
-                                                                src="/images/product/1000x1000.png"
+                                                                src={imageSrc}
                                                                 alt={item.product_name}
                                                                 width={48}
                                                                 height={48}
                                                                 sizes="48px"
                                                                 className="w-full h-full object-cover"
+                                                                unoptimized={isDynamicOrderItemImage(item.product_image)}
                                                             />
                                                         </div>
                                                         <span className="font-medium text-sm">{item.product_name}</span>
@@ -202,7 +207,7 @@ export default function OrderDetailModal({
                         </div>
                     )}
                     <div className="flex flex-wrap gap-2 md:justify-end">
-                        {canViewInvoice && (
+                        {showInvoiceButton && (
                             <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={onViewInvoice}>
                                 Imprimir factura
                             </button>

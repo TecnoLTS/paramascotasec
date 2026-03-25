@@ -7,6 +7,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { login } from '@/lib/api/auth'
+import { setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
 
 const Login = () => {
     const router = useRouter()
@@ -15,12 +16,25 @@ const Login = () => {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [loading, setLoading] = useState(false)
+    const [mfaRequired, setMfaRequired] = useState(false)
+    const [mfaCode, setMfaCode] = useState('')
+    const [mfaMethod, setMfaMethod] = useState<'email_otp' | 'recovery_code'>('email_otp')
 
     React.useEffect(() => {
         const query = new URLSearchParams(window.location.search)
         if (query.get('registered') === 'true') {
             setSuccess('¡Cuenta creada exitosamente! Por favor, inicia sesión.')
         }
+    }, [])
+
+    const getNextPath = React.useCallback(() => {
+        if (typeof window === 'undefined') return '/my-account'
+        const query = new URLSearchParams(window.location.search)
+        const next = query.get('next') || '/my-account'
+        if (!next.startsWith('/')) {
+            return '/my-account'
+        }
+        return next
     }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -30,10 +44,19 @@ const Login = () => {
         setLoading(true)
 
         try {
-            const res = await login({ email, password })
-            localStorage.setItem('authToken', res.token)
-            localStorage.setItem('user', JSON.stringify(res.user))
-            router.push('/my-account')
+            const res = await login({ email, password, mfaCode: mfaRequired ? mfaCode : undefined })
+            if (res.mfaRequired) {
+                setMfaRequired(true)
+                setMfaMethod(res.mfaMethod || 'email_otp')
+                setSuccess(res.message || 'Te enviamos un código MFA al correo del administrador.')
+                return
+            }
+            if (!res.user) {
+                throw new Error('No se pudo iniciar la sesión.')
+            }
+            setCookieSessionMarker()
+            setStoredSessionUser(res.user)
+            router.push(getNextPath())
         } catch (err: any) {
             setError(err.message || 'Error al iniciar sesión')
         } finally {
@@ -76,6 +99,31 @@ const Login = () => {
                                         onChange={(e) => setPassword(e.target.value)}
                                     />
                                 </div>
+                                {mfaRequired && (
+                                    <div className="pass mt-5">
+                                        <div className="mb-2 text-sm text-secondary">
+                                            {mfaMethod === 'recovery_code'
+                                                ? 'Ingresa el código de recuperación del administrador.'
+                                                : 'Ingresa el código MFA de 6 dígitos enviado por correo.'}
+                                        </div>
+                                        <input
+                                            className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                            id="mfaCode"
+                                            type="text"
+                                            inputMode={mfaMethod === 'recovery_code' ? 'text' : 'numeric'}
+                                            maxLength={mfaMethod === 'recovery_code' ? 32 : 6}
+                                            placeholder={mfaMethod === 'recovery_code' ? 'Código de recuperación *' : 'Código MFA de 6 dígitos *'}
+                                            required
+                                            value={mfaCode}
+                                            onChange={(e) => {
+                                                const nextValue = mfaMethod === 'recovery_code'
+                                                    ? e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32)
+                                                    : e.target.value.replace(/\D/g, '').slice(0, 6)
+                                                setMfaCode(nextValue)
+                                            }}
+                                        />
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between mt-5">
                                     <div className='flex items-center'>
                                         <div className="block-input">
@@ -92,7 +140,7 @@ const Login = () => {
                                 </div>
                                 <div className="block-button md:mt-7 mt-4">
                                     <button className="button-main" disabled={loading}>
-                                        {loading ? 'Cargando...' : 'Ingresar'}
+                                        {loading ? 'Cargando...' : (mfaRequired ? 'Validar código' : 'Ingresar')}
                                     </button>
                                 </div>
                             </form>

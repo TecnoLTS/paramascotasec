@@ -5,8 +5,117 @@ type MinimalUser = {
   email?: string | null
 }
 
-type SavedAddressEntry = {
-  billing?: AddressData | null
+export type SavedAddressFields = {
+  firstName: string
+  lastName: string
+  company: string
+  country: string
+  street: string
+  city: string
+  state: string
+  zip: string
+  phone: string
+  email: string
+}
+
+export type SavedAddressEntry = {
+  id: number
+  title: string
+  billing: SavedAddressFields
+  shipping: SavedAddressFields
+  isSame: boolean
+}
+
+export const EMPTY_SAVED_ADDRESS_FIELDS: SavedAddressFields = {
+  firstName: '',
+  lastName: '',
+  company: '',
+  country: '',
+  street: '',
+  city: '',
+  state: '',
+  zip: '',
+  phone: '',
+  email: '',
+}
+
+const hasAddressData = (address: SavedAddressFields) => {
+  return Object.values(address).some((value) => String(value || '').trim() !== '')
+}
+
+export const normalizeSavedAddressFields = (
+  value: unknown,
+  fallback: Partial<SavedAddressFields> = {},
+): SavedAddressFields => {
+  const candidate = normalizeAddressCandidate(value) || {}
+
+  return {
+    firstName: String(candidate.firstName ?? fallback.firstName ?? '').trim(),
+    lastName: String(candidate.lastName ?? fallback.lastName ?? '').trim(),
+    company: String(candidate.company ?? fallback.company ?? '').trim(),
+    country: String(candidate.country ?? fallback.country ?? '').trim(),
+    street: String(candidate.street ?? fallback.street ?? '').trim(),
+    city: String(candidate.city ?? fallback.city ?? '').trim(),
+    state: String(candidate.state ?? fallback.state ?? '').trim(),
+    zip: String(candidate.zip ?? fallback.zip ?? '').trim(),
+    phone: String(candidate.phone ?? fallback.phone ?? '').trim(),
+    email: String(candidate.email ?? fallback.email ?? '').trim(),
+  }
+}
+
+export const createEmptySavedAddressEntry = (
+  title = 'Dirección principal',
+  index = 0,
+): SavedAddressEntry => ({
+  id: Date.now() + index,
+  title,
+  shipping: { ...EMPTY_SAVED_ADDRESS_FIELDS },
+  billing: { ...EMPTY_SAVED_ADDRESS_FIELDS },
+  isSame: true,
+})
+
+export const normalizeSavedAddressEntry = (value: unknown, index = 0): SavedAddressEntry | null => {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const shippingCandidate = normalizeSavedAddressFields(source.shipping ?? null)
+  const billingCandidate = normalizeSavedAddressFields(source.billing ?? null)
+  const flatCandidate = normalizeSavedAddressFields(source)
+
+  const shipping = hasAddressData(shippingCandidate)
+    ? shippingCandidate
+    : (hasAddressData(flatCandidate) ? flatCandidate : billingCandidate)
+  const billing = hasAddressData(billingCandidate)
+    ? billingCandidate
+    : (hasAddressData(flatCandidate) ? flatCandidate : shipping)
+
+  if (!hasAddressData(shipping) && !hasAddressData(billing)) {
+    return null
+  }
+
+  const explicitSame = source.isSame
+  const isSame = typeof explicitSame === 'boolean'
+    ? explicitSame
+    : !hasAddressData(billing) || shipping === billing || JSON.stringify(shipping) === JSON.stringify(billing)
+
+  const idValue = Number(source.id)
+  const titleValue = String(source.title ?? '').trim()
+  const normalizedShipping = { ...shipping }
+  const normalizedBilling = isSame ? { ...normalizedShipping } : { ...billing }
+
+  return {
+    id: Number.isFinite(idValue) && idValue > 0 ? idValue : (Date.now() + index),
+    title: titleValue || (index === 0 ? 'Dirección principal' : `Dirección ${index + 1}`),
+    shipping: normalizedShipping,
+    billing: normalizedBilling,
+    isSame,
+  }
+}
+
+export const normalizeSavedAddresses = (value: unknown): SavedAddressEntry[] => {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map((entry, index) => normalizeSavedAddressEntry(entry, index))
+    .filter((entry): entry is SavedAddressEntry => Boolean(entry))
 }
 
 export const parseAddress = (value: unknown): AddressData | string | null => {
@@ -85,8 +194,8 @@ export const getAdminUserResolvedAddress = (adminUser: AdminUserSummary, profile
   if (Array.isArray(rawAddresses)) {
     for (const entry of rawAddresses) {
       const candidate =
-        normalizeAddressCandidate((entry as Record<string, unknown>)?.billing) ||
         normalizeAddressCandidate((entry as Record<string, unknown>)?.shipping) ||
+        normalizeAddressCandidate((entry as Record<string, unknown>)?.billing) ||
         normalizeAddressCandidate(entry)
       if (candidate) return candidate
     }
@@ -137,7 +246,12 @@ export const formatAddressLines = (value: unknown) => {
 
 export const getDefaultBillingAddress = (savedAddresses: SavedAddressEntry[]): AddressData | null => {
   if (!savedAddresses || savedAddresses.length === 0) return null
-  return savedAddresses[0]?.billing || null
+  return savedAddresses[0]?.billing || savedAddresses[0]?.shipping || null
+}
+
+export const getDefaultShippingAddress = (savedAddresses: SavedAddressEntry[]): AddressData | null => {
+  if (!savedAddresses || savedAddresses.length === 0) return null
+  return savedAddresses[0]?.shipping || savedAddresses[0]?.billing || null
 }
 
 export const getOrderItemsGrossSubtotal = (order: any) => {
@@ -230,6 +344,22 @@ export const getItemNetPrice = (item: any, order: any) => {
   return multiplier > 0 ? price / multiplier : price
 }
 
+const ORDER_ITEM_IMAGE_FALLBACK = '/images/product/1.jpg'
+
+export const normalizeOrderItemImage = (value: unknown) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ORDER_ITEM_IMAGE_FALLBACK
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (raw.startsWith('/uploads/') || raw.startsWith('/images/')) return raw
+  if (raw.startsWith('uploads/')) return `/${raw}`
+  return raw.startsWith('/') ? raw : `/${raw}`
+}
+
+export const isDynamicOrderItemImage = (value: unknown) => {
+  const src = normalizeOrderItemImage(value)
+  return /^https?:\/\//i.test(src) || src.startsWith('/uploads/')
+}
+
 export const getOrderContact = (
   order: any,
   user: MinimalUser | null,
@@ -244,11 +374,12 @@ export const getOrderContact = (
   const nameFromAddress = [shipping.firstName || billing.firstName, shipping.lastName || billing.lastName]
     .filter(Boolean)
     .join(' ')
+  const defaultShipping = getDefaultShippingAddress(savedAddresses) || {}
   const defaultBilling = getDefaultBillingAddress(savedAddresses) || {}
 
   return {
     name: order.customer_name || nameFromAddress || user?.name || '-',
-    email: order.customer_email || shipping.email || billing.email || defaultBilling.email || user?.email || '-',
-    phone: order.customer_phone || shipping.phone || billing.phone || defaultBilling.phone || '-',
+    email: order.customer_email || shipping.email || billing.email || defaultShipping.email || defaultBilling.email || user?.email || '-',
+    phone: order.customer_phone || shipping.phone || billing.phone || defaultShipping.phone || defaultBilling.phone || '-',
   }
 }

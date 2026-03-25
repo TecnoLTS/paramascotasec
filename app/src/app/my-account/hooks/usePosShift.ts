@@ -38,12 +38,8 @@ export const usePosShift = ({ showNotification, parseDecimalInput }: UsePosShift
     }
   }, [])
 
-  const loadPosSnapshot = React.useCallback(async (token?: string) => {
-    const authToken = token || localStorage.getItem('authToken')
-    if (!authToken) return
-    const res = await requestApi<any>('/api/admin/pos/shift/active', {
-      headers: { Authorization: `Bearer ${authToken}` },
-    })
+  const loadPosSnapshot = React.useCallback(async (_token?: string) => {
+    const res = await requestApi<any>('/api/admin/pos/shift/active')
     syncPosState(res.body)
   }, [syncPosState])
 
