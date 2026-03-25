@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
@@ -12,6 +12,7 @@ import { login, register, requestOtp, verifyOtp } from '@/lib/api/auth'
 import { fetchJson, requestApi } from '@/lib/apiClient'
 import { getStoredSessionUser, hasCookieSessionMarker, setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
 import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCountryToEcuador, saveCheckoutDraft } from '@/lib/checkoutDraft'
+import { buildLiveAvailabilityMap, fetchLiveCatalogSnapshot } from '@/lib/liveCatalog'
 
 interface AddressData {
     firstName: string;
@@ -139,10 +140,9 @@ const Checkout = () => {
     const [overwriteOriginal, setOverwriteOriginal] = useState(false)
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
-    const { cartState, clearCart, removeFromCart } = useCart()
+    const { cartState, clearCart, removeFromCart, updateCart } = useCart()
     const router = useRouter()
-    const [availableProductIds, setAvailableProductIds] = useState<Set<string> | null>(null)
-    const removedMissingRef = useRef<Set<string>>(new Set())
+    const [availableProductsMap, setAvailableProductsMap] = useState<Map<string, number> | null>(null)
     const [isLoggedIn, setIsLoggedIn] = useState(false)
     const [loginForm, setLoginForm] = useState({ email: '', password: '' })
     const [loginLoading, setLoginLoading] = useState(false)
@@ -390,25 +390,42 @@ const Checkout = () => {
         })
     }, [orderNotes, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country])
 
+    const refreshAvailableProducts = useCallback(async () => {
+        const snapshot = await fetchLiveCatalogSnapshot()
+        const availabilityMap = buildLiveAvailabilityMap(snapshot.rawProducts)
+        setAvailableProductsMap(availabilityMap)
+        return availabilityMap
+    }, [])
+
     useEffect(() => {
         let mounted = true
-        fetchJson<any[]>('/api/products')
-            .then((products) => {
-                if (!mounted) return
-                const ids = new Set<string>()
-                products.forEach((p) => {
-                    if (p?.id !== undefined && p?.id !== null) ids.add(String(p.id))
-                    if (p?.legacyId !== undefined && p?.legacyId !== null) ids.add(String(p.legacyId))
+        const refresh = () => {
+            refreshAvailableProducts()
+                .then((availabilityMap) => {
+                    if (!mounted) return
+                    setAvailableProductsMap(availabilityMap)
                 })
-                setAvailableProductIds(ids)
-            })
-            .catch((err) => {
-                console.error('No se pudo cargar el catálogo para validar el carrito', err)
-            })
+                .catch((err) => {
+                    console.error('No se pudo cargar el catálogo para validar el carrito', err)
+                })
+        }
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                refresh()
+            }
+        }
+
+        refresh()
+        window.addEventListener('focus', refresh)
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+
         return () => {
             mounted = false
+            window.removeEventListener('focus', refresh)
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
         }
-    }, [])
+    }, [refreshAvailableProducts])
 
 
     const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -743,23 +760,57 @@ const Checkout = () => {
         [cartState.cartArray]
     )
 
+    const syncCartWithLiveAvailability = useCallback((availabilityMap: Map<string, number>, showFeedback = true) => {
+        const removedItems: string[] = []
+        const adjustedItems: Array<{ name: string; available: number }> = []
+
+        normalizedCart.forEach((item) => {
+            const itemId = String(item.id)
+            const liveStock = availabilityMap.get(itemId)
+
+            if (!Number.isFinite(liveStock)) {
+                removeFromCart(itemId)
+                removedItems.push(item.name)
+                return
+            }
+
+            if ((liveStock ?? 0) <= 0) {
+                removeFromCart(itemId)
+                removedItems.push(item.name)
+                return
+            }
+
+            if (item.quantity > (liveStock ?? 0)) {
+                updateCart(itemId, liveStock ?? 0, item.size === '—' ? '' : item.size, item.color === '—' ? '' : item.color)
+                adjustedItems.push({ name: item.name, available: liveStock ?? 0 })
+            }
+        })
+
+        if (!showFeedback) {
+            return { changed: removedItems.length > 0 || adjustedItems.length > 0, removedItems, adjustedItems }
+        }
+
+        if (removedItems.length > 0) {
+            setMessage({
+                text: 'Se eliminaron productos que ya no están disponibles. Revisa tu carrito.',
+                type: 'error'
+            })
+        } else if (adjustedItems.length > 0) {
+            setMessage({
+                text: 'Actualizamos cantidades del carrito porque algunos productos ya no tienen el stock que mostraba la página.',
+                type: 'error'
+            })
+        }
+
+        return { changed: removedItems.length > 0 || adjustedItems.length > 0, removedItems, adjustedItems }
+    }, [normalizedCart, removeFromCart, setMessage, updateCart])
+
     useEffect(() => {
         const updateQuote = async () => {
             if (normalizedCart.length === 0) return;
-            if (availableProductIds) {
-                const missing = normalizedCart.filter((item) => !availableProductIds.has(String(item.id)))
-                if (missing.length > 0) {
-                    missing.forEach((item) => {
-                        const id = String(item.id)
-                        removeFromCart(id)
-                        if (!removedMissingRef.current.has(id)) {
-                            removedMissingRef.current.add(id)
-                        }
-                    })
-                    setMessage({
-                        text: 'Se eliminaron productos que ya no están disponibles. Revisa tu carrito.',
-                        type: 'error'
-                    })
+            if (availableProductsMap) {
+                const syncResult = syncCartWithLiveAvailability(availableProductsMap)
+                if (syncResult.changed) {
                     return
                 }
             }
@@ -790,6 +841,21 @@ const Checkout = () => {
                         return
                     }
                 }
+                if (backendMessage.includes('Stock insuficiente')) {
+                    try {
+                        const latestAvailability = await refreshAvailableProducts()
+                        const syncResult = syncCartWithLiveAvailability(latestAvailability, false)
+                        if (syncResult.changed) {
+                            setMessage({
+                                text: 'Actualizamos tu carrito porque el stock cambió mientras estabas en checkout.',
+                                type: 'error'
+                            })
+                            return
+                        }
+                    } catch {
+                        // ignore refresh errors and keep backend message below
+                    }
+                }
                 if (backendMessage && backendMessage !== 'Error interno del servidor') {
                     setMessage({ text: backendMessage, type: 'error' })
                     return
@@ -799,7 +865,7 @@ const Checkout = () => {
             }
         };
         updateQuote();
-    }, [normalizedCart, deliveryMethod, removeFromCart, availableProductIds]);
+    }, [normalizedCart, deliveryMethod, availableProductsMap, syncCartWithLiveAvailability]);
 
     const items = normalizedCart
     const subtotal = quote?.subtotal || 0
@@ -878,6 +944,17 @@ const Checkout = () => {
         setMessage(null);
 
         try {
+            const latestAvailability = await refreshAvailableProducts()
+            const syncResult = syncCartWithLiveAvailability(latestAvailability, false)
+            if (syncResult.changed) {
+                setMessage({
+                    text: 'Actualizamos tu carrito con el stock real antes de cobrar. Revisa las cantidades y vuelve a confirmar.',
+                    type: 'error'
+                })
+                setLoading(false)
+                return
+            }
+
             const shippingAddress = {
                 ...ensureEcuadorAddress(tempAddress),
                 ...contactInfo
@@ -926,6 +1003,23 @@ const Checkout = () => {
             }
 
         } catch (err: any) {
+            const backendMessage = err?.message || ''
+            if (typeof backendMessage === 'string' && backendMessage.includes('Stock insuficiente')) {
+                try {
+                    const latestAvailability = await refreshAvailableProducts()
+                    const syncResult = syncCartWithLiveAvailability(latestAvailability, false)
+                    if (syncResult.changed) {
+                        setMessage({
+                            text: 'Actualizamos tu carrito con el stock real. Revisa las cantidades y vuelve a confirmar.',
+                            type: 'error'
+                        })
+                        setOrderCompletionInProgress(false)
+                        return
+                    }
+                } catch {
+                    // ignore sync errors and show backend message below
+                }
+            }
             setMessage({ text: err.message || 'Error al procesar el pedido', type: 'error' });
             setOrderCompletionInProgress(false)
         } finally {

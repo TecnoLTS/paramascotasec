@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import { useRouter } from 'next/navigation'
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -16,14 +16,18 @@ import ShareMenu from '@/components/Product/ShareMenu'
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
 import {
-  findCatalogProduct,
   getProductReviewCount,
   getProductSku,
   getProductVariantLabel,
   getProductVariants,
   hasRealReviews,
-  resolveSelectedVariant,
 } from '@/lib/catalog'
+import {
+  fetchLiveCatalogSnapshot,
+  findLiveCatalogProduct,
+  getLiveProductAvailableStock,
+  resolveLiveSelectedVariant,
+} from '@/lib/liveCatalog'
 
 interface Props {
   data: Array<ProductType>
@@ -41,25 +45,82 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [activeSize, setActiveSize] = useState('')
   const [activeTab, setActiveTab] = useState<'description' | 'specifications'>('description')
   const [quantity, setQuantity] = useState(1)
+  const [liveProducts, setLiveProducts] = useState(data)
+  const [availabilityNotice, setAvailabilityNotice] = useState<string | null>(null)
+  const [isStockRefreshing, setIsStockRefreshing] = useState(false)
 
   const { addToCart, updateCart, cartState } = useCart()
   const { openModalCart } = useModalCartContext()
 
   const requestedId = typeof productId === 'string' ? productId : String(productId ?? '')
-  const productFamily = useMemo(() => findCatalogProduct(data, requestedId) ?? data[0], [data, requestedId])
-  const variantProducts = useMemo(() => getProductVariants(productFamily), [productFamily])
-  const defaultVariant = useMemo(() => resolveSelectedVariant(productFamily, requestedId), [productFamily, requestedId])
-  const activeVariant = variantProducts.find((product) => getProductVariantLabel(product) === activeSize) ?? defaultVariant
-  const defaultVariantStock = Math.max(
-    0,
-    Number(defaultVariant.inventory?.available ?? defaultVariant.quantity ?? 0),
+  const productFamily = useMemo(() => findLiveCatalogProduct(liveProducts, requestedId), [liveProducts, requestedId])
+  const variantProducts = useMemo(() => (productFamily ? getProductVariants(productFamily) : []), [productFamily])
+  const defaultVariant = useMemo(
+    () => (productFamily ? resolveLiveSelectedVariant(productFamily, { requestedId }) : null),
+    [productFamily, requestedId],
   )
-  const availableStock = Math.max(
-    0,
-    Number(activeVariant.inventory?.available ?? activeVariant.quantity ?? 0),
-  )
-  const showReviewSummary = hasRealReviews(productFamily)
-  const reviewCount = getProductReviewCount(productFamily)
+  const activeVariant = useMemo(() => {
+    if (!productFamily || !defaultVariant) return null
+    return variantProducts.find((product) => getProductVariantLabel(product) === activeSize)
+      ?? resolveLiveSelectedVariant(productFamily, {
+        requestedId,
+        preferredVariantId: defaultVariant.id,
+        preferredVariantLabel: activeSize,
+      })
+  }, [activeSize, defaultVariant, productFamily, requestedId, variantProducts])
+  const defaultVariantStock = getLiveProductAvailableStock(defaultVariant)
+  const availableStock = getLiveProductAvailableStock(activeVariant)
+  const showReviewSummary = productFamily ? hasRealReviews(productFamily) : false
+  const reviewCount = productFamily ? getProductReviewCount(productFamily) : 0
+
+  useEffect(() => {
+    setLiveProducts(data)
+  }, [data])
+
+  const refreshLiveCatalog = useCallback(async () => {
+    const snapshot = await fetchLiveCatalogSnapshot()
+    setLiveProducts(snapshot.groupedProducts)
+    return findLiveCatalogProduct(snapshot.groupedProducts, requestedId)
+  }, [requestedId])
+
+  const refreshSelectedVariant = useCallback(async () => {
+    const refreshedFamily = await refreshLiveCatalog()
+    if (!refreshedFamily) {
+      setQuantity(0)
+      setAvailabilityNotice('Este producto ya no está disponible en la tienda.')
+      return null
+    }
+
+    const refreshedVariant = resolveLiveSelectedVariant(refreshedFamily, {
+      requestedId,
+      preferredVariantId: activeVariant?.id ?? defaultVariant?.id ?? null,
+      preferredVariantLabel: activeSize,
+      strictPreferredMatch: true,
+    })
+    if (!refreshedVariant) {
+      setQuantity(0)
+      setAvailabilityNotice('La variante seleccionada ya no está disponible.')
+      return null
+    }
+    const refreshedStock = getLiveProductAvailableStock(refreshedVariant)
+
+    if (refreshedStock <= 0) {
+      setQuantity(0)
+      setAvailabilityNotice('Esta variante ya no tiene stock disponible.')
+      return null
+    }
+
+    setQuantity((current) => {
+      if (current <= 0) return 1
+      return Math.min(current, refreshedStock)
+    })
+    setAvailabilityNotice(null)
+    return {
+      family: refreshedFamily,
+      variant: refreshedVariant,
+      stock: refreshedStock,
+    }
+  }, [activeSize, activeVariant?.id, defaultVariant?.id, refreshLiveCatalog, requestedId])
 
   useEffect(() => {
     if (!openPopupImg) return
@@ -81,11 +142,34 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }, [openPopupImg])
 
   useEffect(() => {
+    const handleVisibilityRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        refreshLiveCatalog().catch(() => {})
+      }
+    }
+    const handleFocusRefresh = () => {
+      refreshLiveCatalog().catch(() => {})
+    }
+
+    window.addEventListener('focus', handleFocusRefresh)
+    document.addEventListener('visibilitychange', handleVisibilityRefresh)
+
+    return () => {
+      window.removeEventListener('focus', handleFocusRefresh)
+      document.removeEventListener('visibilitychange', handleVisibilityRefresh)
+    }
+  }, [refreshLiveCatalog])
+
+  useEffect(() => {
+    if (!defaultVariant || !productFamily) {
+      setQuantity(0)
+      return
+    }
     setQuantity(defaultVariantStock > 0 ? 1 : 0)
     setActiveColor('')
     setActiveSize(getProductVariantLabel(defaultVariant))
     setPhotoIndex(0)
-  }, [defaultVariant.id, defaultVariantStock, productFamily.id])
+  }, [defaultVariant?.id, defaultVariantStock, productFamily?.id])
 
   useEffect(() => {
     setQuantity((current) => {
@@ -93,7 +177,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
       if (current <= 0) return 1
       return Math.min(current, availableStock)
     })
-  }, [availableStock, activeVariant.id])
+  }, [availableStock, activeVariant?.id])
 
   useEffect(() => {
     if (openPopupImg) {
@@ -101,18 +185,18 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     }
   }, [openPopupImg, photoIndex])
 
-  const productType = (productFamily.productType ?? '').toLowerCase()
+  const productType = (productFamily?.productType ?? '').toLowerCase()
   const isClothing = productType === 'ropa'
-  const categoryLabel = (productFamily.category ?? '').toLowerCase()
+  const categoryLabel = (productFamily?.category ?? '').toLowerCase()
   const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
   const selectorLabel = isFoodCategory ? 'Tamano del paquete' : (isClothing ? 'Talla' : 'Variante')
-  const sku = getProductSku(activeVariant)
-  const price = Number(activeVariant.price ?? 0)
-  const originPrice = Number(activeVariant.originPrice ?? 0)
-  const hasSale = Boolean(activeVariant.sale || productFamily.sale) && originPrice > price
+  const sku = activeVariant ? getProductSku(activeVariant) : ''
+  const price = Number(activeVariant?.price ?? 0)
+  const originPrice = Number(activeVariant?.originPrice ?? 0)
+  const hasSale = Boolean(activeVariant?.sale || productFamily?.sale) && originPrice > price
   const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
 
-  const pageSettings = productFamily.pageSettings ?? {
+  const pageSettings = productFamily?.pageSettings ?? {
     deliveryEstimate: '14 de enero - 18 de enero',
     viewerCount: 38,
     freeShippingThreshold: 75,
@@ -144,13 +228,13 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }
 
   const attributeRows = useMemo(() => {
-    const attributes = activeVariant.attributes ?? {}
+    const attributes = activeVariant?.attributes ?? {}
     const labels = attributeLabels[productType] ?? {}
 
     return Object.entries(labels)
       .map(([key, label]) => {
         let value: unknown = attributes[key]
-        if (key === 'size' && !value) value = getProductVariantLabel(activeVariant)
+        if (key === 'size' && !value && activeVariant) value = getProductVariantLabel(activeVariant)
         return { key, label, value }
       })
       .filter((item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== '')
@@ -162,46 +246,95 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const thumbImages = Array.isArray((activeVariant as any)?.thumbImage)
     ? (activeVariant as any).thumbImage.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
     : []
-  const variationImages = (activeVariant.variation ?? [])
+  const variationImages = (activeVariant?.variation ?? [])
     .flatMap((variation) => [variation.image, variation.colorImage])
     .filter((img): img is string => typeof img === 'string' && img.length > 0)
   const galleryImages = Array.from(new Set([...productImages, ...variationImages])).filter(Boolean)
   const resolvedGalleryImages = galleryImages.length > 0
     ? galleryImages
     : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.jpg'])
-  const colorOptions = (activeVariant.variation ?? []).filter((item) => item.color)
+  const colorOptions = (activeVariant?.variation ?? []).filter((item) => item.color)
   const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.jpg'
 
   const relatedProducts = useMemo(() => {
+    if (!productFamily) return []
     return data
       .filter((product) => product.id !== productFamily.id && product.variantGroupKey !== productFamily.variantGroupKey)
       .filter((product) => !productFamily.gender || product.gender === productFamily.gender)
       .slice(0, 4)
-  }, [data, productFamily.gender, productFamily.id, productFamily.variantGroupKey])
+  }, [data, productFamily?.gender, productFamily?.id, productFamily?.variantGroupKey])
 
-  const handleAddToCart = () => {
-    if (availableStock <= 0) {
+  const addVariantToCart = useCallback((variantToAdd: ProductType, stockToUse: number) => {
+    const quantityToAdd = Math.min(Math.max(quantity ?? 1, 1), stockToUse)
+    const existingItem = cartState.cartArray.find((item) => item.id === variantToAdd.id)
+    const variantLabel = activeSize || getProductVariantLabel(variantToAdd)
+
+    if (!existingItem) {
+      addToCart({ ...variantToAdd, quantityPurchase: quantityToAdd })
+      updateCart(variantToAdd.id, quantityToAdd, variantLabel, activeColor)
       return
     }
 
-    const quantityToAdd = Math.min(Math.max(quantity ?? 1, 1), availableStock)
-    const existingItem = cartState.cartArray.find((item) => item.id === activeVariant.id)
-    const variantLabel = activeSize || getProductVariantLabel(activeVariant)
+    const nextQuantity = Math.min((existingItem.quantity ?? 0) + quantityToAdd, stockToUse)
+    updateCart(variantToAdd.id, nextQuantity, variantLabel, activeColor)
+  }, [activeColor, activeSize, addToCart, cartState.cartArray, quantity, updateCart])
 
-    if (!existingItem) {
-      addToCart({ ...activeVariant, quantityPurchase: quantityToAdd })
-      updateCart(activeVariant.id, quantityToAdd, variantLabel, activeColor)
-    } else {
-      const nextQuantity = Math.min((existingItem.quantity ?? 0) + quantityToAdd, availableStock)
-      updateCart(activeVariant.id, nextQuantity, variantLabel, activeColor)
+  const handleAddToCart = async () => {
+    if (!activeVariant || availableStock <= 0) {
+      return
     }
 
-    openModalCart()
+    setIsStockRefreshing(true)
+    try {
+      const liveSelection = await refreshSelectedVariant()
+      if (!liveSelection) {
+        return
+      }
+
+      addVariantToCart(liveSelection.variant, liveSelection.stock)
+      openModalCart()
+    } finally {
+      setIsStockRefreshing(false)
+    }
   }
 
-  const handleBuyNow = () => {
-    handleAddToCart()
-    router.push('/cart')
+  const handleBuyNow = async () => {
+    if (!activeVariant || availableStock <= 0) {
+      return
+    }
+
+    setIsStockRefreshing(true)
+    try {
+      const liveSelection = await refreshSelectedVariant()
+      if (!liveSelection) {
+        return
+      }
+
+      addVariantToCart(liveSelection.variant, liveSelection.stock)
+      router.push('/cart')
+    } finally {
+      setIsStockRefreshing(false)
+    }
+  }
+
+  if (!productFamily || !defaultVariant || !activeVariant) {
+    return (
+      <div className="container py-16 text-center">
+        <div className="mx-auto max-w-xl rounded-2xl border border-line bg-white p-8">
+          <h1 className="heading5">Producto no disponible</h1>
+          <p className="mt-3 text-secondary">
+            Este producto ya no está publicado o se quedó sin stock.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="button-main mt-6 inline-flex items-center justify-center"
+          >
+            Volver a la tienda
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const formattedCategory = [productFamily.category, productFamily.gender === 'dog' ? 'Perros' : productFamily.gender === 'cat' ? 'Gatos' : '']

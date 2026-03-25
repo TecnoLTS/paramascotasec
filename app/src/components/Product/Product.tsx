@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import { ProductType } from '@/type/ProductType'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -20,6 +20,12 @@ import {
     isProductOnSale,
     resolveSelectedVariant,
 } from '@/lib/catalog'
+import {
+    fetchLiveCatalogSnapshot,
+    findLiveCatalogProduct,
+    getLiveProductAvailableStock,
+    resolveLiveSelectedVariant,
+} from '@/lib/liveCatalog'
 
 interface ProductProps {
     data: ProductType
@@ -51,19 +57,44 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
         setActiveSize(item)
     }
 
-    const handleAddToCart = () => {
+    const refreshSelectedVariant = useCallback(async () => {
+        const snapshot = await fetchLiveCatalogSnapshot()
+        const refreshedProduct = findLiveCatalogProduct(snapshot.groupedProducts, data.id)
+        if (!refreshedProduct) return null
+        const refreshedVariant = resolveLiveSelectedVariant(refreshedProduct, {
+            requestedId: data.id,
+            preferredVariantId: selectedVariant.id,
+            preferredVariantLabel: activeSize,
+            strictPreferredMatch: true,
+        })
+        if (!refreshedVariant) return null
+        const refreshedStock = getLiveProductAvailableStock(refreshedVariant)
+        if (refreshedStock <= 0) return null
+        return {
+            product: refreshedProduct,
+            variant: refreshedVariant,
+            stock: refreshedStock,
+        }
+    }, [activeSize, data.id, selectedVariant.id])
+
+    const handleAddToCart = async () => {
         if (hasVariantChoices && !activeSize) {
             handleQuickviewOpen()
             return
         }
 
-        const cartProduct = selectedVariant
+        const liveSelection = await refreshSelectedVariant()
+        if (!liveSelection) {
+            return
+        }
+
+        const cartProduct = liveSelection.variant
         const selectedSizeLabel = activeSize || getProductVariantLabel(cartProduct)
         const existingItem = cartState.cartArray.find((item: any) => item.id === cartProduct.id)
-        const qtyToAdd = cartProduct.quantityPurchase ?? data.quantityPurchase ?? 1
+        const qtyToAdd = Math.min(cartProduct.quantityPurchase ?? data.quantityPurchase ?? 1, liveSelection.stock)
 
         if (existingItem) {
-            const nextQuantity = (existingItem.quantity ?? 0) + qtyToAdd
+            const nextQuantity = Math.min((existingItem.quantity ?? 0) + qtyToAdd, liveSelection.stock)
             updateCart(cartProduct.id, nextQuantity, selectedSizeLabel, activeColor)
         } else {
             addToCart({ ...cartProduct, quantityPurchase: qtyToAdd });

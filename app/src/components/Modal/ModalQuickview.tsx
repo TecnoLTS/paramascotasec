@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import * as Icon from '@phosphor-icons/react/dist/ssr'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
@@ -16,6 +16,12 @@ import {
     hasRealReviews,
     resolveSelectedVariant,
 } from '@/lib/catalog'
+import {
+    fetchLiveCatalogSnapshot,
+    findLiveCatalogProduct,
+    getLiveProductAvailableStock,
+    resolveLiveSelectedVariant,
+} from '@/lib/liveCatalog'
 
 const ModalQuickview = () => {
     const { selectedProduct, closeQuickview } = useModalQuickviewContext()
@@ -26,12 +32,15 @@ const ModalQuickview = () => {
     const [activeColor, setActiveColor] = useState('')
     const [activeSize, setActiveSize] = useState('')
     const [quantity, setQuantity] = useState(1)
+    const [liveProduct, setLiveProduct] = useState(selectedProduct)
+    const [availabilityNotice, setAvailabilityNotice] = useState<string | null>(null)
+    const [isRefreshingStock, setIsRefreshingStock] = useState(false)
 
-    const variantProducts = selectedProduct ? getProductVariants(selectedProduct) : []
-    const defaultVariant = selectedProduct ? resolveSelectedVariant(selectedProduct) : null
+    const variantProducts = liveProduct ? getProductVariants(liveProduct) : []
+    const defaultVariant = liveProduct ? resolveSelectedVariant(liveProduct) : null
     const activeVariant = variantProducts.find((product) => getProductVariantLabel(product) === activeSize) ?? defaultVariant
-    const showReviewSummary = selectedProduct ? hasRealReviews(selectedProduct) : false
-    const reviewCount = selectedProduct ? getProductReviewCount(selectedProduct) : 0
+    const showReviewSummary = liveProduct ? hasRealReviews(liveProduct) : false
+    const reviewCount = liveProduct ? getProductReviewCount(liveProduct) : 0
 
     const galleryImages = !activeVariant ? [] : Array.from(new Set([
         ...(Array.isArray((activeVariant as any)?.images)
@@ -42,6 +51,58 @@ const ModalQuickview = () => {
             : []),
     ])).filter(Boolean)
     const resolvedGalleryImages = galleryImages.length > 0 ? galleryImages : ['/images/product/1.jpg']
+
+    useEffect(() => {
+        setLiveProduct(selectedProduct)
+        setAvailabilityNotice(null)
+    }, [selectedProduct])
+
+    const refreshLiveProduct = useCallback(async () => {
+        if (!selectedProduct) return null
+        const snapshot = await fetchLiveCatalogSnapshot()
+        const refreshedProduct = findLiveCatalogProduct(snapshot.groupedProducts, selectedProduct.id)
+        setLiveProduct(refreshedProduct)
+        return refreshedProduct
+    }, [selectedProduct])
+
+    const refreshSelectedVariant = useCallback(async () => {
+        const refreshedProduct = await refreshLiveProduct()
+        if (!refreshedProduct) {
+            setQuantity(0)
+            setAvailabilityNotice('Este producto ya no está disponible.')
+            return null
+        }
+
+        const refreshedVariant = resolveLiveSelectedVariant(refreshedProduct, {
+            requestedId: selectedProduct?.id,
+            preferredVariantId: activeVariant?.id ?? defaultVariant?.id ?? null,
+            preferredVariantLabel: activeSize,
+            strictPreferredMatch: true,
+        })
+        if (!refreshedVariant) {
+            setQuantity(0)
+            setAvailabilityNotice('La variante seleccionada ya no está disponible.')
+            return null
+        }
+        const refreshedStock = getLiveProductAvailableStock(refreshedVariant)
+
+        if (refreshedStock <= 0) {
+            setQuantity(0)
+            setAvailabilityNotice('Esta variante ya no tiene stock disponible.')
+            return null
+        }
+
+        setQuantity((current) => {
+            if (current < 1) return 1
+            return Math.min(current, refreshedStock)
+        })
+        setAvailabilityNotice(null)
+        return {
+            product: refreshedProduct,
+            variant: refreshedVariant,
+            stock: refreshedStock,
+        }
+    }, [activeSize, activeVariant?.id, defaultVariant?.id, refreshLiveProduct, selectedProduct?.id])
 
     useEffect(() => {
         if (!selectedProduct || !defaultVariant) {
@@ -56,17 +117,17 @@ const ModalQuickview = () => {
         setActiveSize(getProductVariantLabel(defaultVariant))
     }, [selectedProduct?.id, defaultVariant?.id])
 
-    const price = Number(activeVariant?.price ?? selectedProduct?.price ?? 0)
-    const originPrice = Number(activeVariant?.originPrice ?? selectedProduct?.originPrice ?? 0)
-    const availableStock = Math.max(0, Number(activeVariant?.quantity ?? selectedProduct?.quantity ?? 0))
+    const price = Number(activeVariant?.price ?? liveProduct?.price ?? 0)
+    const originPrice = Number(activeVariant?.originPrice ?? liveProduct?.originPrice ?? 0)
+    const availableStock = Math.max(0, getLiveProductAvailableStock(activeVariant ?? liveProduct))
     const safeQuantity = availableStock > 0 ? Math.min(Math.max(quantity, 1), availableStock) : 0
     const lineTotal = price * safeQuantity
-    const hasSale = Boolean(activeVariant?.sale || selectedProduct?.sale) && originPrice > price
+    const hasSale = Boolean(activeVariant?.sale || liveProduct?.sale) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
-    const categoryLabel = (selectedProduct?.category ?? '').toLowerCase()
+    const categoryLabel = (liveProduct?.category ?? '').toLowerCase()
     const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
-    const selectorLabel = isFoodCategory ? 'Tamano del paquete' : ((selectedProduct?.productType ?? '').toLowerCase() === 'ropa' ? 'Talla' : 'Variante')
-    const formattedCategory = [selectedProduct?.category, selectedProduct?.gender === 'dog' ? 'Perros' : selectedProduct?.gender === 'cat' ? 'Gatos' : '']
+    const selectorLabel = isFoodCategory ? 'Tamano del paquete' : ((liveProduct?.productType ?? '').toLowerCase() === 'ropa' ? 'Talla' : 'Variante')
+    const formattedCategory = [liveProduct?.category, liveProduct?.gender === 'dog' ? 'Perros' : liveProduct?.gender === 'cat' ? 'Gatos' : '']
         .filter(Boolean)
         .join(' · ')
     const sku = activeVariant ? getProductSku(activeVariant) : ''
@@ -92,23 +153,31 @@ const ModalQuickview = () => {
         })
     }
 
-    const handleAddToCart = () => {
+    const handleAddToCart = async () => {
         if (!selectedProduct || !activeVariant || availableStock <= 0 || safeQuantity <= 0) return
 
-        const quantityToAdd = safeQuantity
-        const variantLabel = activeSize || getProductVariantLabel(activeVariant)
-        const existingItem = cartState.cartArray.find((item) => item.id === activeVariant.id)
+        setIsRefreshingStock(true)
+        try {
+            const liveSelection = await refreshSelectedVariant()
+            if (!liveSelection) return
 
-        if (!existingItem) {
-            addToCart({ ...activeVariant, quantityPurchase: quantityToAdd })
-            updateCart(activeVariant.id, quantityToAdd, variantLabel, activeColor)
-        } else {
-            const nextQuantity = (existingItem.quantity ?? 0) + quantityToAdd
-            updateCart(activeVariant.id, nextQuantity, variantLabel, activeColor)
+            const quantityToAdd = Math.min(safeQuantity, liveSelection.stock)
+            const variantLabel = activeSize || getProductVariantLabel(liveSelection.variant)
+            const existingItem = cartState.cartArray.find((item) => item.id === liveSelection.variant.id)
+
+            if (!existingItem) {
+                addToCart({ ...liveSelection.variant, quantityPurchase: quantityToAdd })
+                updateCart(liveSelection.variant.id, quantityToAdd, variantLabel, activeColor)
+            } else {
+                const nextQuantity = Math.min((existingItem.quantity ?? 0) + quantityToAdd, liveSelection.stock)
+                updateCart(liveSelection.variant.id, nextQuantity, variantLabel, activeColor)
+            }
+
+            openModalCart()
+            closeQuickview()
+        } finally {
+            setIsRefreshingStock(false)
         }
-
-        openModalCart()
-        closeQuickview()
     }
 
     const isOpen = selectedProduct !== null
@@ -274,10 +343,10 @@ const ModalQuickview = () => {
                                     <button
                                         type="button"
                                         onClick={handleAddToCart}
-                                        disabled={availableStock <= 0}
+                                        disabled={availableStock <= 0 || isRefreshingStock}
                                         className="button-main w-full text-center bg-white text-black border border-black disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        Agregar al carrito
+                                        {isRefreshingStock ? 'Validando stock...' : 'Agregar al carrito'}
                                     </button>
                                 </div>
 
@@ -295,6 +364,11 @@ const ModalQuickview = () => {
                                         </div>
                                     </div>
                                 </div>
+                                {availabilityNotice && (
+                                    <div className="mt-3 rounded-xl border border-red px-4 py-3 text-sm text-red">
+                                        {availabilityNotice}
+                                    </div>
+                                )}
 
                                 <div className="more-infor mt-6">
                                     {sku && (
@@ -309,10 +383,10 @@ const ModalQuickview = () => {
                                             <div className="text-secondary">{formattedCategory}</div>
                                         </div>
                                     )}
-                                    {selectedProduct?.brand && (
+                                    {liveProduct?.brand && (
                                         <div className="flex items-center gap-1 mt-3">
                                             <div className="text-title">Marca:</div>
-                                            <div className="text-secondary">{selectedProduct.brand}</div>
+                                            <div className="text-secondary">{liveProduct.brand}</div>
                                         </div>
                                     )}
                                 </div>

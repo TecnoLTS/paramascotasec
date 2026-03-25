@@ -97,6 +97,15 @@ const ProductDefault = async ({ searchParams }: Props) => {
             </div>
             {!productsWithSettings.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
+            ) : !currentProduct ? (
+                <div className="container py-16 text-center">
+                    <div className="mx-auto max-w-xl rounded-2xl border border-line bg-white p-8">
+                        <h1 className="heading5">Producto no disponible</h1>
+                        <p className="mt-3 text-secondary">
+                            Este producto ya no está publicado o se quedó sin stock.
+                        </p>
+                    </div>
+                </div>
             ) : (
                 <Default data={productsWithSettings} productId={productId} />
             )}
