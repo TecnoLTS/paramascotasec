@@ -98,6 +98,7 @@ const authFreePaths = new Set([
   '/api/auth/verify-otp',
   '/api/auth/verify',
   '/api/auth/session',
+  '/api/contact',
 ])
 
 const isPublicApiPath = (pathname: string, method?: string) => {
@@ -110,7 +111,7 @@ const isPublicApiPath = (pathname: string, method?: string) => {
     if (pathname === '/api/health') return true
   }
 
-  if (normalizedMethod === 'POST' && pathname === '/api/orders/quote') return true
+  if (normalizedMethod === 'POST' && (pathname === '/api/orders/quote' || pathname === '/api/contact')) return true
 
   return false
 }
@@ -262,6 +263,11 @@ const handleAuthFailure = (status: number, body: unknown) => {
   }
 }
 
+const shouldClearSessionOnSecurityBlock = (body: unknown) => {
+  const code = getApiErrorCode(body)
+  return code === 'ORDER_PRICING_FIELDS_FORBIDDEN' || code === 'ORDER_ITEM_PRICING_FIELDS_FORBIDDEN'
+}
+
 export type ApiError = {
   message: string
   code?: string
@@ -347,6 +353,11 @@ const normalizeHttpErrorMessage = (
   const fallbackMessage = `Error ${status} al consultar ${url}`
   const envelopeText = String(envelopeMessage || '').trim()
   if (envelopeText) return envelopeText
+
+  const errorCode = getApiErrorCode(body)
+  if (errorCode === 'ORDER_PRICING_FIELDS_FORBIDDEN' || errorCode === 'ORDER_ITEM_PRICING_FIELDS_FORBIDDEN') {
+    return 'Detectamos un intento inválido de alterar precios o montos del pedido. Por seguridad, la cuenta quedó bloqueada temporalmente.'
+  }
 
   if (typeof body === 'object' && body !== null) {
     const rawError = (body as any).error
@@ -540,6 +551,9 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   const result = await performReadableRequest(path, init, cache, nextOptions)
 
   if (!result.ok) {
+    if (typeof window !== 'undefined' && shouldClearSessionOnSecurityBlock(result.body)) {
+      clearStoredSession()
+    }
     handleAuthFailure(result.status, result.body)
     const message = normalizeHttpErrorMessage(
       result.status,
@@ -564,6 +578,9 @@ export async function requestApi<T>(path: string, init?: RequestInit): Promise<{
   const result = await performReadableRequest(path, init, 'no-store')
 
   if (!result.ok) {
+    if (typeof window !== 'undefined' && shouldClearSessionOnSecurityBlock(result.body)) {
+      clearStoredSession()
+    }
     handleAuthFailure(result.status, result.body)
     const message = normalizeHttpErrorMessage(
       result.status,

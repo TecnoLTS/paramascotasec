@@ -13,6 +13,7 @@ import { fetchJson, requestApi } from '@/lib/apiClient'
 import { getStoredSessionUser, hasCookieSessionMarker, setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
 import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCountryToEcuador, saveCheckoutDraft } from '@/lib/checkoutDraft'
 import { buildLiveAvailabilityMap, fetchLiveCatalogSnapshot } from '@/lib/liveCatalog'
+import { normalizeSavedAddresses } from '@/app/my-account/customerDataUtils'
 
 interface AddressData {
     firstName: string;
@@ -37,6 +38,20 @@ interface SavedAddress {
     isSame: boolean;
 }
 
+interface CheckoutProfileResponse {
+    name?: string;
+    email?: string;
+    phone?: string;
+    profile?: {
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        documentType?: string;
+        documentNumber?: string;
+        businessName?: string;
+    };
+}
+
 const emptyAddress: AddressData = {
     firstName: '',
     lastName: '',
@@ -56,6 +71,32 @@ const ensureEcuadorAddress = (address: AddressData): AddressData => ({
     ...address,
     country: 'Ecuador',
 })
+
+const normalizeSavedAddressEntryForCheckout = (entry: unknown): SavedAddress | null => {
+    const normalized = normalizeSavedAddresses([entry])[0]
+    if (!normalized) return null
+
+    return {
+        id: String(normalized.id),
+        title: normalized.title,
+        billing: ensureEcuadorAddress({ ...emptyAddress, ...normalized.billing }),
+        shipping: ensureEcuadorAddress({ ...emptyAddress, ...normalized.shipping }),
+        isSame: !!normalized.isSame,
+    }
+}
+
+const normalizeSavedAddressesForCheckout = (entries: unknown): SavedAddress[] => {
+    if (!Array.isArray(entries)) return []
+    return entries
+        .map((entry) => normalizeSavedAddressEntryForCheckout(entry))
+        .filter((entry): entry is SavedAddress => Boolean(entry))
+}
+
+const isAddressComplete = (address: AddressData) =>
+    !!address.country.trim()
+    && !!address.city.trim()
+    && !!address.zip.trim()
+    && !!address.street.trim()
 
 const fallbackItems = [
     {
@@ -130,6 +171,8 @@ const Checkout = () => {
     const [transferProofName, setTransferProofName] = useState('')
     const [guestOrderId, setGuestOrderId] = useState<string | null>(null)
     const [orderNotes, setOrderNotes] = useState('')
+    const [couponDraft, setCouponDraft] = useState('')
+    const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null)
 
     // Address management state
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
@@ -182,26 +225,10 @@ const Checkout = () => {
     useEffect(() => {
         const draft = loadCheckoutDraft()
         setOrderNotes(draft.note)
+        setCouponDraft(String(draft.couponCode || ''))
+        setAppliedCouponCode(String(draft.couponCode || '').trim().toUpperCase() || null)
         setTempAddress((prev) => mergeAddressFields(prev, draft.shipping))
         setBillingAddress((prev) => mergeAddressFields(prev, { country: 'Ecuador' }))
-
-        if (!hasCookieSessionMarker()) return
-
-        const saved = localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY) || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved)
-                setSavedAddresses(parsed)
-                if (parsed.length > 0) {
-                    setSelectedAddressId(parsed[0].id)
-                    setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
-                    setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
-                    setUseBillingSame(!!parsed[0].isSame)
-                }
-            } catch (e) {
-                console.error('Error parsing addresses', e)
-            }
-        }
     }, [])
 
     useEffect(() => {
@@ -220,61 +247,133 @@ const Checkout = () => {
     }, [])
 
     useEffect(() => {
-        const hasSession = hasCookieSessionMarker()
-        setIsLoggedIn(hasSession)
-        if (!hasSession) return
+        setIsLoggedIn(hasCookieSessionMarker())
+    }, [])
+
+    const loadAuthenticatedProfile = useCallback(async () => {
+        if (!hasCookieSessionMarker()) return
 
         const storedUser = getStoredSessionUser()
-        const email = storedUser?.email || ''
-        const name = storedUser?.name || ''
+        const fallbackEmail = storedUser?.email || ''
+        const fallbackName = storedUser?.name || ''
 
-        requestApi<{ name?: string; profile?: { firstName?: string; lastName?: string; phone?: string; documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
-        })
-            .then((res) => {
-                const profile = res.body.profile || {}
-                const fullName = res.body.name || name || ''
-                const [firstName, ...rest] = fullName.split(' ')
-                setContactInfo((prev) => ({
-                    ...prev,
-                    firstName: profile.firstName || firstName || '',
-                    lastName: profile.lastName || rest.join(' ') || '',
-                    email: email || '',
-                    phone: profile.phone || ''
-                }))
-                setBillingAddress((prev) => mergeAddressFields(prev, {
+        try {
+            const res = await requestApi<CheckoutProfileResponse>('/api/user/profile', {})
+            const profile = res.body.profile || {}
+            const fullName = (res.body.name || fallbackName || '').trim()
+            const [firstName, ...rest] = fullName.split(' ').filter(Boolean)
+            const email = (res.body.email || fallbackEmail || '').trim()
+            const phone = (res.body.phone || profile.phone || '').trim()
+
+            setContactInfo((prev) => ({
+                ...prev,
+                firstName: profile.firstName || firstName || prev.firstName || '',
+                lastName: profile.lastName || rest.join(' ') || prev.lastName || '',
+                email: email || prev.email || '',
+                phone: phone || prev.phone || '',
+                documentType: profile.documentType || prev.documentType,
+                documentNumber: profile.documentNumber || prev.documentNumber,
+                businessName: profile.businessName || prev.businessName,
+            }))
+
+            setBillingAddress((prev) =>
+                mergeAddressFields(prev, {
                     documentType: profile.documentType,
                     documentNumber: profile.documentNumber,
-                    company: profile.businessName
+                    company: profile.businessName,
+                    email: email,
+                    phone: phone,
+                })
+            )
+        } catch (err) {
+            console.error('No se pudo cargar el perfil', err)
+            if (fallbackName || fallbackEmail) {
+                const [firstName, ...rest] = fallbackName.split(' ').filter(Boolean)
+                setContactInfo((prev) => ({
+                    ...prev,
+                    firstName: prev.firstName || firstName || '',
+                    lastName: prev.lastName || rest.join(' ') || '',
+                    email: prev.email || fallbackEmail || '',
                 }))
-            })
-            .catch((err) => {
-                console.error('No se pudo cargar el perfil', err)
-                if (name || email) {
-                    const [firstName, ...rest] = name.split(' ')
-                    setContactInfo((prev) => ({
-                        ...prev,
-                        firstName: prev.firstName || firstName || '',
-                        lastName: prev.lastName || rest.join(' ') || '',
-                        email: prev.email || email || ''
-                    }))
-                }
-            })
+            }
+        }
     }, [])
+
+    const applySavedAddressesToCheckout = useCallback((addresses: SavedAddress[]) => {
+        setSavedAddresses(addresses)
+
+        if (addresses.length === 0) {
+            setSelectedAddressId('one-time')
+            return
+        }
+
+        localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
+        localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
+
+        if (keepOneTimeSelectionRef.current) {
+            return
+        }
+
+        const primary = addresses[0]
+        setSelectedAddressId(primary.id)
+        setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), primary.shipping))
+        setBillingAddress((prev) => mergeAddressFields(prev, primary.billing))
+        setUseBillingSame(!!primary.isSame)
+    }, [])
+
+    const loadAuthenticatedAddresses = useCallback(async () => {
+        if (!hasCookieSessionMarker()) return
+
+        try {
+            const res = await requestApi<{ addresses: unknown[] }>('/api/user/addresses', {})
+            const addresses = normalizeSavedAddressesForCheckout(res.body.addresses)
+
+            if (addresses.length > 0) {
+                applySavedAddressesToCheckout(addresses)
+                localStorage.removeItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
+                return
+            }
+
+            const stored =
+                localStorage.getItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
+                || localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY)
+                || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
+
+            if (!stored) {
+                setSavedAddresses([])
+                setSelectedAddressId('one-time')
+                return
+            }
+
+            const parsed = JSON.parse(stored)
+            const fallbackAddresses = normalizeSavedAddressesForCheckout(parsed)
+            if (fallbackAddresses.length === 0) {
+                setSavedAddresses([])
+                setSelectedAddressId('one-time')
+                return
+            }
+
+            applySavedAddressesToCheckout(fallbackAddresses)
+
+            await requestApi('/api/user/addresses', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ addresses: fallbackAddresses })
+            })
+
+            localStorage.removeItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
+        } catch (err) {
+            console.error('No se pudieron cargar las direcciones', err)
+        }
+    }, [applySavedAddressesToCheckout])
 
     useEffect(() => {
         if (!isLoggedIn) return
-        requestApi<{ profile?: { documentType?: string; documentNumber?: string; businessName?: string } }>('/api/user/profile', {
-        })
-            .then((res) => {
-                const profile = res.body.profile || {}
-                setBillingAddress((prev) => mergeAddressFields(prev, {
-                    documentType: profile.documentType,
-                    documentNumber: profile.documentNumber,
-                    company: profile.businessName
-                }))
-            })
-            .catch(() => {})
-    }, [isLoggedIn])
+        void loadAuthenticatedProfile()
+        void loadAuthenticatedAddresses()
+    }, [isLoggedIn, loadAuthenticatedProfile, loadAuthenticatedAddresses])
 
     const handleLoginSubmit = async () => {
         if (!loginForm.email.trim() || !loginForm.password.trim()) {
@@ -293,6 +392,7 @@ const Checkout = () => {
             setCookieSessionMarker()
             setStoredSessionUser(res.user)
             setIsLoggedIn(true)
+            await Promise.all([loadAuthenticatedProfile(), loadAuthenticatedAddresses()])
             setShowLogin(false)
             setMessage({ text: 'Sesión iniciada correctamente.', type: 'success' })
         } catch (err: any) {
@@ -301,59 +401,6 @@ const Checkout = () => {
             setLoginLoading(false)
         }
     }
-
-    useEffect(() => {
-        if (!hasCookieSessionMarker()) return
-        requestApi<{ addresses: SavedAddress[] }>('/api/user/addresses', {
-        })
-            .then((res) => {
-                const addresses = Array.isArray(res.body.addresses) ? res.body.addresses : []
-                if (addresses.length > 0) {
-                    setSavedAddresses(addresses)
-                    localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
-                    localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses))
-                    setSelectedAddressId(addresses[0].id)
-                    setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), addresses[0].shipping))
-                    setBillingAddress((prev) => mergeAddressFields(prev, addresses[0].billing))
-                    setUseBillingSame(!!addresses[0].isSame)
-                    return
-                }
-
-                // Fallback: if checkout created a pending address before verification, persist it now.
-                const stored =
-                    localStorage.getItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
-                    || localStorage.getItem(ACCOUNT_ADDRESSES_STORAGE_KEY)
-                    || localStorage.getItem(LEGACY_ADDRESSES_STORAGE_KEY)
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored) as SavedAddress[]
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            setSavedAddresses(parsed)
-                            setSelectedAddressId(parsed[0].id)
-                            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), parsed[0].shipping))
-                            setBillingAddress((prev) => mergeAddressFields(prev, parsed[0].billing))
-                            setUseBillingSame(!!parsed[0].isSame)
-                            requestApi('/api/user/addresses', {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ addresses: parsed })
-                            }).then(() => {
-                                localStorage.setItem(ACCOUNT_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
-                                localStorage.setItem(LEGACY_ADDRESSES_STORAGE_KEY, JSON.stringify(parsed))
-                                localStorage.removeItem(PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY)
-                            }).catch(() => {})
-                        }
-                    } catch {
-                        // ignore parse errors
-                    }
-                }
-            })
-            .catch((err) => {
-                console.error('No se pudieron cargar las direcciones', err)
-            })
-    }, [])
 
     useEffect(() => {
         if (!isLoggedIn) return
@@ -376,11 +423,13 @@ const Checkout = () => {
             || draft.shipping.zip !== tempAddress.zip
             || draft.shipping.country !== normalizeCountryToEcuador(tempAddress.country)
         const noteChanged = draft.note !== orderNotes
+        const couponChanged = draft.couponCode !== couponDraft
 
-        if (!shippingDraftChanged && !noteChanged) return
+        if (!shippingDraftChanged && !noteChanged && !couponChanged) return
 
         saveCheckoutDraft({
             note: orderNotes,
+            couponCode: couponDraft,
             shipping: {
                 country: 'Ecuador',
                 state: tempAddress.state,
@@ -388,7 +437,7 @@ const Checkout = () => {
                 zip: tempAddress.zip,
             },
         })
-    }, [orderNotes, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country])
+    }, [orderNotes, couponDraft, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country])
 
     const refreshAvailableProducts = useCallback(async () => {
         const snapshot = await fetchLiveCatalogSnapshot()
@@ -739,6 +788,9 @@ const Checkout = () => {
         vat_subtotal?: number
         vat_amount?: number
         discount_total?: number
+        discount_code?: string | null
+        discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>
+        discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>
         mixed_vat_rates?: boolean
     } | null>(null)
 
@@ -817,7 +869,8 @@ const Checkout = () => {
             try {
                 const res = await getQuote({
                     items: normalizedCart.map(i => ({ product_id: i.id, quantity: i.quantity })),
-                    delivery_method: deliveryMethod
+                    delivery_method: deliveryMethod,
+                    coupon_code: appliedCouponCode
                 });
                 if (res?.storeDisabled) {
                     setQuote(null)
@@ -865,7 +918,7 @@ const Checkout = () => {
             }
         };
         updateQuote();
-    }, [normalizedCart, deliveryMethod, availableProductsMap, syncCartWithLiveAvailability]);
+    }, [normalizedCart, deliveryMethod, appliedCouponCode, availableProductsMap, syncCartWithLiveAvailability]);
 
     const items = normalizedCart
     const subtotal = quote?.subtotal || 0
@@ -878,6 +931,13 @@ const Checkout = () => {
     const vatNetSubtotal = Number(quote?.vat_subtotal ?? 0)
     const vatAmount = Number(quote?.vat_amount ?? 0)
     const discountTotal = Number(quote?.discount_total ?? 0)
+    const couponRejection = quote?.discount_rejections?.[0] || null
+    const couponAppliedLabel = String(
+        quote?.discount_code
+        || quote?.discounts_applied?.[0]?.code
+        || appliedCouponCode
+        || ''
+    ).trim()
     const mixedVatRates = Boolean(quote?.mixed_vat_rates)
     const vatLabel = mixedVatRates
         ? 'IVA aplicado'
@@ -968,8 +1028,6 @@ const Checkout = () => {
                 }
                 : { ...ensureEcuadorAddress(billingAddress), ...contactInfo }
             const orderData = {
-                total, // This is just for local UI, backend will re-calculate.
-                status: 'pending',
                 delivery_method: deliveryMethod,
                 shipping_address: shippingAddress,
                 billing_address: billingAddressPayload,
@@ -980,6 +1038,7 @@ const Checkout = () => {
                     proof_name: transferProofName || null
                 } : null,
                 payment_method: paymentMethod,
+                coupon_code: appliedCouponCode,
                 items: items.map(item => ({
                     product_id: item.id,
                     quantity: item.quantity
@@ -1414,7 +1473,11 @@ const Checkout = () => {
                                                     )}
                                                 </div>
 
-                                                {selectedAddressId !== 'one-time' && isLoggedIn && savedAddresses.length > 0 ? (
+                                                {selectedAddressId !== 'one-time'
+                                                    && isLoggedIn
+                                                    && savedAddresses.length > 0
+                                                    && isAddressComplete(tempAddress)
+                                                    ? (
                                                     <div className="text-sm text-[#6b7280] space-y-1">
                                                         <p className="text-[#111827] font-medium">{tempAddress.firstName} {tempAddress.lastName}</p>
                                                         <p>{tempAddress.street}</p>
@@ -1425,6 +1488,11 @@ const Checkout = () => {
                                                     </div>
                                                 ) : (
                                                     <div className="grid sm:grid-cols-2 gap-4">
+                                                        {selectedAddressId !== 'one-time' && savedAddresses.length > 0 && (
+                                                            <div className="sm:col-span-2 text-sm text-[#6b7280]">
+                                                                Completa los datos faltantes de tu dirección guardada para poder continuar.
+                                                            </div>
+                                                        )}
                                                         <select
                                                             id="country"
                                                             value={tempAddress.country}
@@ -1824,6 +1892,65 @@ const Checkout = () => {
                                 </div>
 
                                 <div className="border-t border-[#e5e7eb] pt-4 space-y-2 lg:mt-auto bg-white">
+                                    <div className="pb-3 mb-1 border-b border-[#e5e7eb] space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <label htmlFor="checkout-coupon" className="text-sm font-medium text-[#111827]">
+                                                Cupón
+                                            </label>
+                                            {couponAppliedLabel && discountTotal > 0 && (
+                                                <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+                                                    {couponAppliedLabel}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <input
+                                                id="checkout-coupon"
+                                                type="text"
+                                                value={couponDraft}
+                                                onChange={(event) => setCouponDraft(event.target.value.toUpperCase())}
+                                                placeholder="Ej: BIENVENIDA10"
+                                                className="min-w-0 flex-1 rounded-lg border border-[#d1d5db] px-3 py-2 text-sm uppercase tracking-wide text-[#111827] placeholder:normal-case placeholder:tracking-normal placeholder:text-[#9ca3af] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#2e4d4d]/60"
+                                            />
+                                            {appliedCouponCode ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAppliedCouponCode(null)
+                                                        setCouponDraft('')
+                                                    }}
+                                                    className="shrink-0 rounded-lg border border-[#d1d5db] px-3 py-2 text-sm font-medium text-[#374151] hover:border-[#111827] hover:text-[#111827]"
+                                                >
+                                                    Quitar
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const normalized = couponDraft.trim().toUpperCase()
+                                                        if (!normalized) {
+                                                            setMessage({ text: 'Ingresa un cupón para aplicarlo.', type: 'error' })
+                                                            return
+                                                        }
+                                                        setAppliedCouponCode(normalized)
+                                                    }}
+                                                    className="shrink-0 rounded-lg bg-[#1f3b3b] px-3 py-2 text-sm font-medium text-white hover:bg-[#2e4d4d]"
+                                                >
+                                                    Aplicar
+                                                </button>
+                                            )}
+                                        </div>
+                                        {couponRejection?.message && appliedCouponCode && (
+                                            <p className="text-xs text-[#b45309]">
+                                                {couponRejection.message}
+                                            </p>
+                                        )}
+                                        {!couponRejection?.message && couponAppliedLabel && discountTotal > 0 && (
+                                            <p className="text-xs text-green-700">
+                                                Cupón aplicado correctamente al pedido.
+                                            </p>
+                                        )}
+                                    </div>
                                     <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
                                         <span className="text-[#6b7280]">Subtotal sin IVA</span>
                                         <span className="text-[#111827] text-right tabular-nums">${vatNetSubtotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

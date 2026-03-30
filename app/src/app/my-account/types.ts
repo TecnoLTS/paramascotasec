@@ -173,10 +173,16 @@ export interface DashboardStats {
 export interface Order {
     id: string;
     user_name?: string;
+    user_email?: string;
+    user_id?: string;
     total: number;
     status: string;
     created_at: string;
     order_notes?: string | null;
+    shipping_address?: Record<string, any> | string | null;
+    billing_address?: Record<string, any> | string | null;
+    delivery_method?: string | null;
+    payment_method?: string | null;
     items?: Array<{
         order_id: string;
         product_id: string;
@@ -224,6 +230,10 @@ export interface AdminUserSummary {
     failed_login_attempts?: number | string | null;
     login_locked_until?: string | null;
     last_login_at?: string | null;
+    security_block_event_type?: string | null;
+    security_block_status?: string | null;
+    security_blocked_at?: string | null;
+    security_block_metadata?: Record<string, any> | string | null;
     orders_total?: number | string | null;
     orders_active?: number | string | null;
     orders_completed?: number | string | null;

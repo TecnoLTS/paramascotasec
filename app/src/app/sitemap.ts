@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { getProductDetailRouteId } from '@/lib/catalog'
 import { fetchProducts } from '@/lib/products'
 
 const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -28,7 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const products = await fetchProducts()
     const productRoutes: MetadataRoute.Sitemap = products.map((product) => ({
-      url: `${baseUrl}/product/default?id=${product.id}`,
+      url: `${baseUrl}/product/default?id=${getProductDetailRouteId(product)}`,
       lastModified: new Date(), // Ideally we'd have a updatedAt field
       changeFrequency: 'weekly',
       priority: 0.6,

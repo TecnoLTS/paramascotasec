@@ -10,6 +10,7 @@ export { listProducts, getProduct, createProduct, updateProduct, deleteProduct }
 export { createOrder, getQuote } from './orders'
 export { fetchRecentOrdersReport } from './reports'
 export { getProductPageSettings, updateProductPageSettings } from './settings'
+export { listDiscounts, createDiscount, updateDiscount, updateDiscountStatus, listDiscountAudit } from './discounts'
 export { fetchJson, requestApi } from '@/lib/apiClient'
 
 // Endpoints ligeros disponibles para chequeo rápido de salud/demo.

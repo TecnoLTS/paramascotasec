@@ -11,6 +11,8 @@ import { motion } from 'framer-motion'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
 import { clearStoredSession, setStoredSessionUser } from '@/lib/authSession'
+import { createDiscount, listDiscountAudit, listDiscounts, updateDiscount, updateDiscountStatus } from '@/lib/api/discounts'
+import type { AdminDiscountAuditRow, AdminDiscountCode, AdminDiscountPayload, AdminDiscountType } from '@/lib/api/discounts'
 import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateStoreStatus } from '@/lib/api/settings'
 import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
 import { unlockAdminUser } from '@/lib/api/users'
@@ -61,6 +63,7 @@ import {
     formatMoney,
     getLocalSalePaymentMethodLabel,
 } from './formatting'
+import AccountSidebar from './components/AccountSidebar'
 import LocalSaleCatalogPanel from './components/LocalSaleCatalogPanel'
 import ProductsManagementPanel from './components/ProductsManagementPanel'
 import { useAdminSidebarNavigation } from './hooks/useAdminSidebarNavigation'
@@ -131,9 +134,6 @@ import type {
     ShippingProvider,
 } from './types'
 
-const AccountSidebar = dynamic(() => import('./components/AccountSidebar'), {
-    ssr: false,
-})
 const ProductEditorModal = dynamic(() => import('./components/ProductEditorModal'), {
     ssr: false,
 })
@@ -170,6 +170,88 @@ const ShipmentsPanel = dynamic(() => import('./components/ShipmentsPanel'), {
 const InventoryManagementPanel = dynamic(() => import('./components/InventoryManagementPanel'), {
     ssr: false,
 })
+const DiscountCodesPanel = dynamic(() => import('./components/DiscountCodesPanel'), {
+    ssr: false,
+})
+
+type DiscountFormState = {
+    code: string
+    name: string
+    description: string
+    type: AdminDiscountType
+    value: string
+    minSubtotal: string
+    maxDiscount: string
+    maxUses: string
+    startsAt: string
+    endsAt: string
+    isActive: boolean
+}
+
+const createEmptyDiscountForm = (): DiscountFormState => ({
+    code: '',
+    name: '',
+    description: '',
+    type: 'percent',
+    value: '',
+    minSubtotal: '0',
+    maxDiscount: '',
+    maxUses: '',
+    startsAt: '',
+    endsAt: '',
+    isActive: true,
+})
+
+const mapDiscountToForm = (discount?: AdminDiscountCode | null): DiscountFormState => {
+    if (!discount) return createEmptyDiscountForm()
+    const toDateTimeInput = (value?: string | null) => {
+        if (!value) return ''
+        const normalized = String(value).replace(' ', 'T')
+        return normalized.slice(0, 16)
+    }
+    return {
+        code: String(discount.code || ''),
+        name: String(discount.name || ''),
+        description: String(discount.description || ''),
+        type: discount.type === 'fixed' ? 'fixed' : 'percent',
+        value: String(discount.value ?? ''),
+        minSubtotal: String(discount.min_subtotal ?? 0),
+        maxDiscount: discount.max_discount === null || discount.max_discount === undefined ? '' : String(discount.max_discount),
+        maxUses: discount.max_uses === null || discount.max_uses === undefined ? '' : String(discount.max_uses),
+        startsAt: toDateTimeInput(discount.starts_at),
+        endsAt: toDateTimeInput(discount.ends_at),
+        isActive: Boolean(discount.is_active),
+    }
+}
+
+const parseDiscountNumber = (value: unknown, fallback = 0, min = 0, max?: number) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return fallback
+    const clamped = Math.max(min, parsed)
+    if (typeof max === 'number') return Math.min(clamped, max)
+    return clamped
+}
+
+const buildDiscountPayload = (input: DiscountFormState): AdminDiscountPayload => {
+    const code = input.code.trim().toUpperCase()
+    const name = input.name.trim()
+    const description = input.description.trim()
+    const startsAt = input.startsAt ? input.startsAt : null
+    const endsAt = input.endsAt ? input.endsAt : null
+    return {
+        code,
+        type: input.type,
+        value: parseDiscountNumber(input.value, 0, 0.01),
+        name: name || null,
+        description: description || null,
+        min_subtotal: parseDiscountNumber(input.minSubtotal, 0, 0),
+        max_discount: input.maxDiscount === '' ? null : parseDiscountNumber(input.maxDiscount, 0, 0),
+        max_uses: input.maxUses === '' ? null : Math.max(1, Math.round(parseDiscountNumber(input.maxUses, 1, 1))),
+        starts_at: startsAt,
+        ends_at: endsAt,
+        is_active: Boolean(input.isActive),
+    }
+}
 
 const MyAccount = () => {
     const router = useRouter()
@@ -248,6 +330,12 @@ const MyAccount = () => {
     const [marginSettings, setMarginSettings] = useState<PricingMargins>({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 })
     const [calcSettings, setCalcSettings] = useState<PricingCalc>({ rounding: 0.05, strategy: 'cost_plus', includeVatInPvp: true, shippingBuffer: 0 })
     const [pricingRules, setPricingRules] = useState<PricingRules>({ bulkThreshold: 10, bulkDiscount: 5, clearanceThreshold: 25, clearanceDiscount: 15 })
+    const [discountCodes, setDiscountCodes] = useState<AdminDiscountCode[]>([])
+    const [discountAuditRows, setDiscountAuditRows] = useState<AdminDiscountAuditRow[]>([])
+    const [discountCodesLoading, setDiscountCodesLoading] = useState(false)
+    const [discountFormSaving, setDiscountFormSaving] = useState(false)
+    const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null)
+    const [discountForm, setDiscountForm] = useState<DiscountFormState>(createEmptyDiscountForm())
     const [productPageSettings, setProductPageSettings] = useState<ProductPageSettings>({
         deliveryEstimate: '14 de enero - 18 de enero',
         viewerCount: 38,
@@ -653,6 +741,90 @@ const MyAccount = () => {
             showNotification(message, 'error')
         }
     }, [reloadAdminUsers, showNotification])
+
+    const loadDiscountData = React.useCallback(async (options?: { silent?: boolean }) => {
+        if (!user || user.role !== 'admin') return
+        const silent = options?.silent === true
+        setDiscountCodesLoading(true)
+        try {
+            const [discountsRes, auditRes] = await Promise.all([
+                listDiscounts(),
+                listDiscountAudit(20),
+            ])
+            setDiscountCodes(Array.isArray(discountsRes.body) ? discountsRes.body : [])
+            setDiscountAuditRows(Array.isArray(auditRes.body) ? auditRes.body : [])
+        } catch (error) {
+            console.error(error)
+            if (!silent) {
+                showNotification('No se pudieron cargar los cupones.', 'error')
+            }
+        } finally {
+            setDiscountCodesLoading(false)
+        }
+    }, [showNotification, user])
+
+    const handleDiscountEdit = React.useCallback((discount: AdminDiscountCode) => {
+        setEditingDiscountId(discount.id)
+        setDiscountForm(mapDiscountToForm(discount))
+    }, [mapDiscountToForm])
+
+    const handleDiscountFormReset = React.useCallback(() => {
+        setEditingDiscountId(null)
+        setDiscountForm(createEmptyDiscountForm())
+    }, [])
+
+    const handleDiscountFormChange = React.useCallback(<K extends keyof DiscountFormState>(field: K, value: DiscountFormState[K]) => {
+        setDiscountForm((current) => ({ ...current, [field]: value }))
+    }, [])
+
+    const handleDiscountFormSubmit = React.useCallback(async () => {
+        const normalizedCode = discountForm.code.trim().toUpperCase()
+        if (!normalizedCode) {
+            showNotification('El código del cupón es obligatorio.', 'error')
+            return
+        }
+        if (Number(discountForm.value || 0) <= 0) {
+            showNotification('El valor del descuento debe ser mayor a cero.', 'error')
+            return
+        }
+
+        setDiscountFormSaving(true)
+        try {
+            const payload = buildDiscountPayload({ ...discountForm, code: normalizedCode })
+            if (editingDiscountId) {
+                await updateDiscount(editingDiscountId, payload)
+                showNotification('Cupón actualizado correctamente.')
+            } else {
+                await createDiscount(payload)
+                showNotification('Cupón creado correctamente.')
+            }
+            handleDiscountFormReset()
+            await loadDiscountData({ silent: true })
+        } catch (error) {
+            const message = error instanceof Error && error.message.trim()
+                ? error.message
+                : 'No se pudo guardar el cupón.'
+            showNotification(message, 'error')
+        } finally {
+            setDiscountFormSaving(false)
+        }
+    }, [buildDiscountPayload, discountForm, editingDiscountId, handleDiscountFormReset, loadDiscountData, showNotification])
+
+    const handleDiscountToggleStatus = React.useCallback(async (discount: AdminDiscountCode) => {
+        setDiscountFormSaving(true)
+        try {
+            await updateDiscountStatus(discount.id, !discount.is_active)
+            showNotification(!discount.is_active ? 'Cupón activado.' : 'Cupón desactivado.')
+            await loadDiscountData({ silent: true })
+        } catch (error) {
+            const message = error instanceof Error && error.message.trim()
+                ? error.message
+                : 'No se pudo actualizar el estado del cupón.'
+            showNotification(message, 'error')
+        } finally {
+            setDiscountFormSaving(false)
+        }
+    }, [loadDiscountData, showNotification])
 
     const handleDuplicateVariant = React.useCallback((product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
@@ -1193,6 +1365,36 @@ const MyAccount = () => {
     const filteredStrategicAlerts = React.useMemo(() => {
         return filterStrategicAlerts(strategicAlerts, alertsSeverityFilter)
     }, [alertsSeverityFilter, strategicAlerts])
+    const pendingOperationalOrders = React.useMemo(() => {
+        const ordersByStatus = dashboardStats?.businessMetrics?.ordersByStatus || []
+        return ordersByStatus.reduce((acc, row) => {
+            const status = normalizeStatus(row?.status)
+            if (['pending', 'processing', 'in_process', 'in-process'].includes(status)) {
+                return acc + Number(row?.count ?? 0)
+            }
+            return acc
+        }, 0)
+    }, [dashboardStats?.businessMetrics?.ordersByStatus])
+    const processingOperationalOrders = React.useMemo(() => {
+        const ordersByStatus = dashboardStats?.businessMetrics?.ordersByStatus || []
+        return ordersByStatus.reduce((acc, row) => {
+            const status = normalizeStatus(row?.status)
+            if (['processing', 'in_process', 'in-process'].includes(status)) {
+                return acc + Number(row?.count ?? 0)
+            }
+            return acc
+        }, 0)
+    }, [dashboardStats?.businessMetrics?.ordersByStatus])
+    const purePendingOperationalOrders = React.useMemo(() => {
+        const ordersByStatus = dashboardStats?.businessMetrics?.ordersByStatus || []
+        return ordersByStatus.reduce((acc, row) => {
+            const status = normalizeStatus(row?.status)
+            if (status === 'pending') {
+                return acc + Number(row?.count ?? 0)
+            }
+            return acc
+        }, 0)
+    }, [dashboardStats?.businessMetrics?.ordersByStatus])
 
     const handleStrategicAlertAction = (alert: { type: 'critical' | 'warning' | 'info'; message: string; action: string }) => {
         const text = `${alert.action} ${alert.message}`.toLowerCase()
@@ -1240,6 +1442,13 @@ const MyAccount = () => {
             setSelectedDeepDive('sales')
         })
     }
+    const openPendingOrdersShortcut = React.useCallback(() => {
+        startPanelNavigationTransition(() => {
+            setActiveOrders('pending')
+            setActiveTab('admin-orders')
+            setSelectedDeepDive(null)
+        })
+    }, [])
 
     React.useEffect(() => {
         if (user?.role !== 'admin') return
@@ -1248,6 +1457,12 @@ const MyAccount = () => {
             setSelectedDeepDive(null)
         }
     }, [activeTab, selectedDeepDive, user?.role])
+
+    React.useEffect(() => {
+        if (!user || user.role !== 'admin') return
+        if (activeTab !== 'discount-codes') return
+        loadDiscountData({ silent: true })
+    }, [activeTab, adminReloadNonce, loadDiscountData, user])
 
     React.useEffect(() => {
         if (!isPurchaseInvoiceModalOpen) return
@@ -2861,20 +3076,20 @@ const MyAccount = () => {
                                     )}
                                     {activeTab === 'reports' && (
                                     <div className="tab text-content w-full">
-                                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 pb-6">
+                                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 pb-4">
                                             <div>
                                                 <div className="heading5">{activeReportMeta.title}</div>
                                                 <p className="text-secondary text-xs mt-1">{activeReportMeta.subtitle}</p>
                                             </div>
-                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
+                                            <div className="text-sm font-bold text-secondary bg-surface px-3.5 py-1.5 rounded-lg border border-line">
                                                 {currentDateLabel}
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2.5 mb-4">
                                             <button
                                                 type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'general') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                className={`p-3.5 rounded-lg border text-left transition-all ${(adminReportSection === 'general') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
                                                 onClick={() => openAdminReportSection('general')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">General</div>
@@ -2883,7 +3098,7 @@ const MyAccount = () => {
                                             </button>
                                             <button
                                                 type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'sales') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                className={`p-3.5 rounded-lg border text-left transition-all ${(adminReportSection === 'sales') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
                                                 onClick={() => openAdminReportSection('sales')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas</div>
@@ -2892,7 +3107,7 @@ const MyAccount = () => {
                                             </button>
                                             <button
                                                 type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'balance') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                className={`p-3.5 rounded-lg border text-left transition-all ${(adminReportSection === 'balance') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
                                                 onClick={() => openAdminReportSection('balance')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Balance</div>
@@ -2901,7 +3116,7 @@ const MyAccount = () => {
                                             </button>
                                             <button
                                                 type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'inventory') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                className={`p-3.5 rounded-lg border text-left transition-all ${(adminReportSection === 'inventory') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
                                                 onClick={() => openAdminReportSection('inventory')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Inventario</div>
@@ -2910,7 +3125,7 @@ const MyAccount = () => {
                                             </button>
                                             <button
                                                 type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${(adminReportSection === 'traceability') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
+                                                className={`p-3.5 rounded-lg border text-left transition-all ${(adminReportSection === 'traceability') ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
                                                 onClick={() => openAdminReportSection('traceability')}
                                             >
                                                 <div className="text-[10px] uppercase font-bold text-secondary mb-1">Trazabilidad</div>
@@ -2921,26 +3136,77 @@ const MyAccount = () => {
 
                                         {adminReportSection === 'general' && (
                                             <>
-                                        <button
-                                            type="button"
-                                            className="mb-6 p-4 rounded-xl border border-line bg-surface w-full text-left transition-all hover:border-black"
-                                            onClick={() => navigateToPanelTab('taxes')}
-                                        >
-                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                                <div>
-                                                    <div className="text-secondary text-xs uppercase font-bold mb-1">IVA configurado</div>
-                                                    <div className="heading4">{vatRateLabel}%</div>
-                                                    <p className="text-secondary text-xs mt-1">Los productos gravados incluyen IVA; los exentos conservan precio final sin IVA.</p>
+                                        <div className="mb-4 grid grid-cols-1 xl:grid-cols-[1.12fr_0.88fr] gap-3">
+                                            <button
+                                                type="button"
+                                                className={`p-4 rounded-lg border w-full text-left transition-all ${
+                                                    pendingOperationalOrders > 0
+                                                        ? 'border-[#F59E0B] bg-[#FFF7E8] hover:border-[#D97706]'
+                                                        : 'border-line bg-white hover:border-black'
+                                                }`}
+                                                onClick={openPendingOrdersShortcut}
+                                            >
+                                                <div className="flex h-full flex-col justify-between gap-3 lg:flex-row lg:items-start">
+                                                    <div className="min-w-0">
+                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">Atención operativa</div>
+                                                        <div className="flex items-center gap-3 flex-wrap">
+                                                            <div className={`heading5 ${pendingOperationalOrders > 0 ? 'text-[#B45309]' : 'text-black'}`}>
+                                                                {pendingOperationalOrders.toLocaleString('es-EC')} pedidos por atender
+                                                            </div>
+                                                            {pendingOperationalOrders > 0 && (
+                                                                <span className="inline-flex items-center rounded-full bg-[#FDE68A] px-3 py-1 text-[11px] font-bold text-[#92400E]">
+                                                                    Requieren revisión
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-secondary text-xs mt-2 max-w-2xl">
+                                                            Este bloque es solo operativo. No entra en ventas, utilidad ni trazabilidad hasta que el pedido se complete o entregue.
+                                                        </p>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2.5 text-sm min-w-full sm:min-w-[320px] lg:min-w-[332px]">
+                                                        <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Pendientes</div>
+                                                            <div className="text-lg font-bold text-black">{purePendingOperationalOrders.toLocaleString('es-EC')}</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">En proceso</div>
+                                                            <div className="text-lg font-bold text-black">{processingOperationalOrders.toLocaleString('es-EC')}</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5 flex flex-col justify-between">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Acción</div>
+                                                            <div className="text-sm font-bold underline">Ver pedidos</div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="text-sm text-secondary">
-                                                    Multiplicador aplicado: <span className="font-bold text-black">{vatMultiplierLabel}x</span>
-                                                    <span className="mx-2 text-line">•</span>
-                                                    Ejemplo gravado: $100 → <span className="font-bold text-black">${vatExampleTotal}</span>
-                                                </div>
-                                            </div>
-                                        </button>
+                                            </button>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+                                            <button
+                                                type="button"
+                                                className="p-4 rounded-lg border border-line bg-surface w-full text-left transition-all hover:border-black"
+                                                onClick={() => navigateToPanelTab('taxes')}
+                                            >
+                                                <div className="flex h-full flex-col justify-between gap-3">
+                                                    <div>
+                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">IVA configurado</div>
+                                                        <div className="heading4">{vatRateLabel}%</div>
+                                                        <p className="text-secondary text-xs mt-2">Los productos gravados incluyen IVA; los exentos conservan precio final sin IVA.</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2.5 text-sm">
+                                                        <div className="rounded-lg bg-white border border-line px-2.5 py-2.5">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Multiplicador</div>
+                                                            <div className="text-lg font-bold text-black">{vatMultiplierLabel}x</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-white border border-line px-2.5 py-2.5">
+                                                            <div className="text-[10px] uppercase font-bold text-secondary">Ejemplo gravado</div>
+                                                            <div className="text-lg font-bold text-black">${vatExampleTotal}</div>
+                                                            <div className="text-[11px] text-secondary">$100 base</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
                                             {(() => {
                                                 const summary = dashboardStats?.businessMetrics?.salesSummary
                                                 const ranking = dashboardStats?.businessMetrics?.productSalesRanking
@@ -2954,7 +3220,7 @@ const MyAccount = () => {
                                                     <>
                                                         <button
                                                             type="button"
-                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
                                                             onClick={() => openProductBreakdown('gross')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Total</div>
@@ -2963,7 +3229,7 @@ const MyAccount = () => {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
                                                             onClick={() => openProductBreakdown('net')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Venta Neta</div>
@@ -2972,7 +3238,7 @@ const MyAccount = () => {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
                                                             onClick={() => openProductBreakdown('vat')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">IVA Cobrado</div>
@@ -2981,7 +3247,7 @@ const MyAccount = () => {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
                                                             onClick={() => openProductBreakdown('shipping')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Envío Cobrado</div>
@@ -2990,7 +3256,7 @@ const MyAccount = () => {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="p-4 bg-white rounded-xl border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
+                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
                                                             onClick={() => openAdminReportSection('sales')}
                                                         >
                                                             <div className="text-secondary text-xs uppercase font-bold mb-1">Productos Vendidos (uds)</div>
@@ -3004,9 +3270,9 @@ const MyAccount = () => {
                                             })()}
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
                                             <div
-                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => openProductBreakdown('net')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -3022,7 +3288,7 @@ const MyAccount = () => {
                                             </div>
 
                                             <div
-                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => setSelectedDeepDive('aov')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -3034,7 +3300,7 @@ const MyAccount = () => {
                                             </div>
 
                                             <div
-                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => openProductBreakdown('profit')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -3046,7 +3312,7 @@ const MyAccount = () => {
                                             </div>
 
                                             <div
-                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => openAdminReportSection('inventory')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -3058,7 +3324,7 @@ const MyAccount = () => {
                                             </div>
 
                                             <div
-                                                className="p-4 bg-white rounded-xl border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
+                                                className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
                                                 onClick={() => navigateToPanelTab('products')}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -3070,9 +3336,9 @@ const MyAccount = () => {
                                             </div>
                                         </div>
 
-                                        <div className="mt-6">
-                                            <div className="bg-white p-6 rounded-2xl border border-line shadow-sm relative overflow-hidden">
-                                                <div className="flex items-center justify-between mb-6">
+                                        <div className="mt-4">
+                                            <div className="bg-white p-5 rounded-xl border border-line shadow-sm relative overflow-hidden">
+                                                <div className="flex items-center justify-between mb-5">
                                                     <div>
                                                         <div className="heading6">Tendencia de Ventas</div>
                                                         <p className="text-secondary text-xs mt-1">Comparativa de ingresos diarios</p>
@@ -3248,10 +3514,13 @@ const MyAccount = () => {
 
                                             <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                                                 <div className="bg-white p-8 rounded-2xl border border-line shadow-sm">
-                                                    <div className="heading6 mb-6">Distribución de Estados</div>
+                                                    <div className="heading6 mb-2">Distribución de Ventas Realizadas</div>
+                                                    <div className="text-[11px] text-secondary mb-6">Solo cuenta pedidos completados o entregados.</div>
                                                     <div className="space-y-6">
-                                                        {dashboardStats?.businessMetrics?.ordersByStatus?.map((status, i) => {
-                                                            const total = dashboardStats.businessMetrics?.ordersByStatus?.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
+                                                        {(dashboardStats?.businessMetrics?.ordersByStatus || [])
+                                                            .filter((status) => ['completed', 'delivered'].includes(normalizeStatus(status.status)))
+                                                            .map((status, i, realizedStatuses) => {
+                                                            const total = realizedStatuses.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
                                                             const perc = Math.round((Number(status.count) / total) * 100);
                                                             const normalizedStatus = normalizeStatus(status.status)
                                                             const barColorClass = ['completed', 'delivered'].includes(normalizedStatus)
@@ -3277,12 +3546,17 @@ const MyAccount = () => {
                                                                 </div>
                                                             )
                                                         })}
+                                                        {((dashboardStats?.businessMetrics?.ordersByStatus || [])
+                                                            .filter((status) => ['completed', 'delivered'].includes(normalizeStatus(status.status)))).length === 0 && (
+                                                            <div className="text-sm text-secondary">Aún no hay ventas completadas.</div>
+                                                        )}
                                                     </div>
                                                 </div>
 
                                                 <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
                                                     <div className="bg-white p-8 rounded-2xl border border-line shadow-sm overflow-hidden">
-                                                        <div className="heading6 mb-6">Actividad Reciente</div>
+                                                        <div className="heading6 mb-2">Ventas Completadas Recientes</div>
+                                                        <div className="text-[11px] text-secondary mb-6">Últimos pedidos que ya cuentan como venta realizada.</div>
                                                         <div className="w-full">
                                                             <table className="w-full text-left text-sm table-fixed">
                                                                 <thead>
@@ -3313,7 +3587,8 @@ const MyAccount = () => {
                                                     </div>
 
                                                     <div className="bg-white p-8 rounded-2xl border border-line shadow-sm">
-                                                        <div className="heading6 mb-6">Top 5 Productos</div>
+                                                        <div className="heading6 mb-2">Top 5 Productos Vendidos</div>
+                                                        <div className="text-[11px] text-secondary mb-6">Ranking basado solo en pedidos completados o entregados.</div>
                                                         <div className="space-y-4">
                                                             {dashboardStats?.topProducts?.map((prod, i) => (
                                                                 <div key={i}
@@ -5911,6 +6186,23 @@ const MyAccount = () => {
                                     </div>
                                     )}
 
+                                    {activeTab === 'discount-codes' && (
+                                    <DiscountCodesPanel
+                                        discountCodes={discountCodes}
+                                        discountAuditRows={discountAuditRows}
+                                        discountCodesLoading={discountCodesLoading}
+                                        discountFormSaving={discountFormSaving}
+                                        editingDiscountId={editingDiscountId}
+                                        discountForm={discountForm}
+                                        onDiscountFormChange={handleDiscountFormChange}
+                                        onDiscountFormSubmit={handleDiscountFormSubmit}
+                                        onDiscountFormReset={handleDiscountFormReset}
+                                        onDiscountEdit={handleDiscountEdit}
+                                        onDiscountToggleStatus={handleDiscountToggleStatus}
+                                        onDiscountRefresh={() => loadDiscountData()}
+                                    />
+                                    )}
+
                                     {activeTab === 'product-page' && (
                                     <ProductPageSettingsPanel
                                         settings={productPageSettings}
@@ -6143,7 +6435,7 @@ const MyAccount = () => {
                                         <div className="mt-10 p-5 bg-surface rounded-xl border border-line">
                                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
                                                 <h6 className="heading6">Trazabilidad de cifras</h6>
-                                                <span className="text-xs text-secondary font-semibold">Fuente: pedidos no cancelados + productos vendidos</span>
+                                                <span className="text-xs text-secondary font-semibold">Fuente: pedidos completados o entregados + productos vendidos</span>
                                             </div>
                                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                                                 <div className="bg-white border border-line rounded-lg p-4">

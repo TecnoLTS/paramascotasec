@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -13,7 +13,6 @@ import { useSite } from '@/context/SiteContext'
 import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 import { getPublicStoreStatus } from '@/lib/api/settings'
-import { loadCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft'
 
 const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
     const router = useRouter()
@@ -28,7 +27,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         return () => clearInterval(timer);
     }, []);
 
-    const [activeTab, setActiveTab] = useState<string | undefined>('')
     const { isModalOpen, closeModalCart } = useModalCartContext();
     const { cartState, addToCart, removeFromCart, updateCart } = useCart()
     const [suggested, setSuggested] = useState<ProductType[]>([])
@@ -36,14 +34,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     const [errorSuggested, setErrorSuggested] = useState<string | null>(null)
     const [salesEnabled, setSalesEnabled] = useState(true)
     const [salesDisabledMessage, setSalesDisabledMessage] = useState('Tienda temporalmente en mantenimiento. Intenta más tarde.')
-    const [noteDraft, setNoteDraft] = useState('')
-    const [shippingDraft, setShippingDraft] = useState({
-        country: 'Ecuador',
-        state: '',
-        city: '',
-        zip: '',
-    })
-
     useEffect(() => {
         getPublicStoreStatus()
             .then((status) => {
@@ -55,19 +45,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
             })
             .catch(() => {})
     }, [])
-
-    useEffect(() => {
-        const draft = loadCheckoutDraft()
-        setNoteDraft(draft.note)
-        setShippingDraft(draft.shipping)
-    }, [])
-
-    useEffect(() => {
-        saveCheckoutDraft({
-            note: noteDraft,
-            shipping: shippingDraft,
-        })
-    }, [noteDraft, shippingDraft])
 
     useEffect(() => {
         const loadSuggested = async () => {
@@ -103,16 +80,8 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         addToCart({ ...productItem, quantityPurchase: quantityToAdd })
     };
 
-    const handleActiveTab = (tab: string) => {
-        setActiveTab(tab)
-    }
-
     const handleGoToCheckout = () => {
         if (!canCheckout) return
-        saveCheckoutDraft({
-            note: noteDraft,
-            shipping: shippingDraft,
-        })
         closeModalCart()
         router.push('/checkout')
     }
@@ -141,14 +110,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
             return src.replace('http://localhost:8080', site.apiBaseUrl)
         }
         return src
-    }
-
-    const handleShippingDraftChange = (field: 'state' | 'city' | 'zip', value: string) => {
-        setShippingDraft((prev) => ({
-            ...prev,
-            country: 'Ecuador',
-            [field]: value,
-        }))
     }
 
     const shouldUnoptimize = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
@@ -305,29 +266,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
             ))}
                         </div>
                         <div className="footer-modal bg-white absolute bottom-0 left-0 w-full">
-                            <div className="flex items-center justify-center lg:gap-14 gap-8 px-6 py-4 border-b border-line">
-                                <div
-                                    className="item flex items-center gap-3 cursor-pointer"
-                                    onClick={() => handleActiveTab('note')}
-                                >
-                                    <Icon.NotePencil className='text-xl' />
-                                    <div className="caption1">Nota</div>
-                                </div>
-                                <div
-                                    className="item flex items-center gap-3 cursor-pointer"
-                                    onClick={() => handleActiveTab('shipping')}
-                                >
-                                    <Icon.Truck className='text-xl' />
-                                    <div className="caption1">Envío</div>
-                                </div>
-                                <div
-                                    className="item flex items-center gap-3 cursor-pointer"
-                                    onClick={() => handleActiveTab('coupon')}
-                                >
-                                    <Icon.Tag className='text-xl' />
-                                    <div className="caption1">Cupón</div>
-                                </div>
-                            </div>
                             <div className="flex items-center justify-between pt-6 px-6">
                                     <div className="heading5">Subtotal</div>
                                 <div className="heading5">${Number(totalCart ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -357,112 +295,6 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                     </div>
                                 )}
                                 <div onClick={closeModalCart} className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block">O seguir comprando</div>
-                            </div>
-                            <div className={`tab-item note-block ${activeTab === 'note' ? 'active' : ''}`}>
-                                <div className="px-6 py-4 border-b border-line">
-                                    <div className="item flex items-center gap-3 cursor-pointer">
-                                        <Icon.NotePencil className='text-xl' />
-                                        <div className="caption1">Nota</div>
-                                    </div>
-                                </div>
-                                <div className="form pt-4 px-6">
-                                    <textarea
-                                        name="form-note"
-                                        id="form-note"
-                                        rows={4}
-                                        placeholder='Agrega instrucciones para tu pedido...'
-                                        className='caption1 py-3 px-4 bg-surface border-line rounded-md w-full'
-                                        value={noteDraft}
-                                        onChange={(e) => setNoteDraft(e.target.value)}
-                                    ></textarea>
-                                    <p className="caption1 text-secondary mt-3">
-                                        Esta nota se enviará junto con el pedido para preparación, entrega o retiro.
-                                    </p>
-                                </div>
-                                <div className="block-button text-center pt-4 px-6 pb-6">
-                                    <div className='button-main w-full text-center' onClick={() => setActiveTab('')}>Guardar</div>
-                                    <div onClick={() => setActiveTab('')} className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block">Cancelar</div>
-                                </div>
-                            </div>
-                            <div className={`tab-item note-block ${activeTab === 'shipping' ? 'active' : ''}`}>
-                                <div className="px-6 py-4 border-b border-line">
-                                    <div className="item flex items-center gap-3 cursor-pointer">
-                                        <Icon.Truck className='text-xl' />
-                                        <div className="caption1">Calcular envío</div>
-                                    </div>
-                                </div>
-                                <div className="form pt-4 px-6">
-                                    <div className="rounded-xl border border-[#0f766e]/20 bg-[#ecfeff] px-4 py-3 mb-4 text-sm text-[#155e75]">
-                                        Los envíos están disponibles únicamente dentro de Ecuador. El costo final se confirma en el checkout.
-                                    </div>
-                                    <div className="">
-                                        <label htmlFor='select-country' className="caption1 text-secondary">País/región</label>
-                                        <div className="select-block relative mt-2">
-                                            <input
-                                                id="select-country"
-                                                name="select-country"
-                                                className='w-full py-3 pl-5 rounded-xl bg-white border border-line'
-                                                value="Ecuador"
-                                                readOnly
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="mt-3">
-                                        <label htmlFor='select-state' className="caption1 text-secondary">Provincia</label>
-                                        <input
-                                            className="border-line px-5 py-3 w-full rounded-xl mt-3"
-                                            id="select-state"
-                                            type="text"
-                                            placeholder="Provincia"
-                                            value={shippingDraft.state}
-                                            onChange={(e) => handleShippingDraftChange('state', e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="mt-3">
-                                        <label htmlFor='select-city' className="caption1 text-secondary">Ciudad</label>
-                                        <input
-                                            className="border-line px-5 py-3 w-full rounded-xl mt-3"
-                                            id="select-city"
-                                            type="text"
-                                            placeholder="Ciudad"
-                                            value={shippingDraft.city}
-                                            onChange={(e) => handleShippingDraftChange('city', e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="mt-3">
-                                        <label htmlFor='select-code' className="caption1 text-secondary">Código postal</label>
-                                        <input
-                                            className="border-line px-5 py-3 w-full rounded-xl mt-3"
-                                            id="select-code"
-                                            type="text"
-                                            placeholder="Código postal"
-                                            value={shippingDraft.zip}
-                                            onChange={(e) => handleShippingDraftChange('zip', e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="block-button text-center pt-4 px-6 pb-6">
-                                    <div className='button-main w-full text-center' onClick={() => setActiveTab('')}>Guardar</div>
-                                    <div onClick={() => setActiveTab('')} className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block">Cancelar</div>
-                                </div>
-                            </div>
-                            <div className={`tab-item note-block ${activeTab === 'coupon' ? 'active' : ''}`}>
-                                <div className="px-6 py-4 border-b border-line">
-                                    <div className="item flex items-center gap-3 cursor-pointer">
-                                        <Icon.Tag className='text-xl' />
-                                        <div className="caption1">Agregar un cupón</div>
-                                    </div>
-                                </div>
-                                <div className="form pt-4 px-6">
-                                    <div className="">
-                                        <label htmlFor='select-discount' className="caption1 text-secondary">Ingresa el código</label>
-                                        <input className="border-line px-5 py-3 w-full rounded-xl mt-3" id="select-discount" type="text" placeholder="Código de descuento" />
-                                    </div>
-                                </div>
-                                <div className="block-button text-center pt-4 px-6 pb-6">
-                                    <div className='button-main w-full text-center' onClick={() => setActiveTab('')}>Aplicar</div>
-                                    <div onClick={() => setActiveTab('')} className="text-button-uppercase mt-4 text-center has-line-before cursor-pointer inline-block">Cancelar</div>
-                                </div>
                             </div>
                         </div>
                     </div>

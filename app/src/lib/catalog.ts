@@ -312,6 +312,11 @@ export const getProductDiscountPercent = (product: ProductType) => {
   return Math.floor(100 - ((currentPrice / originalPrice) * 100))
 }
 
+export const getProductDetailRouteId = (product: ProductType) => {
+  const selectedVariant = resolveSelectedVariant(product)
+  return selectedVariant?.id || selectedVariant?.internalId || selectedVariant?.slug || product.id
+}
+
 export const resolveSelectedVariant = (product: ProductType, idOrSlug?: string | null) => {
   const variants = getProductVariants(product)
   const requestedValue = (idOrSlug ?? '').trim()

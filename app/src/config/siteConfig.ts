@@ -93,8 +93,8 @@ export const siteConfig: SiteConfig = {
   },
   contact: {
     email: 'info@paramascotasec.com',
-    whatsappNumber: '593992782126',
-    whatsappLabel: '+593 (099) 278-21-xx',
+    whatsappNumber: '593978913529',
+    whatsappLabel: '+593 (097) 891-35-29',
   },
   social: {
     facebook: 'https://www.facebook.com/paramascotasec',

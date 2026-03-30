@@ -12,6 +12,7 @@ import { useModalCartContext } from '@/context/ModalCartContext';
 import { useCart } from '@/context/CartContext';
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 import { useSite } from '@/context/SiteContext'
+import { getProductDetailRouteId } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import { ProductType } from '@/type/ProductType'
 
@@ -146,7 +147,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
         setIsSearchFocused(false)
         closeMenuMobile()
         setOpenSubNavMobile(null)
-        router.push(`/product/default?id=${product.id}`)
+        router.push(`/product/default?id=${getProductDetailRouteId(product)}`)
     }
 
     type CategoryLink = {
@@ -172,8 +173,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const categoriesSections: Array<{ title: string; links: CategoryLink[] }> =
         site.menu.categorySections
 
-    const serviceLinks: MegaNavLink[] = site.menu.serviceLinks
-
     // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
     const companyLinks: MegaNavLink[] = site.menu.companyLinks
 
@@ -191,13 +190,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
             href: '/shop/breadcrumb1',
             icon: Icon.Storefront,
             isActive: hasMounted && pathname === '/shop/breadcrumb1',
-        },
-        {
-            key: 'services',
-            label: 'Servicios',
-            href: '#!',
-            icon: Icon.Wrench,
-            isActive: false,
         },
         {
             key: 'about',
@@ -218,7 +210,6 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const mobileMenuDescriptions: Record<(typeof mainMenuItems)[number]['key'], string> = {
         home: 'Novedades y destacados',
         shop: 'Categorías y mascotas',
-        services: 'Envíos, ayuda y soporte',
         about: 'Historia y esencia de la marca',
         contact: 'Canales de atención directa',
     }
@@ -324,18 +315,11 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
     const categoryBanner = site.menu.banner
 
-    const servicesBanner = site.menu.servicesBanner ?? {
-        title: ' ',
-        subtitle: ' ',
-        image: '/images/collection/15.jpg',
-    }
-
     const departmentLinks = site.menu.departmentLinks ?? []
     const HomeMenuIcon = mainMenuItems[0].icon
     const ShopMenuIcon = mainMenuItems[1].icon
-    const ServicesMenuIcon = mainMenuItems[2].icon
-    const AboutMenuIcon = mainMenuItems[3].icon
-    const ContactMenuIcon = mainMenuItems[4].icon
+    const AboutMenuIcon = mainMenuItems[2].icon
+    const ContactMenuIcon = mainMenuItems[3].icon
     const normalizedSearchKeyword = sanitizeProductSearchQuery(searchKeyword)
     const shouldShowSearchPanel =
         isSearchFocused &&
@@ -577,31 +561,21 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                             categoryBanner
                                         )}
                                     </li>
-                                    <li className='h-full'>
-                                        <Link href="#!" className='text-button-uppercase duration-300 h-full flex items-center justify-center'>
+                                    <li className='h-full '>
+                                        <Link
+                                            href={mainMenuItems[2].href}
+                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${mainMenuItems[2].isActive ? 'active' : ''}`}
+                                        >
                                             {mainMenuItems[2].label}
                                         </Link>
-                                        {renderMegaMenu(
-                                            [{ title: 'Servicios', links: serviceLinks }],
-                                            servicesBanner
-                                        )}
                                     </li>
 
-                                    <li className='h-full '>
+                                    <li className='h-full'>
                                         <Link
                                             href={mainMenuItems[3].href}
                                             className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${mainMenuItems[3].isActive ? 'active' : ''}`}
                                         >
                                             {mainMenuItems[3].label}
-                                        </Link>
-                                    </li>
-
-                                    <li className='h-full'>
-                                        <Link
-                                            href={mainMenuItems[4].href}
-                                            className={`text-button-uppercase duration-300 h-full flex items-center justify-center ${mainMenuItems[4].isActive ? 'active' : ''}`}
-                                        >
-                                            {mainMenuItems[4].label}
                                         </Link>
                                     </li>
 
@@ -708,62 +682,26 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                         </div>
                                     </li>
 
-                                    <li className={`${openSubNavMobile === 2 ? 'open' : ''}`}>
-                                        <button
-                                            type="button"
-                                            className="menu-primary-link menu-primary-link--button"
-                                            onClick={() => handleOpenSubNavMobile(2)}
+                                    <li>
+                                        <Link
+                                            href={mainMenuItems[2].href}
+                                            className={`menu-primary-link ${mainMenuItems[2].isActive ? 'active' : ''}`}
+                                            onClick={() => {
+                                                closeMenuMobile()
+                                                setOpenSubNavMobile(null)
+                                            }}
                                         >
                                             <span className="menu-primary-link__icon">
-                                                <ServicesMenuIcon size={19} />
+                                                <AboutMenuIcon size={19} />
                                             </span>
                                             <span className="menu-primary-link__body">
                                                 <span className="menu-primary-link__label">{mainMenuItems[2].label}</span>
-                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.services}</span>
+                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.about}</span>
                                             </span>
                                             <span className="menu-primary-link__chevron">
-                                                <Icon.CaretRight size={18} />
+                                                <Icon.ArrowUpRight size={18} />
                                             </span>
-                                        </button>
-
-                                        <div className="sub-nav-mobile">
-                                            <div className="sub-nav-mobile__header">
-                                                <button
-                                                    type="button"
-                                                    className="back-btn"
-                                                    onClick={() => handleOpenSubNavMobile(2)}
-                                                >
-                                                    <Icon.CaretLeft size={18} />
-                                                    <span>Atrás</span>
-                                                </button>
-                                                <div className="sub-nav-mobile__title">Servicios</div>
-                                                <div className="sub-nav-mobile__subtitle">Información útil para compras, entregas, cambios y soporte.</div>
-                                            </div>
-
-                                            <div className="list-nav-item">
-                                                <div className="mobile-nav-section-card mobile-nav-section-card--services">
-                                                    <div className="mobile-nav-section-card__title">Atención y soporte</div>
-                                                    <ul className="mobile-nav-section-card__list">
-                                                        {serviceLinks.map((link) => (
-                                                            <li key={link.label}>
-                                                                <Link
-                                                                    href={link.href}
-                                                                    className="nav-item-mobile mobile-subnav-link"
-                                                                    onClick={() => {
-                                                                        closeMenuMobile()
-                                                                        setOpenSubNavMobile(null)
-                                                                    }}
-                                                                >
-                                                                    <span>{link.label}</span>
-                                                                    <Icon.ArrowRight size={16} />
-                                                                </Link>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            </div>
-
-                                        </div>
+                                        </Link>
                                     </li>
 
                                     <li>
@@ -776,32 +714,10 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                             }}
                                         >
                                             <span className="menu-primary-link__icon">
-                                                <AboutMenuIcon size={19} />
-                                            </span>
-                                            <span className="menu-primary-link__body">
-                                                <span className="menu-primary-link__label">{mainMenuItems[3].label}</span>
-                                                <span className="menu-primary-link__hint">{mobileMenuDescriptions.about}</span>
-                                            </span>
-                                            <span className="menu-primary-link__chevron">
-                                                <Icon.ArrowUpRight size={18} />
-                                            </span>
-                                        </Link>
-                                    </li>
-
-                                    <li>
-                                        <Link
-                                            href={mainMenuItems[4].href}
-                                            className={`menu-primary-link ${mainMenuItems[4].isActive ? 'active' : ''}`}
-                                            onClick={() => {
-                                                closeMenuMobile()
-                                                setOpenSubNavMobile(null)
-                                            }}
-                                        >
-                                            <span className="menu-primary-link__icon">
                                                 <ContactMenuIcon size={19} />
                                             </span>
                                             <span className="menu-primary-link__body">
-                                                <span className="menu-primary-link__label">{mainMenuItems[4].label}</span>
+                                                <span className="menu-primary-link__label">{mainMenuItems[3].label}</span>
                                                 <span className="menu-primary-link__hint">{mobileMenuDescriptions.contact}</span>
                                             </span>
                                             <span className="menu-primary-link__chevron">

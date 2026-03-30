@@ -8,6 +8,7 @@ export const ADMIN_TABS_WITH_STATS = new Set([
   'margins',
   'calculations',
   'pricing-rules',
+  'discount-codes',
   'product-page',
   'balances',
 ])
@@ -37,4 +38,4 @@ export const ADMIN_TABS_WITH_PRODUCTS = new Set(['products', 'inventory', 'price
 export const ADMIN_TABS_WITH_REFERENCE_DATA = new Set(['products', 'inventory', 'catalogs'])
 export const ADMIN_TABS_WITH_USERS = new Set(['users'])
 export const ADMIN_TABS_WITH_ORDERS = new Set(['admin-orders', 'shipments', 'balances', 'local-sales'])
-export const ADMIN_TABS_WITH_PRICING_SETTINGS = new Set(['prices', 'margins', 'calculations', 'pricing-rules'])
+export const ADMIN_TABS_WITH_PRICING_SETTINGS = new Set(['prices', 'margins', 'calculations', 'pricing-rules', 'discount-codes'])

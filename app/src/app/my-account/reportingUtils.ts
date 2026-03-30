@@ -158,7 +158,7 @@ export const buildProductBreakdownMeta = (
     default:
       return {
         title: 'Venta Neta por Producto',
-        subtitle: 'Sin IVA ni envío. Basado en pedidos no cancelados.',
+        subtitle: 'Sin IVA ni envío. Basado solo en pedidos completados o entregados.',
         total: Number(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0),
       }
   }

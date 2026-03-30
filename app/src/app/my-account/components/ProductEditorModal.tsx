@@ -969,6 +969,10 @@ export default function ProductEditorModal({
     const productCost = Number(deferredForm.cost || 0)
     const productPvpPrice = Number(deferredForm.pvp || 0) || (productBasePrice * effectiveVatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productWouldSellAtLoss = Number.isFinite(productCost)
+        && productCost > 0
+        && Number.isFinite(productBasePrice)
+        && productBasePrice < productCost
     const productGrossProfit = Math.max(productBasePrice - productCost, 0)
     const productGrossMargin = productBasePrice > 0 ? (productGrossProfit / productBasePrice) * 100 : 0
     const productMarkup = productCost > 0 ? (productGrossProfit / productCost) * 100 : 0
@@ -1078,7 +1082,7 @@ export default function ProductEditorModal({
                 {
                     label: 'Precio base',
                     value: hasPositivePrice ? `$${Number(form.price || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
-                    complete: hasPositivePrice,
+                    complete: hasPositivePrice && !productWouldSellAtLoss,
                 },
                 {
                     label: 'Stock',
@@ -1178,6 +1182,7 @@ export default function ProductEditorModal({
         hasSku,
         isDuplicateVariantMode,
         isRestockMode,
+        productWouldSellAtLoss,
         productCost,
         selectedPurchaseSupplier?.document,
         stockEntryDelta,
@@ -1290,6 +1295,9 @@ export default function ProductEditorModal({
             if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
             if (!Number.isFinite(currentCost) || currentCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
+            if (Number.isFinite(basePrice) && Number.isFinite(currentCost) && currentCost > 0 && basePrice < currentCost) {
+                nextErrors.price = 'El precio base no puede ser menor al costo del producto.'
+            }
             if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) nextErrors.quantity = 'El stock debe ser un número entero mayor o igual a 0.'
             if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
             if (isRestockMode && stockIncrease <= 0) nextErrors.quantity = 'Debes indicar al menos 1 unidad a ingresar en la compra.'
@@ -1479,6 +1487,9 @@ export default function ProductEditorModal({
             if (message.toLowerCase().includes('sku')) {
                 setFormErrors((prev) => ({ ...prev, sku: message || 'Ya existe un producto con ese SKU.' }))
             }
+            if (message.toLowerCase().includes('precio base no puede ser menor al costo')) {
+                setFormErrors((prev) => ({ ...prev, price: message || 'El precio base no puede ser menor al costo del producto.' }))
+            }
             showNotification(message || 'Error al guardar producto', 'error')
         } finally {
             setSaving(false)
@@ -1623,6 +1634,9 @@ export default function ProductEditorModal({
                                             <input type="number" step="0.01" min="0" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.price} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} />
                                         </div>
                                         {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
+                                        {productWouldSellAtLoss && !formErrors.price && (
+                                            <p className="text-xs text-red mt-2">El precio base no puede quedar por debajo del costo.</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">{form.taxExempt ? 'Precio final de venta' : 'Precio PVP (con IVA)'}</label>

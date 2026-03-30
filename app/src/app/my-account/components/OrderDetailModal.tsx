@@ -3,7 +3,7 @@
 import React from 'react'
 import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
-import { isDynamicOrderItemImage, normalizeOrderItemImage } from '../customerDataUtils'
+import { isDynamicOrderItemImage, normalizeOrderItemImage, parseAddress } from '../customerDataUtils'
 import { normalizeStatus } from '../statusDisplay'
 
 type OrderDetailModalProps = {
@@ -52,6 +52,51 @@ export default function OrderDetailModal({
     if (!open || !order) return null
 
     const shipping = getShipping(order)
+    const shippingAddressRaw = parseAddress(order?.shipping_address)
+    const billingAddressRaw = parseAddress(order?.billing_address)
+    const shippingAddress = shippingAddressRaw && typeof shippingAddressRaw === 'object' ? shippingAddressRaw as Record<string, any> : {}
+    const billingAddress = billingAddressRaw && typeof billingAddressRaw === 'object' ? billingAddressRaw as Record<string, any> : {}
+    const addressValue = (source: Record<string, any>, ...keys: string[]) => {
+        for (const key of keys) {
+            const value = String(source?.[key] ?? '').trim()
+            if (value) return value
+        }
+        return ''
+    }
+    const compactAddress = (source: Record<string, any>) => {
+        const cityLine = [
+            addressValue(source, 'city'),
+            addressValue(source, 'state'),
+            addressValue(source, 'zip'),
+        ].filter(Boolean).join(', ')
+        const country = addressValue(source, 'country')
+        return [addressValue(source, 'street', 'address', 'line1'), cityLine, country].filter(Boolean)
+    }
+    const shippingLines = compactAddress(shippingAddress)
+    const billingLines = compactAddress(billingAddress)
+    const documentType = addressValue(billingAddress, 'documentType') || addressValue(shippingAddress, 'documentType')
+    const documentNumber = addressValue(billingAddress, 'documentNumber') || addressValue(shippingAddress, 'documentNumber')
+    const company = addressValue(billingAddress, 'company') || addressValue(shippingAddress, 'company')
+    const orderNotes = String(order?.order_notes ?? '').trim()
+    const pickupWindow = addressValue(shippingAddress, 'pickupWindow', 'window')
+    const pickupProvider = addressValue(shippingAddress, 'provider', 'provider_name')
+    const inferredDeliveryMethod = (() => {
+        const explicit = normalizeStatus(order?.delivery_method || '')
+        if (explicit) return explicit
+        if (pickupWindow || pickupProvider) return 'pickup'
+        if (Number(order?.shipping ?? 0) > 0) return 'delivery'
+        if (Object.keys(shippingAddress).length > 0) return 'delivery'
+        const normalizedStatus = normalizeStatus(order?.status || '')
+        if (['pickup', 'ready_for_pickup', 'ready'].includes(normalizedStatus)) return 'pickup'
+        return ''
+    })()
+    const deliveryMethod = inferredDeliveryMethod
+    const deliveryMethodLabel = deliveryMethod === 'pickup'
+        ? 'Retiro en tienda'
+        : deliveryMethod === 'delivery'
+            ? 'Envío a domicilio'
+            : 'Método no especificado'
+    const sameAddresses = shippingLines.join(' | ') !== '' && shippingLines.join(' | ') === billingLines.join(' | ')
     const mixedVatRates = Boolean(order?.mixed_vat_rates)
     const vatRateLabel = mixedVatRates
         ? 'IVA aplicado'
@@ -81,7 +126,7 @@ export default function OrderDetailModal({
                 </div>
 
                 <div className="p-8 overflow-y-auto flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div className="bg-surface rounded-xl p-6 border border-line">
                             <h6 className="heading6 mb-4 flex items-center gap-2">
                                 <Icon.User size={20} /> Cliente
@@ -116,6 +161,71 @@ export default function OrderDetailModal({
                                 <div className="pt-3 border-t border-line grid grid-cols-[1fr_120px] items-center">
                                     <span className="text-lg font-bold">Total</span>
                                     <span className="text-xl font-bold text-primary tabular-nums text-right">{formatMoney(order?.total)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mb-6 grid grid-cols-1 xl:grid-cols-[0.92fr_1.08fr] gap-6">
+                        <div className="bg-white rounded-xl p-6 border border-line">
+                            <h6 className="heading6 mb-4 flex items-center gap-2">
+                                <Icon.Truck size={20} /> Entrega y solicitud
+                            </h6>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="rounded-lg bg-surface border border-line px-4 py-4">
+                                    <div className="text-[11px] uppercase font-bold text-secondary mb-2">Método de entrega</div>
+                                    <div className="font-semibold text-black">{deliveryMethodLabel}</div>
+                                    {pickupProvider && <div className="text-sm text-secondary mt-2">Proveedor: {pickupProvider}</div>}
+                                    {pickupWindow && <div className="text-sm text-secondary mt-1">Ventana: {pickupWindow}</div>}
+                                </div>
+                                <div className="rounded-lg bg-surface border border-line px-4 py-4">
+                                    <div className="text-[11px] uppercase font-bold text-secondary mb-2">Pago</div>
+                                    <div className="font-semibold text-black">{String(order?.payment_method || 'No especificado').trim() || 'No especificado'}</div>
+                                    {documentType && <div className="text-sm text-secondary mt-2">Documento: {documentType}</div>}
+                                    {documentNumber && <div className="text-sm text-secondary mt-1">{documentNumber}</div>}
+                                    {company && <div className="text-sm text-secondary mt-1">Razón social: {company}</div>}
+                                </div>
+                            </div>
+                            <div className="mt-4 rounded-lg bg-surface border border-line px-4 py-4">
+                                <div className="text-[11px] uppercase font-bold text-secondary mb-2">Solicitud del cliente</div>
+                                <div className={`text-sm ${orderNotes ? 'text-black whitespace-pre-wrap' : 'text-secondary'}`}>
+                                    {orderNotes || 'Sin observaciones adicionales.'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl p-6 border border-line">
+                            <h6 className="heading6 mb-4 flex items-center gap-2">
+                                <Icon.MapPinLine size={20} /> Direcciones del pedido
+                            </h6>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="rounded-lg bg-surface border border-line px-4 py-4">
+                                    <div className="text-[11px] uppercase font-bold text-secondary mb-2">Dirección de envío</div>
+                                    {deliveryMethod === 'pickup' ? (
+                                        <div className="text-sm text-black">El cliente eligió retiro en tienda.</div>
+                                    ) : shippingLines.length > 0 ? (
+                                        <div className="space-y-1 text-sm text-black">
+                                            {shippingLines.map((line, index) => (
+                                                <div key={`shipping-${index}`}>{line}</div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-secondary">Sin dirección de envío registrada.</div>
+                                    )}
+                                </div>
+                                <div className="rounded-lg bg-surface border border-line px-4 py-4">
+                                    <div className="text-[11px] uppercase font-bold text-secondary mb-2">Dirección de facturación</div>
+                                    {sameAddresses ? (
+                                        <div className="text-sm text-black">Usa la misma dirección de envío.</div>
+                                    ) : billingLines.length > 0 ? (
+                                        <div className="space-y-1 text-sm text-black">
+                                            {billingLines.map((line, index) => (
+                                                <div key={`billing-${index}`}>{line}</div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-secondary">Sin dirección de facturación registrada.</div>
+                                    )}
                                 </div>
                             </div>
                         </div>

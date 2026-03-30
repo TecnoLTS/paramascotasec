@@ -1,8 +1,46 @@
 'use client'
 
-import type { ElementType } from 'react'
+import type { ComponentType } from 'react'
 import Image from '@/components/Common/AppImage'
-import * as Icon from "@phosphor-icons/react/dist/ssr"
+import {
+    ArrowsClockwise,
+    Archive,
+    Bank,
+    Bell,
+    BowlFood,
+    Briefcase,
+    Calculator,
+    CaretDown,
+    ChartBar,
+    ChartLineUp,
+    ChartPieSlice,
+    CurrencyDollar,
+    Files,
+    Flask,
+    GearSix,
+    HourglassMedium,
+    HouseLine,
+    ListChecks,
+    MapPin,
+    NotePencil,
+    Package,
+    Palette,
+    Percent,
+    Power,
+    Rows,
+    Ruler,
+    SealCheck,
+    ShoppingBag,
+    SignOut,
+    SlidersHorizontal,
+    Stack,
+    Storefront,
+    Tag,
+    TrendUp,
+    Trophy,
+    Truck,
+    Users,
+} from "@phosphor-icons/react/dist/ssr"
 
 import { PRODUCT_REFERENCE_SECTIONS, type ProductReferenceKey } from '@/lib/productReferenceData'
 import type { AdminMenuGroupKey, AdminReportSection } from '../types'
@@ -27,6 +65,23 @@ type AccountSidebarProps = {
     onLogout: () => void;
     strategicAlertsCount: number;
     strategicCriticalCount: number;
+}
+
+type SidebarIcon = ComponentType<{ size?: string | number; className?: string }>
+
+const referenceCatalogIcons: Record<string, SidebarIcon> = {
+    SealCheck,
+    Truck,
+    Ruler,
+    Stack,
+    Palette,
+    ArrowsClockwise,
+    Package,
+    Flask,
+    MapPin,
+    Tag,
+    BowlFood,
+    HourglassMedium,
 }
 
 export default function AccountSidebar({
@@ -71,35 +126,35 @@ export default function AccountSidebar({
                                 onClick={() => onToggleAdminMenuGroup('reporting')}
                             >
                                 <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.ChartPieSlice size={16} />
+                                    <ChartPieSlice size={16} />
                                     <span>Reportes</span>
                                 </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.reporting ? 'rotate-180' : ''}`} />
+                                <CaretDown size={14} className={`duration-300 ${adminMenuExpanded.reporting ? 'rotate-180' : ''}`} />
                             </button>
                             {adminMenuExpanded.reporting && (
                                 <div className="pb-2 px-2 space-y-1.5">
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'general'} onClick={() => onOpenAdminReportSection('general')}>
-                                        <Icon.ChartPieSlice size={18} />
+                                        <ChartPieSlice size={18} />
                                         <strong className="heading6">General</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'sales'} onClick={() => onOpenAdminReportSection('sales')}>
-                                        <Icon.ChartLineUp size={18} />
+                                        <ChartLineUp size={18} />
                                         <strong className="heading6">Ventas</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'balance'} onClick={() => onOpenAdminReportSection('balance')}>
-                                        <Icon.Bank size={18} />
+                                        <Bank size={18} />
                                         <strong className="heading6">Balance General</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'inventory'} onClick={() => onOpenAdminReportSection('inventory')}>
-                                        <Icon.Archive size={18} />
+                                        <Archive size={18} />
                                         <strong className="heading6">Inventario</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'traceability'} onClick={() => onOpenAdminReportSection('traceability')}>
-                                        <Icon.Files size={18} />
+                                        <Files size={18} />
                                         <strong className="heading6">Trazabilidad</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'sales-ranking'} onClick={() => onNavigateToPanelTab('sales-ranking')}>
-                                        <Icon.Trophy size={18} />
+                                        <Trophy size={18} />
                                         <strong className="heading6">Ranking Productos</strong>
                                     </PanelNavButton>
                                 </div>
@@ -114,10 +169,10 @@ export default function AccountSidebar({
                                 onClick={() => onToggleAdminMenuGroup('monitoring')}
                             >
                                 <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.ChartBar size={16} />
+                                    <ChartBar size={16} />
                                     <span>Monitoreo</span>
                                 </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.monitoring ? 'rotate-180' : ''}`} />
+                                <CaretDown size={14} className={`duration-300 ${adminMenuExpanded.monitoring ? 'rotate-180' : ''}`} />
                             </button>
                             {adminMenuExpanded.monitoring && (
                                 <div className="pb-2 px-2 space-y-1.5">
@@ -132,7 +187,7 @@ export default function AccountSidebar({
                                         ) : undefined}
                                     >
                                         <span className="flex items-center gap-2">
-                                            <Icon.Bell size={18} />
+                                            <Bell size={18} />
                                             <strong className="heading6">Alertas</strong>
                                         </span>
                                     </PanelNavButton>
@@ -147,27 +202,27 @@ export default function AccountSidebar({
                                 onClick={() => onToggleAdminMenuGroup('catalog')}
                             >
                                 <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.Package size={16} />
+                                    <Package size={16} />
                                     <span>Catálogo</span>
                                 </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.catalog ? 'rotate-180' : ''}`} />
+                                <CaretDown size={14} className={`duration-300 ${adminMenuExpanded.catalog ? 'rotate-180' : ''}`} />
                             </button>
                             {adminMenuExpanded.catalog && (
                                 <div className="pb-2 px-2 space-y-1.5">
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'products'} onClick={() => onNavigateToPanelTab('products')}>
-                                        <Icon.ShoppingBag size={18} />
+                                        <ShoppingBag size={18} />
                                         <strong className="heading6">Productos</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'inventory'} onClick={() => onNavigateToPanelTab('inventory')}>
-                                        <Icon.Archive size={18} />
+                                        <Archive size={18} />
                                         <strong className="heading6">Inventario</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'catalogs' && !focusedReferenceCatalogKey} onClick={() => onNavigateToReferenceCatalog(null)}>
                                         <span className="flex items-center gap-3">
-                                            <Icon.Rows size={18} />
+                                            <Rows size={18} />
                                             <strong className="heading6">Catálogos operativos</strong>
                                         </span>
-                                        <Icon.CaretDown size={14} className={`ml-auto duration-300 ${activeTab === 'catalogs' ? 'rotate-180' : ''}`} />
+                                        <CaretDown size={14} className={`ml-auto duration-300 ${activeTab === 'catalogs' ? 'rotate-180' : ''}`} />
                                     </PanelNavButton>
                                     {activeTab === 'catalogs' && (
                                         <div className="mt-2 rounded-xl border border-line bg-surface p-2">
@@ -176,7 +231,7 @@ export default function AccountSidebar({
                                             </div>
                                             <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
                                             {PRODUCT_REFERENCE_SECTIONS.map((section) => {
-                                                const ItemIcon = Icon[section.menuIcon] as ElementType
+                                                const ItemIcon = referenceCatalogIcons[section.menuIcon] ?? Tag
                                                 return (
                                                     <PanelNavButton
                                                         key={`reference-catalog-${section.key}`}
@@ -195,11 +250,11 @@ export default function AccountSidebar({
                                         </div>
                                     )}
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'users'} onClick={() => onNavigateToPanelTab('users')}>
-                                        <Icon.Users size={18} />
+                                        <Users size={18} />
                                         <strong className="heading6">Usuarios</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'product-page'} onClick={() => onNavigateToPanelTab('product-page')}>
-                                        <Icon.NotePencil size={18} />
+                                        <NotePencil size={18} />
                                         <strong className="heading6">Ficha de producto</strong>
                                     </PanelNavButton>
                                 </div>
@@ -213,31 +268,31 @@ export default function AccountSidebar({
                                 onClick={() => onToggleAdminMenuGroup('operations')}
                             >
                                 <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.Truck size={16} />
+                                    <Truck size={16} />
                                     <span>Operación</span>
                                 </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.operations ? 'rotate-180' : ''}`} />
+                                <CaretDown size={14} className={`duration-300 ${adminMenuExpanded.operations ? 'rotate-180' : ''}`} />
                             </button>
                             {adminMenuExpanded.operations && (
                                 <div className="pb-2 px-2 space-y-1.5">
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'store-status'} onClick={() => onNavigateToPanelTab('store-status')}>
-                                        <Icon.Power size={18} />
+                                        <Power size={18} />
                                         <strong className="heading6">Ventas</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'local-sales'} onClick={() => onNavigateToPanelTab('local-sales')}>
-                                        <Icon.Storefront size={18} />
+                                        <Storefront size={18} />
                                         <strong className="heading6">Venta en local</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'admin-orders'} onClick={() => onNavigateToPanelTab('admin-orders')}>
-                                        <Icon.ListChecks size={18} />
+                                        <ListChecks size={18} />
                                         <strong className="heading6">Pedidos</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'shipments'} onClick={() => onNavigateToPanelTab('shipments')}>
-                                        <Icon.Truck size={18} />
+                                        <Truck size={18} />
                                         <strong className="heading6">Envíos</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'balances'} onClick={() => onNavigateToPanelTab('balances')}>
-                                        <Icon.Briefcase size={18} />
+                                        <Briefcase size={18} />
                                         <strong className="heading6">Balances</strong>
                                     </PanelNavButton>
                                 </div>
@@ -251,32 +306,36 @@ export default function AccountSidebar({
                                 onClick={() => onToggleAdminMenuGroup('finance')}
                             >
                                 <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-wide text-secondary">
-                                    <Icon.CurrencyDollar size={16} />
+                                    <CurrencyDollar size={16} />
                                     <span>Precios y finanzas</span>
                                 </div>
-                                <Icon.CaretDown size={14} className={`duration-300 ${adminMenuExpanded.finance ? 'rotate-180' : ''}`} />
+                                <CaretDown size={14} className={`duration-300 ${adminMenuExpanded.finance ? 'rotate-180' : ''}`} />
                             </button>
                             {adminMenuExpanded.finance && (
                                 <div className="pb-2 px-2 space-y-1.5">
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'prices'} onClick={() => onNavigateToPanelTab('prices')}>
-                                        <Icon.CurrencyDollar size={18} />
+                                        <CurrencyDollar size={18} />
                                         <strong className="heading6">Precios</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'taxes'} onClick={() => onNavigateToPanelTab('taxes')}>
-                                        <Icon.Percent size={18} />
+                                        <Percent size={18} />
                                         <strong className="heading6">Impuestos</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'margins'} onClick={() => onNavigateToPanelTab('margins')}>
-                                        <Icon.TrendUp size={18} />
+                                        <TrendUp size={18} />
                                         <strong className="heading6">Márgenes</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'calculations'} onClick={() => onNavigateToPanelTab('calculations')}>
-                                        <Icon.Calculator size={18} />
+                                        <Calculator size={18} />
                                         <strong className="heading6">Cálculos</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'pricing-rules'} onClick={() => onNavigateToPanelTab('pricing-rules')}>
-                                        <Icon.SlidersHorizontal size={18} />
+                                        <SlidersHorizontal size={18} />
                                         <strong className="heading6">Reglas de precio</strong>
+                                    </PanelNavButton>
+                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'discount-codes'} onClick={() => onNavigateToPanelTab('discount-codes')}>
+                                        <Tag size={18} />
+                                        <strong className="heading6">Cupones</strong>
                                     </PanelNavButton>
                                 </div>
                             )}
@@ -285,25 +344,25 @@ export default function AccountSidebar({
                 ) : (
                     <>
                         <PanelNavButton className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white" isActive={activeTab === 'dashboard'} onClick={() => onNavigateToPanelTab('dashboard')}>
-                            <Icon.HouseLine size={20} />
+                            <HouseLine size={20} />
                             <strong className="heading6">Panel de Control</strong>
                         </PanelNavButton>
                         <PanelNavButton className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5" isActive={activeTab === 'orders'} onClick={() => onNavigateToPanelTab('orders')}>
-                            <Icon.Package size={20} />
+                            <Package size={20} />
                             <strong className="heading6">Historial de Pedidos</strong>
                         </PanelNavButton>
                         <PanelNavButton className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5" isActive={activeTab === 'address'} onClick={() => onNavigateToPanelTab('address')}>
-                            <Icon.Tag size={20} />
+                            <Tag size={20} />
                             <strong className="heading6">Mis Direcciones</strong>
                         </PanelNavButton>
                         <PanelNavButton className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5" isActive={activeTab === 'setting'} onClick={() => onNavigateToPanelTab('setting')}>
-                            <Icon.GearSix size={20} />
+                            <GearSix size={20} />
                             <strong className="heading6">Configuración</strong>
                         </PanelNavButton>
                     </>
                 )}
                 <button onClick={onLogout} className="item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white mt-1.5 text-left border-none bg-transparent">
-                    <Icon.SignOut size={20} />
+                    <SignOut size={20} />
                     <strong className="heading6">Cerrar Sesión</strong>
                 </button>
             </div>

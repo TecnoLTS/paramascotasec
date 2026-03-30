@@ -65,7 +65,15 @@ export const resolveLiveSelectedVariant = (
   const preferredVariantId = typeof options?.preferredVariantId === 'string' ? options?.preferredVariantId : String(options?.preferredVariantId ?? '')
   const preferredLabel = (options?.preferredVariantLabel ?? '').trim()
   const strictPreferredMatch = options?.strictPreferredMatch === true
-  const candidateIds = [preferredVariantId, requestedId].filter(Boolean)
+  const matchesFamilyIdentifier = requestedId !== '' && (
+    productFamily.id === requestedId ||
+    productFamily.internalId === requestedId ||
+    productFamily.slug === requestedId
+  )
+  const candidateIds = [
+    preferredVariantId,
+    ...(requestedId && !matchesFamilyIdentifier ? [requestedId] : []),
+  ].filter(Boolean)
 
   for (const candidateId of candidateIds) {
     const byId = variants.find((variant) =>

@@ -3,20 +3,21 @@ import { apiEndpoints } from './endpoints';
 
 export interface CreateOrderData {
     id?: string;
-    total: number;
     status?: string;
     shipping_address?: any;
     billing_address?: any;
     items: Array<{
         product_id: string;
-        product_name: string;
-        product_image?: string;
         quantity: number;
-        price: number;
     }>;
+    delivery_method?: string;
+    order_notes?: string | null;
+    payment_details?: Record<string, unknown> | null;
+    payment_method?: string | null;
+    coupon_code?: string | null;
 }
 
-export const createOrder = async (data: any) => {
+export const createOrder = async (data: CreateOrderData) => {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json'
     };

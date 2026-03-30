@@ -1,5 +1,5 @@
 import { ProductType } from '@/type/ProductType'
-import { getProductReviewCount } from '@/lib/catalog'
+import { getProductDetailRouteId, getProductReviewCount } from '@/lib/catalog'
 import { versionLocalImagePath } from '@/lib/staticAsset'
 
 export function generateProductJsonLd(
@@ -23,7 +23,7 @@ export function generateProductJsonLd(
         },
         offers: {
             '@type': 'Offer',
-            url: `${siteUrl}/product/default?id=${product.id}`,
+            url: `${siteUrl}/product/default?id=${getProductDetailRouteId(product)}`,
             priceCurrency: 'USD',
             price: product.price,
             availability: product.quantity > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',

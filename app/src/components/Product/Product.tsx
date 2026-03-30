@@ -10,6 +10,7 @@ import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useRouter } from 'next/navigation'
 import Rate from '../Other/Rate'
 import {
+    getProductDetailRouteId,
     getProductCurrentPrice,
     getProductDiscountPercent,
     getProductOriginalPrice,
@@ -107,8 +108,8 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
         openQuickview(data)
     }
 
-    const handleDetailProduct = (productId: string) => {
-        router.push(`/product/default?id=${productId}`);
+    const handleDetailProduct = () => {
+        router.push(`/product/default?id=${getProductDetailRouteId(data)}`);
     };
 
     useEffect(() => {
@@ -150,7 +151,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
         <>
             {type === "grid" ? (
                 <div className={`product-item grid-type ${style}`}>
-                    <div onClick={() => handleDetailProduct(data.id)} className="product-main cursor-pointer block">
+                    <div onClick={handleDetailProduct} className="product-main cursor-pointer block">
                         <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
                             {data.new && (
                                 <div className="product-tag text-button-uppercase text-white bg-[var(--green)] px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
@@ -370,7 +371,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                         <div className="product-item list-type border-b border-line pb-6 last:border-none">
                             <div className="product-main cursor-pointer grid md:grid-cols-[300px,1fr,auto] grid-cols-1 items-center gap-7 max-lg:gap-5">
                                 <div
-                                    onClick={() => handleDetailProduct(data.id)}
+                                    onClick={handleDetailProduct}
                                     className="product-thumb bg-white relative overflow-hidden rounded-2xl block max-sm:w-1/2 md:w-full md:max-w-[300px] md:flex-shrink-0"
                                 >
                                     {data.new && (
@@ -431,7 +432,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
 
                                 <div className='flex items-start gap-7 max-lg:gap-4 max-lg:flex-wrap max-lg:w-full max-sm:flex-col max-sm:w-full'>
                                     <div className="product-infor max-sm:w-full flex-1 min-w-[260px]">
-                                        <div onClick={() => handleDetailProduct(data.id)} className="product-name heading6 inline-block duration-300">{data.name}</div>
+                                        <div onClick={handleDetailProduct} className="product-name heading6 inline-block duration-300">{data.name}</div>
                                         {hasVariantChoices && (
                                             <div className="caption1 text-secondary mt-1">Presentaciones: {sizes.join(', ')}</div>
                                         )}
@@ -524,7 +525,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
             )}
 
             {type === 'marketplace' ? (
-                <div className="product-item style-marketplace p-4 border border-line rounded-2xl" onClick={() => handleDetailProduct(data.id)}>
+                <div className="product-item style-marketplace p-4 border border-line rounded-2xl" onClick={handleDetailProduct}>
                     <div className="bg-img relative w-full">
                         <Image
                             className='w-full aspect-square'

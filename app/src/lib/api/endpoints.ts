@@ -1,6 +1,7 @@
 export const apiEndpoints = {
   products: '/api/products',
   product: (id: string) => `/api/products/${id}`,
+  contact: '/api/contact',
   health: '/api/health',
   auth: {
     login: '/api/auth/login',
@@ -12,6 +13,12 @@ export const apiEndpoints = {
   },
   users: '/api/users',
   user: (id: string) => `/api/users/${id}`,
+  discounts: {
+    list: '/api/admin/discounts',
+    detail: (id: string) => `/api/admin/discounts/${id}`,
+    status: (id: string) => `/api/admin/discounts/${id}/status`,
+    audit: '/api/admin/discounts/audit',
+  },
   orders: '/api/orders',
   settings: {
     productPage: '/api/admin/settings/product-page',

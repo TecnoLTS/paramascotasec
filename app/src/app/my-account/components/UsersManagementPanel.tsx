@@ -88,6 +88,35 @@ export default React.memo(function UsersManagementPanel({
         return !Number.isNaN(lockDate.getTime()) && lockDate.getTime() > Date.now()
     }, [])
 
+    const parseSecurityMetadata = React.useCallback((value: AdminUserSummary['security_block_metadata']) => {
+        if (!value) return null
+        if (typeof value === 'object') return value as Record<string, any>
+        if (typeof value !== 'string' || !value.trim()) return null
+        try {
+            const parsed = JSON.parse(value)
+            return parsed && typeof parsed === 'object' ? parsed as Record<string, any> : null
+        } catch {
+            return null
+        }
+    }, [])
+
+    const getActiveSecurityBlock = React.useCallback((adminUser: AdminUserSummary) => {
+        if (!isUserLocked(adminUser)) return null
+        const eventType = String(adminUser.security_block_event_type || '').trim()
+        if (!eventType) return null
+        const metadata = parseSecurityMetadata(adminUser.security_block_metadata)
+        const fields = Array.isArray(metadata?.fields)
+            ? metadata?.fields.filter((field: unknown) => typeof field === 'string' && field.trim())
+            : []
+
+        return {
+            eventType,
+            blockedAt: String(adminUser.security_blocked_at || '').trim(),
+            fields: fields as string[],
+            isPricingTamper: eventType === 'order_pricing_tamper',
+        }
+    }, [isUserLocked, parseSecurityMetadata])
+
     return (
         <div className="tab text-content w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -166,6 +195,7 @@ export default React.memo(function UsersManagementPanel({
                                 const totalSpent = Number(adminUser.total_spent ?? 0)
                                 const failedAttempts = Number(adminUser.failed_login_attempts ?? 0)
                                 const isLocked = isUserLocked(adminUser)
+                                const securityBlock = getActiveSecurityBlock(adminUser)
 
                                 return (
                                     <div key={adminUser.id} className="p-4 bg-white rounded-xl border border-line shadow-sm">
@@ -216,6 +246,19 @@ export default React.memo(function UsersManagementPanel({
                                             <strong className="font-semibold text-black">Dirección:</strong>{' '}
                                             {adminUser.resolvedAddressText || 'Sin dirección'}
                                         </div>
+                                        {securityBlock?.isPricingTamper && (
+                                            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                                                <div className="font-semibold">Bloqueo por adulteración de montos</div>
+                                                <div className="mt-1">
+                                                    Detectado {securityBlock.blockedAt ? formatDateTime(securityBlock.blockedAt) : 'recientemente'}.
+                                                </div>
+                                                {securityBlock.fields.length > 0 && (
+                                                    <div className="mt-1 break-words">
+                                                        Campos detectados: {securityBlock.fields.join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="mt-3 text-xs text-secondary">
                                             Última compra: {adminUser.last_order_at ? formatDateTime(adminUser.last_order_at) : 'Sin compras'}
                                         </div>
@@ -268,6 +311,7 @@ export default React.memo(function UsersManagementPanel({
                                         const totalSpent = Number(adminUser.total_spent ?? 0)
                                         const failedAttempts = Number(adminUser.failed_login_attempts ?? 0)
                                         const isLocked = isUserLocked(adminUser)
+                                        const securityBlock = getActiveSecurityBlock(adminUser)
 
                                         return (
                                             <tr key={adminUser.id} className="hover:bg-surface/40">
@@ -303,6 +347,25 @@ export default React.memo(function UsersManagementPanel({
                                                                 ? `${failedAttempts} intentos fallidos`
                                                                 : 'Sin bloqueo'}
                                                     </div>
+                                                    {securityBlock?.isPricingTamper && (
+                                                        <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
+                                                            <Icon.ShieldWarning size={13} />
+                                                            Fraude de checkout detectado
+                                                        </div>
+                                                    )}
+                                                    {securityBlock?.isPricingTamper && securityBlock.blockedAt && (
+                                                        <div className="mt-2 text-[11px] text-rose-700">
+                                                            Evento: {formatDateTime(securityBlock.blockedAt)}
+                                                        </div>
+                                                    )}
+                                                    {securityBlock?.isPricingTamper && securityBlock.fields.length > 0 && (
+                                                        <div
+                                                            className="mt-1 max-w-[260px] text-[11px] text-rose-700 break-words"
+                                                            title={securityBlock.fields.join(', ')}
+                                                        >
+                                                            Campos: {securityBlock.fields.join(', ')}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 align-top text-sm">
                                                     <div className="font-semibold">{adminUser.resolvedPhone || '-'}</div>

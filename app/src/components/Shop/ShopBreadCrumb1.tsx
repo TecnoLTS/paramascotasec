@@ -13,6 +13,12 @@ import { getCategoryFilter, getCategoryUrl, getCategoryLabel, getShopBrowseCateg
 import { useSite } from '@/context/SiteContext';
 import { getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
 import { buildProductSearchIndex, filterProductsBySearch, matchesProductSearch, sanitizeProductSearchQuery } from '@/lib/productSearch';
+import {
+    getProductColorValues,
+    getProductMaterialValues,
+    getProductSizeValues,
+    getProductSpeciesValues,
+} from '@/lib/catalogAttributes';
 
 interface Props {
     data: Array<ProductType>
@@ -34,6 +40,8 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const [type, setType] = useState<string | null | undefined>(dataType)
     const [size, setSize] = useState<string | null>()
     const [color, setColor] = useState<string | null>()
+    const [material, setMaterial] = useState<string | null>()
+    const [species, setSpecies] = useState<string | null>()
     const [brand, setBrand] = useState<string | null>()
     const [searchInput, setSearchInput] = useState(searchQuery ?? '')
     const [priceRange, setPriceRange] = useState<{ min: number; max: number }>(defaultPriceRange);
@@ -72,6 +80,16 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
     const handleColor = (color: string) => {
         setColor((prevColor) => (prevColor === color ? null : color))
+        setCurrentPage(0);
+    }
+
+    const handleMaterial = (material: string) => {
+        setMaterial((prevMaterial) => (prevMaterial === material ? null : material))
+        setCurrentPage(0);
+    }
+
+    const handleSpecies = (species: string) => {
+        setSpecies((prevSpecies) => (prevSpecies === species ? null : species))
         setCurrentPage(0);
     }
 
@@ -135,7 +153,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
         router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
     }, [pathname, router, searchParams])
 
-    const matchesProduct = useCallback((product: ProductType, ignore?: 'type' | 'size' | 'color' | 'brand' | 'priceRange' | 'sale' | 'search') => {
+    const matchesProduct = useCallback((product: ProductType, ignore?: 'type' | 'size' | 'color' | 'material' | 'species' | 'brand' | 'priceRange' | 'sale' | 'search') => {
         if (ignore !== 'sale' && showOnlySale && !isProductOnSale(product)) {
             return false
         }
@@ -156,11 +174,19 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             return false
         }
 
-        if (ignore !== 'size' && size && !(product.sizes ?? []).includes(size)) {
+        if (ignore !== 'size' && size && !getProductSizeValues(product).includes(size)) {
             return false
         }
 
-        if (ignore !== 'color' && color && !(product.variation ?? []).some((item) => item.color === color)) {
+        if (ignore !== 'color' && color && !getProductColorValues(product).includes(color)) {
+            return false
+        }
+
+        if (ignore !== 'material' && material && !getProductMaterialValues(product).includes(material)) {
+            return false
+        }
+
+        if (ignore !== 'species' && species && !getProductSpeciesValues(product).includes(species)) {
             return false
         }
 
@@ -176,14 +202,22 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             return false
         }
         return true
-    }, [brand, categoryFilter, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, gender, isDiscountCategory, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, type])
+    }, [brand, categoryFilter, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, gender, isDiscountCategory, material, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, species, type])
 
     const uniqueSizes = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'size')).flatMap((product) => product.sizes ?? []).filter(Boolean))).sort(),
+        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'size')).flatMap((product) => getProductSizeValues(product)).filter(Boolean))).sort(),
         [data, matchesProduct]
     );
     const uniqueColors = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'color')).flatMap((product) => (product.variation ?? []).map((variation) => variation.color)).filter(Boolean))).sort(),
+        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'color')).flatMap((product) => getProductColorValues(product)).filter(Boolean))).sort(),
+        [data, matchesProduct]
+    );
+    const uniqueMaterials = useMemo(
+        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'material')).flatMap((product) => getProductMaterialValues(product)).filter(Boolean))).sort(),
+        [data, matchesProduct]
+    );
+    const uniqueSpecies = useMemo(
+        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'species')).flatMap((product) => getProductSpeciesValues(product)).filter(Boolean))).sort(),
         [data, matchesProduct]
     );
     const uniqueBrands = useMemo(
@@ -206,6 +240,18 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             setColor(null)
         }
     }, [color, uniqueColors])
+
+    useEffect(() => {
+        if (material && !uniqueMaterials.includes(material)) {
+            setMaterial(null)
+        }
+    }, [material, uniqueMaterials])
+
+    useEffect(() => {
+        if (species && !uniqueSpecies.includes(species)) {
+            setSpecies(null)
+        }
+    }, [species, uniqueSpecies])
 
     useEffect(() => {
         if (brand && !uniqueBrands.includes(brand)) {
@@ -251,6 +297,8 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const selectedType = type
     const selectedSize = size
     const selectedColor = color
+    const selectedMaterial = material
+    const selectedSpecies = species
     const selectedBrand = brand
     const pageCount = Math.ceil(filteredData.length / productsPerPage);
 
@@ -276,6 +324,8 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
         setType(null);
         setSize(null);
         setColor(null);
+        setMaterial(null);
+        setSpecies(null);
         setBrand(null);
         setPriceRange(defaultPriceRange);
         setCurrentPage(0);
@@ -363,21 +413,55 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                     </div>
                                 </div>
                             </div>
-                            <div className="filter-color pb-8 border-b border-line mt-8">
-                                <div className="heading6">Colores</div>
-                                <div className="list-color flex items-center flex-wrap gap-3 gap-y-4 mt-4">
-                                    {uniqueColors.map((item) => (
-                                        <div
-                                            key={item}
-                                            className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === item ? 'active' : ''}`}
-                                            onClick={() => handleColor(item)}
-                                        >
-                                            <span className='color me-1 bg-[#d9d9d9] w-5 h-5 rounded-full'></span>
-                                            <div className="caption1 capitalize">{item}</div>
-                                        </div>
-                                    ))}
+                            {uniqueColors.length > 0 && (
+                                <div className="filter-color pb-8 border-b border-line mt-8">
+                                    <div className="heading6">Colores</div>
+                                    <div className="list-color flex items-center flex-wrap gap-3 gap-y-4 mt-4">
+                                        {uniqueColors.map((item) => (
+                                            <div
+                                                key={item}
+                                                className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${color === item ? 'active' : ''}`}
+                                                onClick={() => handleColor(item)}
+                                            >
+                                                <span className='color me-1 bg-[#d9d9d9] w-5 h-5 rounded-full'></span>
+                                                <div className="caption1 capitalize">{item}</div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {uniqueMaterials.length > 0 && (
+                                <div className="filter-color pb-8 border-b border-line mt-8">
+                                    <div className="heading6">Materiales</div>
+                                    <div className="list-color flex items-center flex-wrap gap-3 gap-y-4 mt-4">
+                                        {uniqueMaterials.map((item) => (
+                                            <div
+                                                key={item}
+                                                className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${material === item ? 'active' : ''}`}
+                                                onClick={() => handleMaterial(item)}
+                                            >
+                                                <div className="caption1 capitalize">{item}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {uniqueSpecies.length > 0 && (
+                                <div className="filter-color pb-8 border-b border-line mt-8">
+                                    <div className="heading6">Mascota</div>
+                                    <div className="list-color flex items-center flex-wrap gap-3 gap-y-4 mt-4">
+                                        {uniqueSpecies.map((item) => (
+                                            <div
+                                                key={item}
+                                                className={`color-item px-3 py-[5px] flex items-center justify-center gap-2 rounded-full border border-line ${species === item ? 'active' : ''}`}
+                                                onClick={() => handleSpecies(item)}
+                                            >
+                                                <div className="caption1 capitalize">{item}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="list-product-block lg:w-3/4 md:w-2/3 w-full md:pl-3">
                             <div className="mb-6 rounded-[28px] border border-line bg-white px-4 py-4 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:px-5">
@@ -476,7 +560,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                     <span className='text-secondary pl-1'>productos encontrados</span>
                                 </div>
                                 {
-                                    (selectedType || selectedSize || selectedColor || selectedBrand || effectiveSearchQuery) && (
+                                    (selectedType || selectedSize || selectedColor || selectedMaterial || selectedSpecies || selectedBrand || effectiveSearchQuery) && (
                                         <>
                                             <div className="list flex items-center gap-3">
                                                 <div className='w-px h-4 bg-line'></div>
@@ -502,6 +586,18 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                                     <div className="item flex items-center px-2 py-1 gap-1 bg-linear rounded-full capitalize" onClick={() => { setColor(null) }}>
                                                         <Icon.X className='cursor-pointer' />
                                                         <span>{selectedColor}</span>
+                                                    </div>
+                                                )}
+                                                {selectedMaterial && (
+                                                    <div className="item flex items-center px-2 py-1 gap-1 bg-linear rounded-full capitalize" onClick={() => { setMaterial(null) }}>
+                                                        <Icon.X className='cursor-pointer' />
+                                                        <span>{selectedMaterial}</span>
+                                                    </div>
+                                                )}
+                                                {selectedSpecies && (
+                                                    <div className="item flex items-center px-2 py-1 gap-1 bg-linear rounded-full capitalize" onClick={() => { setSpecies(null) }}>
+                                                        <Icon.X className='cursor-pointer' />
+                                                        <span>{selectedSpecies}</span>
                                                     </div>
                                                 )}
                                                 {selectedBrand && (

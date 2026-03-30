@@ -9,6 +9,7 @@ export interface CheckoutDraftAddress {
 
 export interface CheckoutDraftData {
     note: string
+    couponCode: string
     shipping: CheckoutDraftAddress
 }
 
@@ -16,6 +17,7 @@ const CHECKOUT_DRAFT_KEY = 'checkoutDraft'
 
 const defaultCheckoutDraft: CheckoutDraftData = {
     note: '',
+    couponCode: '',
     shipping: {
         country: 'Ecuador',
         state: '',
@@ -46,6 +48,7 @@ export const loadCheckoutDraft = (): CheckoutDraftData => {
         const parsed = JSON.parse(raw) as Partial<CheckoutDraftData>
         return {
             note: String(parsed.note || ''),
+            couponCode: String(parsed.couponCode || ''),
             shipping: {
                 country: normalizeCountryToEcuador(parsed.shipping?.country),
                 state: String(parsed.shipping?.state || ''),
@@ -64,6 +67,7 @@ export const saveCheckoutDraft = (partial: Partial<CheckoutDraftData>) => {
     const current = loadCheckoutDraft()
     const next: CheckoutDraftData = {
         note: partial.note ?? current.note,
+        couponCode: partial.couponCode ?? current.couponCode,
         shipping: {
             country: normalizeCountryToEcuador(partial.shipping?.country ?? current.shipping.country),
             state: partial.shipping?.state ?? current.shipping.state,

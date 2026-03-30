@@ -50,7 +50,9 @@ const ModalQuickview = () => {
             ? (activeVariant as any).thumbImage.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
             : []),
     ])).filter(Boolean)
-    const resolvedGalleryImages = galleryImages.length > 0 ? galleryImages : ['/images/product/1.jpg']
+    const resolvedGalleryImages = galleryImages.length > 0
+        ? galleryImages
+        : (selectedProduct ? ['/images/product/1.jpg'] : [])
 
     useEffect(() => {
         setLiveProduct(selectedProduct)
@@ -197,6 +199,10 @@ const ModalQuickview = () => {
         height: '100vh',
         maxHeight: '100vh',
         zIndex: 100000,
+    }
+
+    if (!selectedProduct) {
+        return null
     }
 
     return (

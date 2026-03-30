@@ -14,7 +14,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "npm run lint && npm run typecheck",
+    "deploy:dev": "./scripts/deploy-development.sh",
+    "deploy:prod": "./scripts/deploy-production.sh"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.0.14",

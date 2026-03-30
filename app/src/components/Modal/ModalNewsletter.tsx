@@ -7,6 +7,7 @@ import InlineSpinner from '@/components/Other/InlineSpinner'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext';
 import Image from '@/components/Common/AppImage';
 import useProducts from '@/hooks/useProducts'
+import { getProductDetailRouteId } from '@/lib/catalog'
 
 const ModalNewsletter = () => {
     const [open, setOpen] = useState<boolean>(false)
@@ -14,9 +15,8 @@ const ModalNewsletter = () => {
     const { openQuickview } = useModalQuickviewContext()
     const { products, loading, error } = useProducts()
 
-    const handleDetailProduct = (productId: string) => {
-        // redirect to shop with category selected
-        router.push(`/product/default?id=${productId}`);
+    const handleDetailProduct = (product: any) => {
+        router.push(`/product/default?id=${getProductDetailRouteId(product)}`);
     };
 
     useEffect(() => {
@@ -73,7 +73,7 @@ const ModalNewsletter = () => {
                                             >
                                                 <div
                                                     className="infor flex items-center gap-5 cursor-pointer"
-                                                    onClick={() => handleDetailProduct(item.id)}
+                                                    onClick={() => handleDetailProduct(item)}
                                                 >
                                                     <div className="bg-img flex-shrink-0">
                                                         <Image width={5000} height={5000} src={src} alt={item.name}
