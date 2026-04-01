@@ -15,6 +15,7 @@ type CustomerOrdersPanelProps = {
     onOpenOrder: (order: Order) => void;
     getStatusBadge: (status: string) => { label: string; className: string };
     getItemNetPrice: (item: any, order: Order) => number;
+    formatDateTime: (value: string) => string;
 }
 
 const ORDER_FILTERS = [
@@ -33,7 +34,24 @@ export default React.memo(function CustomerOrdersPanel({
     onOpenOrder,
     getStatusBadge,
     getItemNetPrice,
+    formatDateTime,
 }: CustomerOrdersPanelProps) {
+    const getDeliveryMethodLabel = (order: Order) => {
+        const method = String(order.delivery_method || '').trim().toLowerCase()
+        if (method === 'pickup') return 'Retiro en tienda'
+        if (method === 'delivery') return 'Envío a domicilio'
+        return 'Entrega por confirmar'
+    }
+
+    const getPaymentMethodLabel = (order: Order) => {
+        const method = String(order.payment_method || '').trim().toLowerCase()
+        if (!method) return 'Pago por confirmar'
+        if (['cash', 'efectivo'].includes(method)) return 'Pago en efectivo'
+        if (['card', 'tarjeta'].includes(method)) return 'Pago con tarjeta'
+        if (['transfer', 'transferencia'].includes(method)) return 'Transferencia'
+        return String(order.payment_method || '').trim()
+    }
+
     return (
         <div className="tab text-content overflow-hidden w-full p-7 border border-line rounded-xl">
             <h6 className="heading6">Tus Pedidos</h6>
@@ -65,9 +83,16 @@ export default React.memo(function CustomerOrdersPanel({
                     return (
                         <div key={order.id} className="order_item mt-5 border border-line rounded-lg box-shadow-xs">
                             <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-4 p-5 border-b border-line">
-                                <div className="flex items-center gap-2">
-                                    <strong className="text-title">Número de Pedido:</strong>
-                                    <strong className="order_number text-button uppercase">{order.id}</strong>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <strong className="text-title">Número de Pedido:</strong>
+                                        <strong className="order_number text-button uppercase">{order.id}</strong>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-secondary">
+                                        <span><strong className="text-title">Fecha:</strong> {formatDateTime(order.created_at)}</span>
+                                        <span><strong className="text-title">Entrega:</strong> {getDeliveryMethodLabel(order)}</span>
+                                        <span><strong className="text-title">Pago:</strong> {getPaymentMethodLabel(order)}</span>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <strong className="text-title">Estado del pedido:</strong>
@@ -112,7 +137,10 @@ export default React.memo(function CustomerOrdersPanel({
                                     <div className="py-5 text-secondary">Sin productos asociados.</div>
                                 )}
                             </div>
-                            <div className="flex flex-wrap gap-4 p-5">
+                            <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+                                <div className="text-sm text-secondary">
+                                    {order.items?.length || 0} producto{(order.items?.length || 0) === 1 ? '' : 's'} en este pedido
+                                </div>
                                 <button className="button-main" onClick={() => onOpenOrder(order)}>
                                     Detalles del Pedido
                                 </button>

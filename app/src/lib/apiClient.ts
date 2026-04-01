@@ -449,8 +449,14 @@ const buildReadableRequestKey = (url: string, init: RequestInit & { next?: { rev
   ].join('|')
 }
 
-const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
-  const timeoutMs = getFetchTimeoutMs()
+type ApiRequestInit = RequestInit & {
+  timeoutMs?: number
+}
+
+const fetchWithTimeout = async (url: string, init?: ApiRequestInit): Promise<Response> => {
+  const timeoutMs = Number.isFinite(init?.timeoutMs) && (init?.timeoutMs ?? 0) > 0
+    ? Number(init?.timeoutMs)
+    : getFetchTimeoutMs()
   const controller = new AbortController()
   let didTimeout = false
   const timeoutId = setTimeout(() => {
@@ -469,7 +475,8 @@ const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Respon
   }
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    const { timeoutMs: _timeoutMs, ...fetchInit } = init || {}
+    return await fetch(url, { ...fetchInit, signal: controller.signal })
   } catch (error) {
     if (didTimeout) {
       throw new Error(`Tiempo de espera agotado (${timeoutMs}ms) al consultar ${url}`)
@@ -485,13 +492,13 @@ const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Respon
 
 const performReadableRequest = async (
   path: string,
-  init: RequestInit | undefined,
+  init: ApiRequestInit | undefined,
   cache: RequestCache,
   nextOptions?: { revalidate?: number | false }
 ): Promise<PreparedApiResult> => {
   const url = resolveUrl(path)
   const authedInit = await withAuth(path, init)
-  const fetchOptions: RequestInit & { next?: { revalidate?: number | false } } = {
+  const fetchOptions: ApiRequestInit & { next?: { revalidate?: number | false } } = {
     credentials: authedInit.credentials || 'include',
     ...authedInit,
     cache,
@@ -538,7 +545,7 @@ const performReadableRequest = async (
   return requestPromise
 }
 
-export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function fetchJson<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase()
   const pathname = getPathname(path)
   const shouldCacheOnServer =
@@ -574,7 +581,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   return result.body as T
 }
 
-export async function requestApi<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T }> {
+export async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<{ ok: boolean; status: number; body: T }> {
   const result = await performReadableRequest(path, init, 'no-store')
 
   if (!result.ok) {

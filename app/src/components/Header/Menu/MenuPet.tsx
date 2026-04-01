@@ -15,6 +15,7 @@ import { useSite } from '@/context/SiteContext'
 import { getProductDetailRouteId } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import { ProductType } from '@/type/ProductType'
+import { getStoredSessionUser } from '@/lib/authSession'
 
 type MenuPetProps = {
     props?: string;
@@ -34,6 +35,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
     const [searchKeyword, setSearchKeyword] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false)
+    const [accountDisplayName, setAccountDisplayName] = useState('Mi cuenta')
     const router = useRouter()
     const [hasMounted, setHasMounted] = useState(false)
     const searchContainerRef = useRef<HTMLDivElement>(null)
@@ -108,6 +110,34 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     useEffect(() => {
         setHasMounted(true)
     }, [])
+
+    useEffect(() => {
+        const resolveAccountDisplayName = () => {
+            const sessionUser = getStoredSessionUser()
+            const firstName = String(sessionUser?.name || '').trim().split(/\s+/).filter(Boolean)[0] || ''
+            setAccountDisplayName(firstName || 'Mi cuenta')
+        }
+
+        const handleStorage = (event: StorageEvent) => {
+            if (!event.key || event.key === 'user') {
+                resolveAccountDisplayName()
+            }
+        }
+
+        const handleVisibilityRefresh = () => {
+            resolveAccountDisplayName()
+        }
+
+        resolveAccountDisplayName()
+        window.addEventListener('storage', handleStorage)
+        window.addEventListener('focus', handleVisibilityRefresh)
+        document.addEventListener('visibilitychange', handleVisibilityRefresh)
+        return () => {
+            window.removeEventListener('storage', handleStorage)
+            window.removeEventListener('focus', handleVisibilityRefresh)
+            document.removeEventListener('visibilitychange', handleVisibilityRefresh)
+        }
+    }, [pathname])
 
     useEffect(() => {
         if (pathname.startsWith('/shop/')) {
@@ -486,7 +516,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                             <div className="list-action flex items-center gap-6">
                                 <div className="user-icon relative flex items-center flex-col justify-center cursor-pointer">
                                     <Icon.User size={26} color='black' onClick={handleLoginPopup} />
-                                    <div className="caption1" onClick={handleLoginPopup}>Mi cuenta</div>
+                                    <div className="caption1" onClick={handleLoginPopup}>{accountDisplayName}</div>
                                     <div
                                         className={`login-popup absolute top-[74px] w-[320px] p-7 rounded-xl bg-white box-shadow-sm 
                                             ${openLoginPopup ? 'open' : ''}`}

@@ -11,7 +11,7 @@ type AdminOrdersPanelProps = {
     onFilterChange: (value: string) => void;
     onViewOrder: (orderId: string) => void;
     getStatusBadge: (status: string) => { label: string; className: string };
-    formatDate: (value: string) => string;
+    formatDateTime: (value: string) => string;
 }
 
 const ADMIN_ORDER_FILTERS = [
@@ -30,8 +30,20 @@ export default React.memo(function AdminOrdersPanel({
     onFilterChange,
     onViewOrder,
     getStatusBadge,
-    formatDate,
+    formatDateTime,
 }: AdminOrdersPanelProps) {
+    const getDeliveryMethodLabel = (order: Order) => {
+        const method = String(order.delivery_method || '').trim().toLowerCase()
+        if (method === 'pickup') return 'Retiro'
+        if (method === 'delivery') return 'Envío'
+        return 'Por definir'
+    }
+
+    const getPaymentMethodLabel = (order: Order) => {
+        const method = String(order.payment_method || '').trim()
+        return method || 'Por definir'
+    }
+
     return (
         <div className="tab text-content w-full">
             <div className="heading5 pb-6">Todos los Pedidos</div>
@@ -55,7 +67,8 @@ export default React.memo(function AdminOrdersPanel({
                         <tr className="border-b border-line">
                             <th className="pb-4 font-bold text-secondary text-sm">ID PEDIDO</th>
                             <th className="pb-4 font-bold text-secondary text-sm">CLIENTE</th>
-                            <th className="pb-4 font-bold text-secondary text-sm">FECHA</th>
+                            <th className="pb-4 font-bold text-secondary text-sm">FECHA Y HORA</th>
+                            <th className="pb-4 font-bold text-secondary text-sm">ENTREGA / PAGO</th>
                             <th className="pb-4 font-bold text-secondary text-sm">TOTAL</th>
                             <th className="pb-4 font-bold text-secondary text-sm">ESTADO</th>
                             <th className="pb-4 font-bold text-secondary text-sm">ACCIONES</th>
@@ -68,8 +81,17 @@ export default React.memo(function AdminOrdersPanel({
                             return (
                                 <tr key={order.id} className="border-b border-line last:border-0 hover:bg-surface duration-300 text-sm">
                                     <td className="py-4 font-bold">#{order.id}</td>
-                                    <td className="py-4">{order.user_name || 'Cliente'}</td>
-                                    <td className="py-4">{formatDate(order.created_at)}</td>
+                                    <td className="py-4">
+                                        <div className="font-semibold text-black">{order.user_name || 'Cliente'}</div>
+                                        <div className="text-xs text-secondary">{order.user_email || 'Sin correo visible'}</div>
+                                    </td>
+                                    <td className="py-4">
+                                        <div className="font-medium text-black">{formatDateTime(order.created_at)}</div>
+                                    </td>
+                                    <td className="py-4">
+                                        <div className="font-medium text-black">{getDeliveryMethodLabel(order)}</div>
+                                        <div className="text-xs text-secondary">{getPaymentMethodLabel(order)}</div>
+                                    </td>
                                     <td className="py-4 font-bold">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-4">
                                         <span className={`tag px-3 py-1 rounded-full text-xs font-semibold bg-opacity-10 ${badge.className}`}>
@@ -85,7 +107,7 @@ export default React.memo(function AdminOrdersPanel({
                             )
                         }) : (
                             <tr>
-                                <td colSpan={6} className="py-8 text-center text-secondary">
+                                <td colSpan={7} className="py-8 text-center text-secondary">
                                     No se encontraron pedidos.
                                 </td>
                             </tr>

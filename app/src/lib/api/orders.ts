@@ -23,6 +23,7 @@ export const createOrder = async (data: CreateOrderData) => {
     };
     return fetchJson<any>(apiEndpoints.orders, {
         method: 'POST',
+        timeoutMs: 30000,
         headers: {
             ...headers
         },

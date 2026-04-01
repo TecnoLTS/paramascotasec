@@ -504,7 +504,13 @@ const MyAccount = () => {
                 },
                 body: JSON.stringify({ status: newStatus })
             });
-            showNotification(`Pedido ${newStatus === 'delivered' ? 'entregado' : 'actualizado'} correctamente`);
+            showNotification(
+                newStatus === 'canceled'
+                    ? 'Pedido cancelado correctamente'
+                    : newStatus === 'delivered'
+                        ? 'Pedido entregado correctamente'
+                        : 'Pedido actualizado correctamente'
+            );
             setIsOrderModalOpen(false);
             if (user?.role === 'admin') {
                 const res = await requestApi<Order[]>('/api/orders');
@@ -6228,7 +6234,7 @@ const MyAccount = () => {
                                         onFilterChange={setActiveOrders}
                                         onViewOrder={handleViewOrder}
                                         getStatusBadge={getStatusBadge}
-                                        formatDate={formatDateEcuador}
+                                        formatDateTime={formatDateTimeEcuador}
                                     />
                                     )}
 
@@ -6542,11 +6548,12 @@ const MyAccount = () => {
                                         <div className="recent_order pt-5 px-5 pb-2 mt-7 border border-line rounded-xl">
                                             <h6 className="heading6">Pedidos Recientes</h6>
                                             <div className="list overflow-x-auto w-full mt-5">
-                                                <table className="w-full min-w-[640px]">
+                                                <table className="w-full min-w-[900px]">
                                                     <thead className="border-b border-line">
                                                         <tr>
                                                             <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Pedido</th>
                                                             <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Productos</th>
+                                                            <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Entrega / Pago</th>
                                                             <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Precio</th>
                                                             <th scope="col" className="pb-3 text-right text-sm font-bold uppercase text-secondary whitespace-nowrap">Estado</th>
                                                         </tr>
@@ -6554,22 +6561,49 @@ const MyAccount = () => {
                                                     <tbody>
                                                         {userOrdersLoading && (
                                                             <tr>
-                                                                <td colSpan={4} className="py-6 text-center text-secondary">Cargando pedidos...</td>
+                                                                <td colSpan={5} className="py-6 text-center text-secondary">Cargando pedidos...</td>
                                                             </tr>
                                                         )}
                                                         {!userOrdersLoading && recentUserOrders.length === 0 && (
                                                             <tr>
-                                                                <td colSpan={4} className="py-6 text-center text-secondary">No tienes pedidos recientes.</td>
+                                                                <td colSpan={5} className="py-6 text-center text-secondary">No tienes pedidos recientes.</td>
                                                             </tr>
                                                         )}
                                                         {!userOrdersLoading && recentUserOrders.map((order) => {
                                                             const badge = getStatusBadge(order.status)
                                                             const firstItem = order.items?.[0]
                                                             const itemsCount = order.items?.length ?? 0
+                                                            const deliveryMethod = String(order.delivery_method || '').trim().toLowerCase()
+                                                            const deliveryLabel = deliveryMethod === 'pickup'
+                                                                ? 'Retiro en tienda'
+                                                                : deliveryMethod === 'delivery'
+                                                                    ? 'Envío a domicilio'
+                                                                    : 'Entrega por confirmar'
+                                                            const paymentMethodRaw = String(order.payment_method || '').trim()
+                                                            const paymentMethod = paymentMethodRaw.toLowerCase()
+                                                            const paymentLabel = !paymentMethod
+                                                                ? 'Pago por confirmar'
+                                                                : ['cash', 'efectivo'].includes(paymentMethod)
+                                                                    ? 'Pago en efectivo'
+                                                                    : ['card', 'tarjeta'].includes(paymentMethod)
+                                                                        ? 'Pago con tarjeta'
+                                                                        : ['transfer', 'transferencia'].includes(paymentMethod)
+                                                                            ? 'Transferencia'
+                                                                            : paymentMethodRaw
                                                             return (
-                                                                <tr key={order.id} className="item duration-300 border-b border-line last:border-0">
+                                                                <tr
+                                                                    key={order.id}
+                                                                    className="item duration-300 border-b border-line last:border-0 hover:bg-surface/40 cursor-pointer"
+                                                                    onClick={() => {
+                                                                        setSelectedOrder(order)
+                                                                        setIsOrderModalOpen(true)
+                                                                    }}
+                                                                >
                                                                     <th scope="row" className="py-3 text-left">
-                                                                        <strong className="text-title">#{order.id}</strong>
+                                                                        <div className="flex flex-col">
+                                                                            <strong className="text-title">#{order.id}</strong>
+                                                                            <span className="caption1 text-secondary mt-1">{formatDateTimeEcuador(order.created_at)}</span>
+                                                                        </div>
                                                                     </th>
                                                                     <td className="py-3">
                                                                         {firstItem ? (
@@ -6590,6 +6624,12 @@ const MyAccount = () => {
                                                                         ) : (
                                                                             <div className="text-secondary text-sm">Sin productos</div>
                                                                         )}
+                                                                    </td>
+                                                                    <td className="py-3">
+                                                                        <div className="flex flex-col">
+                                                                            <strong className="text-button">{deliveryLabel}</strong>
+                                                                            <span className="caption1 text-secondary mt-1">{paymentLabel}</span>
+                                                                        </div>
                                                                     </td>
                                                                     <td className="py-3 price">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                     <td className="py-3 text-right">
@@ -6616,6 +6656,7 @@ const MyAccount = () => {
                                         }}
                                         getStatusBadge={getStatusBadge}
                                         getItemNetPrice={getItemNetPrice}
+                                        formatDateTime={formatDateTimeEcuador}
                                     />
                                     )}
                                     {activeTab === 'address' && (
@@ -7054,6 +7095,7 @@ const MyAccount = () => {
                 statusBadge={selectedOrder ? getStatusBadge(selectedOrder.status) : { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }}
                 canViewInvoice={(user?.role === 'admin' || user?.role === 'customer') && ['completed', 'delivered'].includes(normalizeStatus(selectedOrder?.status))}
                 canManageStatus={user?.role === 'admin' && selectedOrder?.status !== 'canceled' && selectedOrder?.status !== 'delivered'}
+                canCancelOrder={user?.role === 'customer' && ['pending', 'processing'].includes(normalizeStatus(selectedOrder?.status))}
                 onClose={() => setIsOrderModalOpen(false)}
                 onViewInvoice={handleGenerateInvoice}
                 onUpdateStatus={(status) => {

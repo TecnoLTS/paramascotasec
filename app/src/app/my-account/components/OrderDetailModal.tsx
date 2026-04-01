@@ -13,6 +13,7 @@ type OrderDetailModalProps = {
     statusBadge: { label: string; className: string };
     canViewInvoice: boolean;
     canManageStatus: boolean;
+    canCancelOrder: boolean;
     onClose: () => void;
     onViewInvoice: () => void;
     onUpdateStatus: (status: string) => void;
@@ -31,6 +32,7 @@ export default function OrderDetailModal({
     statusBadge,
     canViewInvoice,
     canManageStatus,
+    canCancelOrder,
     onClose,
     onViewInvoice,
     onUpdateStatus,
@@ -111,6 +113,7 @@ export default function OrderDetailModal({
                     ? 'cancelar el pedido'
                     : ''
     const showInvoiceButton = canViewInvoice && ['completed', 'delivered'].includes(normalizeStatus(order?.status))
+    const currentStatus = normalizeStatus(order?.status)
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -349,6 +352,14 @@ export default function OrderDetailModal({
                                     Cancelar
                                 </button>
                             </>
+                        )}
+                        {!canManageStatus && canCancelOrder && ['pending', 'processing'].includes(currentStatus) && (
+                            <button
+                                className="px-4 py-2 rounded-lg border border-red text-red hover:bg-red/10 transition-all text-sm font-semibold"
+                                onClick={() => setPendingStatus('canceled')}
+                            >
+                                Cancelar pedido
+                            </button>
                         )}
                         <button className="px-5 py-2 rounded-lg border border-line hover:bg-surface transition-all text-sm font-semibold" onClick={onClose}>
                             Cerrar
