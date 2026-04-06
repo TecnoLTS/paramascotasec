@@ -83,6 +83,7 @@ import {
     ADMIN_TABS_WITH_VAT_SETTINGS,
 } from './adminDataScopes'
 import { REPORT_SECTION_META } from './reportSections'
+import { buildReportExport, downloadReportExport } from './reportExport'
 import {
     buildInventoryManagementRows,
     buildLocalSaleCatalog,
@@ -1650,6 +1651,43 @@ const MyAccount = () => {
     const inventoryManagementRows = React.useMemo(() => {
         return buildInventoryManagementRows(adminProductsList || [], parseMoney)
     }, [adminProductsList, parseMoney])
+    const handleExportCurrentReport = React.useCallback(() => {
+        try {
+            const { filename, content } = buildReportExport({
+                section: adminReportSection,
+                reportTitle: activeReportMeta.title,
+                generatedAt: new Date(),
+                currentDateLabel,
+                selectedRankingMonth,
+                selectedRankingMonthLabel,
+                salesRankingView,
+                dashboardStats,
+                salesRankingRows,
+                salesCategories,
+                salesTrendRows,
+                inventoryManagementRows,
+                recentPurchaseInvoices,
+            })
+            downloadReportExport(filename, content)
+            showNotification('Reporte exportado correctamente. Ábrelo con Excel.')
+        } catch (error) {
+            showNotification(String((error as any)?.message || 'No se pudo exportar el reporte.'), 'error')
+        }
+    }, [
+        activeReportMeta.title,
+        adminReportSection,
+        currentDateLabel,
+        dashboardStats,
+        inventoryManagementRows,
+        recentPurchaseInvoices,
+        salesCategories,
+        salesRankingRows,
+        salesRankingView,
+        salesTrendRows,
+        selectedRankingMonth,
+        selectedRankingMonthLabel,
+        showNotification,
+    ])
     const filteredInventoryRows = React.useMemo(() => {
         const scopedRows = inventoryManagementRows.filter((row) => {
             if (inventoryTypeFilter === 'perishable' && !row.isPerishable) return false
@@ -3087,8 +3125,17 @@ const MyAccount = () => {
                                                 <div className="heading5">{activeReportMeta.title}</div>
                                                 <p className="text-secondary text-xs mt-1">{activeReportMeta.subtitle}</p>
                                             </div>
-                                            <div className="text-sm font-bold text-secondary bg-surface px-3.5 py-1.5 rounded-lg border border-line">
-                                                {currentDateLabel}
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+                                                <button
+                                                    type="button"
+                                                    className="text-sm font-bold px-3.5 py-1.5 rounded-lg border border-black bg-black text-white hover:bg-white hover:text-black transition-colors"
+                                                    onClick={handleExportCurrentReport}
+                                                >
+                                                    Exportar a Excel
+                                                </button>
+                                                <div className="text-sm font-bold text-secondary bg-surface px-3.5 py-1.5 rounded-lg border border-line">
+                                                    {currentDateLabel}
+                                                </div>
                                             </div>
                                         </div>
 
