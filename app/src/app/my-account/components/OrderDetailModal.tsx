@@ -98,6 +98,17 @@ export default function OrderDetailModal({
         : deliveryMethod === 'delivery'
             ? 'Envío a domicilio'
             : 'Método no especificado'
+    const paymentMethodRaw = String(order?.payment_method || '').trim()
+    const paymentMethod = paymentMethodRaw.toLowerCase()
+    const paymentMethodLabel = !paymentMethod
+        ? 'No especificado'
+        : ['cash', 'efectivo'].includes(paymentMethod)
+            ? 'Pago en efectivo'
+            : ['card', 'tarjeta'].includes(paymentMethod)
+                ? 'Pago con tarjeta'
+                : ['transfer', 'transferencia'].includes(paymentMethod)
+                    ? 'Transferencia'
+                    : paymentMethodRaw
     const sameAddresses = shippingLines.join(' | ') !== '' && shippingLines.join(' | ') === billingLines.join(' | ')
     const mixedVatRates = Boolean(order?.mixed_vat_rates)
     const vatRateLabel = mixedVatRates
@@ -183,7 +194,7 @@ export default function OrderDetailModal({
                                 </div>
                                 <div className="rounded-lg bg-surface border border-line px-4 py-4">
                                     <div className="text-[11px] uppercase font-bold text-secondary mb-2">Pago</div>
-                                    <div className="font-semibold text-black">{String(order?.payment_method || 'No especificado').trim() || 'No especificado'}</div>
+                                    <div className="font-semibold text-black">{paymentMethodLabel}</div>
                                     {documentType && <div className="text-sm text-secondary mt-2">Documento: {documentType}</div>}
                                     {documentNumber && <div className="text-sm text-secondary mt-1">{documentNumber}</div>}
                                     {company && <div className="text-sm text-secondary mt-1">Razón social: {company}</div>}

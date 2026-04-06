@@ -371,7 +371,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                           alt={`${productFamily.name} - Miniatura ${index + 1}`}
                           sizes="72px"
                           quality={85}
-                          unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                          unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
                           className="w-full aspect-[4/5] object-contain bg-white"
                         />
                       </button>
@@ -394,7 +394,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     alt={`${productFamily.name} - Vista ${photoIndex + 1}`}
                     sizes="(min-width: 1024px) 500px, (min-width: 640px) calc(100vw - 180px), 100vw"
                     quality={90}
-                    unoptimized={currentGalleryImage.startsWith('/uploads/') || currentGalleryImage.startsWith('/images/')}
+                    unoptimized={currentGalleryImage.startsWith('data:') || currentGalleryImage.startsWith('blob:')}
                     className="w-full aspect-[4/5] object-contain bg-white"
                   />
                 </button>
@@ -439,7 +439,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                         alt={`${productFamily.name} - Zoom ${index + 1}`}
                         sizes="(min-width: 1024px) 70vw, 90vw"
                         quality={92}
-                        unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                        unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
                         className="w-full aspect-[4/5] object-contain bg-white rounded-xl"
                       />
                     </SwiperSlide>

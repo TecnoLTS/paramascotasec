@@ -466,7 +466,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                                                         src={imageSrc}
                                                                         alt={product.name}
                                                                         fill
-                                                                        unoptimized
+                                                                        sizes="56px"
+                                                                        unoptimized={imageSrc.startsWith('data:') || imageSrc.startsWith('blob:')}
                                                                         className="object-contain"
                                                                     />
                                                                 </div>

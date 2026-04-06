@@ -112,7 +112,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         return src
     }
 
-    const shouldUnoptimize = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
+    const shouldUnoptimize = (src: string) => src.startsWith('data:') || src.startsWith('blob:')
 
     // Si se cierra el modal y el foco quedó dentro, lo limpiamos para evitar warnings de aria-hidden
     useEffect(() => {

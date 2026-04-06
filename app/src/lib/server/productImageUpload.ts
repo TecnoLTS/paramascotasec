@@ -13,6 +13,19 @@ const allowedTypes: Record<string, string> = {
 }
 const maxUploadBytes = 8 * 1024 * 1024
 const backendBase = (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api').replace(/\/$/, '')
+const seoFilenameMaxLength = 140
+
+type UploadImageMetadata = {
+  platform?: string
+  productName?: string
+  category?: string
+  productType?: string
+  size?: string
+  color?: string
+  species?: string
+  material?: string
+  variantLabel?: string
+}
 
 const hasJpegSignature = (buffer: Buffer) =>
   buffer.length >= 3
@@ -41,6 +54,70 @@ const matchesDeclaredImageType = (buffer: Buffer, mimeType: string) => {
   if (mimeType === 'image/png') return hasPngSignature(buffer)
   if (mimeType === 'image/webp') return hasWebpSignature(buffer)
   return false
+}
+
+const slugifySeoSegment = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+
+const clipSlug = (value: string, maxLength = 28) => value.slice(0, maxLength).replace(/-+$/g, '')
+
+const extractPlatformSlug = (host: string | null) => {
+  if (!host) return 'paramascotas'
+  const normalized = host.split(':')[0].trim().toLowerCase()
+  if (!normalized) return 'paramascotas'
+  if (normalized === 'localhost' || normalized === '127.0.0.1') return 'paramascotas'
+
+  const noWww = normalized.replace(/^www\./, '')
+  const preferred = noWww.split('.')[0] || noWww
+  return slugifySeoSegment(preferred) || 'paramascotas'
+}
+
+const parseImageMetadata = (formData: FormData, reqHost: string | null): UploadImageMetadata => ({
+  platform: typeof formData.get('platform') === 'string' ? String(formData.get('platform') || '') : extractPlatformSlug(reqHost),
+  productName: typeof formData.get('productName') === 'string' ? String(formData.get('productName') || '') : '',
+  category: typeof formData.get('category') === 'string' ? String(formData.get('category') || '') : '',
+  productType: typeof formData.get('productType') === 'string' ? String(formData.get('productType') || '') : '',
+  size: typeof formData.get('size') === 'string' ? String(formData.get('size') || '') : '',
+  color: typeof formData.get('color') === 'string' ? String(formData.get('color') || '') : '',
+  species: typeof formData.get('species') === 'string' ? String(formData.get('species') || '') : '',
+  material: typeof formData.get('material') === 'string' ? String(formData.get('material') || '') : '',
+  variantLabel: typeof formData.get('variantLabel') === 'string' ? String(formData.get('variantLabel') || '') : '',
+})
+
+const buildSeoImageFileName = (
+  metadata: UploadImageMetadata,
+  kind: 'thumb' | 'gallery',
+  ext: string
+) => {
+  const orderedSegments = [
+    metadata.platform,
+    metadata.productName,
+    metadata.productType,
+    metadata.category,
+    metadata.variantLabel,
+    metadata.size,
+    metadata.color,
+    metadata.material,
+    metadata.species,
+    kind === 'thumb' ? 'miniatura' : 'ficha',
+  ]
+    .map((segment) => clipSlug(slugifySeoSegment(String(segment || ''))))
+    .filter(Boolean)
+
+  const dedupedSegments = orderedSegments.filter((segment, index) => orderedSegments.indexOf(segment) === index)
+  const readableBase = dedupedSegments.join('-') || `paramascotas-${kind}`
+  const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10)
+  const datedSuffix = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const maxBaseLength = seoFilenameMaxLength - (`-${datedSuffix}-${uniqueSuffix}.${ext}`).length
+  const clippedBase = clipSlug(readableBase, Math.max(32, maxBaseLength))
+
+  return `${clippedBase}-${datedSuffix}-${uniqueSuffix}.${ext}`
 }
 
 const resolvePublicDir = async () => {
@@ -126,7 +203,11 @@ export const handleProductImageUpload = async (req: Request) => {
       return NextResponse.json({ ok: false, error: { message: 'No se recibió ninguna imagen.' } }, { status: 400 })
     }
 
-    const kindValue = typeof kind === 'string' && allowedKinds.has(kind) ? kind : 'gallery'
+    const kindValue: 'thumb' | 'gallery' =
+      typeof kind === 'string' && allowedKinds.has(kind)
+        ? (kind as 'thumb' | 'gallery')
+        : 'gallery'
+    const metadata = parseImageMetadata(formData, req.headers.get('x-forwarded-host') || req.headers.get('host'))
     const ext = allowedTypes[file.type]
     if (!ext) {
       return NextResponse.json({ ok: false, error: { message: 'Formato de imagen no permitido.' } }, { status: 400 })
@@ -144,7 +225,7 @@ export const handleProductImageUpload = async (req: Request) => {
     const publicDir = await resolvePublicDir()
     const uploadDir = path.join(publicDir, 'uploads', 'products')
     await fs.mkdir(uploadDir, { recursive: true })
-    const fileName = `img_${Date.now()}_${randomUUID()}.${ext}`
+    const fileName = buildSeoImageFileName(metadata, kindValue, ext)
     const filePath = path.join(uploadDir, fileName)
     await fs.writeFile(filePath, buffer)
 
@@ -152,6 +233,7 @@ export const handleProductImageUpload = async (req: Request) => {
       ok: true,
       data: {
         url: `/uploads/products/${fileName}`,
+        fileName,
         kind: kindValue,
       },
     })

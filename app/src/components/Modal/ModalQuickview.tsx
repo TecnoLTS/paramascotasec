@@ -228,7 +228,7 @@ const ModalQuickview = () => {
                                         height={2000}
                                         alt={selectedProduct?.name ?? 'product'}
                                         priority
-                                        unoptimized={image.startsWith('/uploads/') || image.startsWith('/images/')}
+                                        unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
                                         className="w-full h-full object-contain bg-white"
                                     />
                                 </div>
@@ -292,7 +292,7 @@ const ModalQuickview = () => {
                                                         height={100}
                                                         alt={item.color || 'color'}
                                                         className="rounded-xl"
-                                                        unoptimized
+                                                        unoptimized={(item.colorImage || item.image || resolvedGalleryImages[0] || '/images/product/1.jpg').startsWith('data:') || (item.colorImage || item.image || resolvedGalleryImages[0] || '/images/product/1.jpg').startsWith('blob:')}
                                                     />
                                                     <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
                                                         {item.color}

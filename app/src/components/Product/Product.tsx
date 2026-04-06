@@ -131,7 +131,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                 .filter(Boolean)
             : []
     const primaryImage = thumbImages[0] || fullImages[0] || '/images/placeholder.jpg'
-    const shouldBypassOptimizer = (src: string) => src.startsWith('/uploads/') || src.startsWith('/images/')
+    const shouldBypassOptimizer = (src: string) => src.startsWith('data:') || src.startsWith('blob:')
 
     const sizes: string[] = data.sizes ?? []
     const variations = selectedVariant.variation ?? []

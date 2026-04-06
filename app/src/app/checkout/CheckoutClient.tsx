@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
-import { Package, Truck, CreditCard, Building2, Banknote } from 'lucide-react'
+import { Package, Truck, Building2, Banknote } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
 import { useRouter } from 'next/navigation'
 import * as Icon from "@phosphor-icons/react/dist/ssr";
@@ -162,7 +162,7 @@ const Checkout = () => {
 
     const [showLogin, setShowLogin] = useState(false)
     const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery')
-    const [paymentMethod, setPaymentMethod] = useState<'credit' | 'transfer' | 'cash'>('credit')
+    const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash'>('cash')
     const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
     const [transferSecondsLeft, setTransferSecondsLeft] = useState(600)
     const [transferOrderRef, setTransferOrderRef] = useState(() => Math.floor(1000 + Math.random() * 9000))
@@ -1655,17 +1655,6 @@ const Checkout = () => {
                                     <h2 className="text-xl font-semibold text-[#111827] mb-4">Método de pago</h2>
                                     <div className="space-y-3">
                                         <button
-                                            onClick={() => setPaymentMethod('credit')}
-                                            className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${paymentMethod === 'credit'
-                                                ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
-                                                : 'border-[#e5e7eb] hover:border-[#cbd5e1]'
-                                                }`}
-                                        >
-                                            <CreditCard className={`w-5 h-5 ${paymentMethod === 'credit' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
-                                            <span className="font-medium text-[#111827]">Tarjeta de crédito/débito</span>
-                                        </button>
-
-                                        <button
                                             onClick={() => setPaymentMethod('transfer')}
                                             className={`w-full flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${paymentMethod === 'transfer'
                                                 ? 'border-[#2e4d4d] bg-[#2e4d4d1a]'
@@ -1687,32 +1676,6 @@ const Checkout = () => {
                                             <span className="font-medium text-[#111827]">Pago en efectivo</span>
                                         </button>
                                     </div>
-
-                                    {paymentMethod === 'credit' && (
-                                        <div className="mt-6 space-y-4">
-                                            <input
-                                                type="text"
-                                                placeholder="Número de tarjeta"
-                                                className="w-full border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                            />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <input
-                                                    type="text"
-                                                    placeholder="MM/AA"
-                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    placeholder="CVV"
-                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                />
-                                            </div>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" className="w-4 h-4 text-[#2e4d4d] border-[#e5e7eb] rounded focus:ring-[#2e4d4d]" />
-                                                <span className="text-sm text-[#6b7280]">Guardar tarjeta para futuras compras</span>
-                                            </label>
-                                        </div>
-                                    )}
 
                                     {paymentMethod === 'transfer' && (
                                         <div className="mt-6 p-4 bg-[#f3f4f6] rounded-lg border border-[#e5e7eb] space-y-3">
@@ -1818,7 +1781,6 @@ const Checkout = () => {
                                         <div>
                                             <h3 className="text-sm font-bold text-[#6b7280] uppercase tracking-wider mb-3">Método de Pago</h3>
                                             <p className="text-[#111827] font-medium">
-                                                {paymentMethod === 'credit' && 'Tarjeta de Crédito/Débito'}
                                                 {paymentMethod === 'transfer' && 'Transferencia Bancaria'}
                                                 {paymentMethod === 'cash' && 'Pago en Efectivo'}
                                             </p>

@@ -175,6 +175,7 @@ export interface Order {
     user_name?: string;
     user_email?: string;
     user_id?: string;
+    items_count?: number;
     total: number;
     status: string;
     created_at: string;

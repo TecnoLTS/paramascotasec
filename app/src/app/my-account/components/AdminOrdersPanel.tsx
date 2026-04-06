@@ -40,8 +40,13 @@ export default React.memo(function AdminOrdersPanel({
     }
 
     const getPaymentMethodLabel = (order: Order) => {
-        const method = String(order.payment_method || '').trim()
-        return method || 'Por definir'
+        const methodRaw = String(order.payment_method || '').trim()
+        const method = methodRaw.toLowerCase()
+        if (!method) return 'Por definir'
+        if (['cash', 'efectivo'].includes(method)) return 'Pago en efectivo'
+        if (['card', 'tarjeta'].includes(method)) return 'Pago con tarjeta'
+        if (['transfer', 'transferencia'].includes(method)) return 'Transferencia'
+        return methodRaw
     }
 
     return (
@@ -90,7 +95,10 @@ export default React.memo(function AdminOrdersPanel({
                                     </td>
                                     <td className="py-4">
                                         <div className="font-medium text-black">{getDeliveryMethodLabel(order)}</div>
-                                        <div className="text-xs text-secondary">{getPaymentMethodLabel(order)}</div>
+                                        <div className="text-xs text-secondary mt-1">{getPaymentMethodLabel(order)}</div>
+                                        <div className="text-xs text-secondary mt-1">
+                                            {(order.items_count ?? 0) > 0 ? `${order.items_count} ítems` : 'Sin ítems'}{String(order.order_notes || '').trim() ? ' · Con nota del cliente' : ''}
+                                        </div>
                                     </td>
                                     <td className="py-4 font-bold">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-4">

@@ -70,6 +70,18 @@ type ProductEditorModalProps = {
     showNotification: (text: string, type?: 'success' | 'error') => void;
 }
 
+type UploadImageMetadata = {
+    platform: string
+    productName: string
+    category: string
+    productType: string
+    size: string
+    color: string
+    species: string
+    material: string
+    variantLabel: string
+}
+
 const requiredImageSizes = {
     thumb: { width: 640, height: 800 },
     gallery: { width: 1200, height: 1500 }
@@ -156,10 +168,36 @@ const resizeImage = (file: File, targetWidth: number, targetHeight: number): Pro
             .catch((error) => reject(error))
     })
 
-const uploadImage = async (file: File, kind: 'thumb' | 'gallery') => {
+const resolveUploadImageMetadata = (form: ProductFormState): UploadImageMetadata => {
+    const attrs = (form.attributes || {}) as Record<string, any>
+    const platform =
+        typeof window !== 'undefined'
+            ? window.location.hostname.replace(/^www\./, '').split('.')[0] || 'paramascotas'
+            : 'paramascotas'
+
+    return {
+        platform,
+        productName: String(form.name || ''),
+        category: String(form.category || ''),
+        productType: String(form.productType || ''),
+        size: String(attrs.size || attrs.presentation || attrs.weight || ''),
+        color: String(attrs.color || ''),
+        species: String(attrs.species || attrs.target || ''),
+        material: String(attrs.material || ''),
+        variantLabel: String(attrs.variantLabel || attrs.variantBaseName || ''),
+    }
+}
+
+const uploadImage = async (file: File, kind: 'thumb' | 'gallery', metadata: UploadImageMetadata) => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('kind', kind)
+    Object.entries(metadata).forEach(([key, value]) => {
+        const normalized = String(value || '').trim()
+        if (normalized) {
+            formData.append(key, normalized)
+        }
+    })
 
     const url =
         typeof window !== 'undefined'
@@ -885,7 +923,7 @@ export default function ProductEditorModal({
                 showNotification(`Ajustamos la imagen automáticamente a ${required.width}x${required.height}px.`)
                 fileToUpload = await resizeImage(file, required.width, required.height)
             }
-            const uploaded = await withTransientRetry(() => uploadImage(fileToUpload, kind))
+            const uploaded = await withTransientRetry(() => uploadImage(fileToUpload, kind, resolveUploadImageMetadata(form)))
             setImageEntry(kind, index, {
                 url: uploaded.url,
                 width: String((uploaded as any).width || required.width),
@@ -899,7 +937,7 @@ export default function ProductEditorModal({
         } finally {
             setImageUploading((prev) => ({ ...prev, [key]: false }))
         }
-    }, [clearErrors, setImageEntry, showNotification])
+    }, [clearErrors, form, setImageEntry, showNotification])
 
     const handleBasePriceChange = React.useCallback((value: string) => {
         const baseValue = Number(value || 0)
