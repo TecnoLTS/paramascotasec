@@ -49,7 +49,7 @@ import {
     resolveProductVariantLabel,
 } from '../productFormUtils'
 import { ADMIN_PRODUCTS_ENDPOINT, withTransientRetry } from '../utils'
-import type { ProductEditorMode, ProductFormState } from '../types'
+import type { ProductEditorMode, ProductFormState, PurchaseInvoiceFormState } from '../types'
 
 type ProductEditorModalProps = {
     open: boolean;
@@ -86,6 +86,8 @@ const requiredImageSizes = {
     thumb: { width: 640, height: 800 },
     gallery: { width: 1200, height: 1500 }
 }
+
+const PURCHASE_INVOICE_MEMORY_KEY = 'paramascotasec:last-purchase-invoice'
 
 const applyDefaultSizes = (
     entries: Array<{ url: string; width?: string | number; height?: string | number }>,
@@ -321,6 +323,40 @@ const roundCurrency = (value: number) => {
     return Math.round(value * 100) / 100
 }
 
+const normalizeRememberedPurchaseInvoice = (value: unknown): Partial<PurchaseInvoiceFormState> | null => {
+    if (!value || typeof value !== 'object') return null
+    const source = value as Record<string, unknown>
+    const remembered = {
+        invoiceNumber: String(source.invoiceNumber || '').trim(),
+        supplierName: String(source.supplierName || '').trim(),
+        supplierDocument: String(source.supplierDocument || '').trim(),
+        issuedAt: String(source.issuedAt || '').trim(),
+        notes: String(source.notes || '').trim(),
+    }
+    if (!remembered.invoiceNumber && !remembered.supplierName && !remembered.issuedAt && !remembered.notes) {
+        return null
+    }
+    return remembered
+}
+
+const readRememberedPurchaseInvoice = (): Partial<PurchaseInvoiceFormState> | null => {
+    if (typeof window === 'undefined') return null
+    try {
+        const raw = window.localStorage.getItem(PURCHASE_INVOICE_MEMORY_KEY)
+        if (!raw) return null
+        return normalizeRememberedPurchaseInvoice(JSON.parse(raw))
+    } catch {
+        return null
+    }
+}
+
+const persistRememberedPurchaseInvoice = (purchaseInvoice: Partial<PurchaseInvoiceFormState>) => {
+    if (typeof window === 'undefined') return
+    const normalized = normalizeRememberedPurchaseInvoice(purchaseInvoice)
+    if (!normalized) return
+    window.localStorage.setItem(PURCHASE_INVOICE_MEMORY_KEY, JSON.stringify(normalized))
+}
+
 const PRODUCT_TYPE_SKU_PREFIX: Record<string, string> = {
     Alimento: 'ALI',
     ropa: 'ROP',
@@ -535,7 +571,19 @@ export default function ProductEditorModal({
 
     React.useEffect(() => {
         if (!open) return
-        setForm(initialForm)
+        const rememberedPurchaseInvoice = editorMode === 'create'
+            ? readRememberedPurchaseInvoice()
+            : null
+        const nextForm = rememberedPurchaseInvoice
+            ? {
+                ...initialForm,
+                purchaseInvoice: {
+                    ...initialForm.purchaseInvoice,
+                    ...rememberedPurchaseInvoice,
+                },
+            }
+            : initialForm
+        setForm(nextForm)
         setImageUploading({})
         setSaving(false)
         setFormErrors({})
@@ -1763,6 +1811,9 @@ export default function ProductEditorModal({
             onProductsUpdated(normalizeAdminProducts(res.body))
             if (activeTab === 'inventory') {
                 await onRefreshPurchaseInvoices()
+            }
+            if (stockIncrease > 0) {
+                persistRememberedPurchaseInvoice(purchaseInvoice)
             }
             onClose()
         } catch (error) {
