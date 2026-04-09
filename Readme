@@ -19,10 +19,8 @@ cd /home/admincenter/contenedores/paramascotasec
 ```
 
 ## Regla simple
-- Si quieres dejar un ambiente fijo por archivo, usa `.env` para produccion y `.env.development` para desarrollo.
-- Si quieres cambiar por comando, usa:
-  - `./scripts/deploy-development.sh`
-  - `./scripts/deploy-production.sh`
+- Usa `.env.development` para desarrollo.
+- Usa `.env` o `.env.production` para produccion.
 - Los scripts ya usan `--remove-orphans`, asi que al cambiar de ambiente retiran el contenedor del perfil opuesto.
 
 ## Requisitos
@@ -33,58 +31,63 @@ cd /home/admincenter/contenedores/paramascotasec
 docker network create edge || true
 ```
 
-## Variables clave (`.env`)
-1. Copia `.env.example` a `.env`.
-2. Ajusta estas variables segun ambiente:
+## Variables clave
 
 - `APP_ENV`: `development` o `production`.
-- `COMPOSE_PROFILES`: `development` o `production` (debe coincidir con `APP_ENV`).
+- `COMPOSE_PROFILES`: `development` o `production`.
 - `NEXT_PUBLIC_BASE_URL`: URL publica del frontend.
 - `NEXT_PUBLIC_BACKEND_URL`: URL publica del backend (`.../api`).
-- `NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME`: nombre de la cookie CSRF legible por navegador para operaciones autenticadas.
-- `BACKEND_URL_INTERNAL`: URL interna Docker del backend (recomendado `http://paramascotasec-backend-web/api`).
-- `INTERNAL_PROXY_TOKEN`: secreto compartido para validar el proxy interno Next.js -> backend.
+- `NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME`: cookie CSRF legible por navegador.
+- `BACKEND_URL_INTERNAL`: URL interna Docker del backend (`http://paramascotasec-backend-web/api`).
+- `INTERNAL_PROXY_TOKEN`: secreto compartido entre frontend y backend.
 - `PANEL_IP_MODE`: `off`, `private` o `custom`.
-  - `private` permite loopback + redes privadas RFC1918 sin tener que conocer IPs.
 - `PANEL_IP_ALLOWLIST`: IP/CIDR opcionales.
-  - en `private` se suman como excepciones
-  - en `custom` se vuelven la lista efectiva
-- `APP_BIND_IP`: en produccion conviene dejarlo en `127.0.0.1` para no exponer Next directo fuera del gateway.
-- `APP_DEV_BIND_IP`: en desarrollo puedes dejar `0.0.0.0` si necesitas entrar desde la LAN.
+- `APP_BIND_IP`: en produccion conviene `127.0.0.1`.
+- `APP_DEV_BIND_IP`: en desarrollo puedes usar `0.0.0.0` si entras desde la LAN.
+- `FRONTEND_DEV_RUNTIME`: `stable` o `hot`.
+- `FRONTEND_DEV_BUNDLER`: `webpack` o `turbopack`.
 
-Para desarrollo local persistente puedes usar `.env.development`.
+## Desarrollo
 
-## Despliegue en desarrollo
-Desde `/home/admincenter/contenedores/paramascotasec`:
+Por defecto, desarrollo usa `FRONTEND_DEV_RUNTIME=hot`.
+
+Eso significa:
+- el contenedor corre con `next dev`,
+- los cambios se ven en caliente,
+- y la pagina deja una senal visible de entorno `DEV`.
+
+Para desarrollo estable y compatible con este entorno, usa tambien:
 
 ```bash
+FRONTEND_DEV_BUNDLER=webpack
+```
+
+Solo usa `turbopack` si sabes que el host/disco lo soporta bien y quieres probar ese bundler.
+
+Si quieres un runtime mas parecido a produccion, define en `.env.development`:
+
+```bash
+FRONTEND_DEV_RUNTIME=stable
+```
+
+Luego redepliega:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
 ./scripts/deploy-development.sh
 ```
 
-Contenedor esperado: `paramascotasec-app-dev`.
+## Produccion
 
-Comando equivalente sin script:
-
-```bash
-docker compose --env-file .env.development --profile development up -d --build --remove-orphans
-```
-
-## Despliegue en produccion
-Desde `/home/admincenter/contenedores/paramascotasec`:
+Produccion siempre usa build + runtime estable:
 
 ```bash
+cd /home/admincenter/contenedores/paramascotasec
 ./scripts/deploy-production.sh
 ```
 
-Contenedor esperado: `paramascotasec-app`.
+## Operacion
 
-Comando equivalente sin script:
-
-```bash
-docker compose --env-file .env --profile production up -d --build --remove-orphans
-```
-
-## Comandos de operacion
 Ver estado:
 
 ```bash
@@ -103,20 +106,20 @@ Logs produccion:
 docker compose logs -f app
 ```
 
-Detener ambiente desarrollo:
+Detener desarrollo:
 
 ```bash
 docker compose --env-file .env.development --profile development down --remove-orphans
 ```
 
-Detener ambiente produccion:
+Detener produccion:
 
 ```bash
 docker compose --env-file .env --profile production down --remove-orphans
 ```
 
 ## Dependencias
-- Backend disponible en la red `edge` (`paramascotasec-backend-web`).
+- Backend disponible en la red `edge` como `paramascotasec-backend-web`.
 - DB y backend deben estar levantados antes de validar flujos del panel.
 
 ## Nota de seguridad
@@ -128,88 +131,3 @@ docker compose --env-file .env --profile production down --remove-orphans
 cd /home/admincenter/contenedores/paramascotasec
 ./scripts/recommend-allowlist.sh
 ```
-
-
-
-
-Workspace completo en /home/admincenter/contenedores:
-
-cd /home/admincenter/contenedores
-./scripts/deploy-workspace.sh development
-./scripts/deploy-workspace.sh production
-paramascotasec:
-
-cd /home/admincenter/contenedores/paramascotasec
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-paramascotasec-backend:
-
-cd /home/admincenter/contenedores/paramascotasec-backend
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-RUN_COMPOSER_INSTALL=1 RUN_DB_BOOTSTRAP=1 ./scripts/deploy-development.sh
-RUN_COMPOSER_INSTALL=1 RUN_DB_BOOTSTRAP=1 ./scripts/deploy-production.sh
-tecnolts:
-
-cd /home/admincenter/contenedores/tecnolts
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-gateway:
-
-cd /home/admincenter/contenedores/gateway
-./scripts/setup-ssl-local.sh
-./scripts/deploy-gateway-production.sh
-./scripts/renew-letsencrypt.sh
-
-
-
-
-
-
-
-
----------------------------------------------------------------------------------------------------------------------------
-Lista nueva de despliegues
-
-Workspace completo
-
-cd /home/admincenter/contenedores
-./scripts/deploy-workspace.sh development
-./scripts/deploy-workspace.sh production
-paramascotasec
-
-cd /home/admincenter/contenedores/paramascotasec
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-paramascotasec-backend
-
-cd /home/admincenter/contenedores/paramascotasec-backend
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-Si necesitas instalar dependencias PHP y preparar base de datos:
-
-cd /home/admincenter/contenedores/paramascotasec-backend
-RUN_COMPOSER_INSTALL=1 RUN_DB_SETUP=1 ./scripts/deploy-development.sh
-RUN_COMPOSER_INSTALL=1 RUN_DB_SETUP=1 ./scripts/deploy-production.sh
-paramascostas-DB
-
-cd /home/admincenter/contenedores/paramascostas-DB
-./scripts/deploy.sh development
-./scripts/deploy.sh production
-tecnolts
-
-cd /home/admincenter/contenedores/tecnolts
-./scripts/deploy-development.sh
-./scripts/deploy-production.sh
-gateway
-
-cd /home/admincenter/contenedores/gateway
-./scripts/setup-ssl-local.sh
-./scripts/deploy-gateway-production.sh
-./scripts/renew-letsencrypt.sh
-Facturador
-
-cd /home/admincenter/contenedores/Facturador
-./scripts/deploy.sh
-
-

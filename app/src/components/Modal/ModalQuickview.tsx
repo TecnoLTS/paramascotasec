@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import * as Icon from '@phosphor-icons/react/dist/ssr'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
@@ -42,17 +42,32 @@ const ModalQuickview = () => {
     const showReviewSummary = liveProduct ? hasRealReviews(liveProduct) : false
     const reviewCount = liveProduct ? getProductReviewCount(liveProduct) : 0
 
-    const galleryImages = !activeVariant ? [] : Array.from(new Set([
-        ...(Array.isArray((activeVariant as any)?.images)
+    const resolvedGalleryImages = useMemo(() => {
+        if (!activeVariant) {
+            return selectedProduct ? ['/images/product/1.jpg'] : []
+        }
+
+        const productImages = Array.isArray((activeVariant as any)?.images)
             ? (activeVariant as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
-            : []),
-        ...(Array.isArray((activeVariant as any)?.thumbImage)
+            : []
+        const thumbImages = Array.isArray((activeVariant as any)?.thumbImage)
             ? (activeVariant as any).thumbImage.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
-            : []),
-    ])).filter(Boolean)
-    const resolvedGalleryImages = galleryImages.length > 0
-        ? galleryImages
-        : (selectedProduct ? ['/images/product/1.jpg'] : [])
+            : []
+        const variationImages = (activeVariant?.variation ?? [])
+            .flatMap((variation) => [variation.image, variation.colorImage])
+            .filter((img): img is string => typeof img === 'string' && img.length > 0)
+        const galleryImages = Array.from(new Set([...productImages, ...variationImages])).filter(Boolean)
+
+        if (galleryImages.length > 0) {
+            return galleryImages
+        }
+
+        if (thumbImages.length > 0) {
+            return thumbImages
+        }
+
+        return ['/images/product/1.jpg']
+    }, [activeVariant, selectedProduct])
 
     useEffect(() => {
         setLiveProduct(selectedProduct)

@@ -4,6 +4,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+read_env_value() {
+  local env_file="$1"
+  local key="$2"
+
+  awk -F= -v target="${key}" '
+    $1 == target {
+      sub(/^[[:space:]]+/, "", $2)
+      sub(/[[:space:]]+$/, "", $2)
+      print $2
+      exit
+    }
+  ' "${env_file}"
+}
+
 ensure_docker_ready() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "docker no esta instalado"
@@ -114,9 +128,37 @@ assert_frontend_mode() {
   fi
 }
 
+wait_for_container_health() {
+  local container_name="$1"
+  local max_attempts="${2:-240}"
+  local attempt=1
+  local status
+
+  while (( attempt <= max_attempts )); do
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${container_name}" 2>/dev/null || true)"
+
+    if [[ "${status}" == "healthy" || "${status}" == "none" ]]; then
+      return 0
+    fi
+
+    if [[ "${status}" == "unhealthy" ]]; then
+      echo "El contenedor ${container_name} quedo unhealthy" >&2
+      docker logs --tail 80 "${container_name}" >&2 || true
+      exit 1
+    fi
+
+    sleep 2
+    ((attempt++))
+  done
+
+  echo "El contenedor ${container_name} no quedo listo a tiempo" >&2
+  docker logs --tail 80 "${container_name}" >&2 || true
+  exit 1
+}
+
 deploy_frontend() {
   local mode="${1:-development}"
-  local env_file unexpected_container
+  local env_file unexpected_container dev_runtime
 
   ensure_docker_ready
   env_file="$(resolve_env_file "${mode}")"
@@ -128,8 +170,20 @@ deploy_frontend() {
 
   echo "Levantando Paramascotasec en ${mode} usando ${env_file}..."
   remove_container_if_exists "${unexpected_container}"
+
+  if [[ "${mode}" == "development" ]]; then
+    dev_runtime="$(read_env_value "${env_file}" "FRONTEND_DEV_RUNTIME")"
+    dev_runtime="${dev_runtime:-hot}"
+    if [[ "${dev_runtime}" == "stable" ]]; then
+      echo "Precompilando frontend development/stable para evitar compilacion en caliente detras del gateway..."
+      compose_cmd "${env_file}" "${mode}" run --rm --no-deps app-dev \
+        sh -lc 'mkdir -p .next && rm -f .next/BUILD_ID && NODE_ENV=production npm run build'
+    fi
+  fi
+
   compose_cmd "${env_file}" "${mode}" up -d --build --remove-orphans
   assert_frontend_mode "${mode}"
+  wait_for_container_health "$(frontend_container_name "${mode}")"
   compose_cmd "${env_file}" "${mode}" ps
   echo "Paramascotasec ${mode} listo"
 }

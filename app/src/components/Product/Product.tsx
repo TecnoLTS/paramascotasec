@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import { ProductType } from '@/type/ProductType'
-import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { Eye, ShoppingBagOpen } from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
@@ -27,6 +27,11 @@ import {
     getLiveProductAvailableStock,
     resolveLiveSelectedVariant,
 } from '@/lib/liveCatalog'
+
+const Icon = {
+    Eye,
+    ShoppingBagOpen,
+} as const
 
 interface ProductProps {
     data: ProductType

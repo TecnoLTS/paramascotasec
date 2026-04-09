@@ -283,6 +283,10 @@ export default function AccountSidebar({
                                         <Storefront size={18} />
                                         <strong className="heading6">Venta en local</strong>
                                     </PanelNavButton>
+                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'quotations'} onClick={() => onNavigateToPanelTab('quotations')}>
+                                        <Files size={18} />
+                                        <strong className="heading6">Cotizaciones</strong>
+                                    </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'admin-orders'} onClick={() => onNavigateToPanelTab('admin-orders')}>
                                         <ListChecks size={18} />
                                         <strong className="heading6">Pedidos</strong>

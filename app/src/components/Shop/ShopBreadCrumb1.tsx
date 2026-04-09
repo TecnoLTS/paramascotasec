@@ -35,9 +35,17 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const router = useRouter()
     const searchParams = useSearchParams()
     const defaultPriceRange = { min: 0, max: 500 }
+    const availableTypes = useMemo(
+        () => Array.from(new Set(data.map((product) => product.type).filter((value): value is string => Boolean(value)))),
+        [data]
+    )
+    const normalizedDataType = useMemo(() => {
+        if (!dataType) return null
+        return availableTypes.includes(dataType) ? dataType : null
+    }, [availableTypes, dataType])
     const [showOnlySale, setShowOnlySale] = useState(false)
     const [sortOption, setSortOption] = useState('');
-    const [type, setType] = useState<string | null | undefined>(dataType)
+    const [type, setType] = useState<string | null | undefined>(normalizedDataType)
     const [size, setSize] = useState<string | null>()
     const [color, setColor] = useState<string | null>()
     const [material, setMaterial] = useState<string | null>()
@@ -258,6 +266,10 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             setBrand(null)
         }
     }, [brand, uniqueBrands])
+
+    useEffect(() => {
+        setType(normalizedDataType)
+    }, [normalizedDataType])
 
     useEffect(() => {
         setSearchInput(searchQuery ?? '')

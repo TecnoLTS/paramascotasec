@@ -1,16 +1,18 @@
 import React from 'react'
+import dynamic from 'next/dynamic'
 import MenuPet from '@/components/Header/Menu/MenuPet'
 import SliderPet from '@/components/Slider/SliderPet'
-import Collection from '@/components/Pet/Collection'
-import Collection2 from '@/components/Pet/Collection2'
-import FeatureProduct from '@/components/Pet/FeatureProduct'
-import ChooseUs from '@/components/Pet/ChooseUs'
-import AllProducts from '@/components/Product/AllProducts'
-import Benefit from '@/components/Pet/Benefit'
-import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
 import { ProductType } from '@/type/ProductType'
+
+const Collection = dynamic(() => import('@/components/Pet/Collection'))
+const Collection2 = dynamic(() => import('@/components/Pet/Collection2'))
+const FeatureProduct = dynamic(() => import('@/components/Pet/FeatureProduct'))
+const ChooseUs = dynamic(() => import('@/components/Pet/ChooseUs'))
+const AllProducts = dynamic(() => import('@/components/Product/AllProducts'))
+const Benefit = dynamic(() => import('@/components/Pet/Benefit'))
+const Brand = dynamic(() => import('@/components/Pet/Brand'))
 
 const ParamascotasecHome = ({
   products,

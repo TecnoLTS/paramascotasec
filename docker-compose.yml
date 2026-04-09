@@ -13,6 +13,7 @@ services:
       TZ: America/Bogota
       NODE_ENV: production
       APP_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
       PORT: ${PORT:-3000}
       API_FETCH_TIMEOUT_MS: ${API_FETCH_TIMEOUT_MS:-15000}
       NEXT_PUBLIC_CONTAINER_NAME: next-test
@@ -25,12 +26,19 @@ services:
       PANEL_IP_ALLOWLIST: ${PANEL_IP_ALLOWLIST:-}
     working_dir: /app
     command: npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const socket=net.connect({host:'127.0.0.1',port:Number(process.env.PORT||3000)});socket.on('connect',()=>{socket.end();process.exit(0)});socket.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),1500)"]
+      interval: 30s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
     ports:
       - "${APP_BIND_IP:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
     networks:
       edge:
         aliases:
           - next-test-app
+          - paramascotasec-frontend
 
   app-dev:
     profiles: ["development"]
@@ -46,6 +54,10 @@ services:
       TZ: America/Bogota
       NODE_ENV: development
       APP_ENV: development
+      NEXT_PUBLIC_APP_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+      FRONTEND_DEV_RUNTIME: ${FRONTEND_DEV_RUNTIME:-hot}
+      FRONTEND_DEV_BUNDLER: ${FRONTEND_DEV_BUNDLER:-webpack}
       PORT: ${PORT:-3000}
       API_FETCH_TIMEOUT_MS: ${API_FETCH_TIMEOUT_MS:-15000}
       NEXT_PUBLIC_CONTAINER_NAME: next-test
@@ -57,17 +69,40 @@ services:
       PANEL_IP_MODE: ${PANEL_IP_MODE:-off}
       PANEL_IP_ALLOWLIST: ${PANEL_IP_ALLOWLIST:-}
     working_dir: /app
-    command: sh -lc "mkdir -p .next && find .next -mindepth 1 -maxdepth 1 -exec rm -rf {} + && npm run dev -- --webpack --hostname 0.0.0.0 --port ${PORT:-3000}"
+    command: >
+      sh -lc '
+        runtime="$${FRONTEND_DEV_RUNTIME:-hot}";
+        bundler="$${FRONTEND_DEV_BUNDLER:-webpack}";
+        if [ "$$runtime" = "hot" ]; then
+          mkdir -p .next .next/dev .next/cache;
+          find .next -mindepth 1 -maxdepth 1 ! -name dev ! -name cache -exec rm -rf {} +;
+          if [ "$$bundler" = "webpack" ]; then
+            exec npm run dev -- --webpack --hostname 0.0.0.0 --port ${PORT:-3000};
+          fi;
+          exec npm run dev -- --turbopack --hostname 0.0.0.0 --port ${PORT:-3000};
+        fi;
+        exec env NODE_ENV=production npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}
+      '
     volumes:
       - ./app:/app
       - paramascotasec_node_modules:/app/node_modules
-      - /app/.next
+      - paramascotasec_next_build:/app/.next
+    tmpfs:
+      - /app/.next/dev:size=1536m,mode=1777
+      - /app/.next/cache:size=768m,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${PORT:-3000}/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     ports:
       - "${APP_DEV_BIND_IP:-0.0.0.0}:${PORT:-3000}:${PORT:-3000}"
     networks:
       edge:
         aliases:
           - next-test-app
+          - paramascotasec-frontend
 
 networks:
   edge:
@@ -76,3 +111,4 @@ networks:
 
 volumes:
   paramascotasec_node_modules:
+  paramascotasec_next_build:

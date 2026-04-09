@@ -1,12 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
-import { Swiper, SwiperSlide } from 'swiper/react'
-import { Autoplay, Pagination } from 'swiper/modules'
-import 'swiper/css/bundle'
-import 'swiper/css/effect-fade'
 
 type SliderSuffix =
   | 'mobile-xs'
@@ -21,17 +16,7 @@ type SliderSuffix =
 
 type LegacySuffix = '243' | '720' | '1080' | '1920' | '2k' | '4k'
 
-const getSuffixByWidth = (w: number): SliderSuffix => {
-  if (w >= 3840) return 'uhd'
-  if (w >= 2560) return 'qhd'
-  if (w >= 1920) return 'fhd'
-  if (w >= 1280) return 'desktop'
-  if (w >= 1024) return 'laptop'
-  if (w >= 768) return 'tablet'
-  if (w >= 640) return 'mobile-wide'
-  if (w >= 480) return 'mobile'
-  return 'mobile-xs'
-}
+type SlideId = 1 | 2 | 3
 
 const legacyFallbackBySuffix: Record<SliderSuffix, LegacySuffix[]> = {
   'mobile-xs': ['243', '720'],
@@ -45,52 +30,64 @@ const legacyFallbackBySuffix: Record<SliderSuffix, LegacySuffix[]> = {
   uhd: ['4k', '2k'],
 }
 
-const buildCandidateSources = (slide: 1 | 2 | 3, suffix: SliderSuffix) => {
-  const sources = [
-    `/images/slider/slade${slide}-${suffix}.jpg`,
-    ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.jpg`),
-  ]
-  return Array.from(new Set(sources))
-}
+const sourceOrder: Array<{ media?: string; suffix: SliderSuffix }> = [
+  { media: '(min-width: 3840px)', suffix: 'uhd' },
+  { media: '(min-width: 2560px)', suffix: 'qhd' },
+  { media: '(min-width: 1920px)', suffix: 'fhd' },
+  { media: '(min-width: 1280px)', suffix: 'desktop' },
+  { media: '(min-width: 1024px)', suffix: 'laptop' },
+  { media: '(min-width: 768px)', suffix: 'tablet' },
+  { media: '(min-width: 640px)', suffix: 'mobile-wide' },
+  { media: '(min-width: 480px)', suffix: 'mobile' },
+  { suffix: 'mobile-xs' },
+]
 
-type SliderImageProps = {
-  alt: string
-  slide: 1 | 2 | 3
-  suffix: SliderSuffix
-  priority?: boolean
-  eager?: boolean
-}
-
-const SliderImage = ({ alt, slide, suffix, priority, eager }: SliderImageProps) => {
-  const candidates = useMemo(() => buildCandidateSources(slide, suffix), [slide, suffix])
-  const [candidateIndex, setCandidateIndex] = useState(0)
-
-  useEffect(() => {
-    setCandidateIndex(0)
-  }, [slide, suffix])
-
-  const src = candidates[Math.min(candidateIndex, candidates.length - 1)]
-
-  return (
-    <Image
-      src={src}
-      alt={alt}
-      fill
-      priority={priority}
-      sizes="100vw"
-      loading={eager ? 'eager' : undefined}
-      onError={() => {
-        setCandidateIndex((prev) => {
-          if (prev >= candidates.length - 1) return prev
-          return prev + 1
-        })
-      }}
-      className="absolute left-0 top-0 h-full w-full object-cover object-right sm:object-center"
-    />
+const buildCandidateSources = (slide: SlideId, suffix: SliderSuffix) => {
+  return Array.from(
+    new Set([
+      `/images/slider/slade${slide}-${suffix}.jpg`,
+      ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.jpg`),
+    ]),
   )
 }
 
-const SliderSlideContent = ({ slide, suffix, priority }: { slide: 1 | 2 | 3; suffix: SliderSuffix; priority?: boolean }) => {
+const buildSourceSet = (slide: SlideId, suffix: SliderSuffix) => buildCandidateSources(slide, suffix).join(', ')
+
+const SliderImage = ({ alt, slide, priority }: { alt: string; slide: SlideId; priority?: boolean }) => {
+  const fallbackCandidates = useMemo(() => buildCandidateSources(slide, 'desktop'), [slide])
+  const [fallbackIndex, setFallbackIndex] = useState(0)
+
+  useEffect(() => {
+    setFallbackIndex(0)
+  }, [slide])
+
+  const fallbackSrc = fallbackCandidates[Math.min(fallbackIndex, fallbackCandidates.length - 1)]
+
+  return (
+    <picture>
+      {sourceOrder.map(({ media, suffix }) => (
+        <source
+          key={`${slide}-${suffix}`}
+          media={media}
+          srcSet={buildSourceSet(slide, suffix)}
+        />
+      ))}
+      <img
+        src={fallbackSrc}
+        alt={alt}
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'auto'}
+        decoding="async"
+        onError={() => {
+          setFallbackIndex((prev) => (prev >= fallbackCandidates.length - 1 ? prev : prev + 1))
+        }}
+        className="absolute left-0 top-0 h-full w-full object-cover object-right sm:object-center"
+      />
+    </picture>
+  )
+}
+
+const SliderSlideContent = ({ slide, priority }: { slide: SlideId; priority?: boolean }) => {
   const content = {
     1: {
       subtitle: '¡Oferta! Hasta 50% de descuento',
@@ -108,7 +105,7 @@ const SliderSlideContent = ({ slide, suffix, priority }: { slide: 1 | 2 | 3; suf
 
   return (
     <div className="slider-item h-full w-full relative overflow-hidden">
-      <SliderImage alt={`bg-pet1-${slide}`} slide={slide} suffix={suffix} priority={priority} eager />
+      <SliderImage alt={`bg-pet1-${slide}`} slide={slide} priority={priority} />
       <div className="container w-full h-full flex items-center relative">
         <div className="text-content sm:w-1/2 w-full max-w-[720px] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] px-4">
           <div className="text-sub-display slider-text-sub normal-case">
@@ -130,56 +127,50 @@ const SliderSlideContent = ({ slide, suffix, priority }: { slide: 1 | 2 | 3; suf
 }
 
 const SliderPet = () => {
-  const [suffix, setSuffix] = useState<SliderSuffix>('mobile-xs')
-  const [mounted, setMounted] = useState(false)
+  const [activeSlide, setActiveSlide] = useState(0)
 
   useEffect(() => {
-    const update = () => {
-      const width = window.innerWidth || 1920
-      setSuffix(getSuffixByWidth(width))
-    }
+    const timer = window.setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % 3)
+    }, 7000)
 
-    update()              // calculamos el sufijo correcto
-    setMounted(true)      // solo después mostramos el slider
-
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
+    return () => window.clearInterval(timer)
   }, [])
 
   return (
-    <div
-      className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden slider-height"
-    >
-      {!mounted ? (
-        <div className="slider-main h-full w-full">
-          <SliderSlideContent slide={1} suffix={suffix} priority />
+    <div className="slider-block style-one w-full md:pb-0 pb-0 overflow-hidden slider-height">
+      <div className="slider-main relative h-full w-full overflow-hidden">
+        <div
+          className="flex h-full w-full transition-transform duration-700 ease-out"
+          style={{ transform: `translate3d(-${activeSlide * 100}%, 0, 0)` }}
+        >
+          <div className="h-full w-full shrink-0">
+            <SliderSlideContent slide={1} priority />
+          </div>
+          <div className="h-full w-full shrink-0">
+            <SliderSlideContent slide={2} />
+          </div>
+          <div className="h-full w-full shrink-0">
+            <SliderSlideContent slide={3} />
+          </div>
         </div>
-      ) : (
-        <div className="slider-main h-full w-full">
-          <Swiper
-            spaceBetween={0}
-            slidesPerView={1}
-            loop
-            pagination={{ clickable: true }}
-            modules={[Pagination, Autoplay]}
-            className="h-full relative"
-            speed={900}
-            autoplay={{ delay: 7000 }}
-          >
-            <SwiperSlide>
-              <SliderSlideContent slide={1} suffix={suffix} priority />
-            </SwiperSlide>
 
-            <SwiperSlide>
-              <SliderSlideContent slide={2} suffix={suffix} />
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <SliderSlideContent slide={3} suffix={suffix} />
-            </SwiperSlide>
-          </Swiper>
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 z-10 flex items-center justify-center gap-3">
+          {[0, 1, 2].map((index) => (
+            <button
+              key={index}
+              type="button"
+              aria-label={`Ir al slide ${index + 1}`}
+              onClick={() => setActiveSlide(index)}
+              className={`pointer-events-auto h-3.5 w-3.5 rounded-full border transition-all duration-300 ${
+                activeSlide === index
+                  ? 'border-black bg-black shadow-[0_0_0_3px_rgba(255,255,255,0.55)]'
+                  : 'border-black bg-white/70 hover:bg-white'
+              }`}
+            />
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }

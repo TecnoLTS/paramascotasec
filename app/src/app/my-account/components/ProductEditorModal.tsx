@@ -99,6 +99,85 @@ const applyDefaultSizes = (
     }))
 }
 
+const sanitizeDecimalInput = (value: string, maxFractionDigits = 2) => {
+    const cleaned = String(value ?? '')
+        .replace(/[^\d.,]/g, '')
+        .replace(/\s+/g, '')
+
+    if (!cleaned) return ''
+
+    const lastComma = cleaned.lastIndexOf(',')
+    const lastDot = cleaned.lastIndexOf('.')
+    const separatorIndex = Math.max(lastComma, lastDot)
+
+    if (separatorIndex < 0) {
+        const integerOnly = cleaned.replace(/[^\d]/g, '')
+        return integerOnly.replace(/^0+(?=\d)/, '') || '0'
+    }
+
+    const integerPart = cleaned
+        .slice(0, separatorIndex)
+        .replace(/[^\d]/g, '')
+        .replace(/^0+(?=\d)/, '') || '0'
+    const fractionPart = cleaned
+        .slice(separatorIndex + 1)
+        .replace(/[^\d]/g, '')
+        .slice(0, maxFractionDigits)
+
+    return `${integerPart},${fractionPart}`
+}
+
+const normalizeDecimalForStorage = (value: string, maxFractionDigits = 2) =>
+    sanitizeDecimalInput(value, maxFractionDigits).replace(/,/g, '.')
+
+const formatDecimalForDisplay = (value: string | number | null | undefined, fractionDigits = 2) => {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'string' && value.trim() === '') return ''
+    const parsed = parseLocalizedDecimal(value)
+    if (!Number.isFinite(parsed)) return ''
+    return parsed.toLocaleString('es-EC', {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    })
+}
+
+const finalizeDecimalForStorage = (value: string | number | null | undefined, fractionDigits = 2) => {
+    const raw = String(value ?? '').trim()
+    if (!raw) return ''
+    const parsed = parseLocalizedDecimal(raw)
+    if (!Number.isFinite(parsed)) return ''
+    return roundCurrency(parsed).toFixed(fractionDigits)
+}
+
+const parseLocalizedDecimal = (value: string | number | null | undefined): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+
+    const raw = String(value ?? '').trim()
+    if (!raw) return 0
+
+    const cleaned = raw.replace(/[^\d.,]/g, '').replace(/\s+/g, '')
+    if (!cleaned) return 0
+
+    const lastComma = cleaned.lastIndexOf(',')
+    const lastDot = cleaned.lastIndexOf('.')
+    const separatorIndex = Math.max(lastComma, lastDot)
+
+    let normalized = ''
+
+    if (separatorIndex < 0) {
+        normalized = cleaned.replace(/[^\d]/g, '')
+    } else {
+        const integerPart = cleaned.slice(0, separatorIndex).replace(/[^\d]/g, '')
+        const fractionPart = cleaned.slice(separatorIndex + 1).replace(/[^\d]/g, '')
+        normalized = `${integerPart || '0'}.${fractionPart}`
+    }
+
+    if (!normalized) return 0
+
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : 0
+}
+
 const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -206,7 +285,8 @@ const uploadImage = async (file: File, kind: 'thumb' | 'gallery', metadata: Uplo
 
     const res = await requestApi<{ url: string; width?: number; height?: number; kind: string }>(url, {
         method: 'POST',
-        body: formData
+        body: formData,
+        timeoutMs: 60000,
     })
     return res.body
 }
@@ -235,6 +315,11 @@ const getSuggestedBasePriceForCostPreview = (
 
 const getEffectiveVatMultiplier = (taxExempt: boolean, vatMultiplier: number) =>
     taxExempt ? 1 : Math.max(1, vatMultiplier)
+
+const roundCurrency = (value: number) => {
+    if (!Number.isFinite(value)) return 0
+    return Math.round(value * 100) / 100
+}
 
 const PRODUCT_TYPE_SKU_PREFIX: Record<string, string> = {
     Alimento: 'ALI',
@@ -421,10 +506,16 @@ export default function ProductEditorModal({
     showNotification,
 }: ProductEditorModalProps) {
     const [form, setForm] = React.useState<ProductFormState>(initialForm)
+    const [costWithVatInput, setCostWithVatInput] = React.useState('')
+    const [costWithVatManuallySet, setCostWithVatManuallySet] = React.useState(false)
+    const [activeMoneyField, setActiveMoneyField] = React.useState<'price' | 'pvp' | 'cost' | 'costWithVat' | null>(null)
+    const [markupInput, setMarkupInput] = React.useState('')
+    const [markupManuallySet, setMarkupManuallySet] = React.useState(false)
     const [imageUploading, setImageUploading] = React.useState<Record<string, boolean>>({})
     const [saving, setSaving] = React.useState(false)
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
     const [restockUnitsInput, setRestockUnitsInput] = React.useState('0')
+    const galleryMultiInputRef = React.useRef<HTMLInputElement | null>(null)
     const formRef = React.useRef<HTMLFormElement | null>(null)
     const skuManuallyEditedRef = React.useRef(false)
     const lotManuallyEditedRef = React.useRef(false)
@@ -449,6 +540,10 @@ export default function ProductEditorModal({
         setSaving(false)
         setFormErrors({})
         setRestockUnitsInput('0')
+        setActiveMoneyField(null)
+        setCostWithVatInput('')
+        setCostWithVatManuallySet(false)
+        setMarkupManuallySet(false)
         skuManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.sku || '').trim())
         lotManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.lotCode || '').trim())
         lotSuggestionSeedRef.current = String(Math.floor(Math.random() * 900) + 100)
@@ -905,30 +1000,61 @@ export default function ProductEditorModal({
         })
     }, [])
 
+    const processImageUpload = React.useCallback(async (file: File, kind: 'thumb' | 'gallery') => {
+        if (!PRODUCT_IMAGE_ACCEPTED_TYPES.has(file.type)) {
+            throw new Error('Formato no permitido. Usa JPG, PNG o WEBP.')
+        }
+        if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
+            throw new Error('La imagen excede 8MB. Reduce el tamaño e intenta nuevamente.')
+        }
+
+        const { width, height } = await getImageDimensions(file)
+        const required = requiredImageSizes[kind]
+        let fileToUpload = file
+        if (width !== required.width || height !== required.height) {
+            showNotification(`Ajustamos la imagen automáticamente a ${required.width}x${required.height}px.`)
+            fileToUpload = await resizeImage(file, required.width, required.height)
+        }
+
+        const uploaded = await withTransientRetry(() => uploadImage(fileToUpload, kind, resolveUploadImageMetadata(form)))
+        return {
+            url: uploaded.url,
+            width: String((uploaded as any).width || required.width),
+            height: String((uploaded as any).height || required.height)
+        }
+    }, [form, showNotification])
+
+    const appendImageEntries = React.useCallback((kind: 'thumb' | 'gallery', entries: Array<{ url: string; width: string; height: string }>) => {
+        if (entries.length === 0) return
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setForm((prev: any) => {
+            const current = [...(prev[key] || [])]
+            const next = [...current]
+            let entryCursor = 0
+
+            for (let idx = 0; idx < next.length && entryCursor < entries.length; idx += 1) {
+                if (!next[idx]?.url) {
+                    next[idx] = entries[entryCursor]
+                    entryCursor += 1
+                }
+            }
+
+            while (entryCursor < entries.length) {
+                next.push(entries[entryCursor])
+                entryCursor += 1
+            }
+
+            return { ...prev, [key]: next }
+        })
+    }, [])
+
     const handleImageFileChange = React.useCallback(async (kind: 'thumb' | 'gallery', index: number, file?: File | null) => {
         if (!file) return
         const key = `${kind}-${index}`
         setImageUploading((prev) => ({ ...prev, [key]: true }))
         try {
-            if (!PRODUCT_IMAGE_ACCEPTED_TYPES.has(file.type)) {
-                throw new Error('Formato no permitido. Usa JPG, PNG o WEBP.')
-            }
-            if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
-                throw new Error('La imagen excede 8MB. Reduce el tamaño e intenta nuevamente.')
-            }
-            const { width, height } = await getImageDimensions(file)
-            const required = requiredImageSizes[kind]
-            let fileToUpload = file
-            if (width !== required.width || height !== required.height) {
-                showNotification(`Ajustamos la imagen automáticamente a ${required.width}x${required.height}px.`)
-                fileToUpload = await resizeImage(file, required.width, required.height)
-            }
-            const uploaded = await withTransientRetry(() => uploadImage(fileToUpload, kind, resolveUploadImageMetadata(form)))
-            setImageEntry(kind, index, {
-                url: uploaded.url,
-                width: String((uploaded as any).width || required.width),
-                height: String((uploaded as any).height || required.height)
-            })
+            const uploadedEntry = await processImageUpload(file, kind)
+            setImageEntry(kind, index, uploadedEntry)
             clearErrors(kind === 'thumb' ? 'thumbImages' : 'galleryImages')
             showNotification('Imagen subida correctamente.')
         } catch (error) {
@@ -937,31 +1063,102 @@ export default function ProductEditorModal({
         } finally {
             setImageUploading((prev) => ({ ...prev, [key]: false }))
         }
-    }, [clearErrors, form, setImageEntry, showNotification])
+    }, [clearErrors, processImageUpload, setImageEntry, showNotification])
+
+    const handleGalleryFilesChange = React.useCallback(async (files?: FileList | null) => {
+        const selectedFiles = Array.from(files || [])
+        if (selectedFiles.length === 0) return
+
+        const batchKey = 'gallery-batch'
+        setImageUploading((prev) => ({ ...prev, [batchKey]: true }))
+
+        const uploadedEntries: Array<{ url: string; width: string; height: string }> = []
+        const failures: string[] = []
+
+        for (const file of selectedFiles) {
+            try {
+                const uploadedEntry = await processImageUpload(file, 'gallery')
+                uploadedEntries.push(uploadedEntry)
+            } catch (error) {
+                const message = String((error as any)?.message || '').trim() || 'No se pudo subir la imagen.'
+                failures.push(`${file.name}: ${message}`)
+            }
+        }
+
+        try {
+            if (uploadedEntries.length > 0) {
+                appendImageEntries('gallery', uploadedEntries)
+                clearErrors('galleryImages')
+                showNotification(
+                    uploadedEntries.length === 1
+                        ? 'Imagen grande subida correctamente.'
+                        : `${uploadedEntries.length} imágenes grandes subidas correctamente.`
+                )
+            }
+            if (failures.length > 0) {
+                const extraFailures = failures.length > 1 ? ` (+${failures.length - 1} más)` : ''
+                showNotification(`${failures[0]}${extraFailures}`, 'error')
+            }
+        } finally {
+            setImageUploading((prev) => ({ ...prev, [batchKey]: false }))
+            if (galleryMultiInputRef.current) {
+                galleryMultiInputRef.current.value = ''
+            }
+        }
+    }, [appendImageEntries, clearErrors, processImageUpload, showNotification])
 
     const handleBasePriceChange = React.useCallback((value: string) => {
-        const baseValue = Number(value || 0)
+        const nextValue = normalizeDecimalForStorage(value)
+        const baseValue = parseLocalizedDecimal(nextValue)
         const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
+        setMarkupManuallySet(false)
         setForm((prev) => ({
             ...prev,
-            price: value,
+            price: nextValue,
             pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : ''
         }))
     }, [effectiveVatMultiplier])
 
     const handlePvpPriceChange = React.useCallback((value: string) => {
-        const pvpValue = Number(value || 0)
+        const nextValue = normalizeDecimalForStorage(value)
+        const pvpValue = parseLocalizedDecimal(nextValue)
         const baseValue = effectiveVatMultiplier > 0 ? (pvpValue / effectiveVatMultiplier) : pvpValue
+        setMarkupManuallySet(false)
         setForm((prev) => ({
             ...prev,
-            pvp: value,
+            pvp: nextValue,
             price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : ''
         }))
     }, [effectiveVatMultiplier])
 
+    const handleCostChange = React.useCallback((value: string) => {
+        const nextValue = normalizeDecimalForStorage(value)
+        setMarkupManuallySet(false)
+        setCostWithVatManuallySet(false)
+        setForm((prev) => ({ ...prev, cost: nextValue }))
+        clearErrors('cost')
+    }, [clearErrors])
+
+    const handleCostWithVatChange = React.useCallback((value: string) => {
+        const nextValue = normalizeDecimalForStorage(value)
+        setCostWithVatInput(nextValue)
+        setCostWithVatManuallySet(true)
+        const grossCost = parseLocalizedDecimal(nextValue)
+        const baseCost = effectiveVatMultiplier > 0 ? (grossCost / effectiveVatMultiplier) : grossCost
+        setMarkupManuallySet(false)
+        setForm((prev) => ({
+            ...prev,
+            cost: Number.isFinite(baseCost) ? roundCurrency(baseCost).toFixed(2) : ''
+        }))
+        clearErrors('cost')
+    }, [clearErrors, effectiveVatMultiplier])
+
     const handleMarkupChange = React.useCallback((value: string) => {
-        const markupValue = Number(value || 0)
-        const currentCost = Number(form.cost || 0)
+        const nextValue = normalizeDecimalForStorage(value)
+        setMarkupInput(nextValue)
+        setMarkupManuallySet(true)
+        const markupValue = parseLocalizedDecimal(nextValue)
+        const currentCost = parseLocalizedDecimal(form.cost)
         const normalizedMarkup = Number.isFinite(markupValue) ? Math.max(0, markupValue) : 0
 
         if (!Number.isFinite(currentCost) || currentCost < 0) {
@@ -981,6 +1178,37 @@ export default function ProductEditorModal({
             pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : '',
         }))
     }, [effectiveVatMultiplier, form.cost])
+
+    const handleMoneyFieldBlur = React.useCallback((field: 'price' | 'pvp' | 'cost' | 'costWithVat') => {
+        setActiveMoneyField((current) => (current === field ? null : current))
+
+        if (field === 'costWithVat') {
+            const finalizedGrossCost = finalizeDecimalForStorage(costWithVatInput)
+            setCostWithVatInput(finalizedGrossCost)
+            if (!finalizedGrossCost) return
+
+            const grossCost = parseLocalizedDecimal(finalizedGrossCost)
+            const baseCost = effectiveVatMultiplier > 0 ? (grossCost / effectiveVatMultiplier) : grossCost
+            setForm((prev) => ({
+                ...prev,
+                cost: Number.isFinite(baseCost) ? roundCurrency(baseCost).toFixed(2) : '',
+            }))
+            return
+        }
+
+        setForm((prev) => {
+            const currentValue = prev[field]
+            const finalizedValue = finalizeDecimalForStorage(currentValue)
+            if (currentValue === finalizedValue) {
+                return prev
+            }
+
+            return {
+                ...prev,
+                [field]: finalizedValue,
+            }
+        })
+    }, [costWithVatInput, effectiveVatMultiplier])
 
     const handleTaxExemptChange = React.useCallback((value: string) => {
         const nextTaxExempt = value === 'exempt'
@@ -1003,9 +1231,10 @@ export default function ProductEditorModal({
         })
     }, [vatMultiplier])
 
-    const productBasePrice = Number(deferredForm.price || 0)
-    const productCost = Number(deferredForm.cost || 0)
-    const productPvpPrice = Number(deferredForm.pvp || 0) || (productBasePrice * effectiveVatMultiplier)
+    const productBasePrice = parseLocalizedDecimal(deferredForm.price)
+    const productCost = parseLocalizedDecimal(deferredForm.cost)
+    const productCostWithVat = roundCurrency(productCost * effectiveVatMultiplier)
+    const productPvpPrice = parseLocalizedDecimal(deferredForm.pvp) || (productBasePrice * effectiveVatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productWouldSellAtLoss = Number.isFinite(productCost)
         && productCost > 0
@@ -1020,6 +1249,25 @@ export default function ProductEditorModal({
     const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productVatAmountLabel = productVatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productMarkupInputValue = Number.isFinite(productMarkup) ? String(Number(productMarkup.toFixed(2))) : ''
+    const productCostWithVatInputValue = Number.isFinite(productCostWithVat) ? productCostWithVat.toFixed(2) : ''
+
+    React.useEffect(() => {
+        if (!costWithVatManuallySet) {
+            setCostWithVatInput(productCostWithVatInputValue)
+        }
+    }, [costWithVatManuallySet, productCostWithVatInputValue])
+
+    const displayedBasePrice = activeMoneyField === 'price' ? form.price : formatDecimalForDisplay(form.price)
+    const displayedPvpPrice = activeMoneyField === 'pvp' ? form.pvp : formatDecimalForDisplay(form.pvp)
+    const displayedCost = activeMoneyField === 'cost' ? form.cost : formatDecimalForDisplay(form.cost)
+    const displayedCostWithVat = activeMoneyField === 'costWithVat' ? costWithVatInput : formatDecimalForDisplay(costWithVatInput)
+
+    React.useEffect(() => {
+        if (!markupManuallySet) {
+            setMarkupInput(productMarkupInputValue)
+        }
+    }, [markupManuallySet, productMarkupInputValue])
+
     const persistedProductPvpPrice = Number(deferredEditingProduct?.price ?? 0)
     const persistedProductBasePrice = persistedVatMultiplier > 0 ? (persistedProductPvpPrice / persistedVatMultiplier) : persistedProductPvpPrice
     const persistedProductCost = Number(deferredEditingProduct?.business?.cost ?? deferredEditingProduct?.cost ?? 0)
@@ -1119,7 +1367,7 @@ export default function ProductEditorModal({
                 },
                 {
                     label: 'Precio base',
-                    value: hasPositivePrice ? `$${Number(form.price || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                    value: hasPositivePrice ? `$${parseLocalizedDecimal(form.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
                     complete: hasPositivePrice && !productWouldSellAtLoss,
                 },
                 {
@@ -1163,12 +1411,12 @@ export default function ProductEditorModal({
         return [
             {
                 label: 'Precio base',
-                value: hasPositivePrice ? `$${Number(form.price || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                value: hasPositivePrice ? `$${parseLocalizedDecimal(form.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
                 complete: hasPositivePrice,
             },
             {
                 label: 'Costo',
-                value: Number.isFinite(productCost) && productCost >= 0 ? `$${Number(form.cost || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
+                value: Number.isFinite(productCost) && productCost >= 0 ? `$${parseLocalizedDecimal(form.cost).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pendiente',
                 complete: hasPositiveCost,
             },
             {
@@ -1320,8 +1568,8 @@ export default function ProductEditorModal({
             const productType = normalizeProductType(form.productType, form.category)
             const category = normalizeProductCategory(form.category, productType)
             const description = String(form.description || '').trim()
-            const basePrice = Number(form.price)
-            const currentCost = Number(form.cost)
+            const basePrice = parseLocalizedDecimal(form.price)
+            const currentCost = parseLocalizedDecimal(form.cost)
             const previousQuantity = Number(editingProduct?.quantity ?? 0)
             const quantity = isRestockMode && editingProduct
                 ? previousQuantity + Math.max(0, Math.trunc(Number(restockUnitsInput || 0)))
@@ -1669,7 +1917,7 @@ export default function ProductEditorModal({
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="number" step="0.01" min="0" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.price} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} />
+                                            <input type="text" inputMode="decimal" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedBasePrice} onFocus={() => setActiveMoneyField('price')} onBlur={() => handleMoneyFieldBlur('price')} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} placeholder="0,00" />
                                         </div>
                                         {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
                                         {productWouldSellAtLoss && !formErrors.price && (
@@ -1678,7 +1926,20 @@ export default function ProductEditorModal({
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">{form.taxExempt ? 'Precio final de venta' : 'Precio PVP (con IVA)'}</label>
-                                        <input type="number" step="0.01" min="0" className="border border-line rounded-lg px-4 py-3 w-full focus:border-black outline-none transition-all" value={form.pvp} onChange={e => handlePvpPriceChange(e.target.value)} disabled={saving} />
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
+                                                value={displayedPvpPrice}
+                                                onFocus={() => setActiveMoneyField('pvp')}
+                                                onBlur={() => handleMoneyFieldBlur('pvp')}
+                                                onChange={e => handlePvpPriceChange(e.target.value)}
+                                                disabled={saving}
+                                                placeholder="0,00"
+                                            />
+                                        </div>
                                         <p className="text-secondary text-xs mt-2">
                                             {form.taxExempt
                                                 ? `Producto exento: precio final actual $${productPvpPriceLabel}.`
@@ -1686,26 +1947,45 @@ export default function ProductEditorModal({
                                         </p>
                                     </div>
                                     <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo del Producto</label>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo sin IVA</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="number" step="0.01" min="0" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={form.cost} placeholder={editingProduct ? 'Costo unitario' : 'Ej: 9.90'} onChange={e => { setForm({ ...form, cost: e.target.value }); clearErrors('cost') }} required disabled={saving} />
+                                            <input type="text" inputMode="decimal" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedCost} onFocus={() => setActiveMoneyField('cost')} onBlur={() => handleMoneyFieldBlur('cost')} placeholder={editingProduct ? 'Costo base unitario' : 'Ej: 5,50'} onChange={e => handleCostChange(e.target.value)} required disabled={saving} />
                                         </div>
                                         {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
-                                        <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Actualiza el costo unitario si esta compra llegó con un valor diferente.' : (editingProduct ? 'Costo real de compra (base para margen).' : 'Referencia editable. Ejemplo sugerido: 9.90.')}</p>
+                                        <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Costo unitario base usado para margen, utilidad y stock.' : (editingProduct ? 'Costo real sin IVA. Este valor es la base para margen y utilidad.' : 'Ingresa el costo base sin IVA para calcular el precio correctamente.')}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo + IVA</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                className="border border-line rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all focus:border-black"
+                                                value={displayedCostWithVat}
+                                                onFocus={() => setActiveMoneyField('costWithVat')}
+                                                onBlur={() => handleMoneyFieldBlur('costWithVat')}
+                                                placeholder={editingProduct ? 'Costo final con IVA' : 'Ej: 6,33'}
+                                                onChange={e => handleCostWithVatChange(e.target.value)}
+                                                disabled={saving}
+                                            />
+                                        </div>
+                                        <p className="text-secondary text-xs mt-2">
+                                            Valor referencial con IVA incluido. Si escribes aquí, el sistema recalcula automáticamente el costo base.
+                                        </p>
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Markup (%)</label>
                                         <div className="relative">
                                             <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
+                                                type="text"
+                                                inputMode="decimal"
                                                 className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all focus:border-black"
-                                                value={productMarkupInputValue}
-                                                placeholder={Number(form.cost || 0) > 0 ? 'Ej: 35' : 'Primero define costo'}
+                                                value={markupInput}
+                                                placeholder={parseLocalizedDecimal(form.cost) > 0 ? 'Ej: 35' : 'Primero define costo'}
                                                 onChange={e => handleMarkupChange(e.target.value)}
-                                                disabled={saving || Number(form.cost || 0) <= 0}
+                                                disabled={saving || parseLocalizedDecimal(form.cost) <= 0}
                                             />
                                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary">%</span>
                                         </div>
@@ -1967,6 +2247,15 @@ export default function ProductEditorModal({
                                 </div>
                                 <div>
                                     <div className="text-sm font-semibold mb-3">Imágenes grandes (ficha)</div>
+                                    <input
+                                        ref={galleryMultiInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => handleGalleryFilesChange(e.target.files)}
+                                        disabled={saving}
+                                    />
                                     <div className="space-y-3">
                                         {(form.galleryImages || []).map((img: any, idx: number) => {
                                             const key = `gallery-${idx}`
@@ -1989,7 +2278,27 @@ export default function ProductEditorModal({
                                             )
                                         })}
                                     </div>
-                                    <button type="button" className="mt-3 text-sm text-primary font-semibold disabled:opacity-50" onClick={() => addImageEntry('gallery')} disabled={saving}>+ Agregar imagen grande</button>
+                                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                                        <button
+                                            type="button"
+                                            className="text-sm text-primary font-semibold disabled:opacity-50"
+                                            onClick={() => galleryMultiInputRef.current?.click()}
+                                            disabled={saving}
+                                        >
+                                            + Cargar varias imágenes grandes
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="text-sm text-secondary font-semibold disabled:opacity-50"
+                                            onClick={() => addImageEntry('gallery')}
+                                            disabled={saving}
+                                        >
+                                            + Agregar un espacio manual
+                                        </button>
+                                        {imageUploading['gallery-batch'] && (
+                                            <span className="text-xs text-primary font-semibold">Subiendo lote...</span>
+                                        )}
+                                    </div>
                                     <div className="text-xs text-secondary mt-2">Imagen principal para la ficha del producto. Proporcion fija recomendada: 4:5 en 1200x1500. Mantiene detalle alto sin cargar de mas las renderizaciones.</div>
                                 </div>
                             </div>

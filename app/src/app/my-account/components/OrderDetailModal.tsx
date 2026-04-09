@@ -263,6 +263,10 @@ export default function OrderDetailModal({
                                 <tbody className="divide-y divide-line">
                                     {order.items?.map((item: any) => {
                                         const unitNetPrice = Number(getItemNetPrice(item, order))
+                                        const storedUnitGross = Number(item?.price ?? NaN)
+                                        const unitDisplayPrice = Number.isFinite(storedUnitGross) && storedUnitGross >= 0
+                                            ? storedUnitGross
+                                            : unitNetPrice
                                         const imageSrc = normalizeOrderItemImage(item.product_image)
                                         return (
                                             <tr key={item.id} className="hover:bg-surface/50 transition-colors">
@@ -283,8 +287,8 @@ export default function OrderDetailModal({
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                                                <td className="px-6 py-4 text-right tabular-nums">${unitNetPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-4 text-right font-bold text-primary tabular-nums">${(unitNetPrice * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right tabular-nums">${unitDisplayPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-primary tabular-nums">${(unitDisplayPrice * item.quantity).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                             </tr>
                                         )
                                     })}

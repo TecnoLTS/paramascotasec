@@ -48,18 +48,13 @@ const nextConfig = {
         ],
     },
     async headers() {
+        if (process.env.NODE_ENV !== 'production') {
+            return []
+        }
+
         return [
             {
                 source: '/images/:path*',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'public, max-age=0, must-revalidate',
-                    },
-                ],
-            },
-            {
-                source: '/_next/image',
                 headers: [
                     {
                         key: 'Cache-Control',

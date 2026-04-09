@@ -32,7 +32,7 @@ export const useLocalSaleQuote = ({
   setLocalSaleQuoteLoading,
 }: UseLocalSaleQuoteParams) => {
   React.useEffect(() => {
-    if (activeTab !== 'local-sales') return
+    if (activeTab !== 'local-sales' && activeTab !== 'quotations') return
     if (!user || user.role !== 'admin') return
 
     if (localSaleItems.length === 0) {

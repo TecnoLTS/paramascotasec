@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from '@/components/Common/AppImage'
-import * as Icon from "@phosphor-icons/react/dist/ssr";
+import { Handbag, X } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from 'next/navigation'
 import InlineSpinner from '@/components/Other/InlineSpinner'
 import { ProductType } from '@/type/ProductType';
@@ -14,7 +14,21 @@ import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 import { getPublicStoreStatus } from '@/lib/api/settings'
 
-const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) => {
+const Icon = {
+    Handbag,
+    X,
+} as const
+
+const SUGGESTIONS_TIMEOUT_MS = 15000
+const SUGGESTIONS_ENDPOINTS = ['/suggestions-data?limit=4', '/api/suggestions?limit=4'] as const
+
+const ModalCart = ({
+    serverTimeLeft,
+    initialSuggestions = [],
+}: {
+    serverTimeLeft: CountdownTimeType
+    initialSuggestions?: Array<Partial<ProductType>>
+}) => {
     const router = useRouter()
     const site = useSite()
     const [timeLeft, setTimeLeft] = useState(serverTimeLeft);
@@ -29,11 +43,33 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
 
     const { isModalOpen, closeModalCart } = useModalCartContext();
     const { cartState, addToCart, removeFromCart, updateCart } = useCart()
-    const [suggested, setSuggested] = useState<ProductType[]>([])
+    const [suggested, setSuggested] = useState<ProductType[]>(() => (initialSuggestions as ProductType[]).slice(0, 4))
     const [loadingSuggested, setLoadingSuggested] = useState<boolean>(false)
     const [errorSuggested, setErrorSuggested] = useState<string | null>(null)
     const [salesEnabled, setSalesEnabled] = useState(true)
     const [salesDisabledMessage, setSalesDisabledMessage] = useState('Tienda temporalmente en mantenimiento. Intenta más tarde.')
+
+    const fetchSuggestedProducts = async (signal: AbortSignal): Promise<ProductType[]> => {
+        for (const url of SUGGESTIONS_ENDPOINTS) {
+            try {
+                const res = await fetch(url, {
+                    cache: 'no-store',
+                    signal,
+                })
+                if (!res.ok) continue
+                const data = await res.json()
+                const items = Array.isArray(data) ? data : (data?.data ?? [])
+                if (Array.isArray(items) && items.length > 0) {
+                    return (items as ProductType[]).slice(0, 4)
+                }
+            } catch (err: any) {
+                if (err?.name === 'AbortError') throw err
+            }
+        }
+
+        return []
+    }
+
     useEffect(() => {
         getPublicStoreStatus()
             .then((status) => {
@@ -47,32 +83,42 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
     }, [])
 
     useEffect(() => {
+        if (suggested.length > 0 || initialSuggestions.length === 0) return
+        setSuggested((initialSuggestions as ProductType[]).slice(0, 4))
+    }, [initialSuggestions, suggested.length])
+
+    useEffect(() => {
+        if (!isModalOpen || suggested.length > 0) return
+
+        const controller = new AbortController()
+        const timeoutId = window.setTimeout(() => controller.abort(), SUGGESTIONS_TIMEOUT_MS)
+
         const loadSuggested = async () => {
             setLoadingSuggested(true)
             try {
-                const fetchSuggestions = async (path: string) => {
-                    const res = await fetch(path, { cache: 'no-store' })
-                    if (!res.ok) throw new Error(`Status ${res.status}`)
-                    const data = await res.json()
-                    return Array.isArray(data) ? data : (data?.data ?? [])
-                }
-
-                let items: ProductType[] = []
-                try {
-                    items = await fetchSuggestions('/suggestions')
-                } catch {
-                    items = await fetchSuggestions('/api/suggestions')
-                }
-                setSuggested(items.slice(0, 4))
-                setErrorSuggested(null)
+                const items = await fetchSuggestedProducts(controller.signal)
+                setSuggested(items)
+                setErrorSuggested(items.length > 0 ? null : 'No hay sugerencias disponibles por ahora.')
             } catch (err: any) {
-                setErrorSuggested(err?.message ?? 'No se pudieron cargar sugerencias')
+                setSuggested([])
+                setErrorSuggested(
+                    err?.name === 'AbortError'
+                        ? 'La carga de sugerencias tardó demasiado.'
+                        : (err?.message ?? 'No se pudieron cargar sugerencias')
+                )
             } finally {
+                window.clearTimeout(timeoutId)
                 setLoadingSuggested(false)
             }
         }
+
         loadSuggested()
-    }, [])
+
+        return () => {
+            window.clearTimeout(timeoutId)
+            controller.abort()
+        }
+    }, [isModalOpen, suggested.length])
 
     const handleAddToCart = (productItem: ProductType) => {
         // Desde sugerencias siempre agregamos 1 unidad, sin importar el valor por defecto del producto
@@ -95,6 +141,22 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
         0
     )
     let [discountCart, setDiscountCart] = useState<number>(0)
+    const filteredSuggested = useMemo(() => {
+        const cartIdentifiers = new Set<string>()
+
+        cartState.cartArray.forEach((item) => {
+            ;[item.id, (item as any).internalId, item.slug]
+                .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+                .forEach((value) => cartIdentifiers.add(value))
+        })
+
+        return suggested.filter((product) => {
+            const productIdentifiers = [product.id, product.internalId, product.slug]
+                .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+
+            return !productIdentifiers.some((identifier) => cartIdentifiers.has(identifier))
+        })
+    }, [cartState.cartArray, suggested])
 
     const overlayRef = useRef<HTMLDivElement | null>(null)
     const overlayStyle: React.CSSProperties = {
@@ -148,20 +210,27 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                             {errorSuggested && !loadingSuggested && (
                                 <div className="py-4 text-secondary">No se pudieron cargar sugerencias.</div>
                             )}
-                            {suggested.map((product) => {
+                            {!loadingSuggested && !errorSuggested && filteredSuggested.length === 0 && (
+                                <div className="py-4 text-secondary">No hay sugerencias disponibles por ahora.</div>
+                            )}
+                            {filteredSuggested.map((product) => {
+                                const firstThumb = Array.isArray(product.thumbImage) ? product.thumbImage[0] : null
                                 const firstImage = Array.isArray(product.images) ? product.images[0] : null
-                                const rawSrc = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? '/images/product/1.jpg'
+                                const rawSrc =
+                                    (typeof firstThumb === 'string' ? firstThumb : (firstThumb as any)?.url) ??
+                                    (typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url) ??
+                                    '/images/product/1.jpg'
                                 const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
                                         <div className="infor flex items-center gap-5">
-                                            <div className="bg-img">
+                                            <div className="bg-img w-[100px] h-[100px] flex-shrink-0 overflow-hidden">
                                                 <Image
                                                     src={src}
                                                     width={300}
                                                     height={300}
                                                     alt={product.name}
-                                                    className='w-[100px] aspect-square flex-shrink-0 rounded-lg'
+                                                    className='w-full h-full object-contain object-center'
                                                     unoptimized={shouldUnoptimize(src)}
                                                 />
                                             </div>
@@ -203,11 +272,16 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                             {cartState.cartArray.map((product) => (
                 <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
                     <div className="infor flex items-center gap-3 w-full">
-                        <div className="bg-img w-[100px] aspect-square flex-shrink-0 rounded-lg overflow-hidden">
+                        <div className="bg-img w-[100px] h-[100px] flex-shrink-0 overflow-hidden">
                             {(() => {
+                                const thumbs = Array.isArray((product as any).thumbImage) ? (product as any).thumbImage : []
                                 const imgs = Array.isArray(product.images) ? product.images : []
+                                const firstThumb = thumbs[0]
                                 const first = imgs[0]
-                                const rawSrc = typeof first === 'string' ? first : (first as any)?.url ?? ''
+                                const rawSrc =
+                                    (typeof firstThumb === 'string' ? firstThumb : (firstThumb as any)?.url) ??
+                                    (typeof first === 'string' ? first : (first as any)?.url) ??
+                                    ''
                                 const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <Image
@@ -215,7 +289,7 @@ const ModalCart = ({ serverTimeLeft }: { serverTimeLeft: CountdownTimeType }) =>
                                         width={300}
                                         height={300}
                                         alt={product.name}
-                                        className='w-full h-full object-cover'
+                                        className='w-full h-full object-contain object-center'
                                         unoptimized={shouldUnoptimize(src || '/images/product/1.jpg')}
                                     />
                                 )

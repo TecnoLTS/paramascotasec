@@ -4,7 +4,20 @@ import React, { useState, useEffect, useRef } from 'react'
 import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import * as Icon from "@phosphor-icons/react/dist/ssr";
+import {
+    ArrowRight,
+    ArrowUpRight,
+    CaretLeft,
+    CaretRight,
+    EnvelopeSimple,
+    House,
+    MagnifyingGlass,
+    ShoppingCartSimple,
+    Star,
+    Storefront,
+    User,
+    X,
+} from "@phosphor-icons/react/dist/ssr";
 import useLoginPopup from '@/store/useLoginPopup';
 import useShopDepartmentPopup from '@/store/useShopDepartmentPopup';
 import useMenuMobile from '@/store/useMenuMobile';
@@ -21,6 +34,21 @@ type MenuPetProps = {
     props?: string;
     searchProducts?: ProductType[];
 };
+
+const Icon = {
+    ArrowRight,
+    ArrowUpRight,
+    CaretLeft,
+    CaretRight,
+    EnvelopeSimple,
+    House,
+    MagnifyingGlass,
+    ShoppingCartSimple,
+    Star,
+    Storefront,
+    User,
+    X,
+} as const
 
 const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const site = useSite()

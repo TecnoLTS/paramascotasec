@@ -7,6 +7,14 @@ export interface LiveCatalogSnapshot {
   groupedProducts: ProductType[]
 }
 
+let cachedSnapshot: LiveCatalogSnapshot | null = null
+let cachedSnapshotAt = 0
+let inFlightSnapshot: Promise<LiveCatalogSnapshot> | null = null
+
+const getSnapshotTtlMs = () => {
+  return process.env.NODE_ENV === 'development' ? 5000 : 60000
+}
+
 export const getLiveProductAvailableStock = (product?: ProductType | null) => {
   if (!product) return 0
   const inventoryAvailable = Number(product.inventory?.available ?? NaN)
@@ -36,11 +44,38 @@ export const buildLiveAvailabilityMap = (products: ProductType[]) => {
 }
 
 export const fetchLiveCatalogSnapshot = async (): Promise<LiveCatalogSnapshot> => {
-  const rawProducts = await listProducts()
-  return {
-    rawProducts,
-    groupedProducts: groupCatalogProducts(rawProducts),
+  const now = Date.now()
+  const ttlMs = getSnapshotTtlMs()
+
+  if (cachedSnapshot && now - cachedSnapshotAt < ttlMs) {
+    return cachedSnapshot
   }
+
+  if (inFlightSnapshot) {
+    return inFlightSnapshot
+  }
+
+  inFlightSnapshot = listProducts()
+    .then((rawProducts) => {
+      const snapshot = {
+        rawProducts,
+        groupedProducts: groupCatalogProducts(rawProducts),
+      }
+      cachedSnapshot = snapshot
+      cachedSnapshotAt = Date.now()
+      return snapshot
+    })
+    .finally(() => {
+      inFlightSnapshot = null
+    })
+
+  return inFlightSnapshot
+}
+
+export const invalidateLiveCatalogSnapshot = () => {
+  cachedSnapshot = null
+  cachedSnapshotAt = 0
+  inFlightSnapshot = null
 }
 
 export const findLiveCatalogProduct = (products: ProductType[], requestedId?: string | number | null) => {

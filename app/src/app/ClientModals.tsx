@@ -7,12 +7,14 @@ import ModalSearch from '@/components/Modal/ModalSearch'
 import ModalQuickview from '@/components/Modal/ModalQuickview'
 import RouteLoading from '@/components/Other/RouteLoading'
 import CountdownTimeType from '@/type/CountdownType'
+import { ProductType } from '@/type/ProductType'
 
 type ClientModalsProps = {
   serverTimeLeft: CountdownTimeType
+  initialSuggestions: Array<Partial<ProductType>>
 }
 
-const ClientModals = ({ serverTimeLeft }: ClientModalsProps) => {
+const ClientModals = ({ serverTimeLeft, initialSuggestions }: ClientModalsProps) => {
   const [mounted, setMounted] = useState(false)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
 
@@ -26,7 +28,7 @@ const ClientModals = ({ serverTimeLeft }: ClientModalsProps) => {
   return createPortal(
     <>
       <RouteLoading />
-      <ModalCart serverTimeLeft={serverTimeLeft} />
+      <ModalCart serverTimeLeft={serverTimeLeft} initialSuggestions={initialSuggestions} />
       <ModalSearch />
       <ModalQuickview />
     </>,

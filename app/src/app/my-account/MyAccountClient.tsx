@@ -5,8 +5,60 @@ import Image from '@/components/Common/AppImage'
 import dynamic from 'next/dynamic'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
-import * as Icon from "@phosphor-icons/react/dist/ssr";
+import {
+    Archive,
+    ArrowDownLeft,
+    ArrowRight,
+    CaretDown,
+    CheckCircle,
+    CurrencyDollar,
+    HandCoins,
+    HourglassMedium,
+    Info,
+    Lightbulb,
+    Package,
+    Plus,
+    Receipt,
+    ReceiptX,
+    ShoppingBag,
+    Tag,
+    Target,
+    Trash,
+    TrendDown,
+    TrendUp,
+    Warning,
+    WarningCircle,
+    WarningDiamond,
+    X,
+} from "@phosphor-icons/react/dist/ssr";
 import { motion } from 'framer-motion'
+
+const Icon = {
+    Archive,
+    ArrowDownLeft,
+    ArrowRight,
+    CaretDown,
+    CheckCircle,
+    CurrencyDollar,
+    HandCoins,
+    HourglassMedium,
+    Info,
+    Lightbulb,
+    Package,
+    Plus,
+    Receipt,
+    ReceiptX,
+    ShoppingBag,
+    Tag,
+    Target,
+    Trash,
+    TrendDown,
+    TrendUp,
+    Warning,
+    WarningCircle,
+    WarningDiamond,
+    X,
+} as const
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { requestApi } from '@/lib/apiClient'
@@ -64,7 +116,6 @@ import {
     getLocalSalePaymentMethodLabel,
 } from './formatting'
 import AccountSidebar from './components/AccountSidebar'
-import LocalSaleCatalogPanel from './components/LocalSaleCatalogPanel'
 import ProductsManagementPanel from './components/ProductsManagementPanel'
 import { useAdminSidebarNavigation } from './hooks/useAdminSidebarNavigation'
 import { useAuthBootstrap } from './hooks/useAuthBootstrap'
@@ -113,11 +164,13 @@ import {
 } from './statusDisplay'
 import type {
     AddressData,
+    AdminLocalQuotation,
     AdminReportSection,
     AdminUserSummary,
     DashboardStats,
     DeepDiveView,
     LocalSaleLineItem,
+    LocalSaleQuotationResult,
     LocalSaleQuote,
     LocalSaleSubmissionResult,
     Order,
@@ -134,6 +187,199 @@ import type {
     ShippingPickup,
     ShippingProvider,
 } from './types'
+
+const escapeHtml = (value: unknown) =>
+    String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+const normalizeWhatsAppPhone = (value: string): string | null => {
+    const digits = String(value || '').replace(/\D/g, '')
+    if (!digits) return null
+    if (digits.startsWith('593') && digits.length >= 11 && digits.length <= 13) return digits
+    if (digits.startsWith('0') && digits.length === 10) return `593${digits.slice(1)}`
+    if (digits.length === 9) return `593${digits}`
+    if (digits.length >= 10 && digits.length <= 15) return digits
+    return null
+}
+
+const buildQuotationWhatsAppMessage = ({
+    quotation,
+    formatMoney,
+}: {
+    quotation: AdminLocalQuotation
+    formatMoney: (value: number) => string
+}) => {
+    const total = Number(quotation.quote_snapshot?.total || 0)
+    return [
+        `Hola ${String(quotation.customer_name || 'cliente').trim()},`,
+        '',
+        `Te compartimos tu cotización ${quotation.id} de ParaMascotas.`,
+        `Total: ${formatMoney(total)}`,
+        quotation.valid_until ? `Válida hasta: ${String(quotation.valid_until).slice(0, 10)}` : null,
+        '',
+        'Si deseas confirmarla, te ayudamos a convertirla en venta.',
+    ].filter(Boolean).join('\n')
+}
+
+const buildLocalQuotationHtml = ({
+    quotation,
+    formatMoney,
+    formatDateTimeEcuador,
+}: {
+    quotation: AdminLocalQuotation
+    formatMoney: (value: number) => string
+    formatDateTimeEcuador: (value: string, options?: Intl.DateTimeFormatOptions) => string
+}) => {
+    const snapshot = quotation.quote_snapshot || {}
+    const items = Array.isArray(snapshot.items) ? snapshot.items : []
+    const address = quotation.customer_address || {}
+    const formatQuotationDate = (value?: string | null, options?: Intl.DateTimeFormatOptions, fallback = 'No definida') => {
+        const raw = String(value || '').trim()
+        if (!raw) return fallback
+        try {
+            return formatDateTimeEcuador(raw, options)
+        } catch {
+            return raw
+        }
+    }
+    const quoteItemsHtml = items.map((item) => `
+        <tr>
+            <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;vertical-align:top;">
+                <div style="font-weight:700;color:#0f172a;font-size:14px;line-height:1.35;">${escapeHtml(item.product_name || 'Producto')}</div>
+            </td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:center;vertical-align:top;">${Number(item.quantity || 0)}</td>
+            <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:top;">${escapeHtml(formatMoney(Number(item.price || 0)))}</td>
+            <td style="padding:12px 14px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:top;font-weight:700;">${escapeHtml(formatMoney(Number(item.total || 0)))}</td>
+        </tr>
+    `).join('')
+
+    const quoteItemsTableHtml = quoteItemsHtml || `
+        <tr>
+            <td colspan="4" style="padding:18px 14px;text-align:center;color:#64748b;">Sin artículos en esta cotización.</td>
+        </tr>
+    `
+
+    const notesHtml = quotation.notes?.trim()
+        ? `<div style="margin-top:18px;padding:16px 18px;border:1px solid #dbe3ee;border-radius:14px;background:#f8fbff;">
+                <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:#64748b;letter-spacing:0.04em;margin-bottom:8px;">Observaciones</div>
+                <div style="font-size:13px;color:#0f172a;white-space:pre-wrap;line-height:1.55;">${escapeHtml(quotation.notes.trim())}</div>
+           </div>`
+        : ''
+
+    return `<!doctype html>
+        <html lang="es">
+        <head>
+            <meta charset="utf-8" />
+            <title>Cotización ${escapeHtml(quotation.id)}</title>
+            <style>
+                body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; padding: 28px 34px; background: #ffffff; font-size: 13px; line-height: 1.45; }
+                .sheet { max-width: 920px; margin: 0 auto; }
+                .header-table, .info-table, .items-table, .totals-table { width:100%; border-collapse:collapse; }
+                .brand-name { font-size: 22px; font-weight: 800; color: #0b8ca8; line-height: 1; margin: 0 0 4px 0; }
+                .brand-subtitle { color:#64748b; font-size:13px; }
+                .quote-code { font-size:24px; font-weight:800; color:#0f172a; line-height:1.2; margin-bottom:6px; }
+                .muted { color:#64748b; font-size:12px; line-height:1.5; }
+                .section-card { border:1px solid #dbe3ee; border-radius:14px; padding:16px 18px; background:#fff; }
+                .section-title { font-size:11px; text-transform:uppercase; font-weight:700; color:#64748b; letter-spacing:0.04em; margin-bottom:8px; }
+                .customer-name { font-size:18px; font-weight:700; color:#1e293b; margin:0 0 6px 0; }
+                .items-wrap { border:1px solid #dbe3ee; border-radius:14px; padding:14px 16px 16px 16px; }
+                .items-table th { text-align:left; font-size:11px; text-transform:uppercase; color:#64748b; letter-spacing:0.04em; padding:10px 14px; border-bottom:1px solid #cbd5e1; }
+                .summary-box { width:310px; margin-left:auto; margin-top:18px; }
+                .totals-table td { padding:8px 0; border-bottom:1px solid #e2e8f0; font-size:14px; }
+                .totals-table td:last-child { text-align:right; font-weight:700; }
+                .totals-table .grand td { font-size:20px; font-weight:800; color:#0f172a; padding-top:12px; }
+                .footer { margin-top:24px; font-size:12px; color:#64748b; }
+            </style>
+        </head>
+        <body>
+            <div class="sheet">
+                <table class="header-table" style="margin-bottom:24px;">
+                    <tr>
+                        <td style="width:55%; vertical-align:top;">
+                            <div class="brand-name">ParaMascotas</div>
+                            <div class="brand-subtitle">Cotización comercial de productos</div>
+                        </td>
+                        <td style="width:45%; text-align:right; vertical-align:top;">
+                            <div class="quote-code">${escapeHtml(quotation.id)}</div>
+                            <div class="muted">Emitida: ${escapeHtml(formatQuotationDate(quotation.created_at, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}</div>
+                            <div class="muted">Válida hasta: ${escapeHtml(formatQuotationDate(quotation.valid_until, { day: '2-digit', month: '2-digit', year: 'numeric' }))}</div>
+                        </td>
+                    </tr>
+                </table>
+                <table class="info-table" style="margin-bottom:20px;">
+                    <tr>
+                        <td style="width:52%; vertical-align:top; padding-right:8px;">
+                            <div class="section-card">
+                                <div class="section-title">Cliente</div>
+                                <div class="customer-name">${escapeHtml(quotation.customer_name)}</div>
+                                <div class="muted">Documento: ${escapeHtml(quotation.customer_document_number || 'No indicado')}</div>
+                                <div class="muted">Teléfono: ${escapeHtml(quotation.customer_phone || 'No indicado')}</div>
+                                <div class="muted">Correo: ${escapeHtml(quotation.customer_email || 'No indicado')}</div>
+                            </div>
+                        </td>
+                        <td style="width:48%; vertical-align:top; padding-left:8px;">
+                            <div class="section-card">
+                                <div class="section-title">Entrega y condiciones</div>
+                                <div class="muted">Modalidad: Retiro en tienda</div>
+                                <div class="muted">Dirección: ${escapeHtml(address.street || 'No indicada')}</div>
+                                <div class="muted">Ciudad: ${escapeHtml(address.city || 'No indicada')}</div>
+                                <div class="muted">Descuento: ${escapeHtml(quotation.discount_code || 'Sin código')}</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <div class="items-wrap">
+                    <div class="section-title" style="margin-bottom:10px;">Detalle cotizado</div>
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th style="width:52%;">Producto</th>
+                                <th style="width:12%; text-align:center;">Cant.</th>
+                                <th style="width:18%; text-align:right;">PVP</th>
+                                <th style="width:18%; text-align:right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${quoteItemsTableHtml}</tbody>
+                    </table>
+                </div>
+                <div class="summary-box">
+                    <table class="totals-table">
+                        <tr><td>Subtotal</td><td>${escapeHtml(formatMoney(Number(snapshot.vat_subtotal || 0)))}</td></tr>
+                        <tr><td>IVA</td><td>${escapeHtml(formatMoney(Number(snapshot.vat_amount || 0)))}</td></tr>
+                        <tr class="grand"><td>Total</td><td>${escapeHtml(formatMoney(Number(snapshot.total || 0)))}</td></tr>
+                    </table>
+                </div>
+                ${notesHtml}
+                <div class="footer">
+                    Esta cotización es informativa y no descuenta inventario ni genera pedido hasta confirmar la venta.
+                </div>
+            </div>
+        </body>
+        </html>`
+}
+
+const buildLocalSaleQuotationResult = (quotation: AdminLocalQuotation): LocalSaleQuotationResult => ({
+    status: 'success',
+    quoteId: quotation.id,
+    message: quotation.email_delivery?.requested && quotation.email_delivery?.sent
+        ? `Cotización generada correctamente con código ${quotation.id} y enviada al correo del cliente.`
+        : `Cotización generada correctamente con código ${quotation.id}.`,
+    customerName: quotation.customer_name,
+    documentNumber: quotation.customer_document_number || null,
+    total: Number(quotation.quote_snapshot?.total ?? 0),
+    itemCount: Number(quotation.item_count ?? quotation.items.length ?? 0),
+    units: Number(quotation.units ?? quotation.items.reduce((acc, item) => acc + Number(item.quantity || 0), 0)),
+    createdAt: quotation.created_at,
+    printable: true,
+    emailSent: Boolean(quotation.email_delivery?.sent),
+    emailMessage: quotation.email_delivery?.message || null,
+    whatsappPrepared: false,
+    whatsappMessage: null,
+})
 
 const ProductEditorModal = dynamic(() => import('./components/ProductEditorModal'), {
     ssr: false,
@@ -162,6 +408,12 @@ const ProductPageSettingsPanel = dynamic(() => import('./components/ProductPageS
 const ProductReferenceDataPanel = dynamic(() => import('./components/ProductReferenceDataPanel'), {
     ssr: false,
 })
+const AdminAlertsTab = dynamic(() => import('./components/AdminAlertsTab'), {
+    ssr: false,
+})
+const CustomerDashboardTab = dynamic(() => import('./components/CustomerDashboardTab'), {
+    ssr: false,
+})
 const AdminOrdersPanel = dynamic(() => import('./components/AdminOrdersPanel'), {
     ssr: false,
 })
@@ -172,6 +424,12 @@ const InventoryManagementPanel = dynamic(() => import('./components/InventoryMan
     ssr: false,
 })
 const DiscountCodesPanel = dynamic(() => import('./components/DiscountCodesPanel'), {
+    ssr: false,
+})
+const LocalSalesPanel = dynamic(() => import('./components/LocalSalesPanel'), {
+    ssr: false,
+})
+const QuotationsPanel = dynamic(() => import('./components/QuotationsPanel'), {
     ssr: false,
 })
 
@@ -361,6 +619,8 @@ const MyAccount = () => {
     const [localSaleCustomerName, setLocalSaleCustomerName] = useState('')
     const [localSaleCustomerPhone, setLocalSaleCustomerPhone] = useState('')
     const [localSaleCustomerEmail, setLocalSaleCustomerEmail] = useState('')
+    const [localSaleQuoteSendEmail, setLocalSaleQuoteSendEmail] = useState(true)
+    const [localSaleQuoteSendWhatsApp, setLocalSaleQuoteSendWhatsApp] = useState(false)
     const [localSaleCustomerStreet, setLocalSaleCustomerStreet] = useState('')
     const [localSaleCustomerCity, setLocalSaleCustomerCity] = useState('')
     const [localSaleCustomerDocumentType, setLocalSaleCustomerDocumentType] = useState<'cedula' | 'ruc' | 'pasaporte' | 'consumidor_final'>('cedula')
@@ -377,6 +637,11 @@ const MyAccount = () => {
     const [localSaleAutoPrint, setLocalSaleAutoPrint] = useState(true)
     const [localSaleLastOrderId, setLocalSaleLastOrderId] = useState<string | null>(null)
     const [localSaleLastSubmission, setLocalSaleLastSubmission] = useState<LocalSaleSubmissionResult | null>(null)
+    const [localSaleLastQuotation, setLocalSaleLastQuotation] = useState<LocalSaleQuotationResult | null>(null)
+    const [localSaleLastQuotationHtml, setLocalSaleLastQuotationHtml] = useState<string | null>(null)
+    const [localSaleQuoteHistory, setLocalSaleQuoteHistory] = useState<AdminLocalQuotation[]>([])
+    const [localSaleQuoteHistoryLoading, setLocalSaleQuoteHistoryLoading] = useState(false)
+    const [localSaleSelectedQuotationId, setLocalSaleSelectedQuotationId] = useState<string | null>(null)
     const [localSaleCustomerLookupLoading, setLocalSaleCustomerLookupLoading] = useState(false)
     const [localSaleCustomerLookupMessage, setLocalSaleCustomerLookupMessage] = useState<string | null>(null)
     // Modal & Form State
@@ -530,6 +795,11 @@ const MyAccount = () => {
         }
     }
 
+    const showNotification = React.useCallback((text: string, type: 'success' | 'error' = 'success') => {
+        setMessage({ text, type })
+        setTimeout(() => setMessage(null), 5000)
+    }, [])
+
     const printOrderInvoiceById = async (orderId: string) => {
         let printWindow: Window | null = null
 
@@ -600,6 +870,49 @@ const MyAccount = () => {
             return false
         }
     }
+    const printHtmlDocument = React.useCallback((html: string) => {
+        const printWindow = window.open('', '_blank', 'width=1024,height=768')
+        if (!printWindow) {
+            showNotification('Tu navegador bloqueó la ventana de impresión.', 'error')
+            return false
+        }
+
+        const printableHtml = html.includes('</body>')
+            ? html.replace(
+                '</body>',
+                `<script>
+                    window.addEventListener('load', function () {
+                        setTimeout(function () {
+                            window.focus();
+                            window.print();
+                        }, 250);
+                    });
+                    window.addEventListener('afterprint', function () {
+                        setTimeout(function () {
+                            window.close();
+                        }, 150);
+                    });
+                </script></body>`
+            )
+            : `${html}<script>
+                window.addEventListener('load', function () {
+                    setTimeout(function () {
+                        window.focus();
+                        window.print();
+                    }, 250);
+                });
+                window.addEventListener('afterprint', function () {
+                    setTimeout(function () {
+                        window.close();
+                    }, 150);
+                });
+            </script>`
+
+        printWindow.document.open()
+        printWindow.document.write(printableHtml)
+        printWindow.document.close()
+        return true
+    }, [showNotification])
     const handleGenerateInvoice = async () => {
         if (!selectedOrder?.id) return
         await printOrderInvoiceById(String(selectedOrder.id))
@@ -720,11 +1033,6 @@ const MyAccount = () => {
             setProfileSaving(false)
         }
     }
-
-    const showNotification = React.useCallback((text: string, type: 'success' | 'error' = 'success') => {
-        setMessage({ text, type })
-        setTimeout(() => setMessage(null), 5000)
-    }, [])
 
     const reloadAdminUsers = React.useCallback(async () => {
         if (!user || user.role !== 'admin') return
@@ -1553,6 +1861,43 @@ const MyAccount = () => {
         setLocalSaleQuoteLoading,
     })
 
+    const loadLocalSaleQuoteHistory = React.useCallback(async (silent = false) => {
+        if (!user || user.role !== 'admin') return
+        if (!silent) {
+            setLocalSaleQuoteHistoryLoading(true)
+        }
+        try {
+            const result = await requestApi<AdminLocalQuotation[]>('/api/admin/quotes?limit=12')
+            const rows = Array.isArray(result.body) ? result.body : []
+            setLocalSaleQuoteHistory(rows)
+        } catch (error) {
+            console.error(error)
+            if (!silent) {
+                showNotification(String((error as any)?.message || 'No se pudo cargar el historial de cotizaciones.'), 'error')
+            }
+        } finally {
+            if (!silent) {
+                setLocalSaleQuoteHistoryLoading(false)
+            }
+        }
+    }, [showNotification, user])
+
+    React.useEffect(() => {
+        if (!user || user.role !== 'admin') return
+        if (activeTab !== 'local-sales' && activeTab !== 'quotations') return
+        loadLocalSaleQuoteHistory(true)
+    }, [activeTab, loadLocalSaleQuoteHistory, user])
+
+    React.useEffect(() => {
+        if (localSaleLastQuotation || localSaleQuoteHistory.length === 0) return
+        setLocalSaleLastQuotation(buildLocalSaleQuotationResult(localSaleQuoteHistory[0]))
+    }, [buildLocalSaleQuotationResult, localSaleLastQuotation, localSaleQuoteHistory])
+
+    React.useEffect(() => {
+        if (localSaleSelectedQuotationId || localSaleQuoteHistory.length === 0) return
+        setLocalSaleSelectedQuotationId(localSaleQuoteHistory[0].id)
+    }, [localSaleQuoteHistory, localSaleSelectedQuotationId])
+
     const currentAddress = savedAddresses[currentAddrIndex] || createEmptySavedAddressEntry('Dirección principal')
     const currentDateLabel = formatDateEcuador(new Date(), {
         weekday: 'long',
@@ -1796,9 +2141,20 @@ const MyAccount = () => {
     const localSaleChange = Math.max(0, localSalePaidAmount - localSaleTotal)
     const localSalePaymentReferenceValue = localSalePaymentReference.trim()
     const localSaleDocumentNumberValue = localSaleCustomerDocumentNumber.trim()
+    const localSaleCustomerPhoneValue = localSaleCustomerPhone.trim()
+    const localSaleCustomerEmailValue = localSaleCustomerEmail.trim()
+    const localSaleCustomerEmailValid = localSaleCustomerEmailValue === ''
+        ? false
+        : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(localSaleCustomerEmailValue)
+    const localSaleCustomerWhatsAppNumber = normalizeWhatsAppPhone(localSaleCustomerPhoneValue)
+    const localSaleCustomerPhoneValid = Boolean(localSaleCustomerWhatsAppNumber)
     const localSaleCustomerStreetValue = localSaleCustomerStreet.trim()
     const localSaleCustomerCityValue = localSaleCustomerCity.trim()
     const localSaleAddressReady = localSaleCustomerStreetValue.length >= 5
+    const selectedLocalSaleQuotation = React.useMemo(
+        () => localSaleQuoteHistory.find((item) => item.id === localSaleSelectedQuotationId) || null,
+        [localSaleQuoteHistory, localSaleSelectedQuotationId]
+    )
     const localSalePaymentIssues = React.useMemo(() => {
         const issues: string[] = []
         if (localSalePaymentMethod === 'cash') {
@@ -1838,6 +2194,28 @@ const MyAccount = () => {
         localSalePaymentReferenceValue,
         localSalePendingAmount,
         localSaleTotal
+    ])
+    const buildLocalSalePaymentDetails = React.useCallback(() => ({
+        channel: 'local_pos',
+        shift_id: posActiveShift?.id || null,
+        cashier_user_id: user?.id || null,
+        reference: localSalePaymentReferenceValue || null,
+        cash_received: localSalePaymentMethod === 'cash' || localSalePaymentMethod === 'mixed' ? Number(localSaleCashReceivedValue.toFixed(2)) : 0,
+        electronic_amount: localSalePaymentMethod === 'mixed' ? Number(localSaleElectronicAmountValue.toFixed(2)) : (localSalePaymentMethod === 'cash' ? 0 : Number(localSaleTotal.toFixed(2))),
+        paid_amount: Number(localSalePaidAmount.toFixed(2)),
+        pending_amount: Number(localSalePendingAmount.toFixed(2)),
+        change_due: Number(localSaleChange.toFixed(2))
+    }), [
+        localSaleCashReceivedValue,
+        localSaleChange,
+        localSaleElectronicAmountValue,
+        localSalePaidAmount,
+        localSalePaymentMethod,
+        localSalePaymentReferenceValue,
+        localSalePendingAmount,
+        localSaleTotal,
+        posActiveShift?.id,
+        user?.id,
     ])
     const localSalePaymentReady = localSalePaymentIssues.length === 0
     const localSaleMissingInfo = React.useMemo(() => {
@@ -1881,10 +2259,36 @@ const MyAccount = () => {
         storeStatus.message,
         storeStatus.salesEnabled
     ])
+    const localSaleQuotationMissingInfo = React.useMemo(() => {
+        const issues: string[] = []
+        if (localSaleItems.length === 0) {
+            issues.push('Agrega al menos un producto para cotizar.')
+        }
+        if (localSaleQuoteLoading) {
+            issues.push('Espera que termine el cálculo de la cotización.')
+        }
+        if (localSaleError) {
+            issues.push(localSaleError)
+        }
+        if (localSaleCustomerLookupLoading) {
+            issues.push('Espera que termine la búsqueda del cliente por documento.')
+        }
+        if (localSaleCustomerName.trim().length < 3) {
+            issues.push('Ingresa el nombre del cliente para generar la cotización.')
+        }
+        return issues
+    }, [
+        localSaleCustomerLookupLoading,
+        localSaleCustomerName,
+        localSaleError,
+        localSaleItems.length,
+        localSaleQuoteLoading,
+    ])
     const localSalePaymentStatusText = localSalePaymentReady
         ? 'Listo para cobrar'
         : (localSalePaymentIssues[0] || 'Falta completar datos')
     const isLocalSaleSubmitDisabled = localSaleSaving || localSaleMissingInfo.length > 0
+    const isLocalSaleQuoteSubmitDisabled = localSaleSaving || localSaleQuotationMissingInfo.length > 0
     const localSaleDocumentReady = localSaleCustomerDocumentType === 'consumidor_final' || localSaleDocumentNumberValue.length >= 6
     const localSaleQuoteReady = !localSaleQuoteLoading && !localSaleError && localSaleTotal > 0
     const localSaleQuickChecks = React.useMemo(() => ([
@@ -1932,6 +2336,7 @@ const MyAccount = () => {
         posActiveShift
     ])
     const localSalePrimaryMissing = localSaleMissingInfo[0] || null
+    const localSaleQuotationPrimaryMissing = localSaleQuotationMissingInfo[0] || null
     const posSummary = posActiveShift?.summary
     const posExpectedCash = Number(posSummary?.expected_cash ?? 0)
     const posCashSales = Number(posSummary?.cash_sales ?? 0)
@@ -2010,6 +2415,7 @@ const MyAccount = () => {
         setLocalSaleCustomerName('')
         setLocalSaleCustomerPhone('')
         setLocalSaleCustomerEmail('')
+        setLocalSaleQuoteSendEmail(true)
         setLocalSaleCustomerStreet('')
         setLocalSaleCustomerCity('')
         setLocalSaleCustomerDocumentType('cedula')
@@ -2085,6 +2491,277 @@ const MyAccount = () => {
         const remaining = Math.max(0, localSaleTotal - localSaleCashReceivedValue)
         setLocalSaleElectronicAmount(remaining > 0 ? remaining.toFixed(2) : '0.00')
     }
+    const handlePrintLastLocalQuotation = React.useCallback(() => {
+        const fallbackQuotation = selectedLocalSaleQuotation || localSaleQuoteHistory[0] || null
+        if (fallbackQuotation) {
+            const quotationHtml = buildLocalQuotationHtml({
+                quotation: fallbackQuotation,
+                formatMoney,
+                formatDateTimeEcuador,
+            })
+            setLocalSaleLastQuotationHtml(quotationHtml)
+            printHtmlDocument(quotationHtml)
+            return
+        }
+        if (!localSaleLastQuotationHtml) return
+        printHtmlDocument(localSaleLastQuotationHtml)
+    }, [
+        formatDateTimeEcuador,
+        formatMoney,
+        localSaleLastQuotationHtml,
+        localSaleQuoteHistory,
+        printHtmlDocument,
+        selectedLocalSaleQuotation,
+    ])
+
+    const handleCreateLocalQuotation = React.useCallback(async () => {
+        if (localSaleQuotationMissingInfo.length > 0) {
+            const firstIssue = localSaleQuotationMissingInfo[0]
+            const suffix = localSaleQuotationMissingInfo.length > 1 ? ` (+${localSaleQuotationMissingInfo.length - 1} pendiente${localSaleQuotationMissingInfo.length - 1 === 1 ? '' : 's'})` : ''
+            showNotification(`${firstIssue}${suffix}`, 'error')
+            return
+        }
+        try {
+            setLocalSaleSaving(true)
+            const quotationResponse = await requestApi<AdminLocalQuotation>('/api/admin/quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customer_name: localSaleCustomerName.trim(),
+                    customer_document_type: localSaleCustomerDocumentType,
+                    customer_document_number: localSaleDocumentNumberValue || null,
+                    customer_email: localSaleCustomerEmail.trim() || null,
+                    customer_phone: localSaleCustomerPhone.trim() || null,
+                    customer_address: {
+                        street: localSaleCustomerStreetValue || null,
+                        city: localSaleCustomerCityValue || null,
+                        state: null,
+                        country: 'EC',
+                        zip: null,
+                    },
+                    delivery_method: 'pickup',
+                    payment_method: localSalePaymentMethod,
+                    discount_code: localSaleQuote?.discount_code || localSaleDiscountCode.trim().toUpperCase() || null,
+                    notes: localSaleNotes.trim() || null,
+                    send_email: localSaleQuoteSendEmail && localSaleCustomerEmailValid,
+                    items: localSaleItems.map((item) => ({
+                        product_id: item.productId,
+                        quantity: item.quantity,
+                    })),
+                }),
+            })
+
+            const quotation = quotationResponse.body
+            const quotationHtml = buildLocalQuotationHtml({
+                quotation,
+                formatMoney,
+                formatDateTimeEcuador,
+            })
+            const whatsappRequested = localSaleQuoteSendWhatsApp
+            const whatsappReady = Boolean(localSaleCustomerWhatsAppNumber)
+            const whatsappMessage = whatsappRequested
+                ? (whatsappReady
+                    ? 'Mensaje de WhatsApp preparado para envío al cliente.'
+                    : 'No se abrió WhatsApp porque el teléfono del cliente no es válido.')
+                : null
+            setLocalSaleLastQuotation({
+                ...buildLocalSaleQuotationResult(quotation),
+                whatsappPrepared: whatsappRequested && whatsappReady,
+                whatsappMessage,
+            })
+            setLocalSaleLastQuotationHtml(quotationHtml)
+            setLocalSaleSelectedQuotationId(quotation.id)
+            setLocalSaleQuoteHistory((prev) => [quotation, ...prev.filter((item) => item.id !== quotation.id)].slice(0, 12))
+            printHtmlDocument(quotationHtml)
+            if (whatsappRequested) {
+                if (whatsappReady) {
+                    const whatsappText = buildQuotationWhatsAppMessage({ quotation, formatMoney })
+                    const whatsappUrl = `https://wa.me/${localSaleCustomerWhatsAppNumber}?text=${encodeURIComponent(whatsappText)}`
+                    window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+                } else {
+                    showNotification('La cotización se generó, pero no se abrió WhatsApp porque el teléfono no es válido.', 'error')
+                }
+            }
+            const emailMessage = quotation.email_delivery?.message
+            if (quotation.email_delivery?.requested) {
+                showNotification(
+                    emailMessage || `Cotización lista: ${quotation.id}`,
+                    quotation.email_delivery?.sent ? 'success' : 'error'
+                )
+            } else if (whatsappRequested && whatsappReady) {
+                showNotification(`Cotización lista: ${quotation.id}. WhatsApp preparado para envío.`)
+            } else if (localSaleQuoteSendEmail && localSaleCustomerEmailValue && !localSaleCustomerEmailValid) {
+                showNotification(`Cotización lista: ${quotation.id}. El correo no se envió porque no es válido.`, 'error')
+            } else {
+                showNotification(`Cotización lista: ${quotation.id}`)
+            }
+        } catch (error) {
+            console.error(error)
+            showNotification(String((error as any)?.message || 'No se pudo generar la cotización.'), 'error')
+        } finally {
+            setLocalSaleSaving(false)
+        }
+    }, [
+        formatDateTimeEcuador,
+        formatMoney,
+        localSaleCustomerCityValue,
+        localSaleCustomerDocumentType,
+        localSaleCustomerEmail,
+        localSaleCustomerEmailValid,
+        localSaleCustomerEmailValue,
+        localSaleCustomerName,
+        localSaleCustomerPhone,
+        localSaleCustomerWhatsAppNumber,
+        localSaleCustomerStreetValue,
+        localSaleDiscountCode,
+        localSaleDocumentNumberValue,
+        localSaleItems,
+        localSaleNotes,
+        localSaleQuotationMissingInfo,
+        localSaleQuote,
+        localSaleQuoteSendEmail,
+        localSaleQuoteSendWhatsApp,
+        printHtmlDocument,
+        showNotification,
+    ])
+
+    const handleConvertSelectedLocalQuotation = React.useCallback(async () => {
+        if (!selectedLocalSaleQuotation) {
+            showNotification('Selecciona una cotización guardada para convertirla en venta.', 'error')
+            return
+        }
+        if (!(posActiveShift && posActiveShift.status === 'open')) {
+            showNotification('Debes abrir la caja del turno antes de convertir la cotización.', 'error')
+            return
+        }
+        if (!storeStatus.salesEnabled) {
+            showNotification(storeStatus.message || DEFAULT_STORE_PAUSE_MESSAGE, 'error')
+            return
+        }
+        if (selectedLocalSaleQuotation.status === 'converted') {
+            showNotification('Esta cotización ya fue convertida en venta.', 'error')
+            return
+        }
+        if (localSalePaymentIssues.length > 0) {
+            showNotification(localSalePaymentIssues[0], 'error')
+            return
+        }
+
+        const paymentMethodLabel = getLocalSalePaymentMethodLabel(localSalePaymentMethod)
+        const attemptedAt = new Date().toISOString()
+        const fallbackOrderSummary = {
+            customerName: selectedLocalSaleQuotation.customer_name,
+            documentNumber: selectedLocalSaleQuotation.customer_document_number || null,
+            paymentMethod: paymentMethodLabel,
+            total: Number(selectedLocalSaleQuotation.quote_snapshot?.total ?? 0),
+            itemCount: Number(selectedLocalSaleQuotation.item_count ?? selectedLocalSaleQuotation.items.length ?? 0),
+            units: Number(selectedLocalSaleQuotation.units ?? selectedLocalSaleQuotation.items.reduce((acc, item) => acc + Number(item.quantity || 0), 0)),
+            createdAt: attemptedAt,
+        }
+
+        try {
+            setLocalSaleSaving(true)
+            setLocalSaleError(null)
+            const converted = await requestApi<{ quotation: AdminLocalQuotation; order: any }>(`/api/admin/quotes/${encodeURIComponent(selectedLocalSaleQuotation.id)}/convert`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    payment_method: localSalePaymentMethod,
+                    payment_details: buildLocalSalePaymentDetails(),
+                }),
+            })
+
+            const order = converted.body?.order || {}
+            const updatedQuotation = converted.body?.quotation || selectedLocalSaleQuotation
+            const createdOrderId = order?.id ? String(order.id) : ''
+            const createdItems = Array.isArray(order?.items) ? order.items : []
+            const createdUnits = createdItems.length > 0
+                ? createdItems.reduce((acc: number, item: any) => acc + Number(item?.quantity || 0), 0)
+                : fallbackOrderSummary.units
+
+            setLocalSaleLastSubmission({
+                status: 'success',
+                orderId: createdOrderId || null,
+                orderStatus: order?.status ? String(order.status) : 'completed',
+                message: createdOrderId
+                    ? `Cotización ${selectedLocalSaleQuotation.id} convertida correctamente en pedido ${createdOrderId}.`
+                    : `Cotización ${selectedLocalSaleQuotation.id} convertida correctamente.`,
+                customerName: fallbackOrderSummary.customerName,
+                documentNumber: fallbackOrderSummary.documentNumber,
+                paymentMethod: fallbackOrderSummary.paymentMethod,
+                total: Number(order?.total ?? fallbackOrderSummary.total),
+                itemCount: createdItems.length > 0 ? createdItems.length : fallbackOrderSummary.itemCount,
+                units: createdUnits,
+                createdAt: order?.created_at ? String(order.created_at) : fallbackOrderSummary.createdAt,
+                invoiceAvailable: Boolean(createdOrderId),
+            })
+            if (createdOrderId) {
+                setLocalSaleLastOrderId(createdOrderId)
+            }
+            setLocalSaleQuoteHistory((prev) => prev.map((item) => item.id === updatedQuotation.id ? updatedQuotation : item))
+            showNotification(createdOrderId ? `Venta creada desde cotización: ${createdOrderId}` : 'Cotización convertida a venta.')
+            const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
+                ? `?month=${encodeURIComponent(salesRankingMonth)}`
+                : ''
+            const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
+                requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT),
+                requestApi<Order[]>('/api/orders'),
+                requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`),
+            ])
+            if (productsResult.status === 'fulfilled') {
+                setAdminProductsList(normalizeAdminProducts(productsResult.value.body))
+            }
+            if (ordersResult.status === 'fulfilled') {
+                setAdminOrdersList(ordersResult.value.body)
+            }
+            if (statsResult.status === 'fulfilled') {
+                setDashboardStats(statsResult.value.body)
+            }
+            await Promise.all([
+                loadPosSnapshot(),
+                loadLocalSaleQuoteHistory(true),
+            ])
+            if (localSaleAutoPrint && createdOrderId) {
+                await printOrderInvoiceById(createdOrderId)
+            }
+        } catch (error: any) {
+            console.error(error)
+            const message = String(error?.message || 'No se pudo convertir la cotización en venta.')
+            setLocalSaleError(message)
+            setLocalSaleLastSubmission({
+                status: 'error',
+                orderId: null,
+                orderStatus: null,
+                message,
+                customerName: fallbackOrderSummary.customerName,
+                documentNumber: fallbackOrderSummary.documentNumber,
+                paymentMethod: fallbackOrderSummary.paymentMethod,
+                total: fallbackOrderSummary.total,
+                itemCount: fallbackOrderSummary.itemCount,
+                units: fallbackOrderSummary.units,
+                createdAt: fallbackOrderSummary.createdAt,
+                invoiceAvailable: false,
+            })
+            showNotification(message, 'error')
+        } finally {
+            setLocalSaleSaving(false)
+        }
+    }, [
+        buildLocalSalePaymentDetails,
+        loadLocalSaleQuoteHistory,
+        loadPosSnapshot,
+        localSaleAutoPrint,
+        localSalePaymentIssues,
+        localSalePaymentMethod,
+        normalizeAdminProducts,
+        posActiveShift,
+        printOrderInvoiceById,
+        salesRankingMonth,
+        selectedLocalSaleQuotation,
+        showNotification,
+        storeStatus.message,
+        storeStatus.salesEnabled,
+    ])
 
     const handleCreateLocalSale = async () => {
         if (localSaleMissingInfo.length > 0) {
@@ -2110,17 +2787,7 @@ const MyAccount = () => {
             units: localSaleUnits,
             createdAt: attemptedAt
         }
-        const paymentDetails = {
-            channel: 'local_pos',
-            shift_id: posActiveShift?.id || null,
-            cashier_user_id: user?.id || null,
-            reference: localSalePaymentReferenceValue || null,
-            cash_received: localSalePaymentMethod === 'cash' || localSalePaymentMethod === 'mixed' ? Number(localSaleCashReceivedValue.toFixed(2)) : 0,
-            electronic_amount: localSalePaymentMethod === 'mixed' ? Number(localSaleElectronicAmountValue.toFixed(2)) : (localSalePaymentMethod === 'cash' ? 0 : Number(localSaleTotal.toFixed(2))),
-            paid_amount: Number(localSalePaidAmount.toFixed(2)),
-            pending_amount: Number(localSalePendingAmount.toFixed(2)),
-            change_due: Number(localSaleChange.toFixed(2))
-        }
+        const paymentDetails = buildLocalSalePaymentDetails()
 
         const customerAddress = {
             firstName,
@@ -2209,7 +2876,10 @@ const MyAccount = () => {
             if (statsResult.status === 'fulfilled') {
                 setDashboardStats(statsResult.value.body)
             }
-            await loadPosSnapshot()
+            await Promise.all([
+                loadPosSnapshot(),
+                loadLocalSaleQuoteHistory(true),
+            ])
         } catch (error: any) {
             console.error(error)
             const message = String(error?.message || 'No se pudo registrar la venta local.')
@@ -2996,127 +3666,18 @@ const MyAccount = () => {
                                         </button>
                                     </div>
                                     {activeTab === 'alerts' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="flex items-center justify-between pb-6">
-                                            <div>
-                                                <div className="heading5">Alertas estratégicas</div>
-                                                <p className="text-secondary text-sm mt-1">Prioriza acciones operativas, de inventario y rentabilidad.</p>
-                                            </div>
-                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
-                                                {currentDateLabel}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                                            <button
-                                                type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${alertsSeverityFilter === 'all' ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
-                                                onClick={() => setAlertsSeverityFilter('all')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Todas</div>
-                                                <div className="heading5">{strategicAlerts.length}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${alertsSeverityFilter === 'critical' ? 'border-red-500 bg-red-50' : 'border-red/20 bg-red/5 hover:border-red-500'}`}
-                                                onClick={() => setAlertsSeverityFilter('critical')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-red mb-1">Críticas</div>
-                                                <div className="heading5">{strategicAlertSummary.critical}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${alertsSeverityFilter === 'warning' ? 'border-amber-500 bg-amber-50' : 'border-amber-200 bg-amber-50 hover:border-amber-500'}`}
-                                                onClick={() => setAlertsSeverityFilter('warning')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-amber-700 mb-1">Advertencias</div>
-                                                <div className="heading5">{strategicAlertSummary.warning}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`p-4 rounded-xl border text-left transition-all ${alertsSeverityFilter === 'info' ? 'border-blue-500 bg-blue-50' : 'border-blue-200 bg-blue-50 hover:border-blue-500'}`}
-                                                onClick={() => setAlertsSeverityFilter('info')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-blue-700 mb-1">Informativas</div>
-                                                <div className="heading5">{strategicAlertSummary.info}</div>
-                                            </button>
-                                        </div>
-
-                                        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                                            <button
-                                                type="button"
-                                                className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => navigateToPanelTab('inventory')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Sin stock</div>
-                                                <div className="text-lg font-bold text-red">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.out_of_stock ?? 0)}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => navigateToPanelTab('inventory')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
-                                                <div className="text-lg font-bold text-amber-600">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.low_stock ?? 0)}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => navigateToPanelTab('inventory')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Por vencer</div>
-                                                <div className="text-lg font-bold text-amber-600">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.expiring_products ?? 0)}</div>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="p-3 rounded-xl border border-line bg-white text-left transition-all hover:border-black"
-                                                onClick={() => navigateToPanelTab('inventory')}
-                                            >
-                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Vencidos</div>
-                                                <div className="text-lg font-bold text-red">{Number(dashboardStats?.businessMetrics?.inventoryDeepDive?.health?.expired_products ?? 0)}</div>
-                                            </button>
-                                        </div>
-
-                                        {filteredStrategicAlerts.length > 0 ? (
-                                            <div className="grid grid-cols-1 gap-4">
-                                                {filteredStrategicAlerts.map((alert, idx) => (
-                                                    <motion.div
-                                                        key={`alert-tab-${idx}`}
-                                                        initial={{ opacity: 0, y: 8 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className={`flex items-center justify-between p-4 rounded-xl border-l-4 shadow-sm cursor-pointer ${alert.type === 'critical' ? 'bg-red-50 border-red-500 text-red-800' :
-                                                            alert.type === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-800' :
-                                                                'bg-blue-50 border-blue-500 text-blue-800'
-                                                            }`}
-                                                        onClick={() => handleStrategicAlertAction(alert)}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            {alert.type === 'critical' ? <Icon.WarningCircle size={22} weight="fill" /> :
-                                                                alert.type === 'warning' ? <Icon.Warning size={22} weight="fill" /> :
-                                                                    <Icon.Info size={22} weight="fill" />}
-                                                            <span className="font-medium">{alert.message}</span>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-current hover:bg-white/20 transition-colors"
-                                                            onClick={(event) => {
-                                                                event.stopPropagation()
-                                                                handleStrategicAlertAction(alert)
-                                                            }}
-                                                        >
-                                                            {alert.action}
-                                                        </button>
-                                                    </motion.div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="p-5 rounded-xl border border-line bg-surface text-secondary text-sm">
-                                                {alertsSeverityFilter === 'all'
-                                                    ? 'No hay alertas activas en este momento.'
-                                                    : `No hay alertas ${alertSeverityLabels[alertsSeverityFilter]} en este momento.`}
-                                            </div>
-                                        )}
-                                    </div>
+                                        <AdminAlertsTab
+                                            currentDateLabel={currentDateLabel}
+                                            alertsSeverityFilter={alertsSeverityFilter}
+                                            setAlertsSeverityFilter={setAlertsSeverityFilter}
+                                            strategicAlertsCount={strategicAlerts.length}
+                                            strategicAlertSummary={strategicAlertSummary}
+                                            filteredStrategicAlerts={filteredStrategicAlerts}
+                                            alertSeverityLabels={alertSeverityLabels}
+                                            inventoryHealth={dashboardStats?.businessMetrics?.inventoryDeepDive?.health}
+                                            onNavigateToInventory={() => navigateToPanelTab('inventory')}
+                                            onAlertAction={handleStrategicAlertAction}
+                                        />
                                     )}
                                     {activeTab === 'reports' && (
                                     <div className="tab text-content w-full">
@@ -4527,794 +5088,202 @@ const MyAccount = () => {
                                     </div>
                                     )}
 
+                                    
                                     {activeTab === 'local-sales' && (
-                                    <div className="tab text-content !flex !flex-col w-full">
-                                        <div className="flex items-center justify-between pb-6">
-                                            <div>
-                                                <div className="heading5">Venta en local (POS)</div>
-                                                <p className="text-secondary text-xs mt-1">
-                                                    Busca artículos, verifica existencia/costo y registra ventas directas en mostrador.
-                                                </p>
-                                            </div>
-                                            <div className="text-sm font-bold text-secondary bg-surface px-4 py-2 rounded-lg border border-line">
-                                                {currentDateLabel}
-                                            </div>
-                                        </div>
+                                        <LocalSalesPanel
+                                            currentDateLabel={currentDateLabel}
+                                            storeStatus={storeStatus}
+                                            formatMoney={formatMoney}
+                                            formatIsoDate={formatIsoDate}
+                                            formatDateTimeEcuador={formatDateTimeEcuador}
+                                            localSaleAutoPrint={localSaleAutoPrint}
+                                            localSaleCashReceived={localSaleCashReceived}
+                                            localSaleCatalog={localSaleCatalog}
+                                            localSaleChange={localSaleChange}
+                                            localSaleCustomerCity={localSaleCustomerCity}
+                                            localSaleCustomerDocumentNumber={localSaleCustomerDocumentNumber}
+                                            localSaleCustomerDocumentType={localSaleCustomerDocumentType}
+                                            localSaleCustomerEmail={localSaleCustomerEmail}
+                                            localSaleCustomerEmailValid={localSaleCustomerEmailValid}
+                                            localSaleCustomerLookupLoading={localSaleCustomerLookupLoading}
+                                            localSaleCustomerLookupMessage={localSaleCustomerLookupMessage}
+                                            localSaleCustomerName={localSaleCustomerName}
+                                            localSaleCustomerPhone={localSaleCustomerPhone}
+                                            localSaleCustomerStreet={localSaleCustomerStreet}
+                                            localSaleDiscount={localSaleDiscount}
+                                            localSaleDiscountCode={localSaleDiscountCode}
+                                            localSaleElectronicAmount={localSaleElectronicAmount}
+                                            localSaleGross={localSaleGross}
+                                            localSaleItemQuantityById={localSaleItemQuantityById}
+                                            localSaleItems={localSaleItems}
+                                            localSaleLastQuotation={localSaleLastQuotation}
+                                            localSaleLastSubmission={localSaleLastSubmission}
+                                            localSaleMissingInfo={localSaleMissingInfo}
+                                            localSaleQuoteHistory={localSaleQuoteHistory}
+                                            localSaleQuoteHistoryLoading={localSaleQuoteHistoryLoading}
+                                            localSaleNet={localSaleNet}
+                                            localSaleNotes={localSaleNotes}
+                                            localSalePaidAmount={localSalePaidAmount}
+                                            localSalePaymentMethod={localSalePaymentMethod}
+                                            localSalePaymentReady={localSalePaymentReady}
+                                            localSalePaymentReference={localSalePaymentReference}
+                                            localSalePaymentStatusText={localSalePaymentStatusText}
+                                            localSalePendingAmount={localSalePendingAmount}
+                                            localSalePrimaryMissing={localSalePrimaryMissing}
+                                            localSaleQuotationMissingInfo={localSaleQuotationMissingInfo}
+                                            localSaleQuotationPrimaryMissing={localSaleQuotationPrimaryMissing}
+                                            localSaleProfit={localSaleProfit}
+                                            localSaleQuickChecks={localSaleQuickChecks}
+                                            localSaleQuote={localSaleQuote}
+                                            localSaleQuoteSendEmail={localSaleQuoteSendEmail}
+                                            localSaleQuoteSendWhatsApp={localSaleQuoteSendWhatsApp}
+                                            localSaleQuoteLoading={localSaleQuoteLoading}
+                                            localSaleSelectedQuotationId={localSaleSelectedQuotationId}
+                                            localSaleSaving={localSaleSaving}
+                                            localSaleSearch={localSaleSearch}
+                                            localSaleShipping={localSaleShipping}
+                                            localSaleTotal={localSaleTotal}
+                                            localSaleUnits={localSaleUnits}
+                                            localSaleVat={localSaleVat}
+                                            posActionLoading={posActionLoading}
+                                            posActiveShift={posActiveShift}
+                                            posCanRegisterSale={posCanRegisterSale}
+                                            posCashSales={posCashSales}
+                                            posCloseNotes={posCloseNotes}
+                                            posClosingCash={posClosingCash}
+                                            posElectronicSales={posElectronicSales}
+                                            posExpectedCash={posExpectedCash}
+                                            posFieldClass={posFieldClass}
+                                            posFieldFlexClass={posFieldFlexClass}
+                                            posFieldLabelClass={posFieldLabelClass}
+                                            posLoading={posLoading}
+                                            posMovementAdjustments={posMovementAdjustments}
+                                            posMovementAmount={posMovementAmount}
+                                            posMovementDescription={posMovementDescription}
+                                            posMovementExpense={posMovementExpense}
+                                            posMovementIncome={posMovementIncome}
+                                            posMovementType={posMovementType}
+                                            posMovements={posMovements}
+                                            posOpenNotes={posOpenNotes}
+                                            posOpeningCash={posOpeningCash}
+                                            posOrdersCount={posOrdersCount}
+                                            posSalesTotal={posSalesTotal}
+                                            posShiftHistory={posShiftHistory}
+                                            posTextareaClass={posTextareaClass}
+                                            handleAddLocalSaleProduct={handleAddLocalSaleProduct}
+                                            handleAddPosMovement={handleAddPosMovement}
+                                            handleClearLocalSale={handleClearLocalSale}
+                                            handleClosePosShift={handleClosePosShift}
+                                            handleCompleteMixedWithElectronic={handleCompleteMixedWithElectronic}
+                                            handleCreateLocalQuotation={handleCreateLocalQuotation}
+                                            handleCreateLocalSale={handleCreateLocalSale}
+                                            handleConvertSelectedLocalQuotation={handleConvertSelectedLocalQuotation}
+                                            handleLookupCustomerByDocument={handleLookupCustomerByDocument}
+                                            handleOpenLastLocalSaleOrder={handleOpenLastLocalSaleOrder}
+                                            handleOpenPosShift={handleOpenPosShift}
+                                            handlePrintLastLocalSaleInvoice={handlePrintLastLocalSaleInvoice}
+                                            handlePrintLastLocalQuotation={handlePrintLastLocalQuotation}
+                                            handleRemoveLocalSaleItem={handleRemoveLocalSaleItem}
+                                            handleSetCashExact={handleSetCashExact}
+                                            handleUpdateLocalSaleQuantity={handleUpdateLocalSaleQuantity}
+                                            loadPosSnapshot={loadPosSnapshot}
+                                            loadLocalSaleQuoteHistory={loadLocalSaleQuoteHistory}
+                                            setLocalSaleAutoPrint={setLocalSaleAutoPrint}
+                                            setLocalSaleCashReceived={setLocalSaleCashReceived}
+                                            setLocalSaleCustomerCity={setLocalSaleCustomerCity}
+                                            setLocalSaleCustomerDocumentNumber={setLocalSaleCustomerDocumentNumber}
+                                            setLocalSaleCustomerDocumentType={setLocalSaleCustomerDocumentType}
+                                            setLocalSaleCustomerEmail={setLocalSaleCustomerEmail}
+                                            setLocalSaleCustomerLookupMessage={setLocalSaleCustomerLookupMessage}
+                                            setLocalSaleCustomerName={setLocalSaleCustomerName}
+                                            setLocalSaleCustomerPhone={setLocalSaleCustomerPhone}
+                                            setLocalSaleCustomerStreet={setLocalSaleCustomerStreet}
+                                            setLocalSaleDiscountCode={setLocalSaleDiscountCode}
+                                            setLocalSaleElectronicAmount={setLocalSaleElectronicAmount}
+                                            setLocalSaleNotes={setLocalSaleNotes}
+                                            setLocalSalePaymentMethod={setLocalSalePaymentMethod}
+                                            setLocalSalePaymentReference={setLocalSalePaymentReference}
+                                            setLocalSaleQuoteSendEmail={setLocalSaleQuoteSendEmail}
+                                            setLocalSaleQuoteSendWhatsApp={setLocalSaleQuoteSendWhatsApp}
+                                            setLocalSaleSelectedQuotationId={setLocalSaleSelectedQuotationId}
+                                            setLocalSaleSearch={setLocalSaleSearch}
+                                            setPosCloseNotes={setPosCloseNotes}
+                                            setPosClosingCash={setPosClosingCash}
+                                            setPosMovementAmount={setPosMovementAmount}
+                                            setPosMovementDescription={setPosMovementDescription}
+                                            setPosMovementType={setPosMovementType}
+                                            setPosOpenNotes={setPosOpenNotes}
+                                            setPosOpeningCash={setPosOpeningCash}
+                                        />
+                                    )}
 
-                                        {!storeStatus.salesEnabled && (
-                                            <div className="mb-5 p-4 rounded-xl border border-red/30 bg-red/5 text-red text-sm">
-                                                {storeStatus.message || DEFAULT_STORE_PAUSE_MESSAGE}
-                                            </div>
-                                        )}
-
-                                        <div className="grid grid-cols-1 2xl:grid-cols-12 gap-5">
-                                            <LocalSaleCatalogPanel
-                                                products={localSaleCatalog}
-                                                search={localSaleSearch}
-                                                setSearch={setLocalSaleSearch}
-                                                localSaleUnits={localSaleUnits}
-                                                itemQuantityById={localSaleItemQuantityById}
-                                                onAddProduct={handleAddLocalSaleProduct}
-                                                formatMoney={formatMoney}
-                                                formatIsoDate={formatIsoDate}
-                                            />
-
-                                            <div className="2xl:col-span-6 border border-line rounded-2xl bg-white p-5">
-                                                <div className="flex items-start justify-between gap-3 mb-4">
-                                                    <div>
-                                                        <div className="heading6">Compra local</div>
-                                                        <p className="text-xs text-secondary mt-1">Resumen de productos, costos y cobro final.</p>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleClearLocalSale}
-                                                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-surface"
-                                                    >
-                                                        Limpiar
-                                                    </button>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-                                                    {localSaleQuickChecks.map((check) => (
-                                                        <div key={check.key} className={`rounded-lg border p-2 ${check.ok ? 'border-success/30 bg-success/10' : 'border-yellow/40 bg-yellow/10'}`}>
-                                                            <div className="text-[10px] uppercase font-bold text-secondary">{check.label}</div>
-                                                            <div className={`text-xs font-semibold mt-1 ${check.ok ? 'text-success' : 'text-yellow'}`}>{check.detail}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                                                    <div className="sm:col-span-2 text-[11px] font-semibold text-[#516074]">
-                                                        Paso 1: ingresa la cédula/documento para autocompletar el cliente.
-                                                    </div>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Tipo documento</div>
-                                                        <select
-                                                            value={localSaleCustomerDocumentType}
-                                                            onChange={(event) => setLocalSaleCustomerDocumentType(event.target.value as 'cedula' | 'ruc' | 'pasaporte' | 'consumidor_final')}
-                                                            className={posFieldClass}
-                                                        >
-                                                            <option value="cedula">Cédula</option>
-                                                            <option value="ruc">RUC</option>
-                                                            <option value="pasaporte">Pasaporte</option>
-                                                            <option value="consumidor_final">Consumidor final</option>
-                                                        </select>
-                                                    </label>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>
-                                                            Número de documento {localSaleCustomerDocumentType === 'consumidor_final' ? '(opcional)' : '(obligatorio)'}
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={localSaleCustomerDocumentNumber}
-                                                                onChange={(event) => {
-                                                                    setLocalSaleCustomerDocumentNumber(event.target.value)
-                                                                    setLocalSaleCustomerLookupMessage(null)
-                                                                }}
-                                                                onBlur={() => {
-                                                                    const trimmed = localSaleCustomerDocumentNumber.trim()
-                                                                    if (localSaleCustomerDocumentType !== 'consumidor_final' && trimmed.length >= 6) {
-                                                                        handleLookupCustomerByDocument(trimmed)
-                                                                    }
-                                                                }}
-                                                                onKeyDown={(event) => {
-                                                                    if (event.key !== 'Enter') return
-                                                                    event.preventDefault()
-                                                                    if (localSaleCustomerDocumentNumber.trim().length >= 6) {
-                                                                        handleLookupCustomerByDocument()
-                                                                    }
-                                                                }}
-                                                                placeholder={localSaleCustomerDocumentType === 'consumidor_final' ? 'No requerido' : 'Ingresa cédula/documento'}
-                                                                className={posFieldFlexClass}
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleLookupCustomerByDocument()}
-                                                                disabled={localSaleCustomerLookupLoading || localSaleCustomerDocumentNumber.trim().length < 6}
-                                                                className={`px-3 py-2 rounded-lg text-xs font-semibold ${(localSaleCustomerLookupLoading || localSaleCustomerDocumentNumber.trim().length < 6)
-                                                                    ? 'bg-surface text-secondary border border-line cursor-not-allowed'
-                                                                    : 'bg-black text-white hover:opacity-90'
-                                                                    }`}
-                                                            >
-                                                                {localSaleCustomerLookupLoading ? 'Buscando...' : 'Buscar'}
-                                                            </button>
-                                                        </div>
-                                                    </label>
-                                                    {localSaleCustomerLookupMessage && (
-                                                        <div className={`sm:col-span-2 -mt-1 text-xs ${localSaleCustomerLookupMessage.toLowerCase().includes('encontrado') ? 'text-success' : 'text-secondary'}`}>
-                                                            {localSaleCustomerLookupMessage}
-                                                        </div>
-                                                    )}
-                                                    <div className="sm:col-span-2 mt-1 text-[11px] font-semibold text-[#516074]">
-                                                        Paso 2: verifica o completa los datos del cliente.
-                                                    </div>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Cliente</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleCustomerName}
-                                                            onChange={(event) => setLocalSaleCustomerName(event.target.value)}
-                                                            placeholder="Nombre del cliente"
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Teléfono</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleCustomerPhone}
-                                                            onChange={(event) => setLocalSaleCustomerPhone(event.target.value)}
-                                                            placeholder="099..."
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    <label className="sm:col-span-2">
-                                                        <div className={posFieldLabelClass}>Correo</div>
-                                                        <input
-                                                            type="email"
-                                                            value={localSaleCustomerEmail}
-                                                            onChange={(event) => setLocalSaleCustomerEmail(event.target.value)}
-                                                            placeholder="cliente@correo.com"
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    <label className="sm:col-span-2">
-                                                        <div className={posFieldLabelClass}>Dirección (obligatoria)</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleCustomerStreet}
-                                                            onChange={(event) => setLocalSaleCustomerStreet(event.target.value)}
-                                                            placeholder="Dirección del cliente"
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Ciudad</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleCustomerCity}
-                                                            onChange={(event) => setLocalSaleCustomerCity(event.target.value)}
-                                                            placeholder="Ciudad (opcional)"
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Pago</div>
-                                                        <select
-                                                            value={localSalePaymentMethod}
-                                                            onChange={(event) => {
-                                                                const method = event.target.value
-                                                                setLocalSalePaymentMethod(method)
-                                                                if (method !== 'cash' && method !== 'mixed') {
-                                                                    setLocalSaleCashReceived('')
-                                                                }
-                                                                if (method !== 'mixed') {
-                                                                    setLocalSaleElectronicAmount('')
-                                                                }
-                                                                if (method === 'cash') {
-                                                                    setLocalSalePaymentReference('')
-                                                                }
-                                                            }}
-                                                            className={posFieldClass}
-                                                        >
-                                                            <option value="cash">Efectivo</option>
-                                                            <option value="card">Tarjeta</option>
-                                                            <option value="transfer">Transferencia</option>
-                                                            <option value="mixed">Mixto</option>
-                                                        </select>
-                                                    </label>
-                                                    <label>
-                                                        <div className={posFieldLabelClass}>Código descuento</div>
-                                                        <input
-                                                            type="text"
-                                                            value={localSaleDiscountCode}
-                                                            onChange={(event) => setLocalSaleDiscountCode(event.target.value.toUpperCase())}
-                                                            placeholder="Opcional y registrado"
-                                                            className={posFieldClass}
-                                                        />
-                                                    </label>
-                                                    {(localSalePaymentMethod === 'cash' || localSalePaymentMethod === 'mixed') && (
-                                                        <label>
-                                                            <div className={posFieldLabelClass}>Efectivo recibido</div>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
-                                                                value={localSaleCashReceived}
-                                                                onChange={(event) => setLocalSaleCashReceived(event.target.value)}
-                                                                placeholder="0.00"
-                                                                className={posFieldClass}
-                                                            />
-                                                            <div className="mt-1.5 flex gap-1.5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleSetCashExact}
-                                                                    className="px-2 py-1 rounded border border-line text-[11px] font-semibold hover:bg-surface"
-                                                                >
-                                                                    Exacto
-                                                                </button>
-                                                                {localSalePaymentMethod === 'mixed' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={handleCompleteMixedWithElectronic}
-                                                                        className="px-2 py-1 rounded border border-line text-[11px] font-semibold hover:bg-surface"
-                                                                    >
-                                                                        Completar mixto
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </label>
-                                                    )}
-                                                    {localSalePaymentMethod === 'mixed' && (
-                                                        <label>
-                                                            <div className={posFieldLabelClass}>Monto electrónico</div>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
-                                                                value={localSaleElectronicAmount}
-                                                                onChange={(event) => setLocalSaleElectronicAmount(event.target.value)}
-                                                                placeholder="0.00"
-                                                                className={posFieldClass}
-                                                            />
-                                                        </label>
-                                                    )}
-                                                    {(localSalePaymentMethod === 'transfer' || localSalePaymentMethod === 'mixed' || localSalePaymentMethod === 'card') && (
-                                                        <label className={localSalePaymentMethod === 'card' ? '' : 'sm:col-span-2'}>
-                                                            <div className={posFieldLabelClass}>Referencia de pago</div>
-                                                            <input
-                                                                type="text"
-                                                                value={localSalePaymentReference}
-                                                                onChange={(event) => setLocalSalePaymentReference(event.target.value)}
-                                                                placeholder={localSalePaymentMethod === 'card' ? 'Voucher (opcional)' : 'Referencia obligatoria'}
-                                                                className={posFieldClass}
-                                                            />
-                                                        </label>
-                                                    )}
-                                                    <label className="sm:col-span-2">
-                                                        <div className={posFieldLabelClass}>Notas</div>
-                                                        <textarea
-                                                            value={localSaleNotes}
-                                                            onChange={(event) => setLocalSaleNotes(event.target.value)}
-                                                            rows={2}
-                                                            placeholder="Observaciones de la venta"
-                                                            className={posTextareaClass}
-                                                        />
-                                                    </label>
-                                                    <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={localSaleAutoPrint}
-                                                            onChange={(event) => setLocalSaleAutoPrint(event.target.checked)}
-                                                            className="w-4 h-4 accent-black"
-                                                        />
-                                                        <span>Imprimir factura automáticamente al registrar la venta</span>
-                                                    </label>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Pagado</div>
-                                                        <div className="font-bold">{formatMoney(localSalePaidAmount)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Vuelto</div>
-                                                        <div className={`font-bold ${localSaleChange > 0 ? 'text-success' : ''}`}>{formatMoney(localSaleChange)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Pendiente de cobro</div>
-                                                        <div className={`font-bold ${localSalePendingAmount > 0 ? 'text-red' : 'text-success'}`}>{formatMoney(localSalePendingAmount)}</div>
-                                                    </div>
-                                                    <div className={`p-2 rounded border ${localSalePaymentReady ? 'border-success/30 bg-success/10' : 'border-yellow/30 bg-yellow/10'}`}>
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Estado de pago</div>
-                                                        <div className={`font-bold ${localSalePaymentReady ? 'text-success' : 'text-yellow'}`}>
-                                                            {localSalePaymentStatusText}
-                                                        </div>
-                                                        <div className="text-[10px] uppercase font-bold text-secondary mt-2">Monto a cobrar</div>
-                                                        <div className="font-bold">{formatMoney(localSaleTotal)}</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="max-h-[300px] overflow-y-auto border border-line rounded-xl mb-4 p-2 space-y-2">
-                                                    {localSaleItems.map((item) => (
-                                                        <div key={item.internalId} className="rounded-lg border border-line bg-surface p-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div className="min-w-0">
-                                                                    <div className="text-sm font-semibold leading-tight break-words">{item.name}</div>
-                                                                    <div className="text-[11px] text-secondary mt-1">
-                                                                        Costo: {formatMoney(item.cost * item.quantity)} | Unitario: {formatMoney(item.price)}
-                                                                    </div>
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveLocalSaleItem(item.internalId)}
-                                                                    className="text-red hover:underline text-xs font-semibold whitespace-nowrap"
-                                                                >
-                                                                    Quitar
-                                                                </button>
-                                                            </div>
-                                                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                                                                <div className="inline-flex items-center gap-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="w-7 h-7 rounded border border-line text-xs"
-                                                                        onClick={() => handleUpdateLocalSaleQuantity(item.internalId, item.quantity - 1)}
-                                                                    >
-                                                                        -
-                                                                    </button>
-                                                                    <input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        max={item.stock}
-                                                                        value={item.quantity}
-                                                                        onChange={(event) => handleUpdateLocalSaleQuantity(item.internalId, Number(event.target.value || 0))}
-                                                                        className="w-16 text-center text-xs border border-line rounded py-1"
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        className="w-7 h-7 rounded border border-line text-xs"
-                                                                        onClick={() => handleUpdateLocalSaleQuantity(item.internalId, item.quantity + 1)}
-                                                                    >
-                                                                        +
-                                                                    </button>
-                                                                </div>
-                                                                <div className="text-sm font-bold">
-                                                                    Total: {formatMoney(item.price * item.quantity)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {localSaleItems.length === 0 && (
-                                                        <div className="px-3 py-5 text-center text-sm text-secondary">
-                                                            Sin artículos agregados.
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
-                                                        <div className="font-bold">{formatMoney(localSaleNet)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">IVA</div>
-                                                        <div className="font-bold">{formatMoney(localSaleVat)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Venta bruta</div>
-                                                        <div className="font-bold">{formatMoney(localSaleGross)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Envío</div>
-                                                        <div className="font-bold">{formatMoney(localSaleShipping)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
-                                                        <div className={`font-bold ${localSaleProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(localSaleProfit)}</div>
-                                                    </div>
-                                                    <div className="p-2 rounded border border-line bg-surface">
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Descuento</div>
-                                                        <div className="font-bold">{formatMoney(localSaleDiscount)}</div>
-                                                    </div>
-                                                </div>
-
-                                                {localSaleQuote?.discount_rejections && localSaleQuote.discount_rejections.length > 0 && (
-                                                    <div className="mb-3 p-3 rounded-lg border border-yellow/40 bg-yellow/10 text-yellow text-xs">
-                                                        {localSaleQuote.discount_rejections.map((item, index) => (
-                                                            <div key={`${item.code || 'code'}-${index}`}>
-                                                                {item.message || item.reason || 'Descuento rechazado por reglas de validación.'}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {localSaleMissingInfo.length > 0 && (
-                                                    <div className="mb-3 p-3 rounded-lg border border-yellow/40 bg-yellow/10 text-yellow text-xs">
-                                                        <div className="font-semibold mb-1">Pendiente principal: {localSalePrimaryMissing}</div>
-                                                        {localSaleMissingInfo.length > 1 && (
-                                                            <details>
-                                                                <summary className="cursor-pointer font-medium">
-                                                                    Ver {localSaleMissingInfo.length - 1} pendiente{localSaleMissingInfo.length - 1 === 1 ? '' : 's'} adicional{localSaleMissingInfo.length - 1 === 1 ? '' : 'es'}
-                                                                </summary>
-                                                                <ul className="list-disc pl-4 space-y-0.5 mt-1">
-                                                                    {localSaleMissingInfo.slice(1).map((issue, idx) => (
-                                                                        <li key={`${issue}-${idx}`}>{issue}</li>
-                                                                    ))}
-                                                                </ul>
-                                                            </details>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <div className="text-[10px] uppercase font-bold text-secondary">Total a cobrar</div>
-                                                        <div className="text-2xl font-bold">{formatMoney(localSaleTotal)}</div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleCreateLocalSale}
-                                                        disabled={isLocalSaleSubmitDisabled}
-                                                        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${(isLocalSaleSubmitDisabled)
-                                                            ? 'bg-surface text-secondary cursor-not-allowed border border-line'
-                                                            : 'bg-black text-white hover:opacity-90'
-                                                            }`}
-                                                    >
-                                                        {localSaleSaving ? 'Registrando...' : (localSaleQuoteLoading ? 'Calculando...' : 'Registrar venta local')}
-                                                    </button>
-                                                </div>
-                                                {localSaleLastSubmission && (
-                                                    <div className={`mt-4 p-4 rounded-xl border ${localSaleLastSubmission.status === 'success'
-                                                        ? 'border-success/20 bg-success/5'
-                                                        : 'border-red/20 bg-red/5'
-                                                        }`}>
-                                                        <div className="flex items-start justify-between gap-3">
-                                                            <div className="min-w-0">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Último resultado de venta</div>
-                                                                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                                                    <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${localSaleLastSubmission.status === 'success'
-                                                                        ? 'bg-success/15 text-success'
-                                                                        : 'bg-red/10 text-red'
-                                                                        }`}>
-                                                                        {localSaleLastSubmission.status === 'success' ? (
-                                                                            <Icon.CheckCircle size={14} weight="fill" />
-                                                                        ) : (
-                                                                            <Icon.WarningCircle size={14} weight="fill" />
-                                                                        )}
-                                                                        {localSaleLastSubmission.status === 'success' ? 'Venta OK' : 'Venta con error'}
-                                                                    </div>
-                                                                    {localSaleLastSubmission.orderStatus && localSaleLastSubmission.status === 'success' && (
-                                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${getStatusBadge(localSaleLastSubmission.orderStatus).className}`}>
-                                                                            {getStatusBadge(localSaleLastSubmission.orderStatus).label}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="text-right text-[11px] text-secondary shrink-0">
-                                                                {formatDateTimeEcuador(localSaleLastSubmission.createdAt, {
-                                                                    day: '2-digit',
-                                                                    month: '2-digit',
-                                                                    year: 'numeric',
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-3 text-sm font-medium text-black">
-                                                            {localSaleLastSubmission.message}
-                                                        </div>
-
-                                                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedido</div>
-                                                                <div className="font-semibold mt-1 break-all">{localSaleLastSubmission.orderId || 'No generado'}</div>
-                                                            </div>
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Cliente</div>
-                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.customerName}</div>
-                                                            </div>
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Total</div>
-                                                                <div className="font-semibold mt-1">{formatMoney(localSaleLastSubmission.total)}</div>
-                                                            </div>
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pago</div>
-                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.paymentMethod}</div>
-                                                            </div>
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Productos</div>
-                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.itemCount} tipo{localSaleLastSubmission.itemCount === 1 ? '' : 's'} / {localSaleLastSubmission.units} ud{localSaleLastSubmission.units === 1 ? '' : 's'}</div>
-                                                            </div>
-                                                            <div className="rounded-lg border border-line bg-white/80 px-3 py-2">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Documento</div>
-                                                                <div className="font-semibold mt-1">{localSaleLastSubmission.documentNumber || 'Consumidor final'}</div>
-                                                            </div>
-                                                        </div>
-
-                                                        {localSaleLastSubmission.invoiceAvailable && localSaleLastSubmission.orderId && (
-                                                            <div className="mt-3 flex gap-2 flex-wrap">
-                                                                <button
-                                                                    type="button"
-                                                                    className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
-                                                                    onClick={handleOpenLastLocalSaleOrder}
-                                                                >
-                                                                    Ver pedido
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-white"
-                                                                    onClick={handlePrintLastLocalSaleInvoice}
-                                                                >
-                                                                    Imprimir / Guardar PDF
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-5">
-                                            <div className="xl:col-span-7 border border-line rounded-2xl bg-white p-5">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div>
-                                                        <div className="heading6">Caja del turno</div>
-                                                        <p className="text-xs text-secondary mt-1">
-                                                            {posCanRegisterSale
-                                                                ? `Turno activo: ${posActiveShift?.id || '-'}`
-                                                                : 'No hay turno activo. Abre caja para vender.'}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => loadPosSnapshot()}
-                                                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-line hover:bg-surface"
-                                                        disabled={posLoading || posActionLoading}
-                                                    >
-                                                        {posLoading ? 'Cargando...' : 'Actualizar'}
-                                                    </button>
-                                                </div>
-
-                                                {posCanRegisterSale && posActiveShift ? (
-                                                    <div className="space-y-4">
-                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Apertura</div>
-                                                                <div className="font-bold">{formatMoney(posActiveShift.opening_cash)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Esperado en caja</div>
-                                                                <div className="font-bold">{formatMoney(posExpectedCash)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Pedidos POS</div>
-                                                                <div className="font-bold">{posOrdersCount}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas turno</div>
-                                                                <div className="font-bold">{formatMoney(posSalesTotal)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas efectivo</div>
-                                                                <div className="font-bold">{formatMoney(posCashSales)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ventas electrónicas</div>
-                                                                <div className="font-bold">{formatMoney(posElectronicSales)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ingresos caja</div>
-                                                                <div className="font-bold">{formatMoney(posMovementIncome)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Egresos caja</div>
-                                                                <div className="font-bold">{formatMoney(posMovementExpense)}</div>
-                                                            </div>
-                                                            <div className="p-2 rounded border border-line bg-surface">
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ajustes</div>
-                                                                <div className="font-bold">{formatMoney(posMovementAdjustments)}</div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            <label>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Efectivo contado al cierre</div>
-                                                                <input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    step="0.01"
-                                                                    value={posClosingCash}
-                                                                    onChange={(event) => setPosClosingCash(event.target.value)}
-                                                                    className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                                />
-                                                            </label>
-                                                            <label>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Nota de cierre</div>
-                                                                <input
-                                                                    type="text"
-                                                                    value={posCloseNotes}
-                                                                    onChange={(event) => setPosCloseNotes(event.target.value)}
-                                                                    placeholder="Observación del turno"
-                                                                    className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                                />
-                                                            </label>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleClosePosShift}
-                                                            disabled={posActionLoading || posLoading}
-                                                            className={`px-4 py-2 rounded-lg text-sm font-semibold ${(posActionLoading || posLoading)
-                                                                ? 'bg-surface text-secondary cursor-not-allowed border border-line'
-                                                                : 'bg-black text-white hover:opacity-90'
-                                                                }`}
-                                                        >
-                                                            {posActionLoading ? 'Procesando...' : 'Cerrar caja'}
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                        <label>
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Monto inicial</div>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
-                                                                value={posOpeningCash}
-                                                                onChange={(event) => setPosOpeningCash(event.target.value)}
-                                                                placeholder="0.00"
-                                                                className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                            />
-                                                        </label>
-                                                        <label>
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Nota de apertura</div>
-                                                            <input
-                                                                type="text"
-                                                                value={posOpenNotes}
-                                                                onChange={(event) => setPosOpenNotes(event.target.value)}
-                                                                placeholder="Observación inicial"
-                                                                className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                            />
-                                                        </label>
-                                                        <div className="sm:col-span-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleOpenPosShift}
-                                                                disabled={posActionLoading || posLoading}
-                                                                className={`px-4 py-2 rounded-lg text-sm font-semibold ${(posActionLoading || posLoading)
-                                                                    ? 'bg-surface text-secondary cursor-not-allowed border border-line'
-                                                                    : 'bg-black text-white hover:opacity-90'
-                                                                    }`}
-                                                            >
-                                                                {posActionLoading ? 'Procesando...' : 'Abrir caja'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="xl:col-span-5 border border-line rounded-2xl bg-white p-5">
-                                                <div className="heading6 mb-3">Movimientos de caja</div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                                                    <select
-                                                        value={posMovementType}
-                                                        onChange={(event) => setPosMovementType(event.target.value as PosMovement['type'])}
-                                                        className="px-3 py-2 rounded-lg border border-line text-sm bg-white focus:border-black outline-none"
-                                                    >
-                                                        <option value="expense">Egreso</option>
-                                                        <option value="income">Ingreso</option>
-                                                        <option value="withdrawal">Retiro</option>
-                                                        <option value="deposit">Depósito</option>
-                                                        <option value="adjustment">Ajuste (+/-)</option>
-                                                    </select>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={posMovementAmount}
-                                                        onChange={(event) => setPosMovementAmount(event.target.value)}
-                                                        placeholder={posMovementType === 'adjustment' ? 'Puede ser negativo' : 'Monto'}
-                                                        className="px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleAddPosMovement}
-                                                        disabled={!posCanRegisterSale || posActionLoading || posLoading}
-                                                        className={`px-3 py-2 rounded-lg text-sm font-semibold ${(posCanRegisterSale && !posActionLoading && !posLoading)
-                                                            ? 'bg-black text-white hover:opacity-90'
-                                                            : 'bg-surface text-secondary border border-line cursor-not-allowed'
-                                                            }`}
-                                                    >
-                                                        Agregar
-                                                    </button>
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    value={posMovementDescription}
-                                                    onChange={(event) => setPosMovementDescription(event.target.value)}
-                                                    placeholder="Descripción del movimiento"
-                                                    className="w-full mb-3 px-3 py-2 rounded-lg border border-line text-sm focus:border-black outline-none"
-                                                />
-                                                <div className="overflow-auto max-h-[210px] border border-line rounded-xl">
-                                                    <table className="w-full min-w-[540px]">
-                                                        <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
-                                                            <tr>
-                                                                <th className="px-3 py-2 text-left">Fecha</th>
-                                                                <th className="px-3 py-2 text-left">Tipo</th>
-                                                                <th className="px-3 py-2 text-right">Monto</th>
-                                                                <th className="px-3 py-2 text-left">Detalle</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-line">
-                                                            {posMovements.map((movement) => (
-                                                                <tr key={movement.id}>
-                                                                    <td className="px-3 py-2 text-xs">{formatDateTimeEcuador(movement.created_at)}</td>
-                                                                    <td className="px-3 py-2 text-xs uppercase">{movement.type}</td>
-                                                                    <td className={`px-3 py-2 text-xs text-right font-semibold ${movement.type === 'expense' || movement.type === 'withdrawal' ? 'text-red' : 'text-success'}`}>
-                                                                        {formatMoney(movement.amount)}
-                                                                    </td>
-                                                                    <td className="px-3 py-2 text-xs">{movement.description || '-'}</td>
-                                                                </tr>
-                                                            ))}
-                                                            {posMovements.length === 0 && (
-                                                                <tr>
-                                                                    <td colSpan={4} className="px-3 py-5 text-center text-xs text-secondary">
-                                                                        Sin movimientos registrados en el turno.
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="border border-line rounded-2xl bg-white p-5 mb-5">
-                                            <div className="heading6 mb-3">Histórico de turnos de caja</div>
-                                            <div className="overflow-auto max-h-[220px] border border-line rounded-xl">
-                                                <table className="w-full min-w-[880px]">
-                                                    <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
-                                                        <tr>
-                                                            <th className="px-3 py-2 text-left">Turno</th>
-                                                            <th className="px-3 py-2 text-left">Estado</th>
-                                                            <th className="px-3 py-2 text-left">Inicio</th>
-                                                            <th className="px-3 py-2 text-left">Fin</th>
-                                                            <th className="px-3 py-2 text-right">Apertura</th>
-                                                            <th className="px-3 py-2 text-right">Esperado</th>
-                                                            <th className="px-3 py-2 text-right">Cierre</th>
-                                                            <th className="px-3 py-2 text-right">Diferencia</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-line">
-                                                        {posShiftHistory.map((shift) => (
-                                                            <tr key={shift.id} className="hover:bg-surface/40">
-                                                                <td className="px-3 py-2 text-xs font-semibold">{shift.id}</td>
-                                                                <td className="px-3 py-2 text-xs">
-                                                                    <span className={`px-2 py-0.5 rounded-full ${shift.status === 'open' ? 'bg-success/15 text-success' : 'bg-surface text-secondary'}`}>
-                                                                        {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-2 text-xs">{formatDateTimeEcuador(shift.opened_at)}</td>
-                                                                <td className="px-3 py-2 text-xs">{shift.closed_at ? formatDateTimeEcuador(shift.closed_at) : '-'}</td>
-                                                                <td className="px-3 py-2 text-xs text-right">{formatMoney(shift.opening_cash)}</td>
-                                                                <td className="px-3 py-2 text-xs text-right">{formatMoney(shift.summary?.expected_cash ?? shift.expected_cash ?? 0)}</td>
-                                                                <td className="px-3 py-2 text-xs text-right">{shift.closing_cash !== null && shift.closing_cash !== undefined ? formatMoney(shift.closing_cash) : '-'}</td>
-                                                                <td className={`px-3 py-2 text-xs text-right font-semibold ${Number(shift.summary?.difference_cash ?? shift.difference_cash ?? 0) < 0 ? 'text-red' : 'text-success'}`}>
-                                                                    {shift.status === 'closed' ? formatMoney(shift.summary?.difference_cash ?? shift.difference_cash ?? 0) : '-'}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        {posShiftHistory.length === 0 && (
-                                                            <tr>
-                                                                <td colSpan={8} className="px-3 py-5 text-center text-xs text-secondary">
-                                                                    Aún no hay turnos de caja registrados.
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                    </div>
+                                    {activeTab === 'quotations' && (
+                                        <QuotationsPanel
+                                            currentDateLabel={currentDateLabel}
+                                            storeStatus={storeStatus}
+                                            formatMoney={formatMoney}
+                                            formatIsoDate={formatIsoDate}
+                                            formatDateTimeEcuador={formatDateTimeEcuador}
+                                            localSaleCatalog={localSaleCatalog}
+                                            localSaleCustomerCity={localSaleCustomerCity}
+                                            localSaleCustomerDocumentNumber={localSaleCustomerDocumentNumber}
+                                            localSaleCustomerDocumentType={localSaleCustomerDocumentType}
+                                            localSaleCustomerEmail={localSaleCustomerEmail}
+                                            localSaleCustomerEmailValid={localSaleCustomerEmailValid}
+                                            localSaleCustomerLookupLoading={localSaleCustomerLookupLoading}
+                                            localSaleCustomerLookupMessage={localSaleCustomerLookupMessage}
+                                            localSaleCustomerName={localSaleCustomerName}
+                                            localSaleCustomerPhone={localSaleCustomerPhone}
+                                            localSaleCustomerStreet={localSaleCustomerStreet}
+                                            localSaleDiscountCode={localSaleDiscountCode}
+                                            localSaleItemQuantityById={localSaleItemQuantityById}
+                                            localSaleItems={localSaleItems}
+                                            localSaleLastQuotation={localSaleLastQuotation}
+                                            localSaleQuotationMissingInfo={localSaleQuotationMissingInfo}
+                                            localSaleQuotationPrimaryMissing={localSaleQuotationPrimaryMissing}
+                                            localSaleQuote={localSaleQuote}
+                                            localSaleQuoteHistory={localSaleQuoteHistory}
+                                            localSaleQuoteHistoryLoading={localSaleQuoteHistoryLoading}
+                                            localSaleQuoteLoading={localSaleQuoteLoading}
+                                            localSaleQuoteSendEmail={localSaleQuoteSendEmail}
+                                            localSaleQuoteSendWhatsApp={localSaleQuoteSendWhatsApp}
+                                            localSaleCustomerPhoneValid={localSaleCustomerPhoneValid}
+                                            localSaleSearch={localSaleSearch}
+                                            localSaleSelectedQuotationId={localSaleSelectedQuotationId}
+                                            localSaleTotal={localSaleTotal}
+                                            localSaleUnits={localSaleUnits}
+                                            localSaleVat={localSaleVat}
+                                            localSaleNet={localSaleNet}
+                                            localSaleNotes={localSaleNotes}
+                                            localSaleSaving={localSaleSaving}
+                                            posFieldClass={posFieldClass}
+                                            posFieldFlexClass={posFieldFlexClass}
+                                            posFieldLabelClass={posFieldLabelClass}
+                                            posTextareaClass={posTextareaClass}
+                                            handleAddLocalSaleProduct={handleAddLocalSaleProduct}
+                                            handleClearLocalSale={handleClearLocalSale}
+                                            handleCreateLocalQuotation={handleCreateLocalQuotation}
+                                            handleConvertSelectedLocalQuotation={handleConvertSelectedLocalQuotation}
+                                            handleLookupCustomerByDocument={handleLookupCustomerByDocument}
+                                            handlePrintLastLocalQuotation={handlePrintLastLocalQuotation}
+                                            handleRemoveLocalSaleItem={handleRemoveLocalSaleItem}
+                                            handleUpdateLocalSaleQuantity={handleUpdateLocalSaleQuantity}
+                                            loadLocalSaleQuoteHistory={loadLocalSaleQuoteHistory}
+                                            setLocalSaleCustomerCity={setLocalSaleCustomerCity}
+                                            setLocalSaleCustomerDocumentNumber={setLocalSaleCustomerDocumentNumber}
+                                            setLocalSaleCustomerDocumentType={setLocalSaleCustomerDocumentType}
+                                            setLocalSaleCustomerEmail={setLocalSaleCustomerEmail}
+                                            setLocalSaleCustomerLookupMessage={setLocalSaleCustomerLookupMessage}
+                                            setLocalSaleCustomerName={setLocalSaleCustomerName}
+                                            setLocalSaleCustomerPhone={setLocalSaleCustomerPhone}
+                                            setLocalSaleCustomerStreet={setLocalSaleCustomerStreet}
+                                            setLocalSaleDiscountCode={setLocalSaleDiscountCode}
+                                            setLocalSaleNotes={setLocalSaleNotes}
+                                            setLocalSaleQuoteSendEmail={setLocalSaleQuoteSendEmail}
+                                            setLocalSaleQuoteSendWhatsApp={setLocalSaleQuoteSendWhatsApp}
+                                            setLocalSaleSearch={setLocalSaleSearch}
+                                            setLocalSaleSelectedQuotationId={setLocalSaleSelectedQuotationId}
+                                        />
                                     )}
 
                                     {activeTab === 'inventory' && (
@@ -6568,128 +6537,21 @@ const MyAccount = () => {
                             {user.role !== 'admin' && (
                                 <>
                                     {activeTab === 'dashboard' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="overview grid sm:grid-cols-3 gap-5">
-                                            <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="counter">
-                                                    <span className="text-secondary">Esperando Recojo</span>
-                                                    <h5 className="heading5 mt-1">{pickupUserOrders}</h5>
-                                                </div>
-                                                <Icon.HourglassMedium className='text-4xl' />
-                                            </div>
-                                            <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="counter">
-                                                    <span className="text-secondary">Pedidos Cancelados</span>
-                                                    <h5 className="heading5 mt-1">{canceledUserOrders}</h5>
-                                                </div>
-                                                <Icon.ReceiptX className='text-4xl' />
-                                            </div>
-                                            <div className="item flex items-center justify-between p-5 border border-line rounded-lg box-shadow-xs">
-                                                <div className="counter">
-                                                    <span className="text-secondary">Número Total de Pedidos</span>
-                                                    <h5 className="heading5 mt-1">{totalUserOrders}</h5>
-                                                </div>
-                                                <Icon.Package className='text-4xl' />
-                                            </div>
-                                        </div>
-                                        <div className="recent_order pt-5 px-5 pb-2 mt-7 border border-line rounded-xl">
-                                            <h6 className="heading6">Pedidos Recientes</h6>
-                                            <div className="list overflow-x-auto w-full mt-5">
-                                                <table className="w-full min-w-[900px]">
-                                                    <thead className="border-b border-line">
-                                                        <tr>
-                                                            <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Pedido</th>
-                                                            <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Productos</th>
-                                                            <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Entrega / Pago</th>
-                                                            <th scope="col" className="pb-3 text-left text-sm font-bold uppercase text-secondary whitespace-nowrap">Precio</th>
-                                                            <th scope="col" className="pb-3 text-right text-sm font-bold uppercase text-secondary whitespace-nowrap">Estado</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {userOrdersLoading && (
-                                                            <tr>
-                                                                <td colSpan={5} className="py-6 text-center text-secondary">Cargando pedidos...</td>
-                                                            </tr>
-                                                        )}
-                                                        {!userOrdersLoading && recentUserOrders.length === 0 && (
-                                                            <tr>
-                                                                <td colSpan={5} className="py-6 text-center text-secondary">No tienes pedidos recientes.</td>
-                                                            </tr>
-                                                        )}
-                                                        {!userOrdersLoading && recentUserOrders.map((order) => {
-                                                            const badge = getStatusBadge(order.status)
-                                                            const firstItem = order.items?.[0]
-                                                            const itemsCount = order.items?.length ?? 0
-                                                            const deliveryMethod = String(order.delivery_method || '').trim().toLowerCase()
-                                                            const deliveryLabel = deliveryMethod === 'pickup'
-                                                                ? 'Retiro en tienda'
-                                                                : deliveryMethod === 'delivery'
-                                                                    ? 'Envío a domicilio'
-                                                                    : 'Entrega por confirmar'
-                                                            const paymentMethodRaw = String(order.payment_method || '').trim()
-                                                            const paymentMethod = paymentMethodRaw.toLowerCase()
-                                                            const paymentLabel = !paymentMethod
-                                                                ? 'Pago por confirmar'
-                                                                : ['cash', 'efectivo'].includes(paymentMethod)
-                                                                    ? 'Pago en efectivo'
-                                                                    : ['card', 'tarjeta'].includes(paymentMethod)
-                                                                        ? 'Pago con tarjeta'
-                                                                        : ['transfer', 'transferencia'].includes(paymentMethod)
-                                                                            ? 'Transferencia'
-                                                                            : paymentMethodRaw
-                                                            return (
-                                                                <tr
-                                                                    key={order.id}
-                                                                    className="item duration-300 border-b border-line last:border-0 hover:bg-surface/40 cursor-pointer"
-                                                                    onClick={() => {
-                                                                        setSelectedOrder(order)
-                                                                        setIsOrderModalOpen(true)
-                                                                    }}
-                                                                >
-                                                                    <th scope="row" className="py-3 text-left">
-                                                                        <div className="flex flex-col">
-                                                                            <strong className="text-title">#{order.id}</strong>
-                                                                            <span className="caption1 text-secondary mt-1">{formatDateTimeEcuador(order.created_at)}</span>
-                                                                        </div>
-                                                                    </th>
-                                                                    <td className="py-3">
-                                                                        {firstItem ? (
-                                                                            <div className="product flex items-center gap-3">
-                                                                                <Image
-                                                                                    src={normalizeOrderItemImage(firstItem.product_image)}
-                                                                                    width={400}
-                                                                                    height={400}
-                                                                                    alt={firstItem.product_name}
-                                                                                    className="flex-shrink-0 w-12 h-12 rounded object-cover"
-                                                                                    unoptimized={isDynamicOrderItemImage(firstItem.product_image)}
-                                                                                />
-                                                                                <div className="info flex flex-col">
-                                                                                    <strong className="product_name text-button">{firstItem.product_name}</strong>
-                                                                                    <span className="product_tag caption1 text-secondary">{itemsCount > 1 ? `${itemsCount} productos` : '1 producto'}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className="text-secondary text-sm">Sin productos</div>
-                                                                        )}
-                                                                    </td>
-                                                                    <td className="py-3">
-                                                                        <div className="flex flex-col">
-                                                                            <strong className="text-button">{deliveryLabel}</strong>
-                                                                            <span className="caption1 text-secondary mt-1">{paymentLabel}</span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="py-3 price">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                    <td className="py-3 text-right">
-                                                                        <span className={`tag px-4 py-1.5 rounded-full bg-opacity-10 ${badge.className} caption1 font-semibold`}>{badge.label}</span>
-                                                                    </td>
-                                                                </tr>
-                                                            )
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
+                                        <CustomerDashboardTab
+                                            pickupUserOrders={pickupUserOrders}
+                                            canceledUserOrders={canceledUserOrders}
+                                            totalUserOrders={totalUserOrders}
+                                            userOrdersLoading={userOrdersLoading}
+                                            recentUserOrders={recentUserOrders}
+                                            onOpenOrder={(order) => {
+                                                setSelectedOrder(order)
+                                                setIsOrderModalOpen(true)
+                                            }}
+                                            getStatusBadge={getStatusBadge}
+                                            formatDateTime={formatDateTimeEcuador}
+                                            normalizeOrderItemImage={normalizeOrderItemImage}
+                                            isDynamicOrderItemImage={isDynamicOrderItemImage}
+                                        />
                                     )}
                                     {activeTab === 'orders' && (
                                     <CustomerOrdersPanel

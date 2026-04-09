@@ -117,8 +117,25 @@ const isPublicApiPath = (pathname: string, method?: string) => {
 }
 
 const shouldDisableServerCache = (pathname: string) => {
-  if (pathname === '/api/products' || pathname.startsWith('/api/products/')) return true
   return false
+}
+
+const getServerCachePolicy = (
+  pathname: string,
+  method: string,
+): { cache: RequestCache; next?: { revalidate?: number | false } } | null => {
+  if (typeof window !== 'undefined') return null
+  if (method !== 'GET') return null
+  if (!isPublicApiPath(pathname, method) || shouldDisableServerCache(pathname)) return null
+
+  if (process.env.NODE_ENV === 'development') {
+    if (pathname === '/api/products' || pathname.startsWith('/api/products/')) {
+      return { cache: 'force-cache', next: { revalidate: 5 } }
+    }
+    return { cache: 'force-cache', next: { revalidate: 15 } }
+  }
+
+  return { cache: 'force-cache', next: { revalidate: 60 } }
 }
 
 const getPathname = (pathOrUrl: string) => {
@@ -548,13 +565,9 @@ const performReadableRequest = async (
 export async function fetchJson<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase()
   const pathname = getPathname(path)
-  const shouldCacheOnServer =
-    typeof window === 'undefined' &&
-    method === 'GET' &&
-    isPublicApiPath(pathname, method) &&
-    !shouldDisableServerCache(pathname)
-  const cache = init?.cache || (shouldCacheOnServer ? 'force-cache' : 'no-store')
-  const nextOptions = shouldCacheOnServer ? { revalidate: 60 } : undefined
+  const serverCachePolicy = getServerCachePolicy(pathname, method)
+  const cache = init?.cache || serverCachePolicy?.cache || 'no-store'
+  const nextOptions = serverCachePolicy?.next
   const result = await performReadableRequest(path, init, cache, nextOptions)
 
   if (!result.ok) {

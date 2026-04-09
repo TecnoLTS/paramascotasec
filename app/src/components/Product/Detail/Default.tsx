@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation } from 'swiper/modules'
 import SwiperCore from 'swiper/core'
-import * as Icon from '@phosphor-icons/react/dist/ssr'
+import { Minus, Plus, X } from '@phosphor-icons/react/dist/ssr'
 import 'swiper/css/bundle'
 import { ProductType } from '@/type/ProductType'
 import Product from '../Product'
@@ -28,6 +28,12 @@ import {
   getLiveProductAvailableStock,
   resolveLiveSelectedVariant,
 } from '@/lib/liveCatalog'
+
+const Icon = {
+  Minus,
+  Plus,
+  X,
+} as const
 
 interface Props {
   data: Array<ProductType>

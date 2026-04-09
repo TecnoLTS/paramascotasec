@@ -466,6 +466,64 @@ export type LocalSaleSubmissionResult = {
     invoiceAvailable: boolean;
 }
 
+export type LocalSaleQuotationResult = {
+    status: 'success' | 'error';
+    quoteId: string | null;
+    message: string;
+    customerName: string;
+    documentNumber: string | null;
+    total: number;
+    itemCount: number;
+    units: number;
+    createdAt: string;
+    printable: boolean;
+    emailSent?: boolean;
+    emailMessage?: string | null;
+    whatsappPrepared?: boolean;
+    whatsappMessage?: string | null;
+}
+
+export type AdminLocalQuotation = {
+    id: string;
+    tenant_id?: string;
+    status: 'quoted' | 'converted' | 'cancelled' | string;
+    customer_name: string;
+    customer_document_type?: string | null;
+    customer_document_number?: string | null;
+    customer_email?: string | null;
+    customer_phone?: string | null;
+    customer_address?: {
+        street?: string | null;
+        city?: string | null;
+        state?: string | null;
+        country?: string | null;
+        zip?: string | null;
+    } | null;
+    delivery_method?: string | null;
+    payment_method?: string | null;
+    discount_code?: string | null;
+    notes?: string | null;
+    items: Array<{
+        product_id: string;
+        quantity: number;
+    }>;
+    quote_snapshot: LocalSaleQuote;
+    created_by_user_id?: string | null;
+    converted_order_id?: string | null;
+    valid_until?: string | null;
+    converted_at?: string | null;
+    created_at: string;
+    updated_at?: string | null;
+    item_count?: number;
+    units?: number;
+    email_delivery?: {
+        requested?: boolean;
+        sent?: boolean;
+        recipient?: string | null;
+        message?: string | null;
+    };
+}
+
 export type PosShiftSummary = {
     orders_count: number;
     sales_total: number;

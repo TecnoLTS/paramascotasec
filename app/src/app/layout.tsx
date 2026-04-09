@@ -9,6 +9,7 @@ import CountdownTimeType from '@/type/CountdownType'
 import { countdownTime } from '@/store/countdownTime'
 import { getSiteConfig } from '@/lib/site'
 import { versionLocalImagePath } from '@/lib/staticAsset'
+import { fetchSuggestionsData } from '@/lib/server/suggestions'
 
 const instrument = Instrument_Sans({ subsets: ['latin'], preload: false })
 const serverTimeLeft: CountdownTimeType = countdownTime();
@@ -58,10 +59,17 @@ export default async function RootLayout({
 }) {
   const requestHeaders = await headers()
   const nonce = requestHeaders.get('x-nonce') || undefined
+  const forwardedHost = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
+  const forwardedProto = requestHeaders.get('x-forwarded-proto')
   const site = getSiteConfig()
   const siteUrl = site.baseUrl.replace(/\/$/, '')
   const logoImage = versionLocalImagePath(site.logo.src)
   const sameAs = [site.social.facebook, site.social.instagram, site.social.twitter, site.social.youtube].filter(Boolean)
+  const initialSuggestions = await fetchSuggestionsData({
+    host: forwardedHost,
+    proto: forwardedProto || new URL(siteUrl).protocol.replace(':', ''),
+    limit: 4,
+  }).catch(() => [])
   return (
     <html lang="es" data-scroll-behavior="smooth">
       <body className={instrument.className}>
@@ -69,7 +77,7 @@ export default async function RootLayout({
           <div id="app-root">
             {children}
           </div>
-          <ClientModals serverTimeLeft={serverTimeLeft} />
+          <ClientModals serverTimeLeft={serverTimeLeft} initialSuggestions={initialSuggestions} />
           <script
             nonce={nonce}
             type="application/ld+json"
