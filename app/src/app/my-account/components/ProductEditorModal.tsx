@@ -2657,22 +2657,24 @@ export default function ProductEditorModal({
                                     ))}
                                 </select>
                             </div>
-                            <div>
-                                <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor habitual</label>
-                                <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setPreferredSupplier(e.target.value)} disabled={saving}>
-                                    <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
-                                    {supplierOptions.map((option) => (
-                                        <option key={`supplier-option-${option.value}`} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                                <p className="text-secondary text-xs mt-2">Opcional. Sirve como proveedor por defecto para próximas compras e ingresos de stock.</p>
-                                {selectedPreferredSupplier && (
-                                    <p className="text-secondary text-xs mt-2 break-words">
-                                        {selectedPreferredSupplier.document ? `RUC: ${selectedPreferredSupplier.document}` : 'Proveedor sin RUC registrado.'}
-                                        {(selectedPreferredSupplier.email || selectedPreferredSupplier.phone) ? ` · ${selectedPreferredSupplier.email || 'Sin correo'} · ${selectedPreferredSupplier.phone || 'Sin teléfono'}` : ''}
-                                    </p>
-                                )}
-                            </div>
+                            {!requiresPurchaseInvoice && (
+                                <div>
+                                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Proveedor habitual</label>
+                                    <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.supplier || ''} onChange={e => setPreferredSupplier(e.target.value)} disabled={saving}>
+                                        <option value="">{supplierOptions.length > 0 ? 'Selecciona proveedor' : 'No hay proveedores registrados'}</option>
+                                        {supplierOptions.map((option) => (
+                                            <option key={`supplier-option-${option.value}`} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-secondary text-xs mt-2">Opcional. Sirve como proveedor por defecto para próximas compras e ingresos de stock.</p>
+                                    {selectedPreferredSupplier && (
+                                        <p className="text-secondary text-xs mt-2 break-words">
+                                            {selectedPreferredSupplier.document ? `RUC: ${selectedPreferredSupplier.document}` : 'Proveedor sin RUC registrado.'}
+                                            {(selectedPreferredSupplier.email || selectedPreferredSupplier.phone) ? ` · ${selectedPreferredSupplier.email || 'Sin correo'} · ${selectedPreferredSupplier.phone || 'Sin teléfono'}` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                             <div className="md:col-span-2">
                                 {renderReferenceCatalogHints([
                                     { key: 'tags', options: tagOptions },
