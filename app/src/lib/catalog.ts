@@ -26,6 +26,9 @@ const slugify = (value: string) =>
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+const requiresSeparatedVariantSuffix = (label: string) =>
+  /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
+
 const getAttributeValue = (product: ProductType, keys: string[]) => {
   const attributes = product.attributes ?? {}
   for (const key of keys) {
@@ -110,7 +113,8 @@ export const getProductVariantBaseName = (product: ProductType) => {
 
   candidateLabels.forEach((label) => {
     const escapedLabel = escapeRegExp(label).replace(/\s+/g, '\\s*')
-    strippedName = strippedName.replace(new RegExp(`(?:\\s+|-)?${escapedLabel}$`, 'i'), '').trim()
+    const separator = requiresSeparatedVariantSuffix(label) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
+    strippedName = strippedName.replace(new RegExp(`${separator}${escapedLabel}$`, 'i'), '').trim()
   })
 
   return strippedName || normalizedName

@@ -9,6 +9,7 @@ import type { PricingCalc, PricingMargins } from '@/lib/api/settings'
 import {
     findSupplierReference,
     getReferenceOptionsWithCurrent,
+    getSupplierPurchaseTaxRateLabel,
     getSupplierOptionsWithCurrent,
     PRODUCT_REFERENCE_SECTIONS,
     type ProductReferenceData,
@@ -88,6 +89,7 @@ const requiredImageSizes = {
 }
 
 const PURCHASE_INVOICE_MEMORY_KEY = 'paramascotasec:last-purchase-invoice'
+const BASE_PRICE_FRACTION_DIGITS = 4
 
 const applyDefaultSizes = (
     entries: Array<{ url: string; width?: string | number; height?: string | number }>,
@@ -318,6 +320,21 @@ const getSuggestedBasePriceForCostPreview = (
 const getEffectiveVatMultiplier = (taxExempt: boolean, vatMultiplier: number) =>
     taxExempt ? 1 : Math.max(1, vatMultiplier)
 
+const normalizeTaxRateInput = (value: string | number | null | undefined, fallback = 0) => {
+    if (value === null || value === undefined) return fallback
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? Math.max(0, value) : fallback
+    }
+
+    const raw = String(value).trim()
+    if (!raw) return fallback
+    const normalized = raw.replace(',', '.')
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return fallback
+
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback
+}
+
 const roundCurrency = (value: number) => {
     if (!Number.isFinite(value)) return 0
     return Math.round(value * 100) / 100
@@ -330,10 +347,11 @@ const normalizeRememberedPurchaseInvoice = (value: unknown): Partial<PurchaseInv
         invoiceNumber: String(source.invoiceNumber || '').trim(),
         supplierName: String(source.supplierName || '').trim(),
         supplierDocument: String(source.supplierDocument || '').trim(),
+        purchaseTaxRate: String(source.purchaseTaxRate || '').trim(),
         issuedAt: String(source.issuedAt || '').trim(),
         notes: String(source.notes || '').trim(),
     }
-    if (!remembered.invoiceNumber && !remembered.supplierName && !remembered.issuedAt && !remembered.notes) {
+    if (!remembered.invoiceNumber && !remembered.supplierName && !remembered.purchaseTaxRate && !remembered.issuedAt && !remembered.notes) {
         return null
     }
     return remembered
@@ -558,6 +576,10 @@ export default function ProductEditorModal({
     const lotSuggestionSeedRef = React.useRef('001')
     const deferredForm = React.useDeferredValue(form)
     const deferredEditingProduct = React.useDeferredValue(editingProduct)
+    const systemVatRate = React.useMemo(
+        () => roundCurrency(Math.max(0, (Math.max(1, vatMultiplier) - 1) * 100)),
+        [vatMultiplier]
+    )
     const isDuplicateVariantMode = editorMode === 'duplicate-variant'
     const isRestockMode = editorMode === 'restock'
     const effectiveVatMultiplier = React.useMemo(
@@ -583,6 +605,12 @@ export default function ProductEditorModal({
                 },
             }
             : initialForm
+        if (!String(nextForm.purchaseInvoice?.purchaseTaxRate || '').trim()) {
+            nextForm.purchaseInvoice = {
+                ...nextForm.purchaseInvoice,
+                purchaseTaxRate: systemVatRate.toFixed(2),
+            }
+        }
         setForm(nextForm)
         setImageUploading({})
         setSaving(false)
@@ -595,7 +623,7 @@ export default function ProductEditorModal({
         skuManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.sku || '').trim())
         lotManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.lotCode || '').trim())
         lotSuggestionSeedRef.current = String(Math.floor(Math.random() * 900) + 100)
-    }, [open, initialForm, editingProduct, editorMode])
+    }, [open, initialForm, editingProduct, editorMode, systemVatRate])
 
     const duplicateVariantBaseName = React.useMemo(() => {
         const attributeBaseName = String(form.attributes?.variantBaseName || '').trim()
@@ -676,6 +704,28 @@ export default function ProductEditorModal({
     const selectedPreferredSupplier = React.useMemo(
         () => findSupplierReference(referenceData.suppliers, form.attributes?.supplier),
         [form.attributes?.supplier, referenceData.suppliers]
+    )
+    const purchaseTaxRateInputRaw = String(form.purchaseInvoice?.purchaseTaxRate || '').trim()
+    const purchaseTaxRateValue = React.useMemo(() => {
+        if (purchaseTaxRateInputRaw !== '') {
+            return normalizeTaxRateInput(purchaseTaxRateInputRaw, systemVatRate)
+        }
+        if (selectedPurchaseSupplier?.purchaseTaxRate) {
+            return normalizeTaxRateInput(selectedPurchaseSupplier.purchaseTaxRate, systemVatRate)
+        }
+        if (selectedPreferredSupplier?.purchaseTaxRate) {
+            return normalizeTaxRateInput(selectedPreferredSupplier.purchaseTaxRate, systemVatRate)
+        }
+        return systemVatRate
+    }, [
+        purchaseTaxRateInputRaw,
+        selectedPreferredSupplier?.purchaseTaxRate,
+        selectedPurchaseSupplier?.purchaseTaxRate,
+        systemVatRate,
+    ])
+    const purchaseVatMultiplier = React.useMemo(
+        () => 1 + (Math.max(0, purchaseTaxRateValue) / 100),
+        [purchaseTaxRateValue]
     )
     const reservedSkuSet = React.useMemo(() => {
         const currentEntityId = getAdminProductEntityId(editingProduct || {})
@@ -899,12 +949,14 @@ export default function ProductEditorModal({
                 ...prev.purchaseInvoice,
                 supplierName,
                 supplierDocument: matchedSupplier?.document || '',
+                purchaseTaxRate: matchedSupplier?.purchaseTaxRate || prev.purchaseInvoice.purchaseTaxRate,
             },
             attributes: {
                 ...(prev.attributes || {}),
                 supplier: supplierName || String(prev.attributes?.supplier || '').trim(),
             },
         }))
+        setCostWithVatManuallySet(false)
         clearErrors('purchaseInvoiceSupplierName', 'purchaseInvoiceSupplierDocument')
     }, [clearErrors, referenceData.suppliers])
 
@@ -952,9 +1004,11 @@ export default function ProductEditorModal({
                     ...prev.purchaseInvoice,
                     supplierName,
                     supplierDocument: matchedSupplier?.document || '',
+                    purchaseTaxRate: matchedSupplier?.purchaseTaxRate || prev.purchaseInvoice.purchaseTaxRate,
                 }
                 : prev.purchaseInvoice,
         }))
+        setCostWithVatManuallySet(false)
     }, [referenceData.suppliers])
 
     React.useEffect(() => {
@@ -976,6 +1030,7 @@ export default function ProductEditorModal({
                 ...prev.purchaseInvoice,
                 supplierName: matchedSupplier.name,
                 supplierDocument: matchedSupplier.document,
+                purchaseTaxRate: String(prev.purchaseInvoice?.purchaseTaxRate || '').trim() || matchedSupplier.purchaseTaxRate || prev.purchaseInvoice.purchaseTaxRate,
             },
         }))
     }, [form.purchaseInvoice?.supplierDocument, form.purchaseInvoice?.supplierName, referenceData.suppliers])
@@ -1156,7 +1211,7 @@ export default function ProductEditorModal({
     }, [appendImageEntries, clearErrors, processImageUpload, showNotification])
 
     const handleBasePriceChange = React.useCallback((value: string) => {
-        const nextValue = normalizeDecimalForStorage(value)
+        const nextValue = normalizeDecimalForStorage(value, BASE_PRICE_FRACTION_DIGITS)
         const baseValue = parseLocalizedDecimal(nextValue)
         const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
         setMarkupManuallySet(false)
@@ -1175,7 +1230,7 @@ export default function ProductEditorModal({
         setForm((prev) => ({
             ...prev,
             pvp: nextValue,
-            price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : ''
+            price: Number.isFinite(baseValue) ? baseValue.toFixed(BASE_PRICE_FRACTION_DIGITS) : ''
         }))
     }, [effectiveVatMultiplier])
 
@@ -1192,14 +1247,14 @@ export default function ProductEditorModal({
         setCostWithVatInput(nextValue)
         setCostWithVatManuallySet(true)
         const grossCost = parseLocalizedDecimal(nextValue)
-        const baseCost = effectiveVatMultiplier > 0 ? (grossCost / effectiveVatMultiplier) : grossCost
+        const baseCost = purchaseVatMultiplier > 0 ? (grossCost / purchaseVatMultiplier) : grossCost
         setMarkupManuallySet(false)
         setForm((prev) => ({
             ...prev,
             cost: Number.isFinite(baseCost) ? roundCurrency(baseCost).toFixed(2) : ''
         }))
         clearErrors('cost')
-    }, [clearErrors, effectiveVatMultiplier])
+    }, [clearErrors, purchaseVatMultiplier])
 
     const handleMarkupChange = React.useCallback((value: string) => {
         const nextValue = normalizeDecimalForStorage(value)
@@ -1222,7 +1277,7 @@ export default function ProductEditorModal({
         const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
         setForm((prev) => ({
             ...prev,
-            price: Number.isFinite(baseValue) ? baseValue.toFixed(2) : '',
+            price: Number.isFinite(baseValue) ? baseValue.toFixed(BASE_PRICE_FRACTION_DIGITS) : '',
             pvp: Number.isFinite(pvpValue) ? pvpValue.toFixed(2) : '',
         }))
     }, [effectiveVatMultiplier, form.cost])
@@ -1236,7 +1291,7 @@ export default function ProductEditorModal({
             if (!finalizedGrossCost) return
 
             const grossCost = parseLocalizedDecimal(finalizedGrossCost)
-            const baseCost = effectiveVatMultiplier > 0 ? (grossCost / effectiveVatMultiplier) : grossCost
+            const baseCost = purchaseVatMultiplier > 0 ? (grossCost / purchaseVatMultiplier) : grossCost
             setForm((prev) => ({
                 ...prev,
                 cost: Number.isFinite(baseCost) ? roundCurrency(baseCost).toFixed(2) : '',
@@ -1246,7 +1301,8 @@ export default function ProductEditorModal({
 
         setForm((prev) => {
             const currentValue = prev[field]
-            const finalizedValue = finalizeDecimalForStorage(currentValue)
+            const fractionDigits = field === 'price' ? BASE_PRICE_FRACTION_DIGITS : 2
+            const finalizedValue = finalizeDecimalForStorage(currentValue, fractionDigits)
             if (currentValue === finalizedValue) {
                 return prev
             }
@@ -1256,7 +1312,7 @@ export default function ProductEditorModal({
                 [field]: finalizedValue,
             }
         })
-    }, [costWithVatInput, effectiveVatMultiplier])
+    }, [costWithVatInput, purchaseVatMultiplier])
 
     const handleTaxExemptChange = React.useCallback((value: string) => {
         const nextTaxExempt = value === 'exempt'
@@ -1273,7 +1329,7 @@ export default function ProductEditorModal({
             return {
                 ...prev,
                 taxExempt: nextTaxExempt,
-                price: Number.isFinite(resolvedBase) ? resolvedBase.toFixed(2) : '',
+                price: Number.isFinite(resolvedBase) ? resolvedBase.toFixed(BASE_PRICE_FRACTION_DIGITS) : '',
                 pvp: Number.isFinite(nextPvp) ? nextPvp.toFixed(2) : '',
             }
         })
@@ -1281,7 +1337,7 @@ export default function ProductEditorModal({
 
     const productBasePrice = parseLocalizedDecimal(deferredForm.price)
     const productCost = parseLocalizedDecimal(deferredForm.cost)
-    const productCostWithVat = roundCurrency(productCost * effectiveVatMultiplier)
+    const productCostWithVat = roundCurrency(productCost * purchaseVatMultiplier)
     const productPvpPrice = parseLocalizedDecimal(deferredForm.pvp) || (productBasePrice * effectiveVatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productWouldSellAtLoss = Number.isFinite(productCost)
@@ -1384,6 +1440,7 @@ export default function ProductEditorModal({
     const summaryTaxLabel = form.taxExempt
         ? 'Exento de IVA'
         : `Grava IVA (${((effectiveVatMultiplier - 1) * 100).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
+    const summaryPurchaseTaxLabel = `Compra ${purchaseTaxRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
     const summaryPublicationLabel = form.published && publicationEligible ? 'Publicado' : (publicationEligible ? 'Oculto' : 'Bloqueado')
     const summaryPublicationClass = form.published && publicationEligible
         ? 'text-emerald-700'
@@ -1478,6 +1535,11 @@ export default function ProductEditorModal({
                 complete: true,
             },
             {
+                label: 'IVA compra',
+                value: summaryPurchaseTaxLabel,
+                complete: true,
+            },
+            {
                 label: 'SKU',
                 value: String(form.attributes?.sku || '').trim() || 'Pendiente',
                 complete: hasSku,
@@ -1518,8 +1580,10 @@ export default function ProductEditorModal({
         isRestockMode,
         productWouldSellAtLoss,
         productCost,
+        purchaseTaxRateValue,
         selectedPurchaseSupplier?.document,
         stockEntryDelta,
+        summaryPurchaseTaxLabel,
         summaryTaxLabel,
         summaryGalleryCount,
         summaryStockLabel,
@@ -1712,6 +1776,7 @@ export default function ProductEditorModal({
                 invoiceNumber: String(form.purchaseInvoice?.invoiceNumber || '').trim(),
                 supplierName: String(form.purchaseInvoice?.supplierName || '').trim(),
                 supplierDocument: selectedPurchaseSupplier?.document || String(form.purchaseInvoice?.supplierDocument || '').trim(),
+                purchaseTaxRate: purchaseTaxRateValue.toFixed(2),
                 issuedAt: String(form.purchaseInvoice?.issuedAt || '').trim(),
                 notes: String(form.purchaseInvoice?.notes || '').trim(),
                 metadata: selectedPurchaseSupplier ? {
@@ -1720,7 +1785,12 @@ export default function ProductEditorModal({
                     supplierPhone: selectedPurchaseSupplier.phone || null,
                     supplierContactName: selectedPurchaseSupplier.contactName || null,
                     supplierAddress: selectedPurchaseSupplier.address || null,
+                    purchase_tax_rate: purchaseTaxRateValue.toFixed(2),
+                    purchase_tax_exempt: purchaseTaxRateValue <= 0,
                 } : undefined,
+            }
+            if (purchaseTaxRateValue < 0 || purchaseTaxRateValue > 100) {
+                nextErrors.purchaseInvoicePurchaseTaxRate = 'El IVA de compra debe estar entre 0% y 100%.'
             }
             if (stockIncrease > 0) {
                 if (!purchaseInvoice.invoiceNumber) nextErrors.purchaseInvoiceNumber = 'El número de factura de compra es obligatorio para ingresar stock.'
@@ -1734,6 +1804,11 @@ export default function ProductEditorModal({
                 if (!normalizedAttributes.supplier && purchaseInvoice.supplierName) {
                     normalizedAttributes.supplier = purchaseInvoice.supplierName
                 }
+            }
+            if (String(form.purchaseInvoice?.purchaseTaxRate || '').trim() || selectedPurchaseSupplier?.purchaseTaxRate || selectedPreferredSupplier?.purchaseTaxRate) {
+                normalizedAttributes.purchaseTaxRate = purchaseTaxRateValue.toFixed(2)
+            } else {
+                delete normalizedAttributes.purchaseTaxRate
             }
 
             const thumbEntries = applyDefaultSizes((form.thumbImages || []).filter((img: any) => img.url && img.url.trim()), 'thumb')
@@ -2007,7 +2082,7 @@ export default function ProductEditorModal({
                                         <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Costo unitario base usado para margen, utilidad y stock.' : (editingProduct ? 'Costo real sin IVA. Este valor es la base para margen y utilidad.' : 'Ingresa el costo base sin IVA para calcular el precio correctamente.')}</p>
                                     </div>
                                     <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo + IVA</label>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo + IVA compra</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                             <input
@@ -2023,7 +2098,36 @@ export default function ProductEditorModal({
                                             />
                                         </div>
                                         <p className="text-secondary text-xs mt-2">
-                                            Valor referencial con IVA incluido. Si escribes aquí, el sistema recalcula automáticamente el costo base.
+                                            Valor referencial con IVA de compra incluido. Si escribes aquí, el sistema recalcula automáticamente el costo base.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">IVA de compra (%)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                className={getInputClass('purchaseInvoicePurchaseTaxRate', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                                value={form.purchaseInvoice.purchaseTaxRate || ''}
+                                                placeholder={systemVatRate.toFixed(2)}
+                                                onChange={e => {
+                                                    setCostWithVatManuallySet(false)
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        purchaseInvoice: {
+                                                            ...prev.purchaseInvoice,
+                                                            purchaseTaxRate: e.target.value,
+                                                        },
+                                                    }))
+                                                    clearErrors('purchaseInvoicePurchaseTaxRate')
+                                                }}
+                                                disabled={saving}
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary">%</span>
+                                        </div>
+                                        {formErrors.purchaseInvoicePurchaseTaxRate && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoicePurchaseTaxRate}</p>}
+                                        <p className="text-secondary text-xs mt-2">
+                                            Afecta solo el costo con IVA y la factura de compra. Si no lo defines, se usa el IVA del proveedor o el IVA del sistema.
                                         </p>
                                     </div>
                                     <div>
@@ -2045,7 +2149,7 @@ export default function ProductEditorModal({
                                         </p>
                                     </div>
                                     <div>
-                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Tratamiento de IVA</label>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">IVA de venta</label>
                                         <select
                                             className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
                                             value={form.taxExempt ? 'exempt' : 'taxed'}
@@ -2057,8 +2161,8 @@ export default function ProductEditorModal({
                                         </select>
                                         <p className="text-secondary text-xs mt-2">
                                             {form.taxExempt
-                                                ? 'Compra y venta sin IVA para este producto. El precio base y el precio final son iguales.'
-                                                : 'Se aplica el IVA configurado del sistema sobre el precio base para calcular el PVP.'}
+                                                ? 'La venta de este producto es exenta. El IVA de compra se configura por separado.'
+                                                : 'Se aplica el IVA configurado del sistema sobre el precio base para calcular el PVP de venta.'}
                                         </p>
                                     </div>
                                     <div className="md:col-span-2">
@@ -2158,9 +2262,38 @@ export default function ProductEditorModal({
                                         {renderReferenceCatalogHint('suppliers', supplierOptions, 'No hay proveedores registrados todavía.')}
                                     </div>
                                     <div><label className="text-secondary text-xs uppercase font-bold mb-2 block">Fecha de factura</label><input type="date" className={getInputClass('purchaseInvoiceIssuedAt', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.purchaseInvoice.issuedAt} onChange={e => { setForm({ ...form, purchaseInvoice: { ...form.purchaseInvoice, issuedAt: e.target.value } }); clearErrors('purchaseInvoiceIssuedAt') }} disabled={saving} />{formErrors.purchaseInvoiceIssuedAt && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoiceIssuedAt}</p>}</div>
+                                    <div>
+                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">IVA compra (%)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                className={getInputClass('purchaseInvoicePurchaseTaxRate', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                                                value={form.purchaseInvoice.purchaseTaxRate || ''}
+                                                placeholder={systemVatRate.toFixed(2)}
+                                                onChange={e => {
+                                                    setCostWithVatManuallySet(false)
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        purchaseInvoice: {
+                                                            ...prev.purchaseInvoice,
+                                                            purchaseTaxRate: e.target.value,
+                                                        },
+                                                    }))
+                                                    clearErrors('purchaseInvoicePurchaseTaxRate')
+                                                }}
+                                                disabled={saving}
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary">%</span>
+                                        </div>
+                                        {formErrors.purchaseInvoicePurchaseTaxRate && <p className="text-xs text-red mt-1">{formErrors.purchaseInvoicePurchaseTaxRate}</p>}
+                                        <p className="text-secondary text-xs mt-2">
+                                            Se usa para el costo de compra y el total de la factura. Si no lo defines, se toma del proveedor o del IVA del sistema.
+                                        </p>
+                                    </div>
                                     <div className="md:col-span-2 rounded-xl border border-line bg-white p-4">
                                         <div className="text-[11px] uppercase font-bold text-secondary mb-3">Proveedor seleccionado</div>
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
                                             <div>
                                                 <div className="text-secondary text-[11px] uppercase font-bold mb-1">RUC o documento</div>
                                                 <div className="font-semibold break-words">
@@ -2178,6 +2311,12 @@ export default function ProductEditorModal({
                                             <div>
                                                 <div className="text-secondary text-[11px] uppercase font-bold mb-1">Teléfono</div>
                                                 <div className="font-semibold break-words">{selectedPurchaseSupplier?.phone || 'No registrado'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-secondary text-[11px] uppercase font-bold mb-1">IVA compra</div>
+                                                <div className="font-semibold break-words">
+                                                    {getSupplierPurchaseTaxRateLabel(selectedPurchaseSupplier, `IVA compra ${purchaseTaxRateValue.toFixed(2)}%`)}
+                                                </div>
                                             </div>
                                         </div>
                                         {selectedPurchaseSupplier?.address && (
@@ -2479,6 +2618,12 @@ export default function ProductEditorModal({
                                                 <option key={`accessory-material-option-${option}`} value={option}>{option}</option>
                                             ))}
                                         </select>
+                                        <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.color || ''} onChange={e => setAttribute('color', e.target.value)} disabled={saving}>
+                                            <option value="">{colorOptions.length > 0 ? 'Color' : 'No hay colores registrados'}</option>
+                                            {colorOptions.map((option) => (
+                                                <option key={`accessory-color-option-${option}`} value={option}>{option}</option>
+                                            ))}
+                                        </select>
                                         <select className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white" value={form.attributes?.usage || ''} onChange={e => setAttribute('usage', e.target.value)} disabled={saving}>
                                             <option value="">{usageOptions.length > 0 ? 'Uso' : 'No hay usos registrados'}</option>
                                             {usageOptions.map((option) => (
@@ -2500,6 +2645,7 @@ export default function ProductEditorModal({
                                         : renderReferenceCatalogHints([
                                             { key: 'sizes', options: sizeOptions },
                                             { key: 'materials', options: materialOptions },
+                                            { key: 'colors', options: colorOptions },
                                             { key: 'usages', options: usageOptions },
                                         ])}
                                 </div>
@@ -2670,6 +2816,7 @@ export default function ProductEditorModal({
                                     {selectedPreferredSupplier && (
                                         <p className="text-secondary text-xs mt-2 break-words">
                                             {selectedPreferredSupplier.document ? `RUC: ${selectedPreferredSupplier.document}` : 'Proveedor sin RUC registrado.'}
+                                            {` · ${getSupplierPurchaseTaxRateLabel(selectedPreferredSupplier, `IVA compra ${systemVatRate.toFixed(2)}%`)}`}
                                             {(selectedPreferredSupplier.email || selectedPreferredSupplier.phone) ? ` · ${selectedPreferredSupplier.email || 'Sin correo'} · ${selectedPreferredSupplier.phone || 'Sin teléfono'}` : ''}
                                         </p>
                                     )}

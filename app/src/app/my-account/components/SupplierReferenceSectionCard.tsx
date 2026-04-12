@@ -6,6 +6,7 @@ import * as Icon from "@phosphor-icons/react/dist/ssr"
 import {
     createEmptyProductSupplierReference,
     createProductSupplierReferenceId,
+    getSupplierPurchaseTaxRateLabel,
     getSupplierSearchText,
     normalizeProductSupplierRecord,
     type ProductReferenceSection,
@@ -238,6 +239,20 @@ export default React.memo(function SupplierReferenceSectionCard({
                             />
                         </div>
                         <div>
+                            <label className="text-secondary text-[11px] uppercase font-bold mb-2 block">IVA compra (%)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                className="border border-line rounded-xl px-4 py-3 w-full outline-none transition-all focus:border-black bg-white"
+                                value={formState.purchaseTaxRate}
+                                placeholder="Vacío = IVA del sistema"
+                                onChange={(event) => setFormState((prev) => ({ ...prev, purchaseTaxRate: event.target.value }))}
+                                disabled={saving}
+                            />
+                        </div>
+                        <div>
                             <label className="text-secondary text-[11px] uppercase font-bold mb-2 block">Correo</label>
                             <input
                                 type="email"
@@ -298,7 +313,7 @@ export default React.memo(function SupplierReferenceSectionCard({
                         ) : supplierWithSameName ? (
                             <p className="text-xs text-orange-700">Ya existe un proveedor con ese nombre.</p>
                         ) : (
-                            <p className="text-xs text-secondary">Nombre y RUC/documento deben ser únicos. El documento se usará automáticamente en compras.</p>
+                            <p className="text-xs text-secondary">Nombre y RUC/documento deben ser únicos. El IVA compra es opcional: si lo dejas vacío, el sistema usará el IVA general.</p>
                         )}
                     </div>
 
@@ -337,7 +352,7 @@ export default React.memo(function SupplierReferenceSectionCard({
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-line overflow-hidden">
-                        <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_96px] md:grid-cols-[minmax(0,1.2fr)_180px_minmax(0,1fr)_120px] bg-surface/70 px-4 py-3 text-[11px] uppercase font-bold text-secondary tracking-wide">
+                        <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_96px] md:grid-cols-[minmax(0,1.1fr)_180px_minmax(0,1fr)_120px] bg-surface/70 px-4 py-3 text-[11px] uppercase font-bold text-secondary tracking-wide">
                             <div>Proveedor</div>
                             <div className="hidden md:block">Documento</div>
                             <div>Contacto</div>
@@ -347,13 +362,16 @@ export default React.memo(function SupplierReferenceSectionCard({
                             {filteredValues.length > 0 ? paginatedValues.map((supplier) => (
                                 <div
                                     key={supplier.id}
-                                    className={`grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_96px] md:grid-cols-[minmax(0,1.2fr)_180px_minmax(0,1fr)_120px] items-center gap-3 px-4 py-3 bg-white ${
+                                    className={`grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_96px] md:grid-cols-[minmax(0,1.1fr)_180px_minmax(0,1fr)_120px] items-center gap-3 px-4 py-3 bg-white ${
                                         editingId === supplier.id ? 'ring-1 ring-primary/15 bg-primary/5' : ''
                                     }`}
                                 >
                                     <div className="min-w-0">
                                         <div className="font-semibold text-sm break-words">{supplier.name}</div>
-                                        <div className="text-xs text-secondary mt-1 break-words">{supplier.address || supplier.notes || 'Sin dirección registrada'}</div>
+                                        <div className="text-xs text-secondary mt-1 break-words">
+                                            {getSupplierPurchaseTaxRateLabel(supplier)}
+                                            {supplier.address || supplier.notes ? ` · ${supplier.address || supplier.notes}` : ''}
+                                        </div>
                                     </div>
                                     <div className="hidden md:block min-w-0">
                                         <div className="text-sm font-medium break-words">{supplier.document || 'Sin documento'}</div>

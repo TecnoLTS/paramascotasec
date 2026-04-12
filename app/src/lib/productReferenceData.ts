@@ -25,6 +25,7 @@ export type ProductSupplierReference = {
   id: string
   name: string
   document: string
+  purchaseTaxRate: string
   email: string
   phone: string
   contactName: string
@@ -83,6 +84,17 @@ const normalizeDocumentComparable = (value?: string | null) =>
     .toLocaleUpperCase('es-EC')
     .replace(/[^A-Z0-9]+/g, '')
 const normalizeEmail = (value?: string | null) => collapseWhitespace(value).toLocaleLowerCase('es-EC')
+const normalizeRate = (value?: string | number | null) => {
+  const raw = collapseWhitespace(typeof value === 'number' ? String(value) : value)
+  if (!raw) return ''
+
+  const normalized = raw.replace(',', '.')
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return ''
+
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed < 0) return ''
+  return parsed.toFixed(2).replace(/\.00$/, '')
+}
 const createSlug = (value?: string | null) =>
   normalizeDocumentComparable(value)
     .toLocaleLowerCase('es-EC')
@@ -93,6 +105,7 @@ export const createEmptyProductSupplierReference = (): ProductSupplierReference 
   id: '',
   name: '',
   document: '',
+  purchaseTaxRate: '',
   email: '',
   phone: '',
   contactName: '',
@@ -183,6 +196,13 @@ export const normalizeProductSupplierRecord = (
         ? source.supplierDocument
         : '',
   )
+  const purchaseTaxRate = normalizeRate(
+    typeof source.purchaseTaxRate === 'number' || typeof source.purchaseTaxRate === 'string'
+      ? source.purchaseTaxRate
+      : typeof source.purchase_tax_rate === 'number' || typeof source.purchase_tax_rate === 'string'
+        ? source.purchase_tax_rate
+        : '',
+  )
   const email = normalizeEmail(typeof source.email === 'string' ? source.email : '')
   const phone = collapseWhitespace(typeof source.phone === 'string' ? source.phone : '')
   const contactName = collapseWhitespace(
@@ -200,6 +220,7 @@ export const normalizeProductSupplierRecord = (
     id: id || createProductSupplierReferenceId(name, document, fallbackId),
     name,
     document,
+    purchaseTaxRate,
     email,
     phone,
     contactName,
@@ -263,6 +284,14 @@ export const getReferenceOptionsWithCurrent = (options: string[], currentValue?:
 export const getSupplierSelectLabel = (supplier: ProductSupplierReference) =>
   supplier.document ? `${supplier.name} · ${supplier.document}` : supplier.name
 
+export const getSupplierPurchaseTaxRateLabel = (
+  supplier?: Pick<ProductSupplierReference, 'purchaseTaxRate'> | null,
+  fallback = 'IVA compra por sistema',
+) => {
+  const normalizedRate = normalizeRate(supplier?.purchaseTaxRate)
+  return normalizedRate !== '' ? `IVA compra ${normalizedRate}%` : fallback
+}
+
 export const getSupplierOptionsWithCurrent = (
   suppliers: ProductSupplierReference[],
   currentValue?: string | null,
@@ -303,6 +332,7 @@ export const getSupplierSearchText = (supplier: ProductSupplierReference) =>
   [
     supplier.name,
     supplier.document,
+    supplier.purchaseTaxRate ? `iva compra ${supplier.purchaseTaxRate}` : '',
     supplier.email,
     supplier.phone,
     supplier.contactName,

@@ -9,16 +9,20 @@ import type { ProductFormState, PurchaseInvoiceFormState } from './types'
 
 export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
 export const PRODUCT_IMAGE_ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
+const BASE_PRICE_FRACTION_DIGITS = 4
 
 const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const requiresSeparatedVariantSuffix = (label: string) =>
+    /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
 
 const getVariantCandidateValues = (type: string, source: Record<string, any>) => {
     const normalizedType = normalizeProductType(type, String(source.category || ''))
     const valuesByType: Record<string, string[]> = {
         Alimento: ['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'],
         ropa: ['variantLabel', 'size'],
-        accesorios: ['variantLabel', 'size', 'presentation'],
+        accesorios: ['variantLabel', 'size', 'presentation', 'color'],
         cuidado: ['variantLabel', 'presentation', 'dosage', 'volume', 'size'],
     }
 
@@ -82,8 +86,9 @@ export const resolveProductVariantBaseName = (product: any) => {
 
     let strippedName = fullName
     candidates.forEach((candidate) => {
+        const separator = requiresSeparatedVariantSuffix(candidate) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
         strippedName = strippedName
-            .replace(new RegExp(`(?:\\s+|-)?${escapeRegExp(candidate).replace(/\s+/g, '\\s*')}$`, 'i'), '')
+            .replace(new RegExp(`${separator}${escapeRegExp(candidate).replace(/\s+/g, '\\s*')}$`, 'i'), '')
             .trim()
     })
 
@@ -182,6 +187,7 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
             catalogCategories: '',
             material: '',
             size: '',
+            color: '',
             usage: '',
             species: '',
             lotCode: '',
@@ -283,10 +289,11 @@ export const normalizeAttributes = (type: string, attrs: any) => {
 
 export const getTodayDateInputValue = () => new Date().toISOString().slice(0, 10)
 
-export const createEmptyPurchaseInvoice = (supplierName = ''): PurchaseInvoiceFormState => ({
+export const createEmptyPurchaseInvoice = (supplierName = '', purchaseTaxRate = ''): PurchaseInvoiceFormState => ({
     invoiceNumber: '',
     supplierName: supplierName.trim(),
     supplierDocument: '',
+    purchaseTaxRate: purchaseTaxRate.trim(),
     issuedAt: getTodayDateInputValue(),
     notes: ''
 })
@@ -377,7 +384,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
     return {
         id: getAdminProductEntityId(product),
         name: String(product?.name || ''),
-        price: Number.isFinite(basePrice) ? basePrice.toFixed(2) : String(product?.price || ''),
+        price: Number.isFinite(basePrice) ? basePrice.toFixed(BASE_PRICE_FRACTION_DIGITS) : String(product?.price || ''),
         pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : String(product?.price || ''),
         cost: String(product?.business?.cost ?? product?.cost ?? 0),
         taxExempt,
@@ -388,7 +395,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         productType,
         published: isProductEligibleForPublication(product) ? product?.published !== false : false,
         attributes,
-        purchaseInvoice: createEmptyPurchaseInvoice(defaultSupplierName),
+        purchaseInvoice: createEmptyPurchaseInvoice(defaultSupplierName, String(attributes?.purchaseTaxRate || '').trim()),
         thumbImages: filledThumbs.length > 0 ? filledThumbs : [createImageEntry()],
         galleryImages: filledGallery.length > 0 ? filledGallery : [createImageEntry()]
     }
@@ -427,6 +434,9 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
         quantity: '',
         published: false,
         attributes: duplicatedAttributes,
-        purchaseInvoice: createEmptyPurchaseInvoice(String(duplicatedForm.attributes?.supplier || '').trim()),
+        purchaseInvoice: createEmptyPurchaseInvoice(
+            String(duplicatedForm.attributes?.supplier || '').trim(),
+            String(duplicatedForm.attributes?.purchaseTaxRate || '').trim()
+        ),
     }
 }

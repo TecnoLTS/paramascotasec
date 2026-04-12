@@ -258,6 +258,7 @@ export type PurchaseInvoiceFormState = {
     invoiceNumber: string;
     supplierName: string;
     supplierDocument: string;
+    purchaseTaxRate: string;
     issuedAt: string;
     notes: string;
 }
