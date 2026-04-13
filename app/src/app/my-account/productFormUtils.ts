@@ -17,11 +17,14 @@ const escapeRegExp = (value: string) =>
 const requiresSeparatedVariantSuffix = (label: string) =>
     /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
 
+const normalizeVariantComparisonValue = (value: unknown) =>
+    normalizeMeasurementLabel(String(value || '')).trim().toLowerCase()
+
 const getVariantCandidateValues = (type: string, source: Record<string, any>) => {
     const normalizedType = normalizeProductType(type, String(source.category || ''))
     const valuesByType: Record<string, string[]> = {
         Alimento: ['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'],
-        ropa: ['variantLabel', 'size'],
+        ropa: ['variantLabel', 'size', 'color'],
         accesorios: ['variantLabel', 'size', 'presentation', 'color'],
         cuidado: ['variantLabel', 'presentation', 'dosage', 'volume', 'size'],
     }
@@ -34,10 +37,10 @@ const getVariantCandidateValues = (type: string, source: Record<string, any>) =>
 
 export const getVariantDefinitionFieldLabel = (type: string) => {
     const normalizedType = normalizeProductType(type)
-    if (normalizedType === 'ropa') return 'talla'
+    if (normalizedType === 'ropa') return 'talla o color'
     if (normalizedType === 'cuidado') return 'presentación'
     if (normalizedType === 'Alimento') return 'tamaño o peso'
-    if (normalizedType === 'accesorios') return 'tamaño'
+    if (normalizedType === 'accesorios') return 'tamaño o color'
     return 'variante'
 }
 
@@ -45,6 +48,72 @@ export const getVariantDefinitionFieldKey = (type: string) => {
     const normalizedType = normalizeProductType(type)
     if (normalizedType === 'cuidado') return 'presentation'
     return 'size'
+}
+
+export const inferDuplicateVariantFieldKey = (
+    type: string,
+    attributes?: Record<string, any> | null,
+    product?: Record<string, any> | null
+) => {
+    const normalizedType = normalizeProductType(type, String(product?.category || attributes?.category || ''))
+    const attributeSource = attributes || {}
+    const productSource = product || {}
+    const resolvedVariantLabel = normalizeVariantComparisonValue(
+        attributeSource.__sourceVariantLabel
+        || attributeSource.variantLabel
+        || productSource.variantLabel
+        || productSource?.attributes?.variantLabel
+    )
+
+    if (normalizedType === 'cuidado') return 'presentation'
+
+    if (normalizedType === 'Alimento') {
+        const explicitField = String(attributeSource.__variantDefinitionField || '').trim()
+        if (explicitField === 'size' || explicitField === 'weight') {
+            return explicitField
+        }
+
+        const weightValue = normalizeVariantComparisonValue(attributeSource.weight || productSource?.attributes?.weight || productSource.weight)
+        return resolvedVariantLabel && resolvedVariantLabel === weightValue ? 'weight' : 'size'
+    }
+
+    if (normalizedType === 'ropa') {
+        const explicitField = String(attributeSource.__variantDefinitionField || '').trim()
+        if (explicitField === 'color' || explicitField === 'size') {
+            return explicitField
+        }
+
+        const colorValue = normalizeVariantComparisonValue(attributeSource.color || productSource?.attributes?.color || productSource.color)
+        const sizeValue = normalizeVariantComparisonValue(attributeSource.size || productSource?.attributes?.size || productSource.size)
+
+        if (resolvedVariantLabel) {
+            if (colorValue && colorValue === resolvedVariantLabel) return 'color'
+            if (sizeValue && sizeValue === resolvedVariantLabel) return 'size'
+        }
+
+        if (colorValue && !sizeValue) return 'color'
+        return 'size'
+    }
+
+    if (normalizedType === 'accesorios') {
+        const explicitField = String(attributeSource.__variantDefinitionField || '').trim()
+        if (explicitField === 'color' || explicitField === 'size') {
+            return explicitField
+        }
+
+        const colorValue = normalizeVariantComparisonValue(attributeSource.color || productSource?.attributes?.color || productSource.color)
+        const sizeValue = normalizeVariantComparisonValue(attributeSource.size || productSource?.attributes?.size || productSource.size)
+
+        if (resolvedVariantLabel) {
+            if (colorValue && colorValue === resolvedVariantLabel) return 'color'
+            if (sizeValue && sizeValue === resolvedVariantLabel) return 'size'
+        }
+
+        if (colorValue && !sizeValue) return 'color'
+        return 'size'
+    }
+
+    return getVariantDefinitionFieldKey(normalizedType)
 }
 
 export const resolveProductVariantLabel = (
@@ -406,6 +475,7 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
     const duplicatedAttributes = { ...(duplicatedForm.attributes || {}) }
     const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const sourceVariantLabel = resolveProductVariantLabel(productType, product?.attributes, product)
+    const sourceVariantFieldKey = inferDuplicateVariantFieldKey(productType, product?.attributes, product)
 
     duplicatedAttributes.sku = ''
     duplicatedAttributes.lotCode = ''
@@ -413,20 +483,8 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
     duplicatedAttributes.variantLabel = ''
     duplicatedAttributes.variantBaseName = resolveProductVariantBaseName(product)
     duplicatedAttributes.__sourceVariantLabel = sourceVariantLabel
+    duplicatedAttributes.__variantDefinitionField = sourceVariantFieldKey
     delete duplicatedAttributes.variantGroupKey
-
-    if (productType === 'Alimento') {
-        duplicatedAttributes.size = ''
-        duplicatedAttributes.weight = ''
-    }
-
-    if (productType === 'ropa' || productType === 'accesorios') {
-        duplicatedAttributes.size = ''
-    }
-
-    if (productType === 'cuidado') {
-        duplicatedAttributes.presentation = ''
-    }
 
     return {
         ...duplicatedForm,

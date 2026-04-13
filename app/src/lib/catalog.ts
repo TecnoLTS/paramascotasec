@@ -29,6 +29,9 @@ const escapeRegExp = (value: string) =>
 const requiresSeparatedVariantSuffix = (label: string) =>
   /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
 
+const looksLikeSizeValue = (value?: string | null) =>
+  /^(?:XXS|XS|S|M|L|XL|XXL|STANDARD|\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ)|X?\d+)$/i.test((value ?? '').trim())
+
 const getAttributeValue = (product: ProductType, keys: string[]) => {
   const attributes = product.attributes ?? {}
   for (const key of keys) {
@@ -86,6 +89,16 @@ const extractProductVariantLabel = (product: ProductType) => {
 
 export const getProductVariantLabel = (product: ProductType) =>
   normalizeMeasurementLabel(extractProductVariantLabel(product))
+
+const getProductVariantSizeValue = (product: ProductType) => {
+  const explicitSize = getAttributeValue(product, ['size'])
+  if (explicitSize) {
+    return normalizeMeasurementLabel(explicitSize)
+  }
+
+  const variantLabel = getProductVariantLabel(product)
+  return looksLikeSizeValue(variantLabel) ? variantLabel : ''
+}
 
 export const getProductVariantPresentation = (product: ProductType) =>
   normalizeMeasurementLabel(getAttributeValue(product, ['presentation', 'packaging']))
@@ -347,7 +360,8 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
     const variantBaseName = getProductVariantBaseName(product)
     const variantGroupKey = getProductVariantGroupKey(product)
     const reviewCount = getProductReviewCount(product)
-    const uniqueSizes = normalizeMeasurementLabels([...(product.sizes ?? []), ...(variantLabel ? [variantLabel] : [])])
+    const variantSizeValue = getProductVariantSizeValue(product)
+    const uniqueSizes = normalizeMeasurementLabels(variantSizeValue ? [variantSizeValue] : [])
 
     return {
       ...product,
@@ -356,7 +370,7 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
       variantLabel,
       variantBaseName,
       variantGroupKey,
-      variantAxis: variantLabel ? 'size' : (product.variantAxis ?? ''),
+      variantAxis: variantSizeValue ? 'size' : (product.variantAxis ?? ''),
       variantPresentation: getProductVariantPresentation(product),
     }
   })
@@ -373,7 +387,7 @@ export const groupCatalogProducts = (products: ProductType[]): ProductType[] => 
     const sortedVariants = variants.slice().sort(compareVariants)
     const representative = pickRepresentativeVariant(sortedVariants)
     const pricingReference = pickLowestPricedVariant(sortedVariants) ?? representative
-    const sizes = normalizeMeasurementLabels(sortedVariants.map((variant) => getProductVariantLabel(variant)))
+    const sizes = normalizeMeasurementLabels(sortedVariants.map((variant) => getProductVariantSizeValue(variant)))
     const priceValues = sortedVariants.map((variant) => Number(variant.price ?? 0)).filter((value) => value > 0)
     const originValues = sortedVariants.map((variant) => Number(variant.originPrice ?? 0)).filter((value) => value > 0)
     const totalQuantity = sortedVariants.reduce((sum, variant) => sum + Number(variant.quantity ?? 0), 0)

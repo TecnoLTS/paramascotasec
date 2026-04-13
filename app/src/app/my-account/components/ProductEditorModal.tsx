@@ -6,6 +6,7 @@ import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import { requestApi } from '@/lib/apiClient'
 import type { PricingCalc, PricingMargins } from '@/lib/api/settings'
+import { normalizeMeasurementLabel } from '@/lib/measurementLabel'
 import {
     findSupplierReference,
     getReferenceOptionsWithCurrent,
@@ -41,6 +42,7 @@ import {
     getAttributesForTypeChange,
     getVariantDefinitionFieldKey,
     getVariantDefinitionFieldLabel,
+    inferDuplicateVariantFieldKey,
     isProductEligibleForPublication,
     MAX_PRODUCT_IMAGE_BYTES,
     normalizeAdminProducts,
@@ -634,31 +636,79 @@ export default function ProductEditorModal({
 
         return resolveProductVariantBaseName(editingProduct || initialForm)
     }, [editingProduct, form.attributes?.variantBaseName, initialForm])
-    const duplicateVariantLabel = React.useMemo(() => {
-        return resolveProductVariantLabel(form.productType, form.attributes)
-    }, [form.attributes, form.productType])
-    const duplicateVariantFieldLabel = React.useMemo(
-        () => getVariantDefinitionFieldLabel(form.productType),
-        [form.productType]
-    )
     const duplicateVariantFieldKey = React.useMemo(
-        () => getVariantDefinitionFieldKey(form.productType),
-        [form.productType]
+        () => (isDuplicateVariantMode
+            ? inferDuplicateVariantFieldKey(form.productType, {
+                ...(initialForm.attributes || {}),
+                ...(form.attributes || {}),
+            }, editingProduct || undefined)
+            : getVariantDefinitionFieldKey(form.productType)),
+        [editingProduct, form.attributes, form.productType, initialForm.attributes, isDuplicateVariantMode]
+    )
+    const duplicateVariantFieldLabel = React.useMemo(() => {
+        if (duplicateVariantFieldKey === 'color') return 'color'
+        if (duplicateVariantFieldKey === 'presentation') return 'presentación'
+        if (duplicateVariantFieldKey === 'weight') return 'peso'
+
+        const normalizedType = normalizeProductType(form.productType, form.category)
+        if (normalizedType === 'ropa') return 'talla'
+        return 'tamaño'
+    }, [duplicateVariantFieldKey, form.category, form.productType])
+    const duplicateVariantFieldOptions = React.useMemo(() => {
+        const normalizedType = normalizeProductType(form.productType, form.category)
+        if (normalizedType === 'Alimento') {
+            return [
+                { key: 'size', label: 'Tamaño' },
+                { key: 'weight', label: 'Peso' },
+            ]
+        }
+
+        if (normalizedType === 'ropa') {
+            return [
+                { key: 'size', label: 'Talla' },
+                { key: 'color', label: 'Color' },
+            ]
+        }
+
+        if (normalizedType === 'accesorios') {
+            return [
+                { key: 'size', label: 'Tamaño' },
+                { key: 'color', label: 'Color' },
+            ]
+        }
+
+        return []
+    }, [form.category, form.productType])
+    const duplicateVariantFieldOptionsLabel = React.useMemo(
+        () => duplicateVariantFieldOptions.map((option) => option.label.toLowerCase()).join(' o '),
+        [duplicateVariantFieldOptions]
     )
     const duplicateVariantInputValue = React.useMemo(() => {
         const attributes = form.attributes || {}
-        const normalizedType = normalizeProductType(form.productType, form.category)
 
-        if (normalizedType === 'cuidado') {
+        if (duplicateVariantFieldKey === 'presentation') {
             return String(attributes.presentation || attributes.variantLabel || '').trim()
         }
 
+        if (duplicateVariantFieldKey === 'color') {
+            return String(attributes.color || attributes.variantLabel || '').trim()
+        }
+
+        if (duplicateVariantFieldKey === 'weight') {
+            return String(attributes.weight || attributes.variantLabel || '').trim()
+        }
+
+        const normalizedType = normalizeProductType(form.productType, form.category)
         if (normalizedType === 'Alimento') {
             return String(attributes.variantLabel || attributes.size || attributes.weight || '').trim()
         }
 
         return String(attributes.size || attributes.variantLabel || '').trim()
-    }, [form.attributes, form.category, form.productType])
+    }, [duplicateVariantFieldKey, form.attributes, form.category, form.productType])
+    const duplicateVariantLabel = React.useMemo(
+        () => normalizeMeasurementLabel(duplicateVariantInputValue),
+        [duplicateVariantInputValue]
+    )
     const selectedAdditionalCategories = React.useMemo(
         () => parseSerializedProductCategories(form.attributes?.catalogCategories),
         [form.attributes?.catalogCategories]
@@ -679,16 +729,40 @@ export default function ProductEditorModal({
     const tagOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.tags, form.attributes?.tag), [form.attributes?.tag, referenceData.tags])
     const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
     const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
-    const duplicateVariantOptions = React.useMemo(
-        () => (normalizeProductType(form.productType, form.category) === 'cuidado' ? presentationOptions : sizeOptions),
-        [form.category, form.productType, presentationOptions, sizeOptions]
-    )
-    const duplicateVariantReferenceItems = React.useMemo(
-        () => (normalizeProductType(form.productType, form.category) === 'cuidado'
-            ? [{ key: 'presentations' as ProductReferenceKey, options: presentationOptions }]
-            : [{ key: 'sizes' as ProductReferenceKey, options: sizeOptions }]),
-        [form.category, form.productType, presentationOptions, sizeOptions]
-    )
+    const duplicateVariantOptions = React.useMemo(() => {
+        if (duplicateVariantFieldKey === 'presentation') return presentationOptions
+        if (duplicateVariantFieldKey === 'color') return colorOptions
+        if (duplicateVariantFieldKey === 'weight') return []
+        return sizeOptions
+    }, [colorOptions, duplicateVariantFieldKey, presentationOptions, sizeOptions])
+    const duplicateVariantReferenceItems = React.useMemo(() => {
+        if (duplicateVariantFieldKey === 'presentation') {
+            return [{ key: 'presentations' as ProductReferenceKey, options: presentationOptions }]
+        }
+
+        if (duplicateVariantFieldKey === 'color') {
+            return [{ key: 'colors' as ProductReferenceKey, options: colorOptions }]
+        }
+
+        if (duplicateVariantFieldKey === 'weight') {
+            return []
+        }
+
+        return [{ key: 'sizes' as ProductReferenceKey, options: sizeOptions }]
+    }, [colorOptions, duplicateVariantFieldKey, presentationOptions, sizeOptions])
+    const duplicateVariantEmptyLabel = React.useMemo(() => {
+        if (duplicateVariantFieldKey === 'presentation') return 'No hay presentaciones registradas'
+        if (duplicateVariantFieldKey === 'color') return 'No hay colores registrados'
+        if (duplicateVariantFieldKey === 'weight') return 'Escribe el peso de la nueva variante'
+        return 'No hay tallas o tamaños registrados'
+    }, [duplicateVariantFieldKey])
+    const duplicateVariantReferenceEmptyText = React.useMemo(() => {
+        if (duplicateVariantFieldKey === 'presentation') return 'Registra primero las presentaciones en Catálogos operativos:'
+        if (duplicateVariantFieldKey === 'color') return 'Registra primero los colores en Catálogos operativos:'
+        if (duplicateVariantFieldKey === 'weight') return 'El peso se escribe manualmente para esta variante.'
+        if (normalizeProductType(form.productType, form.category) === 'ropa') return 'Registra primero las tallas en Catálogos operativos:'
+        return 'Registra primero las tallas o tamaños en Catálogos operativos:'
+    }, [duplicateVariantFieldKey, form.category, form.productType])
     const primaryCategory = React.useMemo(
         () => normalizeProductCategory(form.category, form.productType),
         [form.category, form.productType]
@@ -1461,7 +1535,7 @@ export default function ProductEditorModal({
                     complete: duplicateVariantBaseName.length >= 3,
                 },
                 {
-                    label: `Nueva ${duplicateVariantFieldLabel}`,
+                    label: 'Variante nueva',
                     value: duplicateVariantLabel || 'Pendiente',
                     complete: !!duplicateVariantLabel,
                 },
@@ -1613,16 +1687,38 @@ export default function ProductEditorModal({
         clearErrors('quantity')
     }, [clearErrors, editingProduct, persistedProductQuantity])
 
+    const setDuplicateVariantField = React.useCallback((fieldKey: string) => {
+        setForm((prev) => {
+            const nextAttributes: Record<string, string> = {
+                ...(prev.attributes || {}),
+                __variantDefinitionField: fieldKey,
+            }
+
+            nextAttributes.variantLabel = String(nextAttributes[fieldKey] || '').trim()
+
+            return {
+                ...prev,
+                attributes: nextAttributes,
+            }
+        })
+        clearErrors('size', 'color', 'presentation', 'weight', 'name')
+    }, [clearErrors])
+
     const applyDuplicateVariantDefinition = React.useCallback((value: string) => {
         setForm((prev) => {
             const normalizedType = normalizeProductType(prev.productType, prev.category)
             const nextAttributes: Record<string, string> = {
                 ...(prev.attributes || {}),
                 variantLabel: value,
+                __variantDefinitionField: duplicateVariantFieldKey,
             }
 
-            if (normalizedType === 'cuidado') {
+            if (duplicateVariantFieldKey === 'presentation' || normalizedType === 'cuidado') {
                 nextAttributes.presentation = value
+            } else if (duplicateVariantFieldKey === 'color') {
+                nextAttributes.color = value
+            } else if (duplicateVariantFieldKey === 'weight') {
+                nextAttributes.weight = value
             } else {
                 nextAttributes.size = value
                 if (normalizedType === 'Alimento') {
@@ -1638,20 +1734,47 @@ export default function ProductEditorModal({
         clearErrors(duplicateVariantFieldKey, 'name')
     }, [clearErrors, duplicateVariantFieldKey])
 
-    const renderDuplicateVariantSelector = React.useCallback((emptyLabel: string) => (
+    const renderDuplicateVariantSelector = React.useCallback(() => (
         <div className="md:col-span-2">
-            <label className="text-secondary text-xs uppercase font-bold mb-2 block">Nueva {duplicateVariantFieldLabel}</label>
-            <select
-                className={getInputClass(duplicateVariantFieldKey, 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
-                value={duplicateVariantInputValue}
-                onChange={e => applyDuplicateVariantDefinition(e.target.value)}
-                disabled={saving}
-            >
-                <option value="">{duplicateVariantOptions.length > 0 ? `Selecciona ${duplicateVariantFieldLabel}` : emptyLabel}</option>
-                {duplicateVariantOptions.map((option) => (
-                    <option key={`duplicate-variant-option-${option}`} value={option}>{option}</option>
-                ))}
-            </select>
+            {duplicateVariantFieldOptions.length > 1 && (
+                <div className="mb-4">
+                    <label className="text-secondary text-xs uppercase font-bold mb-2 block">Dato que cambia en la variante</label>
+                    <select
+                        className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white"
+                        value={duplicateVariantFieldKey}
+                        onChange={e => setDuplicateVariantField(e.target.value)}
+                        disabled={saving}
+                    >
+                        {duplicateVariantFieldOptions.map((option) => (
+                            <option key={`duplicate-variant-field-${option.key}`} value={option.key}>{option.label}</option>
+                        ))}
+                    </select>
+                    <p className="text-secondary text-xs mt-2">Elige si esta variante cambia por {duplicateVariantFieldOptionsLabel}. El resto de atributos puede mantenerse.</p>
+                </div>
+            )}
+            <label className="text-secondary text-xs uppercase font-bold mb-2 block">Nuevo valor de variante</label>
+            {duplicateVariantFieldKey === 'weight' ? (
+                <input
+                    type="text"
+                    className={getInputClass(duplicateVariantFieldKey, 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all')}
+                    value={duplicateVariantInputValue}
+                    onChange={e => applyDuplicateVariantDefinition(e.target.value)}
+                    placeholder="Ej: 2 kg"
+                    disabled={saving}
+                />
+            ) : (
+                <select
+                    className={getInputClass(duplicateVariantFieldKey, 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')}
+                    value={duplicateVariantInputValue}
+                    onChange={e => applyDuplicateVariantDefinition(e.target.value)}
+                    disabled={saving}
+                >
+                    <option value="">{duplicateVariantOptions.length > 0 ? `Selecciona ${duplicateVariantFieldLabel}` : duplicateVariantEmptyLabel}</option>
+                    {duplicateVariantOptions.map((option) => (
+                        <option key={`duplicate-variant-option-${option}`} value={option}>{option}</option>
+                    ))}
+                </select>
+            )}
             {duplicateVariantFieldError && <p className="text-xs text-red mt-1">{duplicateVariantFieldError}</p>}
         </div>
     ), [
@@ -1659,10 +1782,14 @@ export default function ProductEditorModal({
         duplicateVariantFieldError,
         duplicateVariantFieldKey,
         duplicateVariantFieldLabel,
+        duplicateVariantFieldOptions,
+        duplicateVariantFieldOptionsLabel,
+        duplicateVariantEmptyLabel,
         duplicateVariantInputValue,
         duplicateVariantOptions,
         getInputClass,
         saving,
+        setDuplicateVariantField,
     ])
 
     const handleSave = React.useCallback(async (event: React.FormEvent) => {
@@ -1705,8 +1832,10 @@ export default function ProductEditorModal({
             const normalizedSpecies = normalizeProductSpecies(normalizedAttributes.species, editingProduct?.gender ?? '')
             const duplicateSourceVariantLabel = String(form.attributes?.__sourceVariantLabel || '').trim()
             const nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
-            const variantDefinitionField = getVariantDefinitionFieldKey(productType)
-            const variantDefinitionFieldLabel = getVariantDefinitionFieldLabel(productType)
+            const variantDefinitionField = isDuplicateVariantMode ? duplicateVariantFieldKey : getVariantDefinitionFieldKey(productType)
+            const variantDefinitionFieldLabel = isDuplicateVariantMode ? duplicateVariantFieldLabel : getVariantDefinitionFieldLabel(productType)
+            const duplicateSourceVariantFieldValue = normalizeMeasurementLabel(String(initialForm.attributes?.[variantDefinitionField] || '').trim()).toLowerCase()
+            const nextVariantFieldValue = normalizeMeasurementLabel(String(normalizedAttributes[variantDefinitionField] || '').trim()).toLowerCase()
             if (normalizedSpecies) {
                 normalizedAttributes.species = normalizedSpecies
             }
@@ -1723,8 +1852,10 @@ export default function ProductEditorModal({
                     nextErrors[variantDefinitionField] = `Debes definir la ${variantDefinitionFieldLabel} de la nueva variante.`
                 } else {
                     normalizedAttributes.variantLabel = nextVariantLabel
-                    if (duplicateSourceVariantLabel && duplicateSourceVariantLabel.toLowerCase() === nextVariantLabel.toLowerCase()) {
-                        nextErrors[variantDefinitionField] = `La nueva variante debe usar una ${variantDefinitionFieldLabel} distinta a ${duplicateSourceVariantLabel}.`
+                    if (duplicateSourceVariantFieldValue && duplicateSourceVariantFieldValue === nextVariantFieldValue) {
+                        nextErrors[variantDefinitionField] = `La nueva variante debe usar un valor de ${variantDefinitionFieldLabel} distinto al original.`
+                    } else if (duplicateSourceVariantLabel && duplicateSourceVariantLabel.toLowerCase() === nextVariantLabel.toLowerCase()) {
+                        nextErrors[variantDefinitionField] = `La nueva variante debe usar un valor distinto a ${duplicateSourceVariantLabel}.`
                     }
                 }
             }
@@ -1932,7 +2063,7 @@ export default function ProductEditorModal({
                         </span>
                         {isDuplicateVariantMode && (
                             <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-800">
-                                Variante nueva: {duplicateVariantLabel || `define ${duplicateVariantFieldLabel}`}
+                                Variante nueva: {duplicateVariantLabel || 'define el valor'}
                             </span>
                         )}
                         {isRestockMode && (
@@ -1961,8 +2092,8 @@ export default function ProductEditorModal({
                             <div className="p-4 rounded-xl border border-blue-200 bg-blue-50">
                                 <div className="text-sm font-bold text-blue-900 mb-1">Modo variante</div>
                                 <p className="text-xs text-blue-900/80">
-                                    Esta copia mantiene bloqueados los datos que definen la familia del producto. Aquí debes registrar una nueva {duplicateVariantFieldLabel}
-                                    para que en la tienda se vea un solo producto y la ficha publique sus variantes correctamente.
+                                    Esta copia mantiene bloqueados los datos que definen la familia del producto. Aquí debes registrar el dato que diferencia la variante,
+                                    por ejemplo talla, color o presentación, para que en la tienda se vea un solo producto y la ficha publique sus variantes correctamente.
                                 </p>
                             </div>
                         )}
@@ -2015,7 +2146,7 @@ export default function ProductEditorModal({
                                     <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
                                     <input type="text" className={getInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); clearErrors('name') }} required placeholder="Ej: Camiseta Deportiva" disabled={saving || isDuplicateVariantMode || isRestockMode} />
                                     {formErrors.name && <p className="text-xs text-red mt-1">{formErrors.name}</p>}
-                                    {isDuplicateVariantMode && <p className="text-secondary text-xs mt-2">El nombre se genera automáticamente con la familia y la nueva {duplicateVariantFieldLabel} para mantener la agrupación.</p>}
+                                    {isDuplicateVariantMode && <p className="text-secondary text-xs mt-2">El nombre se genera automáticamente con la familia y el valor de variante para mantener la agrupación.</p>}
                                     {isRestockMode && <p className="text-secondary text-xs mt-2">Queda bloqueado en reposición para evitar cambios accidentales.</p>}
                                 </div>
                                 <div>
@@ -2501,7 +2632,7 @@ export default function ProductEditorModal({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {isDuplicateVariantMode ? (
                                     <>
-                                        {renderDuplicateVariantSelector('No hay tallas o tamaños registrados')}
+                                        {renderDuplicateVariantSelector()}
                                     </>
                                 ) : (
                                     <>
@@ -2536,7 +2667,7 @@ export default function ProductEditorModal({
                                 )}
                                 <div className="md:col-span-2">
                                     {isDuplicateVariantMode
-                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas o tamaños en Catálogos operativos:')
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, duplicateVariantReferenceEmptyText)
                                         : renderReferenceCatalogHints([
                                             { key: 'sizes', options: sizeOptions },
                                             { key: 'flavors', options: flavorOptions },
@@ -2551,7 +2682,7 @@ export default function ProductEditorModal({
                                 <div className="text-sm font-semibold">Atributos de ropa</div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {isDuplicateVariantMode ? (
-                                    renderDuplicateVariantSelector('No hay tallas registradas')
+                                    renderDuplicateVariantSelector()
                                 ) : (
                                     <>
                                         <select className={getInputClass('size', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.size || ''} onChange={e => { setAttribute('size', e.target.value); clearErrors('size') }} disabled={saving}>
@@ -2588,7 +2719,7 @@ export default function ProductEditorModal({
                                 )}
                                 <div className="md:col-span-2">
                                     {isDuplicateVariantMode
-                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas en Catálogos operativos:')
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, duplicateVariantReferenceEmptyText)
                                         : renderReferenceCatalogHints([
                                             { key: 'sizes', options: sizeOptions },
                                             { key: 'materials', options: materialOptions },
@@ -2603,7 +2734,7 @@ export default function ProductEditorModal({
                                 <div className="text-sm font-semibold">Atributos de accesorios</div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {isDuplicateVariantMode ? (
-                                    renderDuplicateVariantSelector('No hay tallas o tamaños registrados')
+                                    renderDuplicateVariantSelector()
                                 ) : (
                                     <>
                                         <select className={getInputClass('size', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.size || ''} onChange={e => { setAttribute('size', e.target.value); clearErrors('size') }} disabled={saving}>
@@ -2641,7 +2772,7 @@ export default function ProductEditorModal({
                                 )}
                                 <div className="md:col-span-2">
                                     {isDuplicateVariantMode
-                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las tallas o tamaños en Catálogos operativos:')
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, duplicateVariantReferenceEmptyText)
                                         : renderReferenceCatalogHints([
                                             { key: 'sizes', options: sizeOptions },
                                             { key: 'materials', options: materialOptions },
@@ -2657,7 +2788,7 @@ export default function ProductEditorModal({
                                 <div className="text-sm font-semibold">Atributos de salud</div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {isDuplicateVariantMode ? (
-                                    renderDuplicateVariantSelector('No hay presentaciones registradas')
+                                    renderDuplicateVariantSelector()
                                 ) : (
                                     <>
                                         <select className={getInputClass('presentation', 'border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white')} value={form.attributes?.presentation || ''} onChange={e => { setAttribute('presentation', e.target.value); clearErrors('presentation') }} disabled={saving}>
@@ -2690,7 +2821,7 @@ export default function ProductEditorModal({
                                 )}
                                 <div className="md:col-span-2">
                                     {isDuplicateVariantMode
-                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, 'Registra primero las presentaciones en Catálogos operativos:')
+                                        ? renderReferenceCatalogHints(duplicateVariantReferenceItems, duplicateVariantReferenceEmptyText)
                                         : renderReferenceCatalogHints([
                                             { key: 'presentations', options: presentationOptions },
                                             { key: 'activeIngredients', options: activeIngredientOptions },
@@ -2886,7 +3017,7 @@ export default function ProductEditorModal({
                             {isDuplicateVariantMode && (
                                 <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
                                     <div className="text-sm font-semibold text-blue-900">Regla de variante</div>
-                                    <p className="text-xs text-blue-900/80 mt-2">En este modo solo debes cambiar el dato que diferencia la variante, por ejemplo talla o presentación. La familia queda fija para que el producto siga agrupado en tienda.</p>
+                                    <p className="text-xs text-blue-900/80 mt-2">En este modo solo debes cambiar el dato que diferencia la variante, por ejemplo talla, color o presentación. La familia queda fija para que el producto siga agrupado en tienda.</p>
                                 </div>
                             )}
                         </aside>
