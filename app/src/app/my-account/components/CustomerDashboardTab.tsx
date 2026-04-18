@@ -19,7 +19,7 @@ type CustomerDashboardTabProps = {
     recentUserOrders: Order[]
     onOpenOrder: (order: Order) => void
     getStatusBadge: (status: string) => StatusBadge
-    formatDateTime: (value: string | number | Date | null | undefined) => string
+    formatDateTime: (value: string, options?: Intl.DateTimeFormatOptions) => string
     normalizeOrderItemImage: (src?: string | null) => string
     isDynamicOrderItemImage: (src?: string | null) => boolean
 }

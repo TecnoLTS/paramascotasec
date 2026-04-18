@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
@@ -69,6 +69,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const searchContainerRef = useRef<HTMLDivElement>(null)
     const minAutocompleteQueryLength = 1
     const searchParamsKey = searchParams.toString()
+    const deferredSearchKeyword = useDeferredValue(searchKeyword)
 
     const handleSearch = (value: string) => {
         const trimmedValue = sanitizeProductSearchQuery(value)
@@ -378,17 +379,28 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const ShopMenuIcon = mainMenuItems[1].icon
     const AboutMenuIcon = mainMenuItems[2].icon
     const ContactMenuIcon = mainMenuItems[3].icon
-    const normalizedSearchKeyword = sanitizeProductSearchQuery(searchKeyword)
+    const normalizedSearchKeyword = useMemo(
+        () => sanitizeProductSearchQuery(deferredSearchKeyword),
+        [deferredSearchKeyword]
+    )
     const shouldShowSearchPanel =
         isSearchFocused &&
         normalizedSearchKeyword.length >= minAutocompleteQueryLength &&
         searchProducts.length > 0
-    const productSearchIndex = searchProducts.length > 0
-        ? buildProductSearchIndex(searchProducts)
-        : new Map<string, string>()
-    const searchSuggestions = shouldShowSearchPanel
-        ? filterProductsBySearch(searchProducts, normalizedSearchKeyword, productSearchIndex).slice(0, 6)
-        : []
+    const productSearchIndex = useMemo(() => {
+        if (searchProducts.length === 0) {
+            return new Map<string, string>()
+        }
+
+        return buildProductSearchIndex(searchProducts)
+    }, [searchProducts])
+    const searchSuggestions = useMemo(() => {
+        if (!shouldShowSearchPanel) {
+            return []
+        }
+
+        return filterProductsBySearch(searchProducts, normalizedSearchKeyword, productSearchIndex).slice(0, 6)
+    }, [normalizedSearchKeyword, productSearchIndex, searchProducts, shouldShowSearchPanel])
 
     const normalizeImageSrc = (src: string) => {
         if (!src) return src

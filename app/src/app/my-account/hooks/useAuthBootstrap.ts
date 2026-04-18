@@ -3,7 +3,13 @@
 import React from 'react'
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { requestApi } from '@/lib/apiClient'
-import { clearStoredSession, setCookieSessionMarker, setStoredSessionUser } from '@/lib/authSession'
+import {
+  clearStoredSession,
+  getStoredSessionUser,
+  hasCookieSessionMarker,
+  setCookieSessionMarker,
+  setStoredSessionUser,
+} from '@/lib/authSession'
 
 import type { AdminReportSection } from '../types'
 
@@ -31,6 +37,18 @@ export const useAuthBootstrap = ({
 }: UseAuthBootstrapParams) => {
   React.useEffect(() => {
     let cancelled = false
+    const storedUser = hasCookieSessionMarker() ? getStoredSessionUser() : null
+
+    if (storedUser?.id && storedUser.name && storedUser.email) {
+      setUser(storedUser)
+      if (storedUser.role === 'admin') {
+        setAdminReportSection('general')
+        setActiveTab('reports')
+      } else {
+        setActiveTab('dashboard')
+      }
+      setAuthBootstrapping(false)
+    }
 
     requestApi<{ user?: AccountUser }>('/api/auth/session')
       .then((res) => {

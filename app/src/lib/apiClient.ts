@@ -32,45 +32,32 @@ const buildBaseUrl = () => {
   return `http://localhost:${process.env.PORT ?? 3000}`
 }
 
-const getServerForwardedHost = async () => {
+type ServerRequestContext = {
+  forwardedHost: string | null
+  forwardedProto: string | null
+  cookieHeader: string | null
+  csrfToken: string | null
+}
+
+const getServerRequestContext = async (): Promise<ServerRequestContext | null> => {
   if (typeof window !== 'undefined') return null
   try {
-    const mod = await import('next/headers')
-    const headerList = await mod.headers()
-    const utils = await import('@/lib/headerUtils')
-    return utils.getHostFromHeaders(headerList)
+    const [{ headers }, utils] = await Promise.all([
+      import('next/headers'),
+      import('@/lib/headerUtils'),
+    ])
+    const headerList = await headers()
+    const cookieHeader = utils.getHeaderValue(headerList, 'cookie')
+
+    return {
+      forwardedHost: utils.getHostFromHeaders(headerList),
+      forwardedProto: utils.getProtoFromHeaders(headerList),
+      cookieHeader,
+      csrfToken: readCookieValue(cookieHeader, getCsrfCookieName()),
+    }
   } catch {
     return null
   }
-}
-
-const getServerForwardedProto = async () => {
-  if (typeof window !== 'undefined') return null
-  try {
-    const mod = await import('next/headers')
-    const headerList = await mod.headers()
-    const utils = await import('@/lib/headerUtils')
-    return utils.getProtoFromHeaders(headerList)
-  } catch {
-    return null
-  }
-}
-
-const getServerCookieHeader = async () => {
-  if (typeof window !== 'undefined') return null
-  try {
-    const mod = await import('next/headers')
-    const headerList = await mod.headers()
-    const utils = await import('@/lib/headerUtils')
-    return utils.getHeaderValue(headerList, 'cookie')
-  } catch {
-    return null
-  }
-}
-
-const getServerCsrfToken = async () => {
-  const cookieHeader = await getServerCookieHeader()
-  return readCookieValue(cookieHeader, getCsrfCookieName())
 }
 
 const resolveForwardedHost = (forwardedHost?: string | null) => {
@@ -192,10 +179,11 @@ const withAuth = async (path: string, init?: RequestInit): Promise<RequestInit> 
 
   const pathname = getPathname(path)
   if (typeof window === 'undefined') {
-    const forwardedHost = await getServerForwardedHost()
-    const forwardedProto = await getServerForwardedProto()
-    const cookieHeader = await getServerCookieHeader()
-    const csrfToken = methodRequiresCsrf(init?.method) ? await getServerCsrfToken() : null
+    const serverContext = await getServerRequestContext()
+    const forwardedHost = serverContext?.forwardedHost ?? null
+    const forwardedProto = serverContext?.forwardedProto ?? null
+    const cookieHeader = serverContext?.cookieHeader ?? null
+    const csrfToken = methodRequiresCsrf(init?.method) ? (serverContext?.csrfToken ?? null) : null
     attachInternalProxyToken(headers)
     if (authFreePaths.has(pathname)) {
       const tenantHost = resolveForwardedHost(forwardedHost)

@@ -234,7 +234,13 @@ const buildLocalQuotationHtml = ({
     formatDateTimeEcuador: (value: string, options?: Intl.DateTimeFormatOptions) => string
 }) => {
     const snapshot = quotation.quote_snapshot || {}
-    const items = Array.isArray(snapshot.items) ? snapshot.items : []
+    const items: Array<{
+        product_id: string
+        product_name?: string
+        quantity: number
+        price: number
+        total: number
+    }> = Array.isArray(snapshot.items) ? snapshot.items : []
     const address = quotation.customer_address || {}
     const formatQuotationDate = (value?: string | null, options?: Intl.DateTimeFormatOptions, fallback = 'No definida') => {
         const raw = String(value || '').trim()
@@ -380,22 +386,19 @@ const buildLocalSaleQuotationResult = (quotation: AdminLocalQuotation): LocalSal
     whatsappMessage: null,
 })
 
-const ProductEditorModal = dynamic(() => import('./components/ProductEditorModal'), {
-    ssr: false,
-})
-const PurchaseInvoiceDetailModal = dynamic(() => import('./components/PurchaseInvoiceDetailModal'), {
-    ssr: false,
-})
-const ProductProcurementDetailModal = dynamic(() => import('./components/ProductProcurementDetailModal'), {
-    ssr: false,
-})
-const SalesProductDetailModal = dynamic(() => import('./components/SalesProductDetailModal'), {
-    ssr: false,
-})
-const OrderDetailModal = dynamic(() => import('./components/OrderDetailModal'), {
-    ssr: false,
-})
 const UsersManagementPanel = dynamic(() => import('./components/UsersManagementPanel'), {
+    ssr: false,
+})
+const PanelModals = dynamic(() => import('./components/PanelModals'), {
+    ssr: false,
+})
+const PricingSettingsPanel = dynamic(() => import('./components/PricingSettingsPanel'), {
+    ssr: false,
+})
+const StoreStatusPanel = dynamic(() => import('./components/StoreStatusPanel'), {
+    ssr: false,
+})
+const BalancesPanel = dynamic(() => import('./components/BalancesPanel'), {
     ssr: false,
 })
 const CustomerOrdersPanel = dynamic(() => import('./components/CustomerOrdersPanel'), {
@@ -1665,20 +1668,67 @@ const MyAccount = () => {
             shippingBuffer: toNumber(input.shippingBuffer, 0)
         }
     }
-
-    const roundPriceIncrement = (value: number, increment: number) => {
-        if (!Number.isFinite(value)) return 0
-        if (increment <= 0) return value
-        return Math.round(value / increment) * increment
-    }
-
-
     const normalizePricingRules = (input: typeof pricingRules) => ({
         bulkThreshold: Math.round(toNumber(input.bulkThreshold, 10, 1)),
         bulkDiscount: toNumber(input.bulkDiscount, 5, 0, 90),
         clearanceThreshold: Math.round(toNumber(input.clearanceThreshold, 25, 1)),
         clearanceDiscount: toNumber(input.clearanceDiscount, 15, 0, 90)
     })
+
+    const normalizedMarginSettings = React.useMemo(
+        () => normalizeMarginSettings(marginSettings),
+        [marginSettings],
+    )
+    const normalizedCalcSettings = React.useMemo(
+        () => normalizeCalcSettings(calcSettings),
+        [calcSettings],
+    )
+    const normalizedPricingRules = React.useMemo(
+        () => normalizePricingRules(pricingRules),
+        [pricingRules],
+    )
+
+    const handleSavePricingMargins = React.useCallback(async () => {
+        setMarginSettings(normalizedMarginSettings)
+        try {
+            const res = await updatePricingMargins(normalizedMarginSettings)
+            setMarginSettings(normalizeMarginSettings(res.body))
+            showNotification('Márgenes guardados correctamente.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudieron guardar los márgenes.', 'error')
+        }
+    }, [normalizedMarginSettings, showNotification])
+
+    const handleSavePricingCalculations = React.useCallback(async () => {
+        setCalcSettings(normalizedCalcSettings)
+        try {
+            const res = await updatePricingCalc(normalizedCalcSettings)
+            setCalcSettings(normalizeCalcSettings(res.body))
+            showNotification('Cálculos guardados correctamente.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudieron guardar los cálculos.', 'error')
+        }
+    }, [normalizedCalcSettings, showNotification])
+
+    const handleSavePricingRules = React.useCallback(async () => {
+        setPricingRules(normalizedPricingRules)
+        try {
+            const res = await updatePricingRules(normalizedPricingRules)
+            setPricingRules(normalizePricingRules(res.body))
+            showNotification('Reglas de precio guardadas correctamente.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudieron guardar las reglas.', 'error')
+        }
+    }, [normalizedPricingRules, showNotification])
+
+    const roundPriceIncrement = (value: number, increment: number) => {
+        if (!Number.isFinite(value)) return 0
+        if (increment <= 0) return value
+        return Math.round(value / increment) * increment
+    }
 
     const strategicAlerts = dashboardStats?.strategicAlerts ?? []
     const strategicAlertSummary = React.useMemo(() => {
@@ -1974,9 +2024,11 @@ const MyAccount = () => {
     const salesCategories = dashboardStats?.salesByCategory ?? []
     const salesCategoriesTotal = salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0)
     const salesTrendRows = dashboardStats?.salesTrend30Days ?? []
+    const reportsViewActive = activeTab === 'reports' || activeTab === 'sales-ranking'
+    const inventoryViewActive = activeTab === 'inventory'
     const { rows: salesTrendPreview, max: salesTrendPreviewMax } = React.useMemo(
-        () => buildSalesTrendPreview(salesTrendRows),
-        [salesTrendRows]
+        () => (reportsViewActive ? buildSalesTrendPreview(salesTrendRows) : { rows: [], max: 0 }),
+        [reportsViewActive, salesTrendRows]
     )
     const highValueInventoryItems = inventoryDeepDive?.highValueItems ?? []
     const riskInventoryItems = inventoryDeepDive?.riskItems ?? []
@@ -2054,6 +2106,9 @@ const MyAccount = () => {
         showNotification,
     ])
     const filteredInventoryRows = React.useMemo(() => {
+        if (!inventoryViewActive) {
+            return [] as typeof inventoryManagementRows
+        }
         const scopedRows = inventoryManagementRows.filter((row) => {
             if (inventoryTypeFilter === 'perishable' && !row.isPerishable) return false
             if (inventoryTypeFilter === 'nonperishable' && row.isPerishable) return false
@@ -2083,14 +2138,20 @@ const MyAccount = () => {
                 return left.row.name.localeCompare(right.row.name, 'es')
             })
             .map((item) => item.row)
-    }, [deferredInventorySearch, inventoryManagementRows, inventoryStatusFilter, inventoryTypeFilter])
+    }, [deferredInventorySearch, inventoryManagementRows, inventoryStatusFilter, inventoryTypeFilter, inventoryViewActive])
     const inventorySummary = React.useMemo(() => {
+        if (!inventoryViewActive) {
+            return summarizeInventoryRows([])
+        }
         return summarizeInventoryRows(inventoryManagementRows)
-    }, [inventoryManagementRows])
+    }, [inventoryManagementRows, inventoryViewActive])
     const purchaseInvoicesSummary = React.useMemo(() => {
+        if (!inventoryViewActive) {
+            return summarizePurchaseInvoices([])
+        }
         return summarizePurchaseInvoices(recentPurchaseInvoices)
-    }, [recentPurchaseInvoices])
-    const hasPerishableProducts = inventoryManagementRows.some((row) => row.isPerishable)
+    }, [inventoryViewActive, recentPurchaseInvoices])
+    const hasPerishableProducts = inventoryViewActive && inventoryManagementRows.some((row) => row.isPerishable)
     const deferredAdminProductsSearch = React.useDeferredValue(adminProductsSearch)
     const adminProductSearchIndex = React.useMemo(
         () => (productsNeededForProductsPanel ? buildProductSearchIndex((adminProductsList || []) as any) : new Map()),
@@ -3572,12 +3633,19 @@ const MyAccount = () => {
         )
     }
 
+    const usersTabActive = ADMIN_TABS_WITH_USERS.has(activeTab || '')
     const adminUsersEnriched = React.useMemo(() => {
+        if (!usersTabActive) {
+            return [] as ReturnType<typeof enrichAdminUsers>
+        }
         return enrichAdminUsers(adminUsersList, parseJsonValue, getAdminUserResolvedAddress, formatAddress)
-    }, [adminUsersList, formatAddress, getAdminUserResolvedAddress, parseJsonValue])
+    }, [adminUsersList, formatAddress, getAdminUserResolvedAddress, parseJsonValue, usersTabActive])
 
     const adminUsersSearchTerm = deferredAdminUsersSearch.trim().toLowerCase()
     const filteredAdminUsers = React.useMemo(() => {
+        if (!usersTabActive) {
+            return [] as typeof adminUsersEnriched
+        }
         return adminUsersEnriched.filter((item) => {
             const roleNormalized = String(item.role || 'customer').toLowerCase()
             const isAdmin = roleNormalized === 'admin' || roleNormalized === 'service'
@@ -3588,8 +3656,19 @@ const MyAccount = () => {
             const text = `${item.name || ''} ${item.email || ''} ${item.document_number || ''} ${item.resolvedPhone || ''} ${item.resolvedAddressText || ''} ${item.resolvedCompany || ''}`.toLowerCase()
             return text.includes(adminUsersSearchTerm)
         })
-    }, [adminUsersEnriched, adminUsersRoleFilter, adminUsersSearchTerm])
+    }, [adminUsersEnriched, adminUsersRoleFilter, adminUsersSearchTerm, usersTabActive])
     const adminUsersSummary = React.useMemo(() => {
+        if (!usersTabActive) {
+            return {
+                admins: 0,
+                clients: 0,
+                verified: 0,
+                withOrders: 0,
+                withAddress: 0,
+                withPhone: 0,
+                newLast30Days: 0,
+            }
+        }
         const now = Date.now()
         const last30DaysMs = 30 * 24 * 60 * 60 * 1000
         return adminUsersEnriched.reduce((acc, item) => {
@@ -3613,7 +3692,7 @@ const MyAccount = () => {
             withPhone: 0,
             newLast30Days: 0
         })
-    }, [adminUsersEnriched])
+    }, [adminUsersEnriched, usersTabActive])
 
     const recentUserOrders = React.useMemo(() => userOrders.slice(0, 5), [userOrders])
     const totalUserOrders = userOrders.length
@@ -3669,6 +3748,11 @@ const MyAccount = () => {
         () => getOrderContact(selectedOrder, user, savedAddresses),
         [selectedOrder, savedAddresses, user]
     )
+    const balanceSalesSummary = dashboardStats?.businessMetrics?.salesSummary
+    const balanceProfitStats = dashboardStats?.businessMetrics?.profitStats
+    const balanceRecentOrders = dashboardStats?.businessMetrics?.recentOrders || []
+    const balanceTraceabilityOrders = dashboardStats?.businessMetrics?.traceability?.orders || []
+    const balanceTraceabilityProducts = dashboardStats?.businessMetrics?.traceability?.products || []
 
     if (authBootstrapping || !user) {
         return (
@@ -5947,416 +6031,30 @@ const MyAccount = () => {
                                     )}
 
                                     {activeTab === 'store-status' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="heading5 pb-4">Ventas en línea</div>
-                                        <p className="text-secondary mb-6">Activa o detén la tienda para mantenimiento o fallas operativas.</p>
-                                        <div className="p-6 rounded-xl border border-line bg-surface">
-                                            {storeStatusLoading ? (
-                                                <div className="text-sm text-secondary">Cargando estado de ventas...</div>
-                                            ) : (
-                                                <>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className={`p-4 rounded-lg border ${storeStatus.salesEnabled ? 'bg-white border-success/30' : 'bg-red/5 border-red/30'}`}>
-                                                            <div className="text-xs uppercase font-bold text-secondary">Estado actual</div>
-                                                            <div className={`heading5 mt-1 ${storeStatus.salesEnabled ? 'text-success' : 'text-red'}`}>
-                                                                {storeStatus.salesEnabled ? 'Ventas activas' : 'Ventas apagadas'}
-                                                            </div>
-                                                            <p className="text-xs text-secondary mt-2">
-                                                                {storeStatus.salesEnabled
-                                                                    ? 'Los clientes pueden cotizar y pagar pedidos.'
-                                                                    : 'La tienda bloquea cotizaciones y compras nuevas.'}
-                                                            </p>
-                                                        </div>
-                                                        <div className="p-4 rounded-lg bg-white border border-line">
-                                                            <div className="text-xs uppercase font-bold text-secondary">Última actualización</div>
-                                                            <div className="text-sm font-semibold mt-1">
-                                                                {storeStatus.updatedAt ? formatDateTimeEcuador(storeStatus.updatedAt) : 'Sin registro'}
-                                                            </div>
-                                                            <p className="text-xs text-secondary mt-2">
-                                                                Usuario: {storeStatus.updatedBy || 'Sin registro'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-6">
-                                                        <label className="text-secondary text-xs uppercase font-bold mb-2 block">
-                                                            Mensaje cuando las ventas estén apagadas
-                                                        </label>
-                                                        <textarea
-                                                            className="border border-line rounded-lg px-4 py-3 w-full min-h-[120px]"
-                                                            value={storeStatus.message}
-                                                            onChange={(e) => setStoreStatus((prev) => ({ ...prev, message: e.target.value }))}
-                                                            placeholder={DEFAULT_STORE_PAUSE_MESSAGE}
-                                                            disabled={storeStatusSaving}
-                                                        />
-                                                        <p className="text-[11px] text-secondary mt-2">
-                                                            Este texto se devuelve al cliente cuando intenta comprar con la tienda detenida.
-                                                        </p>
-                                                    </div>
-
-                                                    <div className="mt-6 flex flex-wrap gap-3">
-                                                        <button
-                                                            className={`py-2 px-6 rounded-lg font-semibold ${storeStatus.salesEnabled ? 'bg-red text-white' : 'bg-success text-white'}`}
-                                                            onClick={() => handleSaveStoreStatus(!storeStatus.salesEnabled)}
-                                                            disabled={storeStatusSaving}
-                                                        >
-                                                            {storeStatusSaving
-                                                                ? 'Guardando...'
-                                                                : storeStatus.salesEnabled
-                                                                    ? 'Apagar ventas ahora'
-                                                                    : 'Reactivar ventas'}
-                                                        </button>
-                                                        <button
-                                                            className="py-2 px-6 rounded-lg font-semibold border border-line bg-white hover:bg-surface"
-                                                            onClick={() => handleSaveStoreStatus()}
-                                                            disabled={storeStatusSaving}
-                                                        >
-                                                            Guardar mensaje
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <StoreStatusPanel
+                                        storeStatus={storeStatus}
+                                        storeStatusLoading={storeStatusLoading}
+                                        storeStatusSaving={storeStatusSaving}
+                                        defaultPauseMessage={DEFAULT_STORE_PAUSE_MESSAGE}
+                                        formatDateTime={formatDateTimeEcuador}
+                                        setStoreStatus={setStoreStatus}
+                                        onSaveStoreStatus={handleSaveStoreStatus}
+                                    />
                                     )}
 
-                                    {activeTab === 'margins' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="heading5 pb-4">Márgenes y rentabilidad</div>
-                                        <p className="text-secondary mb-6">Define objetivos de margen para tus precios recomendados.</p>
-                                        <div className="p-6 rounded-xl border border-line bg-surface">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Margen usado como referencia para el precio sugerido. A mayor margen, sube el precio y la utilidad esperada."
-                                                    >
-                                                        Margen base (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={marginSettings.baseMargin}
-                                                        onChange={(e) => setMarginSettings({ ...marginSettings, baseMargin: toNumber(e.target.value, marginSettings.baseMargin) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Aumentar el margen base eleva el precio recomendado y la utilidad por venta.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Piso de rentabilidad. Si el margen configurado es menor, el sistema no sugerirá precios por debajo de este valor."
-                                                    >
-                                                        Margen mínimo (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={marginSettings.minMargin}
-                                                        onChange={(e) => setMarginSettings({ ...marginSettings, minMargin: toNumber(e.target.value, marginSettings.minMargin) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Define el margen más bajo permitido; protege la utilidad aunque el precio competitivo sea menor.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Meta principal de rentabilidad. El motor de precios intenta llegar a este margen."
-                                                    >
-                                                        Margen objetivo (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={marginSettings.targetMargin}
-                                                        onChange={(e) => setMarginSettings({ ...marginSettings, targetMargin: toNumber(e.target.value, marginSettings.targetMargin) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        A mayor margen objetivo, mayor precio sugerido para alcanzar la rentabilidad deseada.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Reserva adicional para aplicar descuentos sin romper la rentabilidad."
-                                                    >
-                                                        Buffer promociones (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={marginSettings.promoBuffer}
-                                                        onChange={(e) => setMarginSettings({ ...marginSettings, promoBuffer: toNumber(e.target.value, marginSettings.promoBuffer) })}
-                                                    />
-                                                    <p className="text-secondary text-xs mt-2">Reserva margen extra para descuentos sin afectar rentabilidad.</p>
-                                                    <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Un buffer más alto sube el precio base para absorber promociones sin perder margen.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="mt-6 flex justify-end">
-                                                <button
-                                                    className="button-main py-2 px-6"
-                                                    onClick={async () => {
-                                                        const normalized = normalizeMarginSettings(marginSettings)
-                                                        setMarginSettings(normalized)
-                                                        try {
-                                                            const res = await updatePricingMargins(normalized)
-                                                            setMarginSettings(normalizeMarginSettings(res.body))
-                                                            showNotification('Márgenes guardados correctamente.')
-                                                        } catch (error) {
-                                                            console.error(error)
-                                                            showNotification('No se pudieron guardar los márgenes.', 'error')
-                                                        }
-                                                    }}
-                                                >
-                                                    Guardar Márgenes
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    )}
-
-                                    {activeTab === 'calculations' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="heading5 pb-4">Cálculos y redondeos</div>
-                                        <p className="text-secondary mb-6">Ajusta cómo se calculan los precios finales.</p>
-                                        <div className="p-6 rounded-xl border border-line bg-surface">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Define cómo se calcula el precio final y el impacto directo del margen."
-                                                    >
-                                                        Estrategia de precio
-                                                    </label>
-                                                    <select
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={calcSettings.strategy}
-                                                        onChange={(e) => {
-                                                            const nextStrategy = e.target.value as PricingCalc['strategy']
-                                                            setCalcSettings({ ...calcSettings, strategy: nextStrategy })
-                                                        }}
-                                                    >
-                                                        <option
-                                                            value="cost_plus"
-                                                            title="Calcula precio sumando el margen al costo. Subir el margen aumenta el precio de forma directa."
-                                                        >
-                                                            Costo + margen
-                                                        </option>
-                                                        <option
-                                                            value="target_margin"
-                                                            title="Ajusta el precio para alcanzar el margen objetivo sobre el precio de venta. A mayor margen, mayor PVP."
-                                                        >
-                                                            Margen objetivo
-                                                        </option>
-                                                        <option
-                                                            value="competitive"
-                                                            title="Prioriza precio competitivo con el mercado; el margen puede reducirse para mantener ventas."
-                                                        >
-                                                            Competitivo
-                                                        </option>
-                                                    </select>
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Pasa el mouse sobre cada opción para ver cómo impacta el margen y el precio del producto.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Define el salto de redondeo del precio final. Ej: 0,05 redondea a múltiplos de 5 centavos."
-                                                    >
-                                                        Redondeo ($)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={calcSettings.rounding}
-                                                        onChange={(e) => setCalcSettings({ ...calcSettings, rounding: toNumber(e.target.value, calcSettings.rounding) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Un redondeo mayor simplifica precios, pero puede subir o bajar el PVP final.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Indica si el precio de venta mostrado al cliente incluye IVA."
-                                                    >
-                                                        Incluir IVA en PVP
-                                                    </label>
-                                                    <select
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={calcSettings.includeVatInPvp ? 'yes' : 'no'}
-                                                        onChange={(e) => setCalcSettings({ ...calcSettings, includeVatInPvp: e.target.value === 'yes' })}
-                                                    >
-                                                        <option value="yes">Sí</option>
-                                                        <option value="no">No</option>
-                                                    </select>
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Si está en “Sí”, el PVP ya incluye IVA; si está en “No”, el IVA se suma aparte.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Porcentaje extra para cubrir variaciones de costos logísticos."
-                                                    >
-                                                        Buffer de envío (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={calcSettings.shippingBuffer}
-                                                        onChange={(e) => setCalcSettings({ ...calcSettings, shippingBuffer: toNumber(e.target.value, calcSettings.shippingBuffer) })}
-                                                    />
-                                                    <p className="text-secondary text-xs mt-2">Cubre variaciones de costos logísticos.</p>
-                                                    <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Un buffer más alto aumenta el precio para proteger el margen ante costos de envío variables.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="mt-6 flex justify-end">
-                                                <button
-                                                    className="button-main py-2 px-6"
-                                                    onClick={async () => {
-                                                        const normalized = normalizeCalcSettings(calcSettings)
-                                                        setCalcSettings(normalized)
-                                                        try {
-                                                            const res = await updatePricingCalc(normalized)
-                                                            setCalcSettings(normalizeCalcSettings(res.body))
-                                                            showNotification('Cálculos guardados correctamente.')
-                                                        } catch (error) {
-                                                            console.error(error)
-                                                            showNotification('No se pudieron guardar los cálculos.', 'error')
-                                                        }
-                                                    }}
-                                                >
-                                                    Guardar Cálculos
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    )}
-
-                                    {activeTab === 'pricing-rules' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="heading5 pb-4">Reglas de precios</div>
-                                        <p className="text-secondary mb-6">Define descuentos automáticos y limpieza de inventario.</p>
-                                        <div className="p-6 rounded-xl border border-line bg-surface">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Cantidad mínima para activar el descuento por volumen."
-                                                    >
-                                                        Volumen mínimo (unidades)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        step="1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={pricingRules.bulkThreshold}
-                                                        onChange={(e) => setPricingRules({ ...pricingRules, bulkThreshold: toNumber(e.target.value, pricingRules.bulkThreshold, 1) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Al subir el umbral, el descuento se activa en compras más grandes.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Porcentaje que se descuenta cuando se cumple el volumen mínimo."
-                                                    >
-                                                        Descuento por volumen (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={pricingRules.bulkDiscount}
-                                                        onChange={(e) => setPricingRules({ ...pricingRules, bulkDiscount: toNumber(e.target.value, pricingRules.bulkDiscount, 0, 90) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Descuentos altos reducen el precio unitario y pueden bajar el margen.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Tiempo sin rotación tras el cual se activa liquidación."
-                                                    >
-                                                        Días para liquidación
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        step="1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={pricingRules.clearanceThreshold}
-                                                        onChange={(e) => setPricingRules({ ...pricingRules, clearanceThreshold: toNumber(e.target.value, pricingRules.clearanceThreshold, 1) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Menos días activan antes la liquidación para mover inventario.
-                                                    </p>
-                                                </div>
-                                                <div className="group">
-                                                    <label
-                                                        className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                        title="Porcentaje de descuento aplicado en productos en liquidación."
-                                                    >
-                                                        Descuento liquidación (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.1"
-                                                        className="border border-line px-4 py-2 rounded-lg w-full"
-                                                        value={pricingRules.clearanceDiscount}
-                                                        onChange={(e) => setPricingRules({ ...pricingRules, clearanceDiscount: toNumber(e.target.value, pricingRules.clearanceDiscount, 0, 90) })}
-                                                    />
-                                                    <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Descuentos altos aceleran ventas pero reducen margen y utilidad.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="mt-6 flex justify-end">
-                                                <button
-                                                    className="button-main py-2 px-6"
-                                                    onClick={async () => {
-                                                        const normalized = normalizePricingRules(pricingRules)
-                                                        setPricingRules(normalized)
-                                                        try {
-                                                            const res = await updatePricingRules(normalized)
-                                                            setPricingRules(normalizePricingRules(res.body))
-                                                            showNotification('Reglas de precio guardadas correctamente.')
-                                                        } catch (error) {
-                                                            console.error(error)
-                                                            showNotification('No se pudieron guardar las reglas.', 'error')
-                                                        }
-                                                    }}
-                                                >
-                                                    Guardar Reglas
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {(activeTab === 'margins' || activeTab === 'calculations' || activeTab === 'pricing-rules') && (
+                                    <PricingSettingsPanel
+                                        activeTab={activeTab}
+                                        marginSettings={marginSettings}
+                                        calcSettings={calcSettings}
+                                        pricingRules={pricingRules}
+                                        setMarginSettings={setMarginSettings}
+                                        setCalcSettings={setCalcSettings}
+                                        setPricingRules={setPricingRules}
+                                        onSaveMargins={handleSavePricingMargins}
+                                        onSaveCalculations={handleSavePricingCalculations}
+                                        onSavePricingRules={handleSavePricingRules}
+                                    />
                                     )}
 
                                     {activeTab === 'discount-codes' && (
@@ -6449,238 +6147,33 @@ const MyAccount = () => {
                                     )}
 
                                     {activeTab === 'balances' && (
-                                    <div className="tab text-content w-full">
-                                        <div className="text-gray-400 text-sm">Balance General (Información crítica para decisiones)</div>
-                                        <div className="heading2 mt-2">
-                                            {formatMoney(dashboardStats?.businessMetrics?.salesSummary?.net ?? 0)}
-                                        </div>
-                                        <div className="text-secondary text-sm mt-1">Ventas netas (sin IVA ni envío)</div>
-
-                                        {(() => {
-                                            const summary = dashboardStats?.businessMetrics?.salesSummary
-                                            const profit = dashboardStats?.businessMetrics?.profitStats
-                                            const gross = Number(summary?.gross ?? 0)
-                                            const net = Number(summary?.net ?? 0)
-                                            const vat = Number(summary?.vat ?? 0)
-                                            const shipping = Number(summary?.shipping ?? 0)
-                                            const cost = Number(profit?.cost ?? 0)
-                                            const utilidad = Number(profit?.profit ?? 0)
-                                            const margin = Number(profit?.margin ?? 0)
-                                            const roi = Number(profit?.roi ?? 0)
-                                            return (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-6">
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Venta total</div>
-                                                        <div className="heading5">{formatMoney(gross)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Incluye IVA + envío</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">IVA por pagar</div>
-                                                        <div className="heading5">{formatMoney(vat)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Impuesto cobrado</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Envío cobrado</div>
-                                                        <div className="heading5">{formatMoney(shipping)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Ingreso operativo</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Costo (COGS)</div>
-                                                        <div className="heading5 text-orange-600">-{formatMoney(cost)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Costo real de producto</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Utilidad bruta</div>
-                                                        <div className="heading5 text-success">{formatMoney(utilidad)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Sin IVA ni envío</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Margen neto</div>
-                                                        <div className="heading5">{margin.toFixed(1)}%</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / ventas netas</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">ROI</div>
-                                                        <div className="heading5">{roi.toFixed(1)}%</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Utilidad / costo</div>
-                                                    </div>
-                                                    <div className="p-5 bg-white rounded-xl border border-line shadow-sm">
-                                                        <div className="text-xs uppercase text-secondary font-bold mb-1">Venta neta</div>
-                                                        <div className="heading5">{formatMoney(net)}</div>
-                                                        <div className="text-[11px] text-secondary mt-1">Base real de ingresos</div>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })()}
-
-                                        <div className="mt-8 p-5 bg-surface rounded-xl border border-line">
-                                            <div className="text-xs uppercase text-secondary font-bold mb-3">Acciones recomendadas</div>
-                                            <div className="flex flex-wrap gap-3">
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => {
-                                                        startPanelNavigationTransition(() => {
-                                                            setAdminReportSection('balance')
-                                                            setActiveTab('reports')
-                                                            setSelectedDeepDive('profit')
-                                                        })
-                                                    }}
-                                                >
-                                                    Analizar rentabilidad
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => navigateToPanelTab('margins')}
-                                                >
-                                                    Ajustar márgenes
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => {
-                                                        startPanelNavigationTransition(() => {
-                                                            setActiveOrders('all')
-                                                            setActiveTab('admin-orders')
-                                                            setSelectedDeepDive(null)
-                                                        })
-                                                    }}
-                                                >
-                                                    Revisar pedidos
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="px-4 py-2 rounded-lg border border-line text-sm font-semibold bg-white hover:bg-surface"
-                                                    onClick={() => navigateToPanelTab('taxes')}
-                                                >
-                                                    IVA y costos de envío
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="heading6 mb-4 mt-10">Movimientos recientes (neto, IVA, envío)</div>
-                                        <div className="flex flex-col gap-4">
-                                            {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 6).map((order: any) => {
-                                                const net = Number(order.vat_subtotal ?? (Number(order.total ?? 0) - Number(order.vat_amount ?? 0) - Number(order.shipping ?? 0)))
-                                                const vat = Number(order.vat_amount ?? 0)
-                                                const shipping = Number(order.shipping ?? 0)
-                                                return (
-                                                <div key={order.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-surface rounded-xl border border-line">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-success bg-opacity-10 text-success rounded-full flex items-center justify-center">
-                                                            <Icon.ArrowDownLeft weight="bold" />
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-bold">Pedido #{order.id}</div>
-                                                            <div className="text-secondary text-xs">{formatDateEcuador(order.created_at)}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-3 gap-4 text-right text-sm md:w-[340px]">
-                                                        <div>
-                                                            <div className="text-[10px] uppercase text-secondary">Neto</div>
-                                                            <div className="font-bold tabular-nums">{formatMoney(net)}</div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-[10px] uppercase text-secondary">IVA</div>
-                                                            <div className="font-bold tabular-nums">{formatMoney(vat)}</div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-[10px] uppercase text-secondary">Envío</div>
-                                                            <div className="font-bold tabular-nums">{formatMoney(shipping)}</div>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold hover:bg-white"
-                                                        onClick={() => handleViewOrder(order.id)}
-                                                    >
-                                                        Ver pedido
-                                                    </button>
-                                                </div>
-                                                )
-                                            })}
-                                            {(dashboardStats?.businessMetrics?.recentOrders || []).length === 0 && (
-                                                <div className="text-center py-4 text-secondary">No hay transacciones recientes.</div>
-                                            )}
-                                        </div>
-
-                                        <div className="mt-10 p-5 bg-surface rounded-xl border border-line">
-                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
-                                                <h6 className="heading6">Trazabilidad de cifras</h6>
-                                                <span className="text-xs text-secondary font-semibold">Fuente: pedidos completados o entregados + productos vendidos</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                                                <div className="bg-white border border-line rounded-lg p-4">
-                                                    <div className="text-xs uppercase font-bold text-secondary mb-3">Pedidos que componen las ventas</div>
-                                                    <div className="flex flex-col gap-2">
-                                                        {(dashboardStats?.businessMetrics?.traceability?.orders || []).slice(0, 6).map((order: any) => (
-                                                            <button
-                                                                key={order.id}
-                                                                type="button"
-                                                                className="text-left p-3 rounded-lg border border-line hover:bg-surface transition-colors"
-                                                                onClick={() => handleViewOrder(order.id)}
-                                                            >
-                                                                <div className="flex items-center justify-between gap-3">
-                                                                    <span className="font-bold text-sm">#{order.id}</span>
-                                                                    <span className="text-xs text-secondary">{formatDateEcuador(order.created_at)}</span>
-                                                                </div>
-                                                                <div className="grid grid-cols-4 gap-2 mt-2 text-[11px]">
-                                                                    <div>
-                                                                        <div className="text-secondary uppercase">Neto</div>
-                                                                        <div className="font-bold tabular-nums">{formatMoney(order.net)}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-secondary uppercase">IVA</div>
-                                                                        <div className="font-bold tabular-nums">{formatMoney(order.vat)}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-secondary uppercase">Envío</div>
-                                                                        <div className="font-bold tabular-nums">{formatMoney(order.shipping)}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-secondary uppercase">Total</div>
-                                                                        <div className="font-bold tabular-nums">{formatMoney(order.gross)}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                        {(dashboardStats?.businessMetrics?.traceability?.orders || []).length === 0 && (
-                                                            <div className="text-sm text-secondary">Sin pedidos para trazabilidad.</div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-white border border-line rounded-lg p-4">
-                                                    <div className="text-xs uppercase font-bold text-secondary mb-3">Productos que explican las ventas netas</div>
-                                                    <div className="flex flex-col gap-3">
-                                                        {(dashboardStats?.businessMetrics?.traceability?.products || []).slice(0, 6).map((product: any, idx: number) => {
-                                                            const refs = Array.isArray(product.order_refs)
-                                                                ? product.order_refs
-                                                                : String(product.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
-                                                            return (
-                                                                <div key={`${product.product_id || product.product_name}-${idx}`} className="p-3 rounded-lg border border-line">
-                                                                    <div className="flex items-center justify-between gap-3">
-                                                                        <div className="font-semibold text-sm">{product.product_name}</div>
-                                                                        <div className="font-bold tabular-nums">{formatMoney(product.net_revenue)}</div>
-                                                                    </div>
-                                                                    <div className="text-xs text-secondary mt-1">
-                                                                        Categoría: <span className="font-semibold capitalize">{product.category || 'Sin categoría'}</span> | Unidades: <span className="font-semibold">{Number(product.units_sold || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-xs text-secondary mt-1 break-words">
-                                                                        Pedidos: {refs.length > 0 ? refs.join(', ') : 'Sin referencia'}
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                        {(dashboardStats?.businessMetrics?.traceability?.products || []).length === 0 && (
-                                                            <div className="text-sm text-secondary">Sin productos vendidos para trazabilidad.</div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <BalancesPanel
+                                        netSales={Number(balanceSalesSummary?.net ?? 0)}
+                                        salesSummary={balanceSalesSummary}
+                                        profitStats={balanceProfitStats}
+                                        recentOrders={balanceRecentOrders}
+                                        traceabilityOrders={balanceTraceabilityOrders}
+                                        traceabilityProducts={balanceTraceabilityProducts}
+                                        formatMoney={formatMoney}
+                                        formatDate={formatDateEcuador}
+                                        onOpenOrder={handleViewOrder}
+                                        onOpenProfitAnalysis={() => {
+                                            startPanelNavigationTransition(() => {
+                                                setAdminReportSection('balance')
+                                                setActiveTab('reports')
+                                                setSelectedDeepDive('profit')
+                                            })
+                                        }}
+                                        onOpenMargins={() => navigateToPanelTab('margins')}
+                                        onOpenOrders={() => {
+                                            startPanelNavigationTransition(() => {
+                                                setActiveOrders('all')
+                                                setActiveTab('admin-orders')
+                                                setSelectedDeepDive(null)
+                                            })
+                                        }}
+                                        onOpenTaxes={() => navigateToPanelTab('taxes')}
+                                    />
                                     )}
                                 </>
                             )}
@@ -7091,84 +6584,67 @@ const MyAccount = () => {
                 </div>
             </div>
             <Footer />
-            <ProductEditorModal
-                open={isProductModalOpen}
-                editingProduct={editingProduct}
-                existingProducts={adminProductsList}
-                editorMode={productEditorMode}
-                initialForm={productEditorInitialForm}
-                vatMultiplier={vatMultiplier}
-                normalizedMargins={normalizeMarginSettings(marginSettings)}
-                normalizedCalc={normalizeCalcSettings(calcSettings)}
-                referenceData={productReferenceData}
-                onOpenReferenceCatalog={openReferenceCatalog}
-                activeTab={activeTab}
-                onClose={() => {
-                    setIsProductModalOpen(false)
-                    setProductEditorMode('create')
-                }}
-                onProductsUpdated={setAdminProductsList}
-                onRefreshPurchaseInvoices={() => loadRecentPurchaseInvoices({ silent: true })}
-                onSessionExpired={handleLogout}
-                showNotification={showNotification}
-            />
-
-            <PurchaseInvoiceDetailModal
-                open={isPurchaseInvoiceModalOpen}
-                loading={purchaseInvoiceDetailLoading}
-                invoice={selectedPurchaseInvoice}
-                onClose={closePurchaseInvoiceModal}
-                formatMoney={formatMoney}
-                formatIsoDate={formatIsoDate}
-                formatDateTime={formatDateTimeEcuador}
-            />
-
-            <ProductProcurementDetailModal
-                open={isProductProcurementModalOpen}
-                loading={productProcurementDetailLoading}
-                detail={selectedProductProcurementDetail}
-                salesProduct={selectedProcurementSalesProduct}
-                currentPeriod={productSalesRanking?.period || { start: null, end: null }}
-                historicalPeriod={productSalesRanking?.historicalPeriod || { start: null, end: null }}
-                formatMoney={formatMoney}
-                formatIsoDate={formatIsoDate}
-                onClose={closeProductProcurementModal}
-                onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
-            />
-
-            <SalesProductDetailModal
-                open={isSalesProductModalOpen}
-                product={selectedSalesProduct}
-                currentPeriod={productSalesRanking?.period || { start: null, end: null }}
-                historicalPeriod={productSalesRanking?.historicalPeriod || { start: null, end: null }}
-                formatMoney={formatMoney}
-                onClose={() => {
-                    setIsSalesProductModalOpen(false)
-                    setSelectedSalesProduct(null)
-                }}
-            />
-
-            <OrderDetailModal
-                open={isOrderModalOpen}
-                order={selectedOrder}
-                orderContact={selectedOrderContact}
-                statusBadge={selectedOrder ? getStatusBadge(selectedOrder.status) : { label: 'Pendiente', className: 'bg-yellow/10 text-yellow' }}
-                canViewInvoice={(user?.role === 'admin' || user?.role === 'customer') && ['completed', 'delivered'].includes(normalizeStatus(selectedOrder?.status))}
-                canManageStatus={user?.role === 'admin' && selectedOrder?.status !== 'canceled' && selectedOrder?.status !== 'delivered'}
-                canCancelOrder={user?.role === 'customer' && ['pending', 'processing'].includes(normalizeStatus(selectedOrder?.status))}
-                onClose={() => setIsOrderModalOpen(false)}
-                onViewInvoice={handleGenerateInvoice}
-                onUpdateStatus={(status) => {
-                    if (!selectedOrder?.id) return
-                    handleUpdateOrderStatus(selectedOrder.id, status)
-                }}
-                formatDateTime={formatDateTimeEcuador}
-                formatMoney={formatMoney}
-                getVatSubtotal={getOrderVatSubtotal}
-                getVatAmount={getOrderVatAmount}
-                getShipping={getOrderShipping}
-                getItemNetPrice={getItemNetPrice}
-            />
+            {(isProductModalOpen || isPurchaseInvoiceModalOpen || isProductProcurementModalOpen || isSalesProductModalOpen || isOrderModalOpen) && (
+                <PanelModals
+                    isProductModalOpen={isProductModalOpen}
+                    editingProduct={editingProduct}
+                    adminProductsList={adminProductsList}
+                    productEditorMode={productEditorMode}
+                    productEditorInitialForm={productEditorInitialForm}
+                    vatMultiplier={vatMultiplier}
+                    normalizedMargins={normalizedMarginSettings}
+                    normalizedCalc={normalizedCalcSettings}
+                    productReferenceData={productReferenceData}
+                    activeTab={activeTab}
+                    openReferenceCatalog={openReferenceCatalog}
+                    closeProductModal={() => {
+                        setIsProductModalOpen(false)
+                        setProductEditorMode('create')
+                    }}
+                    setAdminProductsList={setAdminProductsList}
+                    refreshPurchaseInvoices={() => loadRecentPurchaseInvoices({ silent: true })}
+                    handleLogout={handleLogout}
+                    showNotification={showNotification}
+                    isPurchaseInvoiceModalOpen={isPurchaseInvoiceModalOpen}
+                    purchaseInvoiceDetailLoading={purchaseInvoiceDetailLoading}
+                    selectedPurchaseInvoice={selectedPurchaseInvoice}
+                    closePurchaseInvoiceModal={closePurchaseInvoiceModal}
+                    formatMoney={formatMoney}
+                    formatIsoDate={formatIsoDate}
+                    formatDateTimeEcuador={formatDateTimeEcuador}
+                    isProductProcurementModalOpen={isProductProcurementModalOpen}
+                    productProcurementDetailLoading={productProcurementDetailLoading}
+                    selectedProductProcurementDetail={selectedProductProcurementDetail}
+                    selectedProcurementSalesProduct={selectedProcurementSalesProduct}
+                    currentSalesPeriod={productSalesRanking?.period || { start: null, end: null }}
+                    historicalSalesPeriod={productSalesRanking?.historicalPeriod || { start: null, end: null }}
+                    closeProductProcurementModal={closeProductProcurementModal}
+                    handleOpenPurchaseInvoice={handleOpenPurchaseInvoice}
+                    isSalesProductModalOpen={isSalesProductModalOpen}
+                    selectedSalesProduct={selectedSalesProduct}
+                    closeSalesProductModal={() => {
+                        setIsSalesProductModalOpen(false)
+                        setSelectedSalesProduct(null)
+                    }}
+                    isOrderModalOpen={isOrderModalOpen}
+                    selectedOrder={selectedOrder}
+                    selectedOrderContact={selectedOrderContact}
+                    selectedOrderStatusBadge={getStatusBadge(selectedOrder?.status)}
+                    canViewSelectedOrderInvoice={(user?.role === 'admin' || user?.role === 'customer') && ['completed', 'delivered'].includes(normalizeStatus(selectedOrder?.status))}
+                    canManageSelectedOrderStatus={user?.role === 'admin' && selectedOrder?.status !== 'canceled' && selectedOrder?.status !== 'delivered'}
+                    canCancelSelectedOrder={user?.role === 'customer' && ['pending', 'processing'].includes(normalizeStatus(selectedOrder?.status))}
+                    closeOrderModal={() => setIsOrderModalOpen(false)}
+                    handleGenerateInvoice={handleGenerateInvoice}
+                    handleUpdateSelectedOrderStatus={(status) => {
+                        if (!selectedOrder?.id) return
+                        handleUpdateOrderStatus(selectedOrder.id, status)
+                    }}
+                    getOrderVatSubtotal={getOrderVatSubtotal}
+                    getOrderVatAmount={getOrderVatAmount}
+                    getOrderShipping={getOrderShipping}
+                    getItemNetPrice={getItemNetPrice}
+                />
+            )}
 
             {renderDeepDive()}
         </>

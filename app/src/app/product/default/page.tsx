@@ -4,10 +4,9 @@ import { headers } from 'next/headers'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
-import { listProducts } from '@/lib/products'
-import { getProductPageSettings } from '@/lib/api/settings'
+import { loadProducts } from '@/lib/products.server'
 import { generateProductJsonLd } from '@/lib/seo'
-import { findCatalogProduct, groupCatalogProducts } from '@/lib/catalog'
+import { findCatalogProduct } from '@/lib/catalog'
 import { getSiteConfig } from '@/lib/site'
 
 type SearchParams = {
@@ -29,8 +28,8 @@ export async function generateMetadata(
 
     if (!id) return {}
 
-    const groupedProducts = groupCatalogProducts(await listProducts())
-    const product = findCatalogProduct(groupedProducts, id)
+    const { products } = await loadProducts()
+    const product = findCatalogProduct(products, id)
     if (!product) return { title: 'Producto no encontrado' }
 
     const previousImages = (await parent).openGraph?.images || []
@@ -61,18 +60,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
     const nonce = requestHeaders.get('x-nonce') || undefined
     const site = getSiteConfig()
     const resolvedSearchParams = await searchParams
-    const [rawProducts, pageSettings] = await Promise.all([
-        listProducts(),
-        getProductPageSettings().catch(() => ({
-            deliveryEstimate: '14 de enero - 18 de enero',
-            viewerCount: 38,
-            freeShippingThreshold: 75,
-            supportHours: '8:30 AM a 10:00 PM',
-            returnDays: 100,
-        })),
-    ])
-    const groupedProducts = groupCatalogProducts(rawProducts)
-    const productsWithSettings = groupedProducts.map((product) => ({ ...product, pageSettings }))
+    const { products: productsWithSettings } = await loadProducts()
     const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (productsWithSettings[0]?.id ?? '')
     const currentProduct = findCatalogProduct(productsWithSettings, productId)
 

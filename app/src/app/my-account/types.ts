@@ -172,6 +172,7 @@ export interface DashboardStats {
 
 export interface Order {
     id: string;
+    order_number?: string;
     user_name?: string;
     user_email?: string;
     user_id?: string;

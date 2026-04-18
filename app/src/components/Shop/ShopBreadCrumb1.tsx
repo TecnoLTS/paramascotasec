@@ -29,6 +29,9 @@ interface Props {
     searchQuery?: string | null
 }
 
+const sortLabels = (values: Iterable<string>) =>
+    Array.from(new Set(values)).sort((left, right) => left.localeCompare(right, 'es'))
+
 const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gender, category, searchQuery }) => {
     useSite()
     const pathname = usePathname()
@@ -117,19 +120,62 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     const isDiscountCategory = normalizedCategory === 'descuentos';
     const effectiveSearchQuery = useMemo(() => sanitizeProductSearchQuery(deferredSearchInput), [deferredSearchInput])
     const productSearchIndex = useMemo(() => buildProductSearchIndex(data), [data])
+    const productAttributeIndex = useMemo(() => new Map(
+        data.map((product) => ([
+            product.id,
+            {
+                sizes: getProductSizeValues(product),
+                colors: getProductColorValues(product),
+                materials: getProductMaterialValues(product),
+                species: getProductSpeciesValues(product),
+                onSale: isProductOnSale(product),
+            },
+        ]))
+    ), [data])
 
-    const categoryCounts = useCallback((categoryId: string) => {
-        const filter = getCategoryFilter(categoryId);
-        return data.filter((product) => {
-            if (effectiveSearchQuery && !matchesProductSearch(productSearchIndex.get(product.id) ?? '', effectiveSearchQuery)) {
-                return false
-            }
-            if (categoryId === 'descuentos') {
-                return isProductOnSale(product)
-            }
-            return matchesPetCategoryFilter(product, filter);
-        }).length;
-    }, [data, effectiveSearchQuery, productSearchIndex]);
+    const getIndexedAttributes = useCallback((product: ProductType) => (
+        productAttributeIndex.get(product.id) ?? {
+            sizes: [],
+            colors: [],
+            materials: [],
+            species: [],
+            onSale: isProductOnSale(product),
+        }
+    ), [productAttributeIndex])
+
+    const categoryCountsMap = useMemo(() => {
+        const preferredCategoryIds = getShopBrowseCategoryIds().filter((categoryId) => categoryId !== 'todos')
+        const initialCounts = new Map<string, number>(preferredCategoryIds.map((categoryId) => [categoryId, 0]))
+        const searchScopedProducts = effectiveSearchQuery
+            ? data.filter((product) => matchesProductSearch(productSearchIndex.get(product.id) ?? '', effectiveSearchQuery))
+            : data
+
+        searchScopedProducts.forEach((product) => {
+            const indexed = getIndexedAttributes(product)
+
+            preferredCategoryIds.forEach((categoryId) => {
+                if (categoryId === 'descuentos') {
+                    if (indexed.onSale) {
+                        initialCounts.set(categoryId, (initialCounts.get(categoryId) ?? 0) + 1)
+                    }
+                    return
+                }
+
+                if (matchesPetCategoryFilter(product, getCategoryFilter(categoryId))) {
+                    initialCounts.set(categoryId, (initialCounts.get(categoryId) ?? 0) + 1)
+                }
+            })
+        })
+
+        return initialCounts
+    }, [data, effectiveSearchQuery, getIndexedAttributes, productSearchIndex])
+
+    const categoryCounts = useCallback((categoryId: string) => (
+        categoryId === 'todos'
+            ? data.length
+            : (categoryCountsMap.get(categoryId) ?? 0)
+    ), [categoryCountsMap, data.length])
+
     const categoryOptions = useMemo(() => {
         const preferred = getShopBrowseCategoryIds()
         return preferred.filter((categoryId) => {
@@ -162,7 +208,9 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     }, [pathname, router, searchParams])
 
     const matchesProduct = useCallback((product: ProductType, ignore?: 'type' | 'size' | 'color' | 'material' | 'species' | 'brand' | 'priceRange' | 'sale' | 'search') => {
-        if (ignore !== 'sale' && showOnlySale && !isProductOnSale(product)) {
+        const indexed = getIndexedAttributes(product)
+
+        if (ignore !== 'sale' && showOnlySale && !indexed.onSale) {
             return false
         }
 
@@ -170,7 +218,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             return false
         }
 
-        if (isDiscountCategory && !isProductOnSale(product)) {
+        if (isDiscountCategory && !indexed.onSale) {
             return false
         }
 
@@ -182,19 +230,19 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             return false
         }
 
-        if (ignore !== 'size' && size && !getProductSizeValues(product).includes(size)) {
+        if (ignore !== 'size' && size && !indexed.sizes.includes(size)) {
             return false
         }
 
-        if (ignore !== 'color' && color && !getProductColorValues(product).includes(color)) {
+        if (ignore !== 'color' && color && !indexed.colors.includes(color)) {
             return false
         }
 
-        if (ignore !== 'material' && material && !getProductMaterialValues(product).includes(material)) {
+        if (ignore !== 'material' && material && !indexed.materials.includes(material)) {
             return false
         }
 
-        if (ignore !== 'species' && species && !getProductSpeciesValues(product).includes(species)) {
+        if (ignore !== 'species' && species && !indexed.species.includes(species)) {
             return false
         }
 
@@ -210,31 +258,61 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
             return false
         }
         return true
-    }, [brand, categoryFilter, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, gender, isDiscountCategory, material, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, species, type])
+    }, [brand, categoryFilter, color, defaultPriceRange.max, defaultPriceRange.min, effectiveSearchQuery, gender, getIndexedAttributes, isDiscountCategory, material, priceRange.max, priceRange.min, productSearchIndex, showOnlySale, size, species, type])
+
+    const productsExcludingSizeFilter = useMemo(
+        () => data.filter((product) => matchesProduct(product, 'size')),
+        [data, matchesProduct]
+    )
+    const productsExcludingColorFilter = useMemo(
+        () => data.filter((product) => matchesProduct(product, 'color')),
+        [data, matchesProduct]
+    )
+    const productsExcludingMaterialFilter = useMemo(
+        () => data.filter((product) => matchesProduct(product, 'material')),
+        [data, matchesProduct]
+    )
+    const productsExcludingSpeciesFilter = useMemo(
+        () => data.filter((product) => matchesProduct(product, 'species')),
+        [data, matchesProduct]
+    )
+    const productsExcludingBrandFilter = useMemo(
+        () => data.filter((product) => matchesProduct(product, 'brand')),
+        [data, matchesProduct]
+    )
 
     const uniqueSizes = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'size')).flatMap((product) => getProductSizeValues(product)).filter(Boolean))).sort(),
-        [data, matchesProduct]
-    );
+        () => sortLabels(productsExcludingSizeFilter.flatMap((product) => getIndexedAttributes(product).sizes).filter(Boolean)),
+        [getIndexedAttributes, productsExcludingSizeFilter]
+    )
     const uniqueColors = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'color')).flatMap((product) => getProductColorValues(product)).filter(Boolean))).sort(),
-        [data, matchesProduct]
-    );
+        () => sortLabels(productsExcludingColorFilter.flatMap((product) => getIndexedAttributes(product).colors).filter(Boolean)),
+        [getIndexedAttributes, productsExcludingColorFilter]
+    )
     const uniqueMaterials = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'material')).flatMap((product) => getProductMaterialValues(product)).filter(Boolean))).sort(),
-        [data, matchesProduct]
-    );
+        () => sortLabels(productsExcludingMaterialFilter.flatMap((product) => getIndexedAttributes(product).materials).filter(Boolean)),
+        [getIndexedAttributes, productsExcludingMaterialFilter]
+    )
     const uniqueSpecies = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'species')).flatMap((product) => getProductSpeciesValues(product)).filter(Boolean))).sort(),
-        [data, matchesProduct]
-    );
+        () => sortLabels(productsExcludingSpeciesFilter.flatMap((product) => getIndexedAttributes(product).species).filter(Boolean)),
+        [getIndexedAttributes, productsExcludingSpeciesFilter]
+    )
+    const brandCountsMap = useMemo(() => {
+        const counts = new Map<string, number>()
+        productsExcludingBrandFilter.forEach((product) => {
+            const productBrand = product.brand ?? ''
+            if (!productBrand) return
+            counts.set(productBrand, (counts.get(productBrand) ?? 0) + 1)
+        })
+        return counts
+    }, [productsExcludingBrandFilter])
     const uniqueBrands = useMemo(
-        () => Array.from(new Set(data.filter((product) => matchesProduct(product, 'brand')).map((product) => product.brand ?? '').filter(Boolean))).sort(),
-        [data, matchesProduct]
-    );
+        () => sortLabels(productsExcludingBrandFilter.map((product) => product.brand ?? '').filter(Boolean)),
+        [productsExcludingBrandFilter]
+    )
     const brandCounts = useCallback(
-        (brandValue: string) => data.filter((product) => matchesProduct(product, 'brand') && (product.brand ?? '') === brandValue).length,
-        [data, matchesProduct]
+        (brandValue: string) => brandCountsMap.get(brandValue) ?? 0,
+        [brandCountsMap]
     );
 
     useEffect(() => {

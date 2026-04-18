@@ -11,10 +11,10 @@ type StrategicAlert = {
 }
 
 type InventoryHealth = {
-    out_of_stock?: number
-    low_stock?: number
-    expiring_products?: number
-    expired_products?: number
+    out_of_stock?: number | string
+    low_stock?: number | string
+    expiring_products?: number | string
+    expired_products?: number | string
 }
 
 type AdminAlertsTabProps = {
