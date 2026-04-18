@@ -11,6 +11,23 @@ export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
 export const PRODUCT_IMAGE_ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
 const BASE_PRICE_FRACTION_DIGITS = 4
 
+const COLOR_INFERENCE_RULES: Array<{ canonical: string; patterns: string[] }> = [
+    { canonical: 'Verde fluorescente', patterns: ['verde fluorescente'] },
+    { canonical: 'Verde Militar', patterns: ['verde militar'] },
+    { canonical: 'Azul', patterns: [' azul ', '-az-', '-azul-', ' azul'] },
+    { canonical: 'Rojo', patterns: [' rojo ', ' roja ', '-rj-', ' rojo', ' roja'] },
+    { canonical: 'Rosa', patterns: [' rosa ', ' rosado ', ' rosada ', '-rs-', ' rosa', ' rosado', ' rosada'] },
+    { canonical: 'Morado', patterns: [' morado ', ' morada ', '-mr-', ' morado', ' morada'] },
+    { canonical: 'Turquesa', patterns: [' turquesa ', '-tq-', ' turquesa'] },
+    { canonical: 'Naranja', patterns: [' naranja ', '-nj-', ' naranja'] },
+    { canonical: 'Amarillo', patterns: [' amarillo ', ' amarilla ', '-am-', ' amarillo', ' amarilla'] },
+    { canonical: 'Verde', patterns: [' verde ', '-vd-', ' verde'] },
+    { canonical: 'Gris', patterns: [' gris ', '-gr-', ' gris'] },
+    { canonical: 'Blanco', patterns: [' blanco ', ' blanca ', '-bl-', ' blanco', ' blanca'] },
+    { canonical: 'Negro', patterns: [' negro ', ' negra ', '-ng-', '-nr-', ' negro', ' negra'] },
+    { canonical: 'Cafe', patterns: [' cafe ', ' café ', '-cf-', ' cafe', ' café'] },
+]
+
 const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -19,6 +36,64 @@ const requiresSeparatedVariantSuffix = (label: string) =>
 
 const normalizeVariantComparisonValue = (value: unknown) =>
     normalizeMeasurementLabel(String(value || '')).trim().toLowerCase()
+
+const slugifyVariantValue = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+
+const titleCaseWords = (value: string) =>
+    value
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+        .join(' ')
+
+const normalizeVariantSizeValue = (value: string) => {
+    const normalized = normalizeMeasurementLabel(value).trim()
+    if (!normalized) return ''
+    if (/^(n\/?a|na)$/i.test(normalized)) return ''
+    if (/^(xxs|xs|s|m|l|xl|xxl)$/i.test(normalized)) return normalized.toUpperCase()
+    if (/^(small|medium|large)$/i.test(normalized)) return titleCaseWords(normalized)
+    return normalized
+}
+
+const inferColorFromText = (...values: Array<unknown>) => {
+    const haystack = ` ${values.map((value) => slugifyVariantValue(String(value || '')).replace(/-/g, ' ')).join(' ')} `.replace(/\s+/g, ' ')
+    if (!haystack.trim()) return ''
+
+    for (const rule of COLOR_INFERENCE_RULES) {
+        if (rule.patterns.some((pattern) => haystack.includes(` ${slugifyVariantValue(pattern).replace(/-/g, ' ')} `))) {
+            return rule.canonical
+        }
+    }
+
+    return ''
+}
+
+const buildVariantGroupKey = ({
+    supplier,
+    type,
+    species,
+    baseName,
+}: {
+    supplier?: string;
+    type?: string;
+    species?: string;
+    baseName?: string;
+}) => {
+    const parts = [
+        supplier ? slugifyVariantValue(supplier) : '',
+        type ? slugifyVariantValue(type) : '',
+        species ? slugifyVariantValue(species) : '',
+        baseName ? slugifyVariantValue(baseName) : '',
+    ].filter(Boolean)
+
+    return parts.join('-')
+}
 
 const getVariantCandidateValues = (type: string, source: Record<string, any>) => {
     const normalizedType = normalizeProductType(type, String(source.category || ''))
@@ -162,6 +237,98 @@ export const resolveProductVariantBaseName = (product: any) => {
     })
 
     return strippedName || fullName
+}
+
+export const enrichVariantAttributes = ({
+    type,
+    category,
+    name,
+    attributes,
+}: {
+    type: string;
+    category?: string;
+    name?: string;
+    attributes?: Record<string, any> | null;
+}) => {
+    const normalizedType = normalizeProductType(type, String(category || ''))
+    const nextAttributes: Record<string, string> = { ...(attributes || {}) }
+    const rawName = String(name || '').trim()
+
+    const explicitColor = titleCaseWords(String(nextAttributes.color || '').trim())
+    const inferredColor = inferColorFromText(
+        explicitColor,
+        nextAttributes.variantLabel,
+        nextAttributes.variantBaseName,
+        nextAttributes.sku,
+        rawName,
+        nextAttributes.tag
+    )
+    if (!explicitColor && inferredColor) {
+        nextAttributes.color = inferredColor
+    } else if (explicitColor) {
+        nextAttributes.color = explicitColor
+    }
+
+    if (nextAttributes.size) {
+        nextAttributes.size = normalizeVariantSizeValue(String(nextAttributes.size))
+    }
+    if (nextAttributes.weight) {
+        nextAttributes.weight = normalizeMeasurementLabel(String(nextAttributes.weight)).trim()
+    }
+    if (nextAttributes.presentation) {
+        nextAttributes.presentation = normalizeMeasurementLabel(String(nextAttributes.presentation)).trim()
+    }
+
+    let resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.variantLabel || '')).trim()
+
+    if (!resolvedVariantLabel) {
+        if (normalizedType === 'ropa') {
+            resolvedVariantLabel = normalizeVariantSizeValue(String(nextAttributes.size || ''))
+                || String(nextAttributes.color || '').trim()
+        } else if (normalizedType === 'accesorios') {
+            resolvedVariantLabel = String(nextAttributes.color || '').trim()
+                || normalizeVariantSizeValue(String(nextAttributes.size || ''))
+                || normalizeMeasurementLabel(String(nextAttributes.presentation || '')).trim()
+        } else if (normalizedType === 'cuidado') {
+            resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.presentation || nextAttributes.size || '')).trim()
+        } else {
+            resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.weight || nextAttributes.size || '')).trim()
+        }
+    }
+
+    if (resolvedVariantLabel) {
+        nextAttributes.variantLabel = resolvedVariantLabel
+    }
+
+    const synthesizedProduct = {
+        name: rawName,
+        category: normalizeProductCategory(String(category || ''), normalizedType),
+        productType: normalizedType,
+        attributes: nextAttributes,
+        variantLabel: nextAttributes.variantLabel,
+        variantBaseName: nextAttributes.variantBaseName,
+    }
+
+    const resolvedBaseName = String(nextAttributes.variantBaseName || '').trim()
+        || resolveProductVariantBaseName(synthesizedProduct)
+
+    if (resolvedBaseName) {
+        nextAttributes.variantBaseName = resolvedBaseName
+    }
+
+    if (nextAttributes.variantBaseName) {
+        const groupKey = buildVariantGroupKey({
+            supplier: String(nextAttributes.supplier || '').trim(),
+            type: normalizedType,
+            species: String(nextAttributes.species || '').trim(),
+            baseName: nextAttributes.variantBaseName,
+        })
+        if (groupKey) {
+            nextAttributes.variantGroupKey = groupKey
+        }
+    }
+
+    return nextAttributes
 }
 
 export const normalizeAdminProducts = (items: any[]) => {
@@ -408,7 +575,12 @@ export const createEmptyProductForm = (): ProductFormState => ({
 export const createProductFormFromProduct = (product: any, vatMultiplier: number): ProductFormState => {
     const pvpPrice = Number(product?.price ?? 0)
     const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
-    const attributes = normalizeAttributes(productType, product?.attributes)
+    const attributes = enrichVariantAttributes({
+        type: productType,
+        category: String(product?.category || ''),
+        name: String(product?.name || ''),
+        attributes: normalizeAttributes(productType, product?.attributes),
+    })
     const taxExempt = isTaxExemptProduct({ ...product, attributes })
     const effectiveVatMultiplier = taxExempt ? 1 : Math.max(1, vatMultiplier)
     const basePrice = effectiveVatMultiplier > 0 ? pvpPrice / effectiveVatMultiplier : pvpPrice

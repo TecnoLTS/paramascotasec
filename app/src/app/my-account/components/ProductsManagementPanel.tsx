@@ -5,7 +5,49 @@ import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import type { ProductPublicationFilter } from '../types'
-import { getAdminProductEntityId } from '../productFormUtils'
+import { getAdminProductEntityId, resolveProductVariantLabel } from '../productFormUtils'
+
+type AdminProductAdvancedFilters = {
+    category: string;
+    supplier: string;
+    brand: string;
+    species: string;
+    tax: 'all' | 'taxed' | 'exempt';
+}
+
+type AdminProductFilterOption = { value: string; label: string; count: number }
+
+const normalizeAdminGroupText = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+
+const compareAdminLabels = (left: string, right: string) =>
+    left.localeCompare(right, 'es', { sensitivity: 'base', numeric: true })
+
+const getProductVariantMeta = (product: any) => {
+    const attributes = product?.attributes || {}
+    const normalizedLabel = String(
+        resolveProductVariantLabel(String(product?.productType || product?.category || ''), attributes, product) || ''
+    ).trim()
+    const color = String(attributes.color || '').trim()
+    const size = String(attributes.size || '').trim()
+    const presentation = String(attributes.presentation || attributes.weight || '').trim()
+    const sku = String(attributes.sku || '').trim()
+
+    const badges = Array.from(new Set(
+        [normalizedLabel, color, size, presentation]
+            .map((value) => String(value || '').trim())
+            .filter((value) => value && !/^(n\/?a|na)$/i.test(value))
+    )).slice(0, 3)
+
+    return {
+        badges,
+        sku,
+    }
+}
 
 type ProductsManagementPanelProps = {
     products: any[];
@@ -23,10 +65,19 @@ type ProductsManagementPanelProps = {
     activeFilter: ProductPublicationFilter;
     activeQuickFilter: 'all' | 'publishable' | 'blocked' | 'with-stock' | 'no-stock' | 'no-price';
     searchQuery: string;
+    advancedFilters: AdminProductAdvancedFilters;
+    filterOptions: {
+        categories: AdminProductFilterOption[];
+        suppliers: AdminProductFilterOption[];
+        brands: AdminProductFilterOption[];
+        species: AdminProductFilterOption[];
+    };
     hasPerishableProducts: boolean;
     onFilterChange: (filter: ProductPublicationFilter) => void;
     onQuickFilterChange: (filter: 'all' | 'publishable' | 'blocked' | 'with-stock' | 'no-stock' | 'no-price') => void;
     onSearchChange: (value: string) => void;
+    onAdvancedFiltersChange: (filters: AdminProductAdvancedFilters) => void;
+    onClearAdvancedFilters: () => void;
     onNewProduct: () => void;
     onEditProduct: (product: any) => void;
     onRestockProduct: (product: any) => void;
@@ -55,10 +106,14 @@ export default React.memo(function ProductsManagementPanel({
     activeFilter,
     activeQuickFilter,
     searchQuery,
+    advancedFilters,
+    filterOptions,
     hasPerishableProducts,
     onFilterChange,
     onQuickFilterChange,
     onSearchChange,
+    onAdvancedFiltersChange,
+    onClearAdvancedFilters,
     onNewProduct,
     onEditProduct,
     onRestockProduct,
@@ -70,6 +125,13 @@ export default React.memo(function ProductsManagementPanel({
     getProductExpirationMeta,
     formatIsoDate,
 }: ProductsManagementPanelProps) {
+    const hasAdvancedFilters = searchQuery.trim().length > 0
+        || advancedFilters.category !== 'all'
+        || advancedFilters.supplier !== 'all'
+        || advancedFilters.brand !== 'all'
+        || advancedFilters.species !== 'all'
+        || advancedFilters.tax !== 'all'
+
     const getCount = React.useCallback((filter: ProductPublicationFilter) => {
         if (filter === 'published') return summary.published
         if (filter === 'hidden') return summary.hidden
@@ -84,6 +146,61 @@ export default React.memo(function ProductsManagementPanel({
         { key: 'no-stock', label: 'Sin stock', count: summary.noStock },
         { key: 'no-price', label: 'Sin precio', count: summary.noPrice },
     ]), [summary])
+
+    const activeFilterChips = React.useMemo(() => {
+        const chips: Array<{ key: keyof AdminProductAdvancedFilters | 'search'; label: string; value?: string }> = []
+
+        if (searchQuery.trim()) {
+            chips.push({ key: 'search', label: 'Búsqueda', value: searchQuery.trim() })
+        }
+        if (advancedFilters.category !== 'all') {
+            chips.push({ key: 'category', label: 'Categoría', value: filterOptions.categories.find((item) => item.value === advancedFilters.category)?.label ?? advancedFilters.category })
+        }
+        if (advancedFilters.supplier !== 'all') {
+            chips.push({ key: 'supplier', label: 'Proveedor', value: filterOptions.suppliers.find((item) => item.value === advancedFilters.supplier)?.label ?? advancedFilters.supplier })
+        }
+        if (advancedFilters.brand !== 'all') {
+            chips.push({ key: 'brand', label: 'Marca', value: filterOptions.brands.find((item) => item.value === advancedFilters.brand)?.label ?? advancedFilters.brand })
+        }
+        if (advancedFilters.species !== 'all') {
+            chips.push({ key: 'species', label: 'Mascota', value: filterOptions.species.find((item) => item.value === advancedFilters.species)?.label ?? advancedFilters.species })
+        }
+        if (advancedFilters.tax !== 'all') {
+            chips.push({ key: 'tax', label: 'Impuesto', value: advancedFilters.tax === 'taxed' ? 'Con IVA' : 'IVA 0%' })
+        }
+
+        return chips
+    }, [advancedFilters, filterOptions, searchQuery])
+
+    const handleSelectFilterChange = (key: keyof AdminProductAdvancedFilters, value: string) => {
+        onAdvancedFiltersChange({
+            ...advancedFilters,
+            [key]: value,
+        })
+    }
+
+    const clearSingleFilter = (key: keyof AdminProductAdvancedFilters | 'search') => {
+        if (key === 'search') {
+            onSearchChange('')
+            return
+        }
+
+        onAdvancedFiltersChange({
+            ...advancedFilters,
+            [key]: 'all',
+        })
+    }
+
+    const sortedProducts = React.useMemo(() => {
+        return [...products].sort((left, right) => {
+            const nameComparison = compareAdminLabels(String(left?.name || ''), String(right?.name || ''))
+            if (nameComparison !== 0) return nameComparison
+            return compareAdminLabels(
+                String(getAdminProductEntityId(left) || ''),
+                String(getAdminProductEntityId(right) || '')
+            )
+        })
+    }, [products])
 
     return (
         <div className="tab text-content w-full">
@@ -116,14 +233,149 @@ export default React.memo(function ProductsManagementPanel({
                 })}
             </div>
 
-            <div className="mb-6">
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => onSearchChange(event.target.value)}
-                    placeholder="Buscar por marca, producto, categoría o SKU"
-                    className="w-full max-w-[520px] rounded-xl border border-line bg-white px-4 py-3 text-sm outline-none transition-all focus:border-black"
-                />
+            <div className="mb-6 rounded-[28px] border border-line bg-white px-4 py-4 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:px-5">
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="relative flex-1">
+                            <Icon.MagnifyingGlass size={18} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--blue)]" />
+                            <input
+                                type="search"
+                                value={searchQuery}
+                                onChange={(event) => onSearchChange(event.target.value)}
+                                placeholder="Buscar por marca, producto, categoría, SKU, proveedor o mascota"
+                                spellCheck={false}
+                                className="h-12 w-full rounded-full border border-[rgba(0,127,155,0.18)] bg-white pl-12 pr-24 text-[15px] text-black shadow-[0_8px_20px_rgba(15,23,42,0.05)] outline-none transition-all placeholder:text-[rgba(15,23,42,0.45)] focus:border-[var(--blue)] focus:shadow-[0_12px_28px_rgba(0,127,155,0.12)]"
+                            />
+                            {searchQuery.trim() ? (
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-1/2 inline-flex h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(0,127,155,0.14)] bg-[rgba(0,127,155,0.06)] px-3 text-[12px] font-semibold text-[var(--blue)] transition-all hover:bg-[rgba(0,127,155,0.12)] hover:text-black"
+                                    onClick={() => onSearchChange('')}
+                                >
+                                    Limpiar
+                                </button>
+                            ) : (
+                                <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--blue)]">
+                                    Buscar
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                            <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                                {products.length} producto{products.length === 1 ? '' : 's'}
+                            </div>
+                            {hasAdvancedFilters && (
+                                <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                                    Filtros activos
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Categoría</span>
+                            <select
+                                value={advancedFilters.category}
+                                onChange={(event) => handleSelectFilterChange('category', event.target.value)}
+                                className="h-11 rounded-2xl border border-line bg-white px-4 text-sm outline-none transition-all focus:border-black"
+                            >
+                                <option value="all">Todas</option>
+                                {filterOptions.categories.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label} ({option.count})
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Proveedor</span>
+                            <select
+                                value={advancedFilters.supplier}
+                                onChange={(event) => handleSelectFilterChange('supplier', event.target.value)}
+                                className="h-11 rounded-2xl border border-line bg-white px-4 text-sm outline-none transition-all focus:border-black"
+                            >
+                                <option value="all">Todos</option>
+                                {filterOptions.suppliers.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label} ({option.count})
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Marca</span>
+                            <select
+                                value={advancedFilters.brand}
+                                onChange={(event) => handleSelectFilterChange('brand', event.target.value)}
+                                className="h-11 rounded-2xl border border-line bg-white px-4 text-sm outline-none transition-all focus:border-black"
+                            >
+                                <option value="all">Todas</option>
+                                {filterOptions.brands.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label} ({option.count})
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Mascota</span>
+                            <select
+                                value={advancedFilters.species}
+                                onChange={(event) => handleSelectFilterChange('species', event.target.value)}
+                                className="h-11 rounded-2xl border border-line bg-white px-4 text-sm outline-none transition-all focus:border-black"
+                            >
+                                <option value="all">Todas</option>
+                                {filterOptions.species.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label} ({option.count})
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Impuestos</span>
+                            <select
+                                value={advancedFilters.tax}
+                                onChange={(event) => handleSelectFilterChange('tax', event.target.value as AdminProductAdvancedFilters['tax'])}
+                                className="h-11 rounded-2xl border border-line bg-white px-4 text-sm outline-none transition-all focus:border-black"
+                            >
+                                <option value="all">Todos</option>
+                                <option value="exempt">IVA 0%</option>
+                                <option value="taxed">Con IVA</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    {activeFilterChips.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            {activeFilterChips.map((chip) => (
+                                <button
+                                    key={`${chip.key}-${chip.value ?? ''}`}
+                                    type="button"
+                                    className="inline-flex items-center gap-2 rounded-full bg-[rgba(0,127,155,0.08)] px-3 py-2 text-[12px] font-semibold text-[var(--blue)] transition-all hover:bg-[rgba(0,127,155,0.14)] hover:text-black"
+                                    onClick={() => clearSingleFilter(chip.key)}
+                                >
+                                    <Icon.X size={12} weight="bold" />
+                                    <span>{chip.label}: {chip.value}</span>
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-2 text-[12px] font-semibold text-secondary transition-all hover:border-black hover:text-black"
+                                onClick={onClearAdvancedFilters}
+                            >
+                                <Icon.X size={12} weight="bold" />
+                                Limpiar todo
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="flex flex-wrap gap-2 mb-6">
@@ -161,17 +413,19 @@ export default React.memo(function ProductsManagementPanel({
                         </tr>
                     </thead>
                     <tbody>
-                        {products.length > 0 ? products.map((product) => {
+                        {sortedProducts.length > 0 ? sortedProducts.map((product) => {
                             const expirationMeta = getProductExpirationMeta(product)
                             const canPublish = isProductEligibleForPublication(product)
                             const productId = getAdminProductEntityId(product)
                             const publicationPending = Boolean(publicationPendingIds[productId])
+                            const itemKey = productId || String(product?.id || product?.name || Math.random())
+                            const variantMeta = getProductVariantMeta(product)
                             const imageSrc = (product.thumbImage && product.thumbImage.length > 0
                                 ? product.thumbImage[0]
                                 : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string
 
                             return (
-                                <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
+                                <tr key={itemKey} className="border-b border-line last:border-0 hover:bg-surface duration-300">
                                     <td className="py-4">
                                         <div className="w-12 h-12 bg-line rounded-lg overflow-hidden">
                                             <Image
@@ -184,7 +438,28 @@ export default React.memo(function ProductsManagementPanel({
                                             />
                                         </div>
                                     </td>
-                                    <td className="py-4 font-semibold">{product.name}</td>
+                                    <td className="py-4">
+                                        <div className="space-y-2">
+                                            <div className="font-semibold">{product.name}</div>
+                                            {(variantMeta.badges.length > 0 || variantMeta.sku) && (
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {variantMeta.badges.map((badge) => (
+                                                        <span
+                                                            key={`${itemKey}-${badge}`}
+                                                            className="inline-flex rounded-full bg-surface px-2.5 py-1 text-[11px] font-semibold text-secondary"
+                                                        >
+                                                            {badge}
+                                                        </span>
+                                                    ))}
+                                                    {variantMeta.sku && (
+                                                        <span className="text-[11px] text-secondary">
+                                                            SKU: {variantMeta.sku}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="py-4">{product.quantity ?? 0} unidades</td>
                                     {hasPerishableProducts && (
                                         <td className="py-4">

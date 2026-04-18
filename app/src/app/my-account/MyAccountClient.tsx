@@ -116,7 +116,6 @@ import {
     getLocalSalePaymentMethodLabel,
 } from './formatting'
 import AccountSidebar from './components/AccountSidebar'
-import ProductsManagementPanel from './components/ProductsManagementPanel'
 import { useAdminSidebarNavigation } from './hooks/useAdminSidebarNavigation'
 import { useAuthBootstrap } from './hooks/useAuthBootstrap'
 import { useAdminDataLoader } from './hooks/useAdminDataLoader'
@@ -432,6 +431,9 @@ const LocalSalesPanel = dynamic(() => import('./components/LocalSalesPanel'), {
 const QuotationsPanel = dynamic(() => import('./components/QuotationsPanel'), {
     ssr: false,
 })
+const ProductsManagementPanel = dynamic(() => import('./components/ProductsManagementPanel'), {
+    ssr: false,
+})
 
 type DiscountFormState = {
     code: string
@@ -562,6 +564,11 @@ const MyAccount = () => {
     const [adminProductsList, setAdminProductsList] = useState<any[]>([])
     const [adminProductsSearch, setAdminProductsSearch] = useState('')
     const [adminProductsQuickFilter, setAdminProductsQuickFilter] = useState<'all' | 'publishable' | 'blocked' | 'with-stock' | 'no-stock' | 'no-price'>('all')
+    const [adminProductsCategoryFilter, setAdminProductsCategoryFilter] = useState('all')
+    const [adminProductsSupplierFilter, setAdminProductsSupplierFilter] = useState('all')
+    const [adminProductsBrandFilter, setAdminProductsBrandFilter] = useState('all')
+    const [adminProductsSpeciesFilter, setAdminProductsSpeciesFilter] = useState('all')
+    const [adminProductsTaxFilter, setAdminProductsTaxFilter] = useState<'all' | 'taxed' | 'exempt'>('all')
     const [productPublicationPendingIds, setProductPublicationPendingIds] = useState<Record<string, boolean>>({})
     const [adminUsersList, setAdminUsersList] = useState<AdminUserSummary[]>([])
     const [adminUsersSearch, setAdminUsersSearch] = useState('')
@@ -1987,15 +1994,28 @@ const MyAccount = () => {
         setSelectedSalesProduct(item)
         setIsSalesProductModalOpen(true)
     }
+    const productsNeededForLocalSales = activeTab === 'local-sales' || activeTab === 'quotations'
+    const productsNeededForInventory = activeTab === 'inventory' || activeTab === 'reports' || activeTab === 'alerts'
+    const productsNeededForProductsPanel = activeTab === 'products'
+    const productsNeededForBreakdowns = Boolean(selectedDeepDive === 'product-breakdown')
+    const inventoryRowsNeeded = productsNeededForInventory || productsNeededForLocalSales || productsNeededForBreakdowns
     const localSaleCatalog = React.useMemo(() => {
+        if (!productsNeededForLocalSales) {
+            return [] as ReturnType<typeof buildLocalSaleCatalog>
+        }
+
         return buildLocalSaleCatalog(adminProductsList || [], deferredLocalSaleSearch, parseMoney)
-    }, [adminProductsList, deferredLocalSaleSearch, parseMoney])
+    }, [adminProductsList, deferredLocalSaleSearch, parseMoney, productsNeededForLocalSales])
     const localSaleItemQuantityById = React.useMemo(() => {
         return new Map(localSaleItems.map((item) => [item.internalId, item.quantity]))
     }, [localSaleItems])
     const inventoryManagementRows = React.useMemo(() => {
+        if (!inventoryRowsNeeded) {
+            return [] as ReturnType<typeof buildInventoryManagementRows>
+        }
+
         return buildInventoryManagementRows(adminProductsList || [], parseMoney)
-    }, [adminProductsList, parseMoney])
+    }, [adminProductsList, inventoryRowsNeeded, parseMoney])
     const handleExportCurrentReport = React.useCallback(() => {
         try {
             const { filename, content } = buildReportExport({
@@ -2073,17 +2093,25 @@ const MyAccount = () => {
     const hasPerishableProducts = inventoryManagementRows.some((row) => row.isPerishable)
     const deferredAdminProductsSearch = React.useDeferredValue(adminProductsSearch)
     const adminProductSearchIndex = React.useMemo(
-        () => buildProductSearchIndex((adminProductsList || []) as any),
-        [adminProductsList]
+        () => (productsNeededForProductsPanel ? buildProductSearchIndex((adminProductsList || []) as any) : new Map()),
+        [adminProductsList, productsNeededForProductsPanel]
     )
     const normalizedAdminProductsSearch = React.useMemo(
         () => sanitizeProductSearchQuery(deferredAdminProductsSearch),
         [deferredAdminProductsSearch]
     )
     const productPublicationSummary = React.useMemo(() => {
+        if (!productsNeededForProductsPanel) {
+            return buildProductPublicationSummary([])
+        }
+
         return buildProductPublicationSummary(adminProductsList || [])
-    }, [adminProductsList])
+    }, [adminProductsList, productsNeededForProductsPanel])
     const filteredAdminProductsList = React.useMemo(() => {
+        if (!productsNeededForProductsPanel) {
+            return [] as any[]
+        }
+
         const publicationScopedProducts = (adminProductsList || []).filter((product: any) => {
             if (productPublicationFilter === 'published') {
                 return product?.published !== false
@@ -2113,16 +2141,106 @@ const MyAccount = () => {
             return true
         })
 
+        const advancedScopedProducts = quickScopedProducts.filter((product: any) => {
+            const attributes = product?.attributes ?? {}
+            const normalizedCategory = String(product?.category ?? product?.productType ?? '').trim().toLowerCase()
+            const normalizedSupplier = String(attributes?.supplier ?? '').trim().toLowerCase()
+            const normalizedBrand = String(product?.brand ?? '').trim().toLowerCase()
+            const normalizedSpecies = String(attributes?.species ?? product?.gender ?? '').trim().toLowerCase()
+            const taxRate = Number(attributes?.taxRate ?? 0)
+            const taxExempt = String(attributes?.taxExempt ?? '').trim().toLowerCase() === 'true'
+
+            if (adminProductsCategoryFilter !== 'all' && normalizedCategory !== adminProductsCategoryFilter) {
+                return false
+            }
+            if (adminProductsSupplierFilter !== 'all' && normalizedSupplier !== adminProductsSupplierFilter) {
+                return false
+            }
+            if (adminProductsBrandFilter !== 'all' && normalizedBrand !== adminProductsBrandFilter) {
+                return false
+            }
+            if (adminProductsSpeciesFilter !== 'all' && normalizedSpecies !== adminProductsSpeciesFilter) {
+                return false
+            }
+            if (adminProductsTaxFilter === 'taxed' && (taxExempt || taxRate <= 0)) {
+                return false
+            }
+            if (adminProductsTaxFilter === 'exempt' && !taxExempt && taxRate > 0) {
+                return false
+            }
+            return true
+        })
+
         if (!normalizedAdminProductsSearch) {
-            return quickScopedProducts
+            return advancedScopedProducts
         }
 
         return filterProductsBySearch(
-            quickScopedProducts as any,
+            advancedScopedProducts as any,
             normalizedAdminProductsSearch,
             adminProductSearchIndex as any
         ) as any[]
-    }, [adminProductSearchIndex, adminProductsList, adminProductsQuickFilter, normalizedAdminProductsSearch, productPublicationFilter])
+    }, [
+        adminProductSearchIndex,
+        adminProductsBrandFilter,
+        adminProductsCategoryFilter,
+        adminProductsList,
+        adminProductsQuickFilter,
+        adminProductsSpeciesFilter,
+        adminProductsSupplierFilter,
+        adminProductsTaxFilter,
+        normalizedAdminProductsSearch,
+        productPublicationFilter,
+        productsNeededForProductsPanel,
+    ])
+    const adminProductFilterOptions = React.useMemo(() => {
+        if (!productsNeededForProductsPanel) {
+            return {
+                categories: [],
+                suppliers: [],
+                brands: [],
+                species: [],
+            }
+        }
+
+        const buildOptionList = (
+            getValue: (product: any) => string,
+            getLabel?: (value: string) => string
+        ) => {
+            const counts = new Map<string, number>()
+
+            ;(adminProductsList || []).forEach((product: any) => {
+                const value = getValue(product)
+                if (!value) {
+                    return
+                }
+                counts.set(value, (counts.get(value) ?? 0) + 1)
+            })
+
+            return Array.from(counts.entries())
+                .sort((left, right) => left[0].localeCompare(right[0], 'es', { sensitivity: 'base' }))
+                .map(([value, count]) => ({
+                    value,
+                    label: getLabel ? getLabel(value) : value,
+                    count,
+                }))
+        }
+
+        return {
+            categories: buildOptionList((product) => String(product?.category ?? product?.productType ?? '').trim().toLowerCase(), (value) =>
+                value ? value.charAt(0).toUpperCase() + value.slice(1) : value
+            ),
+            suppliers: buildOptionList((product) => String(product?.attributes?.supplier ?? '').trim().toLowerCase(), (value) =>
+                value ? value.charAt(0).toUpperCase() + value.slice(1) : value
+            ),
+            brands: buildOptionList((product) => String(product?.brand ?? '').trim().toLowerCase(), (value) =>
+                value ? value.charAt(0).toUpperCase() + value.slice(1) : value
+            ),
+            species: buildOptionList((product) => String(product?.attributes?.species ?? product?.gender ?? '').trim().toLowerCase(), (value) =>
+                value ? value.charAt(0).toUpperCase() + value.slice(1) : value
+            ),
+        }
+    }, [adminProductsList, productsNeededForProductsPanel])
     const localSaleUnits = localSaleItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0)
     const localSaleNet = Number(localSaleQuote?.vat_subtotal ?? 0)
     const localSaleVat = Number(localSaleQuote?.vat_amount ?? 0)
@@ -2914,17 +3032,25 @@ const MyAccount = () => {
     }, [dashboardStats, selectedProductMetric])
 
     const salesProductBreakdown = React.useMemo(() => {
+        if (!productsNeededForBreakdowns) {
+            return []
+        }
+
         return buildSalesProductBreakdown(
             dashboardStats,
             adminProductsList || [],
             parseMoney,
             selectedProductMetric
         )
-    }, [adminProductsList, dashboardStats, parseMoney, selectedProductMetric])
+    }, [adminProductsList, dashboardStats, parseMoney, productsNeededForBreakdowns, selectedProductMetric])
 
     const inventoryProductBreakdown = React.useMemo(() => {
+        if (!productsNeededForBreakdowns) {
+            return []
+        }
+
         return buildInventoryProductBreakdown(adminProductsList || [], parseMoney)
-    }, [adminProductsList, parseMoney])
+    }, [adminProductsList, parseMoney, productsNeededForBreakdowns])
 
 
     const updateAddressData = (type: 'billing' | 'shipping', field: string, value: string) => {
@@ -5332,10 +5458,35 @@ const MyAccount = () => {
                                         activeFilter={productPublicationFilter}
                                         activeQuickFilter={adminProductsQuickFilter}
                                         searchQuery={adminProductsSearch}
+                                        advancedFilters={{
+                                            category: adminProductsCategoryFilter,
+                                            supplier: adminProductsSupplierFilter,
+                                            brand: adminProductsBrandFilter,
+                                            species: adminProductsSpeciesFilter,
+                                            tax: adminProductsTaxFilter,
+                                        }}
+                                        filterOptions={adminProductFilterOptions}
                                         hasPerishableProducts={hasPerishableProducts}
                                         onFilterChange={setProductPublicationFilter}
                                         onQuickFilterChange={setAdminProductsQuickFilter}
                                         onSearchChange={setAdminProductsSearch}
+                                        onAdvancedFiltersChange={(nextFilters) => {
+                                            setAdminProductsCategoryFilter(nextFilters.category)
+                                            setAdminProductsSupplierFilter(nextFilters.supplier)
+                                            setAdminProductsBrandFilter(nextFilters.brand)
+                                            setAdminProductsSpeciesFilter(nextFilters.species)
+                                            setAdminProductsTaxFilter(nextFilters.tax)
+                                        }}
+                                        onClearAdvancedFilters={() => {
+                                            setAdminProductsSearch('')
+                                            setAdminProductsCategoryFilter('all')
+                                            setAdminProductsSupplierFilter('all')
+                                            setAdminProductsBrandFilter('all')
+                                            setAdminProductsSpeciesFilter('all')
+                                            setAdminProductsTaxFilter('all')
+                                            setAdminProductsQuickFilter('all')
+                                            setProductPublicationFilter('all')
+                                        }}
                                         onNewProduct={handleNewProduct}
                                         onEditProduct={handleEditProduct}
                                         onRestockProduct={handleRestockProduct}

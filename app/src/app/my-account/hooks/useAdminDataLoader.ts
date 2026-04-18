@@ -80,6 +80,9 @@ export const useAdminDataLoader = ({
   loadPosSnapshot,
   normalizeAdminProducts,
 }: UseAdminDataLoaderParams) => {
+  const resourceCacheRef = React.useRef<Record<string, unknown>>({})
+  const lastCacheNonceRef = React.useRef<number>(adminReloadNonce)
+
   const handlersRef = React.useRef({
     handleLogout,
     setAdminDataLoading,
@@ -101,6 +104,13 @@ export const useAdminDataLoader = ({
     loadPosSnapshot,
     normalizeAdminProducts,
   })
+
+  React.useEffect(() => {
+    if (lastCacheNonceRef.current !== adminReloadNonce) {
+      resourceCacheRef.current = {}
+      lastCacheNonceRef.current = adminReloadNonce
+    }
+  }, [adminReloadNonce])
 
   React.useEffect(() => {
     handlersRef.current = {
@@ -157,6 +167,16 @@ export const useAdminDataLoader = ({
 
     let cancelled = false
     const headers = {}
+    const getCached = <T,>(key: string): T | null => {
+      if (!(key in resourceCacheRef.current)) {
+        return null
+      }
+
+      return resourceCacheRef.current[key] as T
+    }
+    const setCached = (key: string, value: unknown) => {
+      resourceCacheRef.current[key] = value
+    }
 
     const handleError = (error: any) => {
       console.error(error)
@@ -187,11 +207,19 @@ export const useAdminDataLoader = ({
         const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
           ? `?month=${encodeURIComponent(salesRankingMonth)}`
           : ''
-        tasks.push(
-          withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })).then((res) => {
-            if (!cancelled) current.setDashboardStats(res.body)
-          }),
-        )
+        const statsCacheKey = `stats:${salesRankingMonth}`
+        const cachedStats = getCached<DashboardStats>(statsCacheKey)
+
+        if (cachedStats) {
+          if (!cancelled) current.setDashboardStats(cachedStats)
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })).then((res) => {
+              setCached(statsCacheKey, res.body)
+              if (!cancelled) current.setDashboardStats(res.body)
+            }),
+          )
+        }
       }
 
       if (ADMIN_TABS_WITH_VAT_SETTINGS.has(activeTab)) {
@@ -203,11 +231,18 @@ export const useAdminDataLoader = ({
       }
 
       if (ADMIN_TABS_WITH_PRODUCTS.has(activeTab)) {
-        tasks.push(
-          withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers })).then((res) => {
-            if (!cancelled) current.setAdminProductsList(current.normalizeAdminProducts(res.body))
-          }),
-        )
+        const cachedProducts = getCached<any[]>('products')
+        if (cachedProducts) {
+          if (!cancelled) current.setAdminProductsList(cachedProducts)
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT, { headers })).then((res) => {
+              const normalizedProducts = current.normalizeAdminProducts(res.body)
+              setCached('products', normalizedProducts)
+              if (!cancelled) current.setAdminProductsList(normalizedProducts)
+            }),
+          )
+        }
       }
 
       if (ADMIN_TABS_WITH_REFERENCE_DATA.has(activeTab)) {
@@ -219,21 +254,34 @@ export const useAdminDataLoader = ({
       }
 
       if (ADMIN_TABS_WITH_USERS.has(activeTab)) {
-        tasks.push(
-          withTransientRetry(() => requestApi<AdminUserSummary[]>('/api/users', { headers })).then((res) => {
-            if (!cancelled) {
-              current.setAdminUsersList(Array.isArray(res.body) ? res.body : [])
-            }
-          }),
-        )
+        const cachedUsers = getCached<AdminUserSummary[]>('users')
+        if (cachedUsers) {
+          if (!cancelled) current.setAdminUsersList(cachedUsers)
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<AdminUserSummary[]>('/api/users', { headers })).then((res) => {
+              const users = Array.isArray(res.body) ? res.body : []
+              setCached('users', users)
+              if (!cancelled) {
+                current.setAdminUsersList(users)
+              }
+            }),
+          )
+        }
       }
 
       if (ADMIN_TABS_WITH_ORDERS.has(activeTab)) {
-        tasks.push(
-          withTransientRetry(() => requestApi<Order[]>('/api/orders', { headers })).then((res) => {
-            if (!cancelled) current.setAdminOrdersList(res.body)
-          }),
-        )
+        const cachedOrders = getCached<Order[]>('orders')
+        if (cachedOrders) {
+          if (!cancelled) current.setAdminOrdersList(cachedOrders)
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<Order[]>('/api/orders', { headers })).then((res) => {
+              setCached('orders', res.body)
+              if (!cancelled) current.setAdminOrdersList(res.body)
+            }),
+          )
+        }
       }
 
       if (ADMIN_TABS_WITH_PRICING_SETTINGS.has(activeTab)) {
@@ -258,14 +306,27 @@ export const useAdminDataLoader = ({
       }
 
       if (activeTab === 'shipments') {
-        tasks.push(
-          withTransientRetry(() => requestApi<{ providers?: ShippingProvider[]; pickups?: ShippingPickup[] }>('/api/shipments', { headers })).then((res) => {
-            if (!cancelled) {
-              current.setShippingProviders(Array.isArray(res.body.providers) ? res.body.providers : [])
-              current.setShippingPickups(Array.isArray(res.body.pickups) ? res.body.pickups : [])
-            }
-          }),
-        )
+        const cachedShipments = getCached<{ providers: ShippingProvider[]; pickups: ShippingPickup[] }>('shipments')
+        if (cachedShipments) {
+          if (!cancelled) {
+            current.setShippingProviders(cachedShipments.providers)
+            current.setShippingPickups(cachedShipments.pickups)
+          }
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<{ providers?: ShippingProvider[]; pickups?: ShippingPickup[] }>('/api/shipments', { headers })).then((res) => {
+              const shipments = {
+                providers: Array.isArray(res.body.providers) ? res.body.providers : [],
+                pickups: Array.isArray(res.body.pickups) ? res.body.pickups : [],
+              }
+              setCached('shipments', shipments)
+              if (!cancelled) {
+                current.setShippingProviders(shipments.providers)
+                current.setShippingPickups(shipments.pickups)
+              }
+            }),
+          )
+        }
       }
 
       const results = await Promise.allSettled(tasks)

@@ -307,6 +307,27 @@ export const getProductVariants = (product: ProductType): ProductType[] => {
   return [product]
 }
 
+export const getProductVariantDisplayValues = (product: ProductType): string[] => {
+  const variants = getProductVariants(product)
+  const variantLabels = normalizeMeasurementLabels(
+    variants.map((variant) => getProductVariantLabel(variant)).filter(Boolean),
+  )
+
+  if (variantLabels.length > 0) {
+    return variantLabels
+  }
+
+  const presentationLabels = normalizeMeasurementLabels(
+    variants.map((variant) => getProductVariantPresentation(variant)).filter(Boolean),
+  )
+
+  if (presentationLabels.length > 0) {
+    return presentationLabels
+  }
+
+  return normalizeMeasurementLabels(product.sizes ?? [])
+}
+
 export const getProductCurrentPrice = (product: ProductType) =>
   Number(pickPricingReferenceVariant(product)?.price ?? product.priceMin ?? product.price ?? 0)
 

@@ -37,6 +37,7 @@ import {
 } from '@/lib/productSizeGuide'
 import {
     createEmptyPurchaseInvoice,
+    enrichVariantAttributes,
     createImageEntry,
     getAdminProductEntityId,
     getAttributesForTypeChange,
@@ -1827,7 +1828,14 @@ export default function ProductEditorModal({
             if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
             if (isRestockMode && stockIncrease <= 0) nextErrors.quantity = 'Debes indicar al menos 1 unidad a ingresar en la compra.'
 
-            const normalizedAttributes = normalizeAttributes(productType, form.attributes)
+            const normalizedAttributes = enrichVariantAttributes({
+                type: productType,
+                category,
+                name: isDuplicateVariantMode
+                    ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
+                    : name,
+                attributes: normalizeAttributes(productType, form.attributes),
+            })
             normalizedAttributes.taxExempt = form.taxExempt ? 'true' : 'false'
             const normalizedSpecies = normalizeProductSpecies(normalizedAttributes.species, editingProduct?.gender ?? '')
             const duplicateSourceVariantLabel = String(form.attributes?.__sourceVariantLabel || '').trim()
@@ -1842,6 +1850,9 @@ export default function ProductEditorModal({
             if (productType !== 'ropa') {
                 delete normalizedAttributes.sizeGuideRows
                 delete normalizedAttributes.sizeGuideNotes
+            }
+            if (productType === 'ropa' && !String(normalizedAttributes.size || '').trim()) {
+                nextErrors.size = 'La talla es obligatoria para productos de ropa.'
             }
             if (isDuplicateVariantMode) {
                 if (duplicateVariantBaseName.length < 3) {
