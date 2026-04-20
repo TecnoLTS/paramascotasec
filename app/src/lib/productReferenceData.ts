@@ -278,6 +278,14 @@ export const getReferenceOptionsWithCurrent = (options: string[], currentValue?:
   const current = collapseWhitespace(currentValue)
   if (!current) return normalizedOptions
 
+  const compactCurrent = current.toLocaleLowerCase('es-EC').replace(/\s+/g, '')
+  const existingOption = normalizedOptions.find((option) => {
+    const compactOption = collapseWhitespace(option).toLocaleLowerCase('es-EC').replace(/\s+/g, '')
+    return compactOption === compactCurrent
+  })
+
+  if (existingOption) return normalizedOptions
+
   return normalizeReferenceList([current, ...normalizedOptions])
 }
 

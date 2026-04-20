@@ -110,6 +110,33 @@ const getVariantCandidateValues = (type: string, source: Record<string, any>) =>
         .filter(Boolean)
 }
 
+const resolveCanonicalVariantLabelByType = (type: string, attributes: Record<string, any>) => {
+    const normalizedType = normalizeProductType(type, String(attributes.category || ''))
+    const size = normalizeVariantSizeValue(String(attributes.size || ''))
+    const weight = normalizeMeasurementLabel(String(attributes.weight || '')).trim()
+    const presentation = normalizeMeasurementLabel(String(attributes.presentation || '')).trim()
+    const color = titleCaseWords(String(attributes.color || '').trim())
+    const explicit = normalizeMeasurementLabel(String(attributes.variantLabel || '')).trim()
+
+    if (normalizedType === 'ropa') {
+        return size || color || explicit
+    }
+
+    if (normalizedType === 'accesorios') {
+        return color || size || presentation || explicit
+    }
+
+    if (normalizedType === 'cuidado') {
+        return presentation || size || explicit
+    }
+
+    if (normalizedType === 'Alimento') {
+        return weight || size || presentation || explicit
+    }
+
+    return explicit || size || weight || presentation || color
+}
+
 export const getVariantDefinitionFieldLabel = (type: string) => {
     const normalizedType = normalizeProductType(type)
     if (normalizedType === 'ropa') return 'talla o color'
@@ -198,6 +225,14 @@ export const resolveProductVariantLabel = (
 ) => {
     const attributeSource = attributes || {}
     const productSource = product || {}
+    const explicitCanonical = resolveCanonicalVariantLabelByType(type, {
+        ...(productSource?.attributes || {}),
+        ...productSource,
+        ...attributeSource,
+    })
+    if (explicitCanonical) {
+        return normalizeMeasurementLabel(explicitCanonical)
+    }
     const candidates = [
         ...getVariantCandidateValues(type, {
             ...productSource,
@@ -279,22 +314,7 @@ export const enrichVariantAttributes = ({
         nextAttributes.presentation = normalizeMeasurementLabel(String(nextAttributes.presentation)).trim()
     }
 
-    let resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.variantLabel || '')).trim()
-
-    if (!resolvedVariantLabel) {
-        if (normalizedType === 'ropa') {
-            resolvedVariantLabel = normalizeVariantSizeValue(String(nextAttributes.size || ''))
-                || String(nextAttributes.color || '').trim()
-        } else if (normalizedType === 'accesorios') {
-            resolvedVariantLabel = String(nextAttributes.color || '').trim()
-                || normalizeVariantSizeValue(String(nextAttributes.size || ''))
-                || normalizeMeasurementLabel(String(nextAttributes.presentation || '')).trim()
-        } else if (normalizedType === 'cuidado') {
-            resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.presentation || nextAttributes.size || '')).trim()
-        } else {
-            resolvedVariantLabel = normalizeMeasurementLabel(String(nextAttributes.weight || nextAttributes.size || '')).trim()
-        }
-    }
+    const resolvedVariantLabel = resolveCanonicalVariantLabelByType(normalizedType, nextAttributes)
 
     if (resolvedVariantLabel) {
         nextAttributes.variantLabel = resolvedVariantLabel

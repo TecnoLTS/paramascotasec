@@ -29,16 +29,18 @@ const compareAdminLabels = (left: string, right: string) =>
 
 const getProductVariantMeta = (product: any) => {
     const attributes = product?.attributes || {}
+    const normalizedType = String(product?.productType || product?.category || '').trim().toLowerCase()
     const normalizedLabel = String(
         resolveProductVariantLabel(String(product?.productType || product?.category || ''), attributes, product) || ''
     ).trim()
     const color = String(attributes.color || '').trim()
-    const size = String(attributes.size || '').trim()
-    const presentation = String(attributes.presentation || attributes.weight || '').trim()
     const sku = String(attributes.sku || '').trim()
 
     const badges = Array.from(new Set(
-        [normalizedLabel, color, size, presentation]
+        [
+            normalizedLabel,
+            ...(normalizedType === 'ropa' || normalizedType === 'accesorios' ? [color] : []),
+        ]
             .map((value) => String(value || '').trim())
             .filter((value) => value && !/^(n\/?a|na)$/i.test(value))
     )).slice(0, 3)
@@ -413,12 +415,12 @@ export default React.memo(function ProductsManagementPanel({
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedProducts.length > 0 ? sortedProducts.map((product) => {
+                        {sortedProducts.length > 0 ? sortedProducts.map((product, index) => {
                             const expirationMeta = getProductExpirationMeta(product)
                             const canPublish = isProductEligibleForPublication(product)
                             const productId = getAdminProductEntityId(product)
                             const publicationPending = Boolean(publicationPendingIds[productId])
-                            const itemKey = productId || String(product?.id || product?.name || Math.random())
+                            const itemKey = productId || String(product?.id || product?.legacyId || product?.name || `product-${index}`)
                             const variantMeta = getProductVariantMeta(product)
                             const imageSrc = (product.thumbImage && product.thumbImage.length > 0
                                 ? product.thumbImage[0]

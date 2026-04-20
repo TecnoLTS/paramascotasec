@@ -6,9 +6,9 @@ export const normalizeMeasurementLabel = (value?: string | null) => {
 
   return trimmed
     .replace(/\s+/g, ' ')
-    .replace(/(\d+(?:[.,]\d+)?)\s*(?:KGS?|KG|K)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)}Kg`)
-    .replace(/(\d+(?:[.,]\d+)?)\s*(?:GR|G)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)}gr`)
-    .replace(/(\d+(?:[.,]\d+)?)\s*(?:MLS?|ML)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)}ml`)
+    .replace(/(\d+(?:[.,]\d+)?)\s*(?:KGS?|KG|K)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)} kg`)
+    .replace(/(\d+(?:[.,]\d+)?)\s*(?:GR|G)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)} gr`)
+    .replace(/(\d+(?:[.,]\d+)?)\s*(?:MLS?|ML)\b/gi, (_, amount: string) => `${normalizeDecimal(amount)} ml`)
     .trim()
 }
 
