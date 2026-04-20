@@ -3,7 +3,6 @@ import dynamic from 'next/dynamic'
 import MenuPet from '@/components/Header/Menu/MenuPet'
 import SliderPet from '@/components/Slider/SliderPet'
 import Footer from '@/components/Footer/Footer'
-import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
 import { ProductType } from '@/type/ProductType'
 
 const Collection = dynamic(() => import('@/components/Pet/Collection'))
@@ -21,7 +20,6 @@ const ParamascotasecHome = ({
 }) => {
   return (
     <>
-      <ScrollToTopOnMount />
       <div id="header" className="relative w-full style-pet">
         <MenuPet searchProducts={products} />
         <SliderPet />

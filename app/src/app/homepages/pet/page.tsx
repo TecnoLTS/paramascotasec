@@ -10,7 +10,6 @@ import Banner2 from '@/components/Pet/Banner2'
 import FeatureProduct from '@/components/Pet/FeatureProduct'
 import Benefit from '@/components/Pet/Benefit'
 import Instagram from '@/components/Pet/Instagram'
-import ScrollToTopOnMount from '@/components/ScrollToTopOnMount'
 import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 import ModalNewsletter from '@/components/Modal/ModalNewsletter'
@@ -22,7 +21,6 @@ export default async function HomePet() {
 
     return (
         <>
-            <ScrollToTopOnMount />
             <TopNavOne props="style-one bg-black" slogan='New customers save 10% with the code GET102222' />
             <div id="header" className='relative w-full style-pet'>
                 <MenuPet searchProducts={products} />
