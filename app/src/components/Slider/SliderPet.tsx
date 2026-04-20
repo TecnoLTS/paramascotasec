@@ -111,7 +111,7 @@ const HeroPicture = ({
         onError={() => {
           setFallbackIndex((prev) => (prev >= fallbackCandidates.length - 1 ? prev : prev + 1))
         }}
-        className="absolute inset-0 h-full w-full object-contain object-center"
+        className="block h-auto w-full"
       />
     </picture>
   )
@@ -125,13 +125,13 @@ const SliderSlideContent = ({
   priority?: boolean
 }) => {
   return (
-    <div className="slider-item relative h-full w-full overflow-hidden">
+    <div className="slider-item relative w-full overflow-hidden">
       <HeroPicture
         alt={`Slide principal ${slide.id} de ParaMascotasEC`}
         slide={slide.id}
         priority={priority}
       />
-      <div className="container relative z-[1] flex h-full w-full items-center">
+      <div className="container absolute inset-0 z-[1] flex h-full w-full items-center">
         <div className="w-full max-w-[760px] px-4 text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.35)] sm:w-[58%]">
           <p className="text-sub-display slider-text-sub normal-case">
             {slide.subtitle}
@@ -219,7 +219,7 @@ const SliderPet = () => {
 
   return (
     <section
-      className="slider-block style-one pet-hero-height mt-2 w-full overflow-hidden md:mt-3"
+      className="slider-block style-one mt-2 w-full overflow-hidden md:mt-3"
       aria-roledescription="carousel"
       aria-label="Promociones principales"
       onMouseEnter={() => setIsPaused(true)}
@@ -227,21 +227,21 @@ const SliderPet = () => {
       onFocusCapture={() => setIsPaused(true)}
       onBlurCapture={() => setIsPaused(false)}
     >
-      <div className="slider-main relative h-full w-full">
+      <div className="slider-main relative w-full">
         <div
-          className="h-full overflow-hidden"
+          className="overflow-hidden"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           <div
-            className="flex h-full transition-transform duration-500 ease-out will-change-transform touch-pan-y"
+            className="flex transition-transform duration-500 ease-out will-change-transform touch-pan-y"
             style={{ transform: `translate3d(-${selectedIndex * 100}%, 0, 0)` }}
           >
             {slides.map((slide, index) => (
               <div
                 key={slide.id}
-                className="relative h-full min-w-0 flex-[0_0_100%]"
+                className="relative min-w-0 flex-[0_0_100%]"
                 aria-hidden={selectedIndex !== index}
               >
                 <SliderSlideContent slide={slide} priority={index === 0} />
@@ -250,8 +250,8 @@ const SliderPet = () => {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex items-center justify-center px-4 md:bottom-6 md:px-6">
-          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-3 rounded-full bg-white/18 px-3 py-2 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-x-0 bottom-8 z-10 flex items-center justify-center px-4 md:bottom-10 md:px-6">
+          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-3 rounded-full border border-black/10 bg-white/70 px-3 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm">
             {slides.map((slide, index) => (
               <button
                 key={slide.id}
@@ -261,8 +261,8 @@ const SliderPet = () => {
                 onClick={() => goToSlide(index)}
                 className={`h-3 w-3 rounded-full border transition-all duration-300 ${
                   selectedIndex === index
-                    ? 'scale-110 border-white bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.2)]'
-                    : 'border-white/75 bg-white/45 hover:bg-white/75'
+                    ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_4px_rgba(10,123,143,0.18)]'
+                    : 'border-[var(--blue)]/45 bg-white hover:bg-[var(--blue)]/12'
                 }`}
               />
             ))}
