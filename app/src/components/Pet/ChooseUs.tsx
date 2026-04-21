@@ -54,7 +54,7 @@ const ChooseUs = () => {
             <div className="container">
                 <div className="lg:hidden">
                     <div className="mb-8 sm:mb-10">
-                        <h2 className="heading2 mb-5 text-[#1F3B3B] text-[32px] leading-[1.08] sm:text-[38px] sm:leading-[1.06]">
+                        <h2 className="heading2 mb-5 text-[#0a7b8f] text-[32px] leading-[1.08] sm:text-[38px] sm:leading-[1.06]">
                             Las mejores razones para elegirnos
                         </h2>
                         <p className="body1 text-secondary max-w-[600px] text-[14px] leading-7 sm:text-base">
@@ -103,7 +103,7 @@ const ChooseUs = () => {
                         </div>
                     </div>
                     <div className="content min-w-0">
-                        <h2 className="heading2 mb-6 text-[#1F3B3B]">
+                        <h2 className="heading2 mb-6 text-[#0a7b8f]">
                             Las mejores razones para elegirnos
                         </h2>
                         <p className="body1 text-secondary mb-10 max-w-[600px]">

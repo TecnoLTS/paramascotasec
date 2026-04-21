@@ -115,7 +115,7 @@ const FaqPage = () => {
                         <div className="lg:w-1/3 order-2 lg:order-1">
                             <div className="sticky space-y-6" style={{ top: `${headerHeight}px` }}>
                                 <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-xl shadow-gray-200/50">
-                                    <h4 className="heading4 font-bold mb-4 text-black">¿Necesitas ayuda extra?</h4>
+                                    <h4 className="heading4 font-bold mb-4 text-[#0a7b8f]">¿Necesitas ayuda extra?</h4>
                                     <p className="text-secondary text-sm mb-6 leading-relaxed">
                                         Si no encuentras la respuesta que buscas, nuestro equipo está listo para atenderte.
                                     </p>
@@ -151,7 +151,7 @@ const FaqPage = () => {
                                 {faqData.map((section, sIndex) => (
                                     <div key={sIndex}>
                                         <div className="flex items-center gap-4 mb-4 pb-2 border-b border-gray-200/60">
-                                            <h3 className="text-xl md:text-2xl font-bold text-black">{section.category}</h3>
+                                            <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">{section.category}</h3>
                                         </div>
                                         <div className="flex flex-col gap-3">
                                             {section.items.map((item, iIndex) => {

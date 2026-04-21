@@ -119,7 +119,7 @@ export default function ContactPage() {
             <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#cfeaf2] bg-[#eefafe] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a7d99]">
               Centro de Ayuda Paramascotas
             </div>
-            <h1 className="mb-4 text-4xl font-black leading-[1.05] tracking-[-0.03em] text-slate-950 sm:text-5xl md:text-6xl">
+            <h1 className="mb-4 text-4xl font-black leading-[1.05] tracking-[-0.03em] text-[#0a7b8f] sm:text-5xl md:text-6xl">
               ¿En qué podemos ayudarte?
             </h1>
             <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-600">
@@ -135,7 +135,7 @@ export default function ContactPage() {
             {/* COLUMNA IZQUIERDA: Formulario */}
             <div className="rounded-[34px] border border-[#d9e7ee] bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] md:p-10">
               <div className="mb-8 max-w-3xl space-y-3">
-                <h2 className="text-3xl font-black tracking-[-0.03em] text-slate-950">Envíanos un mensaje</h2>
+                <h2 className="text-3xl font-black tracking-[-0.03em] text-[#0a7b8f]">Envíanos un mensaje</h2>
                 <p className="text-base leading-7 text-slate-600">
                   Déjanos nombre, correo y el mayor contexto posible para que la respuesta sea concreta desde el primer mensaje.
                 </p>

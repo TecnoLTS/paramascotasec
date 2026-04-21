@@ -143,11 +143,6 @@ const SliderPet = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null)
-  const [hasMounted, setHasMounted] = useState(false)
-
-  useEffect(() => {
-    setHasMounted(true)
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -206,26 +201,6 @@ const SliderPet = () => {
 
     setTouchStartX(null)
     setTouchCurrentX(null)
-  }
-
-  if (!hasMounted) {
-    return (
-      <section
-        className="slider-block style-one mt-2 w-full overflow-hidden md:mt-3"
-        aria-roledescription="carousel"
-        aria-label="Promociones principales"
-      >
-        <div className="slider-main relative w-full">
-          <div className="slider-item relative w-full overflow-hidden">
-            <HeroPicture
-              alt="Slide principal 1 de ParaMascotasEC"
-              slide={1}
-              priority
-            />
-          </div>
-        </div>
-      </section>
-    )
   }
 
   return (

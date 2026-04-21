@@ -77,7 +77,7 @@ const PrivacyPolicy = () => {
                                 className="sticky bg-white p-6 rounded-[20px] shadow-lg border border-gray-100 transition-all duration-300"
                                 style={{ top: '200px' }}
                             >
-                                <h3 className="heading5 font-bold mb-6 text-black">
+                                <h3 className="heading5 font-bold mb-6 text-[#0a7b8f]">
                                     Tabla de contenidos
                                 </h3>
                                 <nav className="space-y-1">
@@ -103,7 +103,7 @@ const PrivacyPolicy = () => {
                         <div className="lg:w-3/4">
                             <div className="bg-white p-8 md:p-12 rounded-[30px] shadow-sm border border-gray-100 space-y-10 text-[15px] md:text-base text-secondary [&>section]:scroll-mt-[320px]">
                                 <section id="intro" className="border-b border-gray-100 pb-8">
-                                    <h2 className="text-2xl md:text-3xl font-bold mb-4 text-black">Tu privacidad protegida</h2>
+                                    <h2 className="text-2xl md:text-3xl font-bold mb-4 text-[#0a7b8f]">Tu privacidad protegida</h2>
                                     <p className="leading-relaxed">
                                         En Para Mascotas EC, la transparencia es fundamental. Aquí te explicamos cómo protegemos tus datos y para qué utilizamos la información personal que nos compartes.
                                     </p>
@@ -112,7 +112,7 @@ const PrivacyPolicy = () => {
                                 <section id="info">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-blue-50 p-2 rounded-lg"><Scroll size={24} className="text-blue-600" /></div>
-                                        <h3 className="text-xl md:text-2xl font-bold text-black">1. Información recopilada</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">1. Información recopilada</h3>
                                     </div>
                                     <p className="mb-4">Recopilamos únicamente la información necesaria para:</p>
                                     <ul className="list-disc list-outside ml-4 space-y-2 marker:text-blue-400">
@@ -127,7 +127,7 @@ const PrivacyPolicy = () => {
                                 <section id="uso">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-orange-50 p-2 rounded-lg"><IdentificationBadge size={24} className="text-orange-600" /></div>
-                                        <h3 className="text-xl md:text-2xl font-bold text-black">2. Uso de la información</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">2. Uso de la información</h3>
                                     </div>
                                     <p>La información personal será utilizada exclusivamente para los fines operativos y comerciales mencionados.</p>
                                     <div className="mt-4 rounded-lg bg-orange-50/50 p-4 text-sm text-gray-800 font-medium">
@@ -138,7 +138,7 @@ const PrivacyPolicy = () => {
                                 <section id="derechos">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-green-50 p-2 rounded-lg"><UserCircle size={24} className="text-green-600" /></div>
-                                        <h3 className="text-xl md:text-2xl font-bold text-black">3. Derechos del cliente</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">3. Derechos del cliente</h3>
                                     </div>
                                     <p>El cliente puede solicitar la actualización, corrección o eliminación de sus datos personales a través de nuestros canales oficiales.</p>
                                 </section>
@@ -146,7 +146,7 @@ const PrivacyPolicy = () => {
                                 <section id="seguridad">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-purple-50 p-2 rounded-lg"><Lock size={24} className="text-purple-600" /></div>
-                                        <h3 className="text-xl md:text-2xl font-bold text-black">4. Seguridad</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">4. Seguridad</h3>
                                     </div>
                                     <p>Adoptamos medidas razonables para proteger la información personal y evitar accesos no autorizados.</p>
                                 </section>
@@ -154,13 +154,13 @@ const PrivacyPolicy = () => {
                                 <section id="cambios">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="bg-yellow-50 p-2 rounded-lg"><Bell size={24} className="text-yellow-600" /></div>
-                                        <h3 className="text-xl md:text-2xl font-bold text-black">5. Cambios en la política</h3>
+                                        <h3 className="text-xl md:text-2xl font-bold text-[#0a7b8f]">5. Cambios en la política</h3>
                                     </div>
                                     <p>Esta Política de Privacidad podrá ser actualizada en cualquier momento. Las modificaciones entrarán en vigencia desde su publicación.</p>
                                 </section>
 
                                 <section id="aceptacion" className="bg-black text-white p-6 rounded-2xl text-center">
-                                    <h3 className="text-lg md:text-xl font-bold mb-2">6. Aceptación</h3>
+                                    <h3 className="text-lg md:text-xl font-bold mb-2 text-[#0a7b8f]">6. Aceptación</h3>
                                     <p className="text-white/80">Al utilizar nuestros servicios o realizar una compra, el cliente acepta esta Política de Privacidad.</p>
                                 </section>
                             </div>
