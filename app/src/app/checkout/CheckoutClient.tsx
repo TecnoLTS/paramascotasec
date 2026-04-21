@@ -15,6 +15,8 @@ import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCount
 import { buildLiveAvailabilityMap, fetchLiveCatalogSnapshot } from '@/lib/liveCatalog'
 import { normalizeSavedAddresses } from '@/app/my-account/customerDataUtils'
 
+const PASSWORD_MIN_LENGTH = 8
+
 interface AddressData {
     firstName: string;
     lastName: string;
@@ -530,8 +532,8 @@ const Checkout = () => {
             setMessage({ text: 'Ingresa un correo válido.', type: 'error' })
             return false
         }
-        if (!contactInfo.password || contactInfo.password.length < 12) {
-            setMessage({ text: 'La contraseña debe tener al menos 12 caracteres.', type: 'error' })
+        if (!contactInfo.password || contactInfo.password.length < PASSWORD_MIN_LENGTH) {
+            setMessage({ text: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`, type: 'error' })
             return false
         }
         if (contactInfo.password !== contactInfo.confirmPassword) {
@@ -1325,18 +1327,24 @@ const Checkout = () => {
                                                     onChange={handleContactChange}
                                                     className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
                                                 />
-                                                <select
-                                                    id="documentType"
-                                                    value={contactInfo.documentType}
-                                                    onChange={handleContactChange}
-                                                    className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent bg-white"
-                                                >
-                                                    <option value="">Tipo de identificación *</option>
-                                                    <option value="Cédula">Cédula</option>
-                                                    <option value="RUC">RUC</option>
-                                                    <option value="Pasaporte">Pasaporte</option>
-                                                    <option value="Otro">Otro</option>
-                                                </select>
+                                                <div className="relative">
+                                                    <select
+                                                        id="documentType"
+                                                        value={contactInfo.documentType}
+                                                        onChange={handleContactChange}
+                                                        className="w-full appearance-none border border-[#e5e7eb] bg-white px-4 py-2.5 pr-12 placeholder:text-[#9ca3af] rounded-lg focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
+                                                    >
+                                                        <option value="">Tipo de identificación *</option>
+                                                        <option value="Cédula">Cédula</option>
+                                                        <option value="RUC">RUC</option>
+                                                        <option value="Pasaporte">Pasaporte</option>
+                                                        <option value="Otro">Otro</option>
+                                                    </select>
+                                                    <Icon.CaretDown
+                                                        size={18}
+                                                        className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#2e4d4d]"
+                                                    />
+                                                </div>
                                                 <input
                                                     type="text"
                                                     id="documentNumber"
@@ -1356,7 +1364,7 @@ const Checkout = () => {
                                                 <input
                                                     type="password"
                                                     id="password"
-                                                    placeholder="Contraseña (mínimo 12 caracteres) *"
+                                                    placeholder={`Contraseña (mínimo ${PASSWORD_MIN_LENGTH} caracteres) *`}
                                                     value={contactInfo.password}
                                                     onChange={handleContactChange}
                                                     className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
@@ -1547,10 +1555,8 @@ const Checkout = () => {
                                         {deliveryMethod === 'pickup' && (
                                             <div className="mt-6 p-4 bg-[#2e4d4d1a] rounded-lg border border-[#2e4d4d]/30">
                                                 <p className="text-sm text-[#374151]">
-                                                    <strong>Dirección de la tienda:</strong><br />
-                                                    Av. Principal 123, Local 45<br />
-                                                    Ciudad, CP 12345<br />
-                                                    Horario: Lun-Vie 9:00-18:00
+                                                    <strong>Retiro en tienda:</strong><br />
+                                                    Av de La Prensa y Juan Paz y Miño. El horario de retiro se coordinará por nuestros canales oficiales al confirmar el pedido.
                                                 </p>
                                             </div>
                                         )}

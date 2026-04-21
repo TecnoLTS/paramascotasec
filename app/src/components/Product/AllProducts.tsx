@@ -214,7 +214,10 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                             Categorías principales
                         </div>
                         <div className="flex flex-wrap justify-center gap-2.5 lg:justify-start">
-                            {CATALOG_PRIMARY_FILTER_IDS.map((filterId) => {
+                            {CATALOG_PRIMARY_FILTER_IDS.filter((filterId) => {
+                                const count = primaryFilterCounts.get(filterId) ?? 0
+                                return filterId === 'todas' || count > 0
+                            }).map((filterId) => {
                                 const isActive = activePrimaryFilter === filterId
                                 const count = primaryFilterCounts.get(filterId) ?? 0
 

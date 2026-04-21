@@ -6,6 +6,7 @@ import ShopBreadCrumb1 from '@/components/Shop/ShopBreadCrumb1'
 import Footer from '@/components/Footer/Footer'
 import { fetchProducts } from '@/lib/products'
 import { ProductType } from '@/type/ProductType'
+import { buildCatalogCategoryCards } from '@/lib/catalog'
 
 type SearchParams = {
     type?: string | string[]
@@ -49,18 +50,20 @@ export default async function BreadCrumb1({ searchParams }: Props) {
     } catch (error) {
         console.error('No se pudieron cargar productos en BreadCrumb1:', error)
     }
+    const availableCategoryIds = buildCatalogCategoryCards(products).map((category) => category.id)
+    const footerCategoryIds = availableCategoryIds.filter((categoryId) => categoryId.toLowerCase() !== 'todos')
 
     return (
         <>
             <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" />
+                <MenuOne props="bg-transparent" searchProducts={products} availableCategoryIds={availableCategoryIds} />
             </div>
             {!products.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} searchQuery={query} />
             )}
-            <Footer />
+            <Footer categoryIds={footerCategoryIds} />
         </>
     )
 }

@@ -8,9 +8,27 @@ import * as Icon from "@phosphor-icons/react/dist/ssr";
 import { useSite } from '@/context/SiteContext'
 import { getCategoryLabel, getCategoryUrl } from '@/data/petCategoryCards'
 
-const Footer = () => {
+type FooterProps = {
+    categoryIds?: string[]
+}
+
+const Footer = ({ categoryIds }: FooterProps) => {
     const site = useSite()
-    const footerCategories = site.footerCategoryLinks
+    const currentYear = 2026
+    const [hasMounted, setHasMounted] = React.useState(false)
+
+    React.useEffect(() => {
+        setHasMounted(true)
+    }, [])
+
+    const footerCategories = React.useMemo(() => {
+        if (!hasMounted || !categoryIds || categoryIds.length === 0) {
+            return site.footerCategoryLinks
+        }
+
+        const available = new Set(categoryIds.map((categoryId) => String(categoryId).trim().toLowerCase()))
+        return site.footerCategoryLinks.filter((categoryId) => available.has(categoryId.toLowerCase()))
+    }, [categoryIds, hasMounted, site.footerCategoryLinks])
     return (
         <div id="footer" className='footer'>
             <div className="footer-main bg-surface pt-[60px] pb-[20px]">
@@ -131,7 +149,7 @@ const Footer = () => {
                     <div className="footer-bottom py-6 mt-8 flex items-center justify-between gap-5 max-lg:justify-center max-lg:flex-col border-t border-gray-200">
                         <div className="left flex items-center gap-8">
                             <div className="copyright caption1 text-secondary text-center">
-                                ©{new Date().getFullYear()} {site.name} - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
+                                ©{currentYear} {site.name} - Con el apoyo de nuestros aliados tecnológicos - TecnoLTS
                             </div>
                         </div>
                     </div>

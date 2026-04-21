@@ -251,19 +251,19 @@ export default function ContactPage() {
             <aside className="flex flex-col gap-6 lg:sticky lg:top-28 lg:self-start">
               
               {/* Tarjeta WhatsApp */}
-              <div className="rounded-[32px] bg-[#0f172f] p-7 text-white shadow-[0_28px_80px_rgba(15,23,47,0.18)]">
-                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#8fdff0]">Canal Inmediato</div>
+              <div className="rounded-[32px] bg-[linear-gradient(180deg,#1c8da3_0%,#166b80_100%)] p-7 text-white shadow-[0_28px_80px_rgba(22,107,128,0.22)]">
+                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#d9f7fb]">Canal Inmediato</div>
                 <h3 className="mt-4 text-2xl font-black leading-[1.1] tracking-[-0.03em] text-white">
                   ¿Respuesta urgente?
                 </h3>
-                <p className="mt-3 text-sm leading-6 text-white/80">
+                <p className="mt-3 text-sm leading-6 text-white/90">
                   Usa WhatsApp para consultas sobre compras activas, cambios de última hora o seguimiento de entregas.
                 </p>
                 <a
                   href={whatsappLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 py-4 text-sm font-bold text-white transition hover:bg-[#20bd5a]"
+                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 py-4 text-sm font-bold text-white transition hover:bg-[#1fbe5d]"
                 >
                   <WhatsappLogo size={20} weight="fill" />
                   Abrir WhatsApp

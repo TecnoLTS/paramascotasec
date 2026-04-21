@@ -49,6 +49,7 @@ const DOCUMENT_TYPE_OPTIONS = [
     { value: 'pasaporte', label: 'Pasaporte' },
     { value: 'otro', label: 'Otro' },
 ]
+const PASSWORD_MIN_LENGTH = 8
 
 const normalizeRole = (value?: string | null): AdminManagedUserRole => {
     return String(value || '').trim().toLowerCase() === 'admin' ? 'admin' : 'customer'
@@ -149,13 +150,13 @@ export default function UserEditorModal({
             return
         }
 
-        if (mode === 'create' && password.length < 12) {
-            setError('La contraseña debe tener al menos 12 caracteres.')
+        if (mode === 'create' && password.length < PASSWORD_MIN_LENGTH) {
+            setError(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
             return
         }
 
-        if (password && password.length < 12) {
-            setError('La contraseña debe tener al menos 12 caracteres.')
+        if (password && password.length < PASSWORD_MIN_LENGTH) {
+            setError(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
             return
         }
 
@@ -317,7 +318,7 @@ export default function UserEditorModal({
                                             type="password"
                                             value={form.password}
                                             onChange={(event) => handleFieldChange('password', event.target.value)}
-                                            placeholder="Mínimo 12 caracteres"
+                                            placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
                                             className="w-full rounded-xl border border-line px-4 py-3 text-sm outline-none transition-all focus:border-black"
                                         />
                                     </div>

@@ -569,11 +569,14 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               {attributeRows.length > 0 && (
                 <div className="mt-4 p-4 bg-surface border border-line rounded-xl">
                   <div className="text-title mb-3">Detalles del producto</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                     {attributeRows.map((item) => (
-                      <div key={item.key} className="flex items-center justify-between gap-3">
-                        <span className="text-secondary">{item.label}</span>
-                        <span className="font-semibold text-right">{String(item.value)}</span>
+                      <div
+                        key={item.key}
+                        className="flex items-baseline gap-2 text-left"
+                      >
+                        <span className="text-secondary text-left">{item.label}</span>
+                        <span className="font-semibold text-left">{String(item.value)}</span>
                       </div>
                     ))}
                   </div>
@@ -748,12 +751,15 @@ const Default: React.FC<Props> = ({ data, productId }) => {
             {activeTab === 'description' ? (
               <div className="mt-6 text-secondary leading-7">{activeVariant.description}</div>
             ) : (
-              <div className="mt-6 grid sm:grid-cols-2 gap-4">
+              <div className="mt-6 grid gap-4">
                 {attributeRows.length > 0 ? (
                   attributeRows.map((item) => (
-                    <div key={`spec-${item.key}`} className="rounded-xl border border-line p-4 bg-white">
-                      <div className="caption1 text-secondary">{item.label}</div>
-                      <div className="text-title mt-1">{String(item.value)}</div>
+                    <div
+                      key={`spec-${item.key}`}
+                      className="grid grid-cols-1 gap-1 rounded-xl border border-line bg-white p-4 text-left sm:grid-cols-[minmax(140px,220px)_1fr] sm:items-start sm:gap-4"
+                    >
+                      <div className="caption1 text-secondary text-left">{item.label}</div>
+                      <div className="text-title mt-0 text-left">{String(item.value)}</div>
                     </div>
                   ))
                 ) : (
@@ -767,16 +773,16 @@ const Default: React.FC<Props> = ({ data, productId }) => {
         <div className="container mt-10">
           <div className="grid md:grid-cols-3 gap-4">
             <div className="rounded-2xl border border-line p-5 bg-surface">
-              <div className="text-title">Envio y devoluciones</div>
-              <div className="caption1 text-secondary mt-2">Atencion de {pageSettings.supportHours} todos los dias.</div>
+              <div className="text-title">Envíos y entregas</div>
+              <div className="caption1 text-secondary mt-2">Envíos en zonas habilitadas con tiempos informados.</div>
             </div>
             <div className="rounded-2xl border border-line p-5 bg-surface">
-              <div className="text-title">Envio gratis</div>
-              <div className="caption1 text-secondary mt-2">Disponible desde ${Number(pageSettings.freeShippingThreshold ?? 0).toFixed(2)}.</div>
+              <div className="text-title">Pagos seguros</div>
+              <div className="caption1 text-secondary mt-2">Transferencia bancaria o efectivo coordinado, con confirmación previa.</div>
             </div>
             <div className="rounded-2xl border border-line p-5 bg-surface">
-              <div className="text-title">Politica de devolucion</div>
-              <div className="caption1 text-secondary mt-2">Hasta {pageSettings.returnDays} dias para solicitar cambios o devoluciones.</div>
+              <div className="text-title">Cambios y devoluciones</div>
+              <div className="caption1 text-secondary mt-2">Consulta políticas completas en Términos y Condiciones.</div>
             </div>
           </div>
         </div>

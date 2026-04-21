@@ -16,7 +16,7 @@ const Benefit: React.FC<Props> = ({ props }) => {
         },
         {
             title: 'Cambios y devoluciones',
-            description: 'Aceptamos cambios o devoluciones dentro de los 5 días hábiles posteriores a la entrega.',
+            description: 'Consulta nuestra política completa en Términos y Condiciones.',
             icon: Icon.ArrowCounterClockwise,
             bgColor: 'bg-[#FFF4E5]',
             iconColor: 'text-[#FC5A04]',
@@ -30,7 +30,7 @@ const Benefit: React.FC<Props> = ({ props }) => {
         },
         {
             title: 'Envíos y entregas',
-            description: 'Realizamos envíos a zonas habilitadas dentro de Ecuador con tiempos informados.',
+            description: 'Envíos en zonas habilitadas con tiempos informados.',
             icon: Icon.Truck,
             bgColor: 'bg-[#E8F5E9]',
             iconColor: 'text-[#3DAB25]',

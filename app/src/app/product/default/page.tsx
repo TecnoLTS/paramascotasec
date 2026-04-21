@@ -6,7 +6,7 @@ import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
 import { loadProducts } from '@/lib/products.server'
 import { generateProductJsonLd } from '@/lib/seo'
-import { findCatalogProduct } from '@/lib/catalog'
+import { buildCatalogCategoryCards, findCatalogProduct } from '@/lib/catalog'
 import { getSiteConfig } from '@/lib/site'
 
 type SearchParams = {
@@ -61,6 +61,8 @@ const ProductDefault = async ({ searchParams }: Props) => {
     const site = getSiteConfig()
     const resolvedSearchParams = await searchParams
     const { products: productsWithSettings } = await loadProducts()
+    const availableCategoryIds = buildCatalogCategoryCards(productsWithSettings).map((category) => category.id)
+    const footerCategoryIds = availableCategoryIds.filter((categoryId) => categoryId.toLowerCase() !== 'todos')
     const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (productsWithSettings[0]?.id ?? '')
     const currentProduct = findCatalogProduct(productsWithSettings, productId)
 
@@ -81,7 +83,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
                 />
             )}
             <div id="header" className='relative w-full'>
-                <MenuOne props="bg-white" />
+                <MenuOne props="bg-white" searchProducts={productsWithSettings} availableCategoryIds={availableCategoryIds} />
             </div>
             {!productsWithSettings.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
@@ -97,7 +99,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
             ) : (
                 <Default data={productsWithSettings} productId={productId} />
             )}
-            <Footer />
+            <Footer categoryIds={footerCategoryIds} />
         </>
     )
 }

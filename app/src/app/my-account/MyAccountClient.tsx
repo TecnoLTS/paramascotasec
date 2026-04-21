@@ -964,8 +964,8 @@ const MyAccount = () => {
                 showNotification('Para cambiar la contraseña completa los 3 campos.', 'error')
                 return
             }
-            if (passwordForm.newPassword.length < 12) {
-                showNotification('La nueva contraseña debe tener al menos 12 caracteres.', 'error')
+            if (passwordForm.newPassword.length < 8) {
+                showNotification('La nueva contraseña debe tener al menos 8 caracteres.', 'error')
                 return
             }
             if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -6549,7 +6549,7 @@ const MyAccount = () => {
                                                     className="border-line mt-2 px-4 py-3 w-full rounded-lg"
                                                     id="newPassword"
                                                     type="password"
-                                                    placeholder="Mínimo 12 caracteres"
+                                                    placeholder="Mínimo 8 caracteres"
                                                     autoComplete="new-password"
                                                     value={passwordForm.newPassword}
                                                     onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}

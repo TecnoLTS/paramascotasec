@@ -20,15 +20,18 @@ const Register = () => {
     const [documentType, setDocumentType] = useState('')
     const [documentNumber, setDocumentNumber] = useState('')
     const [businessName, setBusinessName] = useState('')
+    const [petName, setPetName] = useState('')
+    const [petBirthday, setPetBirthday] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    const passwordMinLength = 8
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
 
-        if (password.length < 12) {
-            setError('La contraseña debe tener al menos 12 caracteres')
+        if (password.length < passwordMinLength) {
+            setError(`La contraseña debe tener al menos ${passwordMinLength} caracteres`)
             return
         }
 
@@ -57,6 +60,8 @@ const Register = () => {
                     documentType,
                     documentNumber,
                     businessName,
+                    petName,
+                    petBirthday,
                 },
             })
             // Redirigir al login tras registro exitoso
@@ -116,9 +121,9 @@ const Register = () => {
                                     />
                                 </div>
                                 <div className="document-type mt-5">
-                                    <div className="select-block">
+                                    <div className="select-block relative">
                                         <select
-                                            className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                            className="border-line w-full appearance-none rounded-lg px-4 pb-3 pt-3 pr-12"
                                             id="documentType"
                                             value={documentType || 'default'}
                                             onChange={(e) => setDocumentType(e.target.value)}
@@ -130,6 +135,10 @@ const Register = () => {
                                             <option value="Pasaporte">Pasaporte</option>
                                             <option value="Otro">Otro</option>
                                         </select>
+                                        <Icon.CaretDown
+                                            size={18}
+                                            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#2e4d4d]"
+                                        />
                                     </div>
                                 </div>
                                 <div className="document-number mt-5">
@@ -153,13 +162,32 @@ const Register = () => {
                                         onChange={(e) => setBusinessName(e.target.value)}
                                     />
                                 </div>
+                                <div className="pet-name mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="petName"
+                                        type="text"
+                                        placeholder="Nombre de tu mascota (opcional)"
+                                        value={petName}
+                                        onChange={(e) => setPetName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="pet-birthday mt-5">
+                                    <input
+                                        className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
+                                        id="petBirthday"
+                                        type="date"
+                                        value={petBirthday}
+                                        onChange={(e) => setPetBirthday(e.target.value)}
+                                    />
+                                </div>
                                 <div className="pass mt-5">
                                     <input
                                         className="border-line px-4 pt-3 pb-3 w-full rounded-lg"
                                         id="password"
                                         type="password"
-                                        placeholder="Contraseña *"
-                                        minLength={12}
+                                        placeholder={`Contraseña (mínimo ${passwordMinLength} caracteres) *`}
+                                        minLength={passwordMinLength}
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
@@ -171,7 +199,7 @@ const Register = () => {
                                         id="confirmPassword"
                                         type="password"
                                         placeholder="Confirmar contraseña *"
-                                        minLength={12}
+                                        minLength={passwordMinLength}
                                         required
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}

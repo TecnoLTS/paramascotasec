@@ -40,7 +40,7 @@ const ChooseUs = () => {
                             <FeatureIcon weight="duotone" className={`${compact ? 'text-[28px]' : 'text-3xl sm:text-4xl'} ${feature.iconColor}`} />
                         </div>
                         <div className="text-content pt-1 min-w-0">
-                            <h4 className={`heading6 text-[#1F3B3B] mb-2 ${compact ? 'text-lg leading-6' : ''} group-hover:text-[#63CFDF] transition-colors`}>{feature.title}</h4>
+                            <h4 className={`mb-2 text-[#1F3B3B] transition-colors group-hover:text-[#1F3B3B] ${compact ? 'text-lg leading-6 font-semibold' : 'text-[22px] leading-[30px] font-semibold'}`}>{feature.title}</h4>
                             <p className={`caption1 text-secondary leading-relaxed ${compact ? 'text-[13px]' : ''}`}>{feature.description}</p>
                         </div>
                     </div>
@@ -54,11 +54,8 @@ const ChooseUs = () => {
             <div className="container">
                 <div className="lg:hidden">
                     <div className="mb-8 sm:mb-10">
-                        <div className="inline-block px-4 py-1 rounded-full bg-[#1F3B3B]/5 text-[#1F3B3B] text-sm font-bold mb-4">
-                            ¿Por qué elegirnos?
-                        </div>
                         <h2 className="heading2 mb-5 text-[#1F3B3B] text-[32px] leading-[1.08] sm:text-[38px] sm:leading-[1.06]">
-                            Las mejores razones para <span className="text-[#63CFDF]">elegirnos</span>
+                            Las mejores razones para elegirnos
                         </h2>
                         <p className="body1 text-secondary max-w-[600px] text-[14px] leading-7 sm:text-base">
                             Cuidamos a los animales como parte de la familia, ofreciendo productos confiables
@@ -106,11 +103,8 @@ const ChooseUs = () => {
                         </div>
                     </div>
                     <div className="content min-w-0">
-                        <div className="inline-block px-4 py-1 rounded-full bg-[#1F3B3B]/5 text-[#1F3B3B] text-sm font-bold mb-4">
-                            ¿Por qué elegirnos?
-                        </div>
                         <h2 className="heading2 mb-6 text-[#1F3B3B]">
-                            Las mejores razones para <span className="text-[#63CFDF]">elegirnos</span>
+                            Las mejores razones para elegirnos
                         </h2>
                         <p className="body1 text-secondary mb-10 max-w-[600px]">
                             Cuidamos a los animales como parte de la familia, ofreciendo productos confiables

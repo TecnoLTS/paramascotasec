@@ -69,8 +69,8 @@ const ModalCompare = () => {
                                 {
                                     compareState.compareArray.length < 2 ? (
                                         <>
-                                            <a
-                                                href='#!'
+                                            <button
+                                                type='button'
                                                 className='button-main whitespace-nowrap'
                                                 onClick={(e) => {
                                                     e.stopPropagation()
@@ -78,7 +78,7 @@ const ModalCompare = () => {
                                                 }}
                                             >
                                                 Compare Products
-                                            </a>
+                                            </button>
                                         </>
                                     ) : (
                                         <>

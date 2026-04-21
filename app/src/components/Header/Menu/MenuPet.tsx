@@ -28,11 +28,12 @@ import { useSite } from '@/context/SiteContext'
 import { getProductDetailRouteId } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import { ProductType } from '@/type/ProductType'
-import { getStoredSessionUser } from '@/lib/authSession'
+import { clearStoredSession, getStoredSessionUser } from '@/lib/authSession'
 
 type MenuPetProps = {
     props?: string;
     searchProducts?: ProductType[];
+    availableCategoryIds?: string[];
 };
 
 const Icon = {
@@ -50,7 +51,7 @@ const Icon = {
     X,
 } as const
 
-const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
+const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], availableCategoryIds }) => {
     const site = useSite()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -64,12 +65,15 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
     const [searchKeyword, setSearchKeyword] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false)
     const [accountDisplayName, setAccountDisplayName] = useState('Mi cuenta')
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
     const router = useRouter()
     const [hasMounted, setHasMounted] = useState(false)
     const searchContainerRef = useRef<HTMLDivElement>(null)
     const minAutocompleteQueryLength = 1
     const searchParamsKey = searchParams.toString()
     const deferredSearchKeyword = useDeferredValue(searchKeyword)
+    const visibleAccountDisplayName = hasMounted ? accountDisplayName : 'Mi cuenta'
+    const showAuthenticatedMenu = hasMounted && isAuthenticated
 
     const handleSearch = (value: string) => {
         const trimmedValue = sanitizeProductSearchQuery(value)
@@ -145,6 +149,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
             const sessionUser = getStoredSessionUser()
             const firstName = String(sessionUser?.name || '').trim().split(/\s+/).filter(Boolean)[0] || ''
             setAccountDisplayName(firstName || 'Mi cuenta')
+            setIsAuthenticated(Boolean(sessionUser?.id))
         }
 
         const handleStorage = (event: StorageEvent) => {
@@ -231,6 +236,24 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
 
     const categoriesSections: Array<{ title: string; links: CategoryLink[] }> =
         site.menu.categorySections
+    const normalizedAvailableCategoryIds = useMemo(
+        () => new Set((availableCategoryIds ?? []).map((categoryId) => String(categoryId).trim().toLowerCase())),
+        [availableCategoryIds]
+    )
+    const visibleCategorySections = useMemo(() => {
+        if (!availableCategoryIds || normalizedAvailableCategoryIds.size === 0) {
+            return categoriesSections
+        }
+
+        return categoriesSections
+            .map((section) => ({
+                ...section,
+                links: section.links.filter((link) =>
+                    link.id === 'todos' || normalizedAvailableCategoryIds.has(link.id.toLowerCase())
+                ),
+            }))
+            .filter((section) => section.links.length > 0)
+    }, [availableCategoryIds, categoriesSections, normalizedAvailableCategoryIds])
 
     // Ya no se usa companyLinks en el render, pero lo dejo por si acaso lo necesitas luego
     const companyLinks: MegaNavLink[] = site.menu.companyLinks
@@ -417,6 +440,24 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
         return normalizeImageSrc(firstThumb || imageValue || '/images/placeholder.jpg')
     }
 
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+            })
+        } catch {}
+
+        clearStoredSession()
+        setAccountDisplayName('Mi cuenta')
+        setIsAuthenticated(false)
+        if (openLoginPopup) {
+            handleLoginPopup()
+        }
+        router.refresh()
+        router.push('/')
+    }
+
     return (
         <>
             {fixedHeader && <div aria-hidden="true" className="pet-header-spacer" style={{ height: stickyHeight }} />}
@@ -558,18 +599,35 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                             <div className="list-action flex items-center gap-6">
                                 <div className="user-icon relative flex items-center flex-col justify-center cursor-pointer">
                                     <Icon.User size={26} color='black' onClick={handleLoginPopup} />
-                                    <div className="caption1" onClick={handleLoginPopup}>{accountDisplayName}</div>
+                                    <div className="caption1" onClick={handleLoginPopup}>{visibleAccountDisplayName}</div>
                                     <div
                                         className={`login-popup absolute top-[74px] w-[320px] p-7 rounded-xl bg-white box-shadow-sm 
                                             ${openLoginPopup ? 'open' : ''}`}
                                     >
-                                        <Link href={'/login'} className="button-main w-full text-center">Iniciar sesión</Link>
-                                        <div className="text-secondary text-center mt-3 pb-4">¿No tienes una cuenta?
-                                            <Link href={'/register'} className='text-black pl-1 hover:underline'>Regístrate</Link>
-                                        </div>
-                                        <Link href={'/my-account'} className="button-main bg-white text-black border border-black w-full text-center">Panel</Link>
-                                        <div className="bottom mt-4 pt-4 border-t border-line"></div>
-                                        <Link href={'#!'} className='body1 hover:underline'>Soporte</Link>
+                                        {showAuthenticatedMenu ? (
+                                            <>
+                                                <Link href={'/my-account'} className="button-main w-full text-center">Panel</Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLogout}
+                                                    className="button-main mt-3 bg-white text-black border border-black w-full text-center"
+                                                >
+                                                    Cerrar sesión
+                                                </button>
+                                                <div className="bottom mt-4 pt-4 border-t border-line"></div>
+                                                <Link href={'/pages/contact'} className='body1 hover:underline'>Soporte</Link>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Link href={'/login'} className="button-main w-full text-center">Iniciar sesión</Link>
+                                                <div className="text-secondary text-center mt-3 pb-4">¿No tienes una cuenta?
+                                                    <Link href={'/register'} className='text-black pl-1 hover:underline'>Regístrate</Link>
+                                                </div>
+                                                <Link href={'/my-account'} className="button-main bg-white text-black border border-black w-full text-center">Panel</Link>
+                                                <div className="bottom mt-4 pt-4 border-t border-line"></div>
+                                                <Link href={'/pages/contact'} className='body1 hover:underline'>Soporte</Link>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="cart-icon flex flex-col items-center relative cursor-pointer" onClick={openModalCart}>
@@ -629,7 +687,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                             {mainMenuItems[1].label}
                                         </Link>
                                         {renderMegaMenu(
-                                            categoriesSections,
+                                            visibleCategorySections,
                                             categoryBanner
                                         )}
                                     </li>
@@ -742,7 +800,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                             </div>
 
                                             <div className="list-nav-item">
-                                                {categoriesSections.map((section) => (
+                                                {visibleCategorySections.map((section) => (
                                                     <div className="mobile-nav-section-card" key={section.title}>
                                                         <div className="mobile-nav-section-card__title">{section.title}</div>
                                                         <ul className="mobile-nav-section-card__list">

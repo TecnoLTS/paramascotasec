@@ -192,7 +192,7 @@ const TermsConditions = () => {
                                         <ul className="list-disc list-outside ml-4 space-y-2 marker:text-gray-400">
                                             <li>Los pedidos se procesan en días laborables.</li>
                                             <li>Los tiempos de entrega pueden variar según ubicación, disponibilidad del producto y condiciones externas.</li>
-                                            <li><strong>Opción de Retiro:</strong> También podrá existir la opción de retiro en tienda sin costo, previa coordinación.</li>
+                                            <li><strong>Opción de Retiro:</strong> El retiro en tienda se realiza en Av de La Prensa y Juan Paz y Miño. El horario se coordinará previamente por nuestros canales oficiales.</li>
                                         </ul>
                                     </div>
                                 </section>

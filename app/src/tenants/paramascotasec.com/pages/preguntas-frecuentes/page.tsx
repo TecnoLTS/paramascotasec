@@ -38,7 +38,7 @@ const FaqPage = () => {
 
     const faqData = [
         { 
-            category: "Compras y Pedidos", 
+            category: "Compras y pedidos", 
             items: [
                 { q: "¿Cómo puedo realizar una compra?", a: "Puedes comprar en nuestra tienda física o contactarnos a través de WhatsApp y nuestras redes sociales oficiales." },
                 { q: "¿Debo pagar antes de retirar o recibir mi pedido?", a: "Sí. Todos los pedidos se confirman únicamente con pago previo." },
@@ -53,7 +53,7 @@ const FaqPage = () => {
             ] 
         },
         { 
-            category: "Envíos y Entregas", 
+            category: "Envíos y entregas", 
             items: [
                 { q: "¿Realizan envíos?", a: "Sí, realizamos envíos dentro de la ciudad y a nivel nacional, según zonas habilitadas." },
                 { q: "¿Cuánto tiempo tarda el envío?", a: "El tiempo de entrega depende de la ciudad, la disponibilidad del producto y el operador logístico. Esta información se confirma antes del despacho." },
@@ -62,7 +62,7 @@ const FaqPage = () => {
             ] 
         },
         { 
-            category: "Cambios y Devoluciones", 
+            category: "Cambios y devoluciones", 
             items: [
                 { q: "¿Puedo cambiar un producto?", a: "Sí. Se aceptan cambios dentro de los 5 días hábiles posteriores a la entrega, siempre que el producto esté sin uso, en perfecto estado y con su empaque original." },
                 { q: "¿Se aceptan cambios o devoluciones de alimentos o productos de higiene?", a: "No. Por motivos de higiene y seguridad, no se aceptan cambios ni devoluciones de alimentos, medicamentos o productos de higiene, salvo defectos de fabricación comprobables." },
@@ -70,7 +70,7 @@ const FaqPage = () => {
             ] 
         },
         { 
-            category: "Productos y Atención", 
+            category: "Productos y atención", 
             items: [
                 { q: "¿Los productos son originales?", a: "Sí. Trabajamos únicamente con marcas y proveedores confiables." },
                 { q: "¿Brindan asesoría para elegir productos?", a: "Sí. Te ayudamos a elegir el producto más adecuado según las necesidades de tu mascota." },

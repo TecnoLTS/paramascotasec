@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import Link from 'next/link'
 
 type SliderSuffix =
   | 'mobile-xs'
@@ -19,8 +18,7 @@ type SlideId = 1 | 2 | 3
 
 type SlideContent = {
   id: SlideId
-  subtitle: string
-  title: string
+  text: string
 }
 
 const AUTOPLAY_DELAY_MS = 7000
@@ -28,18 +26,15 @@ const AUTOPLAY_DELAY_MS = 7000
 const slides: SlideContent[] = [
   {
     id: 1,
-    subtitle: '¡Oferta! Hasta 50% de descuento',
-    title: 'La tienda perfecta para tu mascota',
+    text: 'Cuidado que enamora',
   },
   {
     id: 2,
-    subtitle: '¡Oferta! Hasta 50% de descuento',
-    title: 'Alimenta el apetito de tu mascota',
+    text: 'Bienestar que se siente',
   },
   {
     id: 3,
-    subtitle: '¡Oferta! Hasta 50% de descuento',
-    title: 'Alimenta el apetito de tu mascota',
+    text: 'Mucho más que una tienda',
   },
 ]
 
@@ -133,18 +128,9 @@ const SliderSlideContent = ({
       />
       <div className="container absolute inset-0 z-[1] flex h-full w-full items-center">
         <div className="w-full max-w-[760px] px-4 text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.35)] sm:w-[58%]">
-          <p className="text-sub-display slider-text-sub normal-case">
-            {slide.subtitle}
-          </p>
-          <h1 className="text-display slider-text-display mt-2 normal-case md:mt-5">
-            {slide.title}
+          <h1 className="text-display slider-text-display normal-case">
+            {slide.text}
           </h1>
-          <Link
-            href="/shop/breadcrumb1"
-            className="button-main mt-4 inline-flex normal-case bg-[var(--blue)] text-white hover:bg-[var(--bluesecondary)] hover:text-white md:mt-8"
-          >
-            Compra ahora
-          </Link>
         </div>
       </div>
     </div>
@@ -157,6 +143,11 @@ const SliderPet = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null)
+  const [hasMounted, setHasMounted] = useState(false)
+
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -215,6 +206,26 @@ const SliderPet = () => {
 
     setTouchStartX(null)
     setTouchCurrentX(null)
+  }
+
+  if (!hasMounted) {
+    return (
+      <section
+        className="slider-block style-one mt-2 w-full overflow-hidden md:mt-3"
+        aria-roledescription="carousel"
+        aria-label="Promociones principales"
+      >
+        <div className="slider-main relative w-full">
+          <div className="slider-item relative w-full overflow-hidden">
+            <HeroPicture
+              alt="Slide principal 1 de ParaMascotasEC"
+              slide={1}
+              priority
+            />
+          </div>
+        </div>
+      </section>
+    )
   }
 
   return (

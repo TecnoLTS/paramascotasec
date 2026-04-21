@@ -60,9 +60,6 @@ const AboutUs = () => {
                                     />
                                 </div>
 
-                                <div className="tag text-button-uppercase text-orange-500 bg-orange-100 px-3 py-1.5 md:px-4 md:py-2 rounded-full w-fit mb-3 md:mb-5">
-                                    Nuestra Esencia
-                                </div>
                                 <h2 className="heading3 font-bold mb-4 md:mb-7 max-sm:text-[34px] max-sm:leading-[40px]">¿Quiénes somos?</h2>
                                 <div className="body1 text-secondary leading-relaxed space-y-4 md:space-y-6 max-sm:text-base max-sm:leading-7 md:text-lg">
                                     <p>
@@ -97,8 +94,10 @@ const AboutUs = () => {
                                             <Package size={24} className="text-blue-600 md:w-7 md:h-7" />
                                         </div>
                                         <div>
-                                            <h4 className="heading5 mb-1 md:mb-2">Productos Cuidadosos</h4>
-                                            <p className="body1 text-secondary max-sm:text-base max-sm:leading-7">
+                                            <h4 className="mb-1 text-[20px] font-semibold leading-[28px] text-[#1F3B3B] md:mb-2 md:text-[18px]">
+                                                Productos Cuidadosos
+                                            </h4>
+                                            <p className="body1 text-secondary text-[16px] leading-7 max-sm:text-base">
                                                 Ofrecemos productos pensados para el cuidado diario, trabajando con marcas responsables y opciones de calidad.
                                             </p>
                                         </div>
@@ -108,15 +107,17 @@ const AboutUs = () => {
                                             <Storefront size={24} className="text-green-600 md:w-7 md:h-7" />
                                         </div>
                                         <div>
-                                            <h4 className="heading5 mb-1 md:mb-2">Experiencia Cercana</h4>
-                                            <p className="body1 text-secondary max-sm:text-base max-sm:leading-7">
+                                            <h4 className="mb-1 text-[20px] font-semibold leading-[28px] text-[#1F3B3B] md:mb-2 md:text-[18px]">
+                                                Experiencia Cercana
+                                            </h4>
+                                            <p className="body1 text-secondary text-[16px] leading-7 max-sm:text-base">
                                                 Nos enfocamos en brindar una experiencia simple, honesta y cercana, tanto en nuestra tienda como en nuestros canales digitales. Queremos que cada persona que nos visite se sienta acompañada y segura.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="mt-7 md:mt-10">
-                                    <Link href="/shop/breadcrumb1" className="button-main bg-black text-white px-6 md:px-8 py-3 rounded-full hover:bg-green-600 transition-all">
+                                    <Link href="/shop/breadcrumb1" className="button-main rounded-full bg-[var(--blue)] px-6 py-3 text-white transition-all hover:bg-[var(--bluesecondary)] hover:text-white md:px-8">
                                         Explorar Productos
                                     </Link>
                                 </div>

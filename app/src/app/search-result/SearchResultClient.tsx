@@ -9,6 +9,7 @@ import { ProductType } from '@/type/ProductType'
 import Product from '@/components/Product/Product'
 import HandlePagination from '@/components/Other/HandlePagination'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
+import { buildCatalogCategoryCards } from '@/lib/catalog'
 
 type Props = {
   products: ProductType[]
@@ -26,6 +27,14 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
   const query = sanitizeProductSearchQuery(initialQuery ?? '')
   const activeQuery = sanitizeProductSearchQuery(deferredSearchKeyword)
   const productSearchIndex = useMemo(() => buildProductSearchIndex(products), [products])
+  const availableCategoryIds = useMemo(
+    () => buildCatalogCategoryCards(products).map((category) => category.id),
+    [products]
+  )
+  const footerCategoryIds = useMemo(
+    () => availableCategoryIds.filter((categoryId) => categoryId.toLowerCase() !== 'todos'),
+    [availableCategoryIds]
+  )
 
   const filteredData = useMemo(() => {
     return filterProductsBySearch(products, activeQuery, productSearchIndex)
@@ -63,7 +72,7 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
     <>
       <TopNavOne props="style-one bg-black" slogan="Nuevos clientes ahorran 10% con el codigo GET10" />
       <div id="header" className='relative w-full'>
-        <MenuOne props="bg-transparent" searchProducts={products} />
+        <MenuOne props="bg-transparent" searchProducts={products} availableCategoryIds={availableCategoryIds} />
       </div>
       <div className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
         <div className="container">
@@ -119,7 +128,7 @@ const SearchResultClient = ({ products, error, initialQuery }: Props) => {
           </div>
         </div>
       </div>
-      <Footer />
+      <Footer categoryIds={footerCategoryIds} />
     </>
   )
 }
