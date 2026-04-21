@@ -39,7 +39,7 @@ echo "  ADMIN_IP_MODE=private"
 echo "  # private permite loopback + redes privadas RFC1918"
 echo
 echo "Sugerencia conservadora para desarrollo:"
-echo "  PANEL_IP_ALLOWLIST=127.0.0.1,192.168.100.0/24"
-echo "  ADMIN_IP_ALLOWLIST=127.0.0.1,192.168.100.0/24"
+echo "  PANEL_IP_ALLOWLIST=127.0.0.1,192.168.100.229,80.241.213.31"
+echo "  ADMIN_IP_ALLOWLIST=127.0.0.1,192.168.100.229,80.241.213.31"
 echo
 echo "Antes de activar en produccion, confirma tus IPs cliente reales."

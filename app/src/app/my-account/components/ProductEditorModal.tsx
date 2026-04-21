@@ -1828,18 +1828,29 @@ export default function ProductEditorModal({
             if (description.length < 10) nextErrors.description = 'La descripción debe tener al menos 10 caracteres.'
             if (isRestockMode && stockIncrease <= 0) nextErrors.quantity = 'Debes indicar al menos 1 unidad a ingresar en la compra.'
 
-            const normalizedAttributes = enrichVariantAttributes({
+            const draftVariantName = isDuplicateVariantMode ? duplicateVariantBaseName : name
+            let normalizedAttributes = enrichVariantAttributes({
                 type: productType,
                 category,
-                name: isDuplicateVariantMode
-                    ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
-                    : name,
+                name: draftVariantName,
                 attributes: normalizeAttributes(productType, form.attributes),
             })
+            let nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
+            const resolvedProductName = isDuplicateVariantMode
+                ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
+                : name
+            if (resolvedProductName && resolvedProductName !== draftVariantName) {
+                normalizedAttributes = enrichVariantAttributes({
+                    type: productType,
+                    category,
+                    name: resolvedProductName,
+                    attributes: normalizedAttributes,
+                })
+                nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
+            }
             normalizedAttributes.taxExempt = form.taxExempt ? 'true' : 'false'
             const normalizedSpecies = normalizeProductSpecies(normalizedAttributes.species, editingProduct?.gender ?? '')
             const duplicateSourceVariantLabel = String(form.attributes?.__sourceVariantLabel || '').trim()
-            const nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
             const variantDefinitionField = isDuplicateVariantMode ? duplicateVariantFieldKey : getVariantDefinitionFieldKey(productType)
             const variantDefinitionFieldLabel = isDuplicateVariantMode ? duplicateVariantFieldLabel : getVariantDefinitionFieldLabel(productType)
             const duplicateSourceVariantFieldValue = normalizeMeasurementLabel(String(initialForm.attributes?.[variantDefinitionField] || '').trim()).toLowerCase()
@@ -1980,9 +1991,7 @@ export default function ProductEditorModal({
             setSaving(true)
 
             const data = {
-                name: isDuplicateVariantMode
-                    ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
-                    : name,
+                name: resolvedProductName,
                 price: basePrice,
                 cost: currentCost,
                 quantity,

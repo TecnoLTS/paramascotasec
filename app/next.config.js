@@ -4,6 +4,7 @@ const allowedDevOrigins = [
     'paramascotasec.com',
     'www.paramascotasec.com',
     '192.168.100.229',
+    '80.241.213.31',
     'localhost',
     '127.0.0.1',
 ]

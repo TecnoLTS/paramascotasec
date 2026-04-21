@@ -12,7 +12,7 @@ const useLoginPopup = () => {
         // Cast event.target to Element to use the closest method.
         const targetElement = event.target as Element;
 
-        if (openLoginPopup && !targetElement.closest('.login-popup')) {
+        if (openLoginPopup && !targetElement.closest('.login-popup') && !targetElement.closest('.user-icon')) {
             setOpenLoginPopup(false)
         }
     }, [openLoginPopup])

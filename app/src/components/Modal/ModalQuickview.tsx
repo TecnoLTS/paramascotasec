@@ -437,7 +437,7 @@ const ModalQuickview = () => {
                                 {(showGenericVariantSelector || hasSizeSelector || isClothing) && (
                                     <div className="choose-size mt-5">
                                         <div className="heading flex items-center justify-between">
-                                            <div className="text-title">{selectorLabel}: <span className="text-title size">{showGenericVariantSelector ? (getProductVariantLabel(activeVariant) || activeVariant?.name || '') : activeSize}</span></div>
+                                            <div className="text-title">{selectorLabel}: <span className="text-title size">{showGenericVariantSelector ? (activeVariant ? (getProductVariantLabel(activeVariant) || activeVariant.name || '') : '') : activeSize}</span></div>
                                             {isClothing && hasSizeSelector && (
                                                 <>
                                                     <div
@@ -457,7 +457,7 @@ const ModalQuickview = () => {
                                                     : familySizeValues.map((label) => ({ id: label, label }))
                                                 ).map((option) => {
                                                     const isActive = showGenericVariantSelector
-                                                        ? (getProductVariantLabel(activeVariant) || activeVariant?.name || '') === option.label
+                                                        ? (activeVariant ? (getProductVariantLabel(activeVariant) || activeVariant.name || '') : '') === option.label
                                                         : activeSize === option.label
                                                     return (
                                                         <button
