@@ -177,7 +177,10 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
     label: 'Salud',
     alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
+    filter: {
+      categories: ['salud', 'cuidado', 'cuidados', 'higiene', 'medicina', 'medicinas', 'farmacia'],
+      productTypes: ['cuidado'],
+    },
   },
   accesorios: {
     id: 'accesorios',
@@ -203,14 +206,20 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
     label: 'Salud',
     alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
+    filter: {
+      categories: ['salud', 'cuidado', 'cuidados', 'higiene', 'medicina', 'medicinas', 'farmacia'],
+      productTypes: ['cuidado'],
+    },
   },
   salud: {
     id: 'salud',
     label: 'Salud',
     alt: 'Productos de salud para mascotas en Ecuador',
     route: '/shop/breadcrumb1?category=salud',
-    filter: { categories: ['salud', 'cuidado', 'higiene', 'medicina', 'medicinas', 'farmacia'] },
+    filter: {
+      categories: ['salud', 'cuidado', 'cuidados', 'higiene', 'medicina', 'medicinas', 'farmacia'],
+      productTypes: ['cuidado'],
+    },
     showInFooter: true,
     showInShopBrowse: true,
   },

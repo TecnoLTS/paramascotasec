@@ -44,11 +44,10 @@ export default async function BreadCrumb1({ searchParams }: Props) {
     const query = typeof resolvedSearchParams?.query === 'string' ? resolvedSearchParams.query : null
 
     let products: ProductType[] = []
-    let error: string | null = null
     try {
         products = await fetchProducts()
-    } catch (e: any) {
-        error = e.message || 'Error al cargar productos'
+    } catch (error) {
+        console.error('No se pudieron cargar productos en BreadCrumb1:', error)
     }
 
     return (
@@ -56,9 +55,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            {error ? (
-                <div className="container py-10 text-center text-red-600">{error}</div>
-            ) : !products.length ? (
+            {!products.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (
                 <ShopBreadCrumb1 data={products} productPerPage={9} dataType={type} gender={gender} category={category} searchQuery={query} />

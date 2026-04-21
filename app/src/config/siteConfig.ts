@@ -3,6 +3,8 @@ import {
   PET_CATEGORY_ROUTES,
   PET_FOOTER_CATEGORY_IDS,
   PET_HOME_CATEGORY_CARDS,
+  getCategoryLabel,
+  getCategoryUrl,
   type PetCategoryCard,
   type PetCategoryFilter,
 } from '@/data/petCategoryCards'
@@ -74,6 +76,7 @@ export type SiteConfig = {
 }
 
 export const defaultSiteId: SiteId = 'paramascotasec'
+const SHOP_DEPARTMENT_CATEGORY_IDS = ['ropa', 'alimento', 'salud', 'accesorios'] as const
 
 // Punto principal para editar datos globales del sitio.
 // Si quieres tocar logo, textos, menu, contacto o enlaces, empieza aqui.
@@ -140,12 +143,10 @@ export const siteConfig: SiteConfig = {
       subtitle: ' ',
       image: '/images/collection/15.jpg',
     },
-    departmentLinks: [
-      { label: 'Ropa para mascotas', href: '/shop/breadcrumb1?category=ropa' },
-      { label: 'Alimento para mascotas', href: '/shop/breadcrumb1?category=alimento' },
-      { label: 'Salud', href: '/shop/breadcrumb1?category=salud' },
-      { label: 'Accesorios', href: '/shop/breadcrumb1?category=accesorios' },
-    ],
+    departmentLinks: SHOP_DEPARTMENT_CATEGORY_IDS.map((categoryId) => ({
+      label: getCategoryLabel(categoryId),
+      href: getCategoryUrl(categoryId),
+    })),
   },
   footerCategoryLinks: PET_FOOTER_CATEGORY_IDS,
 }
