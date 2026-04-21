@@ -32,9 +32,11 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const [activePrimaryFilter, setActivePrimaryFilter] = useState<CatalogPrimaryFilterId>('todas')
     const [activeSecondaryFilter, setActiveSecondaryFilter] = useState<string>(allSecondaryId)
     const [searchQuery, setSearchQuery] = useState<string>('')
-    const [showAllSecondaryFilters, setShowAllSecondaryFilters] = useState<boolean>(false)
 
     const productsRef = useRef<HTMLDivElement | null>(null)
+    const searchCardRef = useRef<HTMLDivElement | null>(null)
+    const secondaryFiltersRef = useRef<HTMLDivElement | null>(null)
+    const productGridRef = useRef<HTMLDivElement | null>(null)
     const deferredSearchQuery = useDeferredValue(searchQuery)
 
     const productSearchIndex = useMemo(() => buildProductSearchIndex(data), [data])
@@ -81,26 +83,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         return [getCatalogAllSecondaryOption(primaryScopedProducts.length), ...secondaryConfig.options]
     }, [primaryScopedProducts.length, secondaryConfig])
 
-    const visibleSecondaryOptions = useMemo(() => {
-        if (!secondaryConfig) return []
-
-        if (showAllSecondaryFilters || secondaryOptions.length <= secondaryConfig.previewCount + 1) {
-            return secondaryOptions
-        }
-
-        const preferredIds = new Set<string>([
-            allSecondaryId,
-            activeSecondaryFilter,
-            ...secondaryConfig.options.slice(0, secondaryConfig.previewCount).map((option) => option.id),
-        ])
-
-        return secondaryOptions.filter((option) => preferredIds.has(option.id))
-    }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions, showAllSecondaryFilters])
-
-    const visibleSecondaryCount = useMemo(
-        () => visibleSecondaryOptions.filter((option) => option.id !== allSecondaryId).length,
-        [allSecondaryId, visibleSecondaryOptions]
-    )
+    const visibleSecondaryOptions = useMemo(() => secondaryOptions, [secondaryOptions])
 
     const filteredData = useMemo(
         () => primaryScopedProducts.filter((product) => matchesCatalogSecondaryFilter(product, activePrimaryFilter, activeSecondaryFilter)),
@@ -113,7 +96,6 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
 
     useEffect(() => {
         if (!secondaryConfig) {
-            setShowAllSecondaryFilters(false)
             if (activeSecondaryFilter !== allSecondaryId) {
                 setActiveSecondaryFilter(allSecondaryId)
             }
@@ -123,11 +105,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         if (!secondaryOptions.some((option) => option.id === activeSecondaryFilter)) {
             setActiveSecondaryFilter(allSecondaryId)
         }
-
-        if (secondaryOptions.length <= secondaryConfig.previewCount + 1 && showAllSecondaryFilters) {
-            setShowAllSecondaryFilters(false)
-        }
-    }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions, showAllSecondaryFilters])
+    }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions])
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize))
 
@@ -136,27 +114,38 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
         return filteredData.slice(start, start + pageSize)
     }, [filteredData, page, pageSize])
 
-    const scrollToProducts = () => {
+    const scrollToTarget = (target: HTMLElement | null, extraOffset = 30) => {
         setTimeout(() => {
-            if (!productsRef.current) return;
+            if (!target) return;
 
-            const rect = productsRef.current.getBoundingClientRect();
+            const rect = target.getBoundingClientRect();
             const scrollTop = rect.top + window.scrollY;
 
             // mide el header sticky
             const headerHeight = document.querySelector('.header')?.clientHeight ?? 120;
 
             window.scrollTo({
-                top: scrollTop - headerHeight - 30, // extra margen
+                top: scrollTop - headerHeight - extraOffset,
                 behavior: 'smooth'
             });
         }, 50);
     };
 
+    const scrollToProducts = () => {
+        scrollToTarget(searchCardRef.current ?? productsRef.current, 16)
+    }
+
+    const scrollToSecondaryFilters = () => {
+        scrollToTarget(secondaryFiltersRef.current ?? productsRef.current, 12)
+    }
+
+    const scrollToProductGrid = () => {
+        scrollToTarget(productGridRef.current ?? productsRef.current, 20)
+    }
+
     const handlePrimaryFilterChange = (filterId: CatalogPrimaryFilterId) => {
         setActivePrimaryFilter(filterId)
         setActiveSecondaryFilter(allSecondaryId)
-        setShowAllSecondaryFilters(false)
         setPage(1)
         scrollToProducts()
     }
@@ -164,14 +153,14 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
     const handleSecondaryFilterChange = (filterId: string) => {
         setActiveSecondaryFilter(filterId)
         setPage(1)
-        scrollToProducts()
+        scrollToSecondaryFilters()
     }
 
     const handlePageChange = (nextPage: number) => {
         const sanitized = Math.min(Math.max(nextPage, 1), totalPages)
         if (sanitized === page) return
         setPage(sanitized)
-        scrollToProducts()
+        scrollToProductGrid()
     }
 
     return (
@@ -183,7 +172,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                 </div>
             </div>
 
-            <div className="menu-tab md:mt-8 mt-6">
+            <div ref={searchCardRef} className="menu-tab md:mt-8 mt-6">
                 <div className="rounded-[32px] border border-line bg-white px-4 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)] sm:px-6 sm:py-6 lg:px-7">
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <div className="relative flex-1">
@@ -216,14 +205,6 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                             <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
                                 {filteredData.length} producto{filteredData.length === 1 ? '' : 's'}
                             </div>
-                            {secondaryConfig && secondaryConfig.options.length > secondaryConfig.previewCount && !effectiveSearchQuery && (
-                                <button
-                                    className="inline-flex items-center rounded-full border border-line bg-surface px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-black duration-300 hover:border-[var(--blue)] hover:bg-white hover:text-[var(--blue)]"
-                                    onClick={() => setShowAllSecondaryFilters((current) => !current)}
-                                >
-                                    {showAllSecondaryFilters ? 'Mostrar menos' : `ver todas las ${secondaryConfig.label.toLowerCase()} (${secondaryConfig.options.length})`}
-                                </button>
-                            )}
                         </div>
                     </div>
 
@@ -256,20 +237,11 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                     </div>
 
                     {secondaryConfig && (
-                        <div className="mt-5">
+                        <div ref={secondaryFiltersRef} className="mt-5">
                             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
                                     {secondaryConfig.label}
                                 </div>
-                                {secondaryConfig.options.length > secondaryConfig.previewCount && !effectiveSearchQuery && (
-                                    <button
-                                        className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--blue)] duration-300 hover:text-black"
-                                        onClick={() => setShowAllSecondaryFilters((current) => !current)}
-                                        type="button"
-                                    >
-                                        {showAllSecondaryFilters ? 'Mostrar menos' : `Ver todas (${secondaryConfig.options.length})`}
-                                    </button>
-                                )}
                             </div>
 
                             <div className="flex flex-wrap justify-center gap-2.5 lg:justify-start">
@@ -317,23 +289,11 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                                 Limpiar búsqueda
                             </button>
                         </div>
-                    ) : secondaryConfig && secondaryConfig.options.length > secondaryConfig.previewCount && !showAllSecondaryFilters && (
-                        <div className="mt-4 flex flex-col gap-2 rounded-[20px] bg-surface px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
-                            <div className="caption1 text-secondary">
-                                Mostrando {visibleSecondaryCount} de {secondaryConfig.options.length} opciones en {secondaryConfig.label.toLowerCase()}.
-                            </div>
-                            <button
-                                className="text-button font-semibold text-[var(--blue)] duration-300 hover:text-black"
-                                onClick={() => setShowAllSecondaryFilters(true)}
-                            >
-                                Ver todas las opciones
-                            </button>
-                        </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
 
-            <div className="list-product hide-product-sold grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
+            <div ref={productGridRef} className="list-product hide-product-sold grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px] md:mt-10 mt-6">
                 {paginatedProducts.map((product) => (
                     <Product data={product} type='grid' key={product.id} style='style-1' />
                 ))}
