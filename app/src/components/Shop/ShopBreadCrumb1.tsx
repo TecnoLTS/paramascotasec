@@ -564,6 +564,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                             onChange={(event) => setSearchInput(event.target.value)}
                                             placeholder="Buscar por marca, producto, categoría o SKU"
                                             spellCheck={false}
+                                            suppressHydrationWarning
                                             type="search"
                                             value={searchInput}
                                         />
@@ -632,6 +633,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                                             className='caption1 py-2 pl-3 md:pr-20 pr-10 rounded-lg border border-line'
                                             onChange={(e) => { handleSortChange(e.target.value) }}
                                             defaultValue={''}
+                                            suppressHydrationWarning
                                         >
                                             <option value="" disabled>Ordenar por</option>
                                             <option value="soldQuantityHighToLow">Más vendidos</option>

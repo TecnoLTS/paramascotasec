@@ -183,6 +183,7 @@ const AllProducts: React.FC<Props> = ({ data, pageSize = 15 }) => {
                                 onChange={(event) => setSearchQuery(event.target.value)}
                                 placeholder="Buscar en el catálogo"
                                 spellCheck={false}
+                                suppressHydrationWarning
                                 type="search"
                                 value={searchQuery}
                             />

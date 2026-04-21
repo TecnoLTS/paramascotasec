@@ -102,8 +102,8 @@ const Footer = () => {
                                 <div className="text-button-uppercase pb-4 text-black font-bold">Boletín</div>
                                 <div className="caption1 mb-4">Suscríbete y obtén un 10% de descuento en tu primera compra</div>
                                 <div className="input-block w-full h-[52px]">
-                                    <form className='w-full h-full relative' action="post">
-                                        <input type="email" placeholder='Ingresa tu correo' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line focus:outline-none focus:border-green-500' required />
+                                    <form className='w-full h-full relative' action="post" suppressHydrationWarning>
+                                        <input type="email" placeholder='Ingresa tu correo' className='caption1 w-full h-full pl-4 pr-14 rounded-xl border border-line focus:outline-none focus:border-green-500' required suppressHydrationWarning />
                                         <button className='w-[44px] h-[44px] bg-[#1F2937] hover:bg-green-600 transition-colors flex items-center justify-center rounded-xl absolute top-1 right-1'>
                                             <Icon.ArrowRight size={24} color='#fff' />
                                         </button>

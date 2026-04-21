@@ -451,6 +451,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [] }) => {
                                         type="text"
                                         className="search-input h-full w-full border-none bg-transparent px-6 text-[16px] text-black outline-none placeholder:text-[rgba(15,23,42,0.48)]"
                                         placeholder="Buscar por marca, producto, categoría o SKU"
+                                        suppressHydrationWarning
                                         value={searchKeyword}
                                         onFocus={() => {
                                             if (searchProducts.length > 0) {

@@ -71,7 +71,7 @@ export default async function RootLayout({
     limit: 4,
   }).catch(() => [])
   return (
-    <html lang="es" data-scroll-behavior="smooth">
+    <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={instrument.className}>
         <GlobalProvider>
           <div id="app-root">
