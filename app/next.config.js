@@ -11,6 +11,7 @@ const allowedDevOrigins = [
 
 const nextConfig = {
     reactStrictMode: true,
+    poweredByHeader: false,
     allowedDevOrigins,
     images: {
         minimumCacheTTL: 0,
