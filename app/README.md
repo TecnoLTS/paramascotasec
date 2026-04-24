@@ -24,14 +24,14 @@ npm run dev
 Desarrollo:
 
 ```bash
-cd /home/admincenter/contenedores/paramascostas-DB
+cd /home/admincenter/contenedores/paramascotas-DB
 ./scripts/deploy-development.sh
 
 cd /home/admincenter/contenedores/paramascotasec
 ./scripts/deploy-development.sh
 ```
 
-El frontend en Docker depende de que `paramascotasec-backend` y la base `paramascostas-DB` esten accesibles en la red `edge`.
+El frontend en Docker depende de que `paramascotasec-backend` y la base `paramascotas-DB` esten accesibles en la red `edge`.
 
 Produccion:
 
