@@ -118,7 +118,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
                 ref={mobileTrackRef}
                 onMouseDown={startMouseDrag}
                 onMouseLeave={stopMouseDrag}
-                className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth touch-pan-x overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
               >
                 {resolvedCategories.map((category, index) =>
@@ -131,7 +131,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
               </div>
             </div>
           </div>
-          <div className="hidden md:grid md:grid-cols-5 md:gap-4">
+          <div className="hidden md:mx-auto md:grid md:w-full md:max-w-[1110px] md:grid-cols-5 md:gap-4 lg:max-w-[1160px] lg:gap-5">
             {resolvedCategories.map((category, index) =>
               renderCategoryCard(category, index, 'w-full')
             )}

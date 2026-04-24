@@ -301,9 +301,9 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
         banner: { title: string; subtitle: string; image: string }
     ) =>
     (
-        <div className="mega-menu absolute top-[44px] left-0 bg-white w-screen">
+        <div className="mega-menu absolute top-full left-0 bg-white w-screen">
             <div className="container">
-                <div className="flex justify-between py-8 gap-8">
+                <div className="flex justify-between pt-4 pb-8 gap-8">
                     <div className="nav-link basis-3/4 grid grid-cols-1 md:grid-cols-3 gap-8">
                         {sections.map((section) => (
                             <div className="nav-item" key={section.title}>

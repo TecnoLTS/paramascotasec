@@ -142,45 +142,42 @@ input[type="file"] {
   background: linear-gradient(238deg, #FAF8F1 0%, #F6F3EF 99.66%);
 }
 
-/* Alturas del slider por rango: cambia solo al cruzar cada breakpoint */
-.slider-height {
-  height: 180px;
+/* Marco real del hero principal de SliderPet */
+/* < 480px -> slade1/2/3-mobile-xs.jpg -> sugerida: 960x480 */
+.pet-hero-frame {
+  aspect-ratio: 960 / 480;
 }
 
-.pet-hero-height {
-  height: clamp(320px, 37vw, 820px);
+@media (min-width: 480px) { /* xs+ -> slade1/2/3-mobile.jpg -> sugerida: 1200x600 */
+  .pet-hero-frame { aspect-ratio: 1200 / 600; }
 }
 
-@media (min-width: 480px) { /* xs+ */
-  .slider-height { height: 210px; }
+@media (min-width: 640px) { /* sm -> slade1/2/3-mobile-wide.jpg -> sugerida: 1440x600 */
+  .pet-hero-frame { aspect-ratio: 1440 / 550; }
 }
 
-@media (min-width: 640px) { /* sm */
-  .slider-height { height: 250px; }
+@media (min-width: 768px) { /* md -> slade1/2/3-tablet.jpg -> sugerida: 1920x800 */
+  .pet-hero-frame { aspect-ratio: 1920 / 800; }
 }
 
-@media (min-width: 768px) { /* md */
-  .slider-height { height: 320px; }
+@media (min-width: 1024px) { /* lg -> slade1/2/3-laptop.jpg -> sugerida: 2560x533 */
+  .pet-hero-frame { aspect-ratio: 2560 / 533; }
 }
 
-@media (min-width: 1024px) { /* lg */
-  .slider-height { height: 460px; }
+@media (min-width: 1280px) { /* xl -> slade1/2/3-desktop.jpg -> sugerida: 2560x500 */
+  .pet-hero-frame { aspect-ratio: 2560 / 500; }
 }
 
-@media (min-width: 1280px) { /* xl */
-  .slider-height { height: 540px; }
+@media (min-width: 1920px) { /* fhd -> slade1/2/3-fhd.jpg -> sugerida: 3840x1000 */
+  .pet-hero-frame { aspect-ratio: 3840 / 720; }
 }
 
-@media (min-width: 1920px) { /* 1080p/2K compacto */
-  .slider-height { height: 620px; }
+@media (min-width: 2560px) { /* qhd -> slade1/2/3-qhd.jpg -> sugerida: 5120x1760 */
+  .pet-hero-frame { aspect-ratio: 5120 / 1300; }
 }
 
-@media (min-width: 2560px) { /* 2K */
-  .slider-height { height: 700px; }
-}
-
-@media (min-width: 3840px) { /* 4K */
-  .slider-height { height: 840px; }
+@media (min-width: 3840px) { /* uhd -> slade1/2/3-uhd.jpg -> sugerida: 6400x2200 */
+  .pet-hero-frame { aspect-ratio: 6400 / 2200; }
 }
 
 .box-shadow-xs {
@@ -219,10 +216,6 @@ input[type="file"] {
 
 /* Cuando la altura del viewport es baja, reduce texto para que no invada la imagen */
 @media (max-height: 520px) {
-  .pet-hero-height {
-    height: clamp(260px, 70svh, 420px);
-  }
-
   .slider-text-display {
     font-size: clamp(22px, 4vh, 40px);
     line-height: clamp(28px, 4.6vh, 48px);
@@ -376,10 +369,6 @@ input[type="file"] {
     padding-left: 18px;
   }
 
-  .pet-hero-height {
-    height: clamp(300px, 33vw, 620px);
-  }
-
   .text-display {
     font-size: 66px;
     line-height: 74px;
@@ -486,10 +475,6 @@ input[type="file"] {
     max-width: 1060px !important;
     padding-right: 18px;
     padding-left: 18px;
-  }
-
-  .pet-hero-height {
-    height: clamp(280px, 31vw, 500px);
   }
 
   .text-sub-display {
@@ -614,10 +599,6 @@ input[type="file"] {
   .header-menu .list-action svg {
     width: 22px !important;
     height: 22px !important;
-  }
-
-  .pet-hero-height {
-    height: clamp(230px, 26vw, 360px);
   }
 
   .slider-text-display {
@@ -757,10 +738,6 @@ input[type="file"] {
     padding-left: 16px;
   }
 
-  .pet-hero-height {
-    height: clamp(250px, 41vw, 420px);
-  }
-
   .text-sub-display {
     font-size: 14px;
     line-height: 20px;
@@ -812,10 +789,6 @@ input[type="file"] {
   .container {
     padding-right: 14px;
     padding-left: 14px;
-  }
-
-  .pet-hero-height {
-    height: clamp(220px, 54vw, 320px);
   }
 
   html,
@@ -905,10 +878,6 @@ input[type="file"] {
   .container {
     padding-right: 12px;
     padding-left: 12px;
-  }
-
-  .pet-hero-height {
-    height: clamp(205px, 58vw, 280px);
   }
 
   .slider-text-display {

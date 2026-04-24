@@ -89,7 +89,7 @@ const HeroPicture = ({
   const fallbackSrc = fallbackCandidates[Math.min(fallbackIndex, fallbackCandidates.length - 1)]
 
   return (
-    <picture>
+    <picture className="block h-full w-full">
       {sourceOrder.map(({ media, suffix }) => (
         <source
           key={`${slide}-${suffix}`}
@@ -106,7 +106,7 @@ const HeroPicture = ({
         onError={() => {
           setFallbackIndex((prev) => (prev >= fallbackCandidates.length - 1 ? prev : prev + 1))
         }}
-        className="block h-auto w-full"
+        className="block h-full w-full object-cover object-center"
       />
     </picture>
   )
@@ -120,7 +120,7 @@ const SliderSlideContent = ({
   priority?: boolean
 }) => {
   return (
-    <div className="slider-item relative w-full overflow-hidden">
+    <div className="slider-item relative h-full w-full overflow-hidden bg-[#46bcd3]">
       <HeroPicture
         alt={`Slide principal ${slide.id} de ParaMascotasEC`}
         slide={slide.id}
@@ -205,7 +205,7 @@ const SliderPet = () => {
 
   return (
     <section
-      className="slider-block style-one mt-2 w-full overflow-hidden md:mt-3"
+      className="slider-block style-one pet-hero-frame mt-2 w-full overflow-hidden md:mt-3"
       aria-roledescription="carousel"
       aria-label="Promociones principales"
       onMouseEnter={() => setIsPaused(true)}
@@ -213,21 +213,21 @@ const SliderPet = () => {
       onFocusCapture={() => setIsPaused(true)}
       onBlurCapture={() => setIsPaused(false)}
     >
-      <div className="slider-main relative w-full">
+      <div className="slider-main relative h-full w-full">
         <div
-          className="overflow-hidden"
+          className="h-full overflow-hidden"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           <div
-            className="flex transition-transform duration-500 ease-out will-change-transform touch-pan-y"
+            className="flex h-full transition-transform duration-500 ease-out will-change-transform touch-pan-y"
             style={{ transform: `translate3d(-${selectedIndex * 100}%, 0, 0)` }}
           >
             {slides.map((slide, index) => (
               <div
                 key={slide.id}
-                className="relative min-w-0 flex-[0_0_100%]"
+                className="relative min-w-0 h-full flex-[0_0_100%]"
                 aria-hidden={selectedIndex !== index}
               >
                 <SliderSlideContent slide={slide} priority={index === 0} />
