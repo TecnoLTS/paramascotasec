@@ -5,6 +5,7 @@ import MenuOne from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumb1 from '@/components/Shop/ShopBreadCrumb1'
 import Footer from '@/components/Footer/Footer'
 import { fetchProducts } from '@/lib/products'
+import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 import { ProductType } from '@/type/ProductType'
 import { buildCatalogCategoryCards } from '@/lib/catalog'
 
@@ -46,7 +47,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
 
     let products: ProductType[] = []
     try {
-        products = await fetchProducts()
+        products = orderProductsFoodFirst(await fetchProducts())
     } catch (error) {
         console.error('No se pudieron cargar productos en BreadCrumb1:', error)
     }

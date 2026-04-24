@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 
 type SliderSuffix =
@@ -18,7 +19,10 @@ type SlideId = 1 | 2 | 3
 
 type SlideContent = {
   id: SlideId
-  text: string
+  title: string
+  subtitle: string
+  ctaLabel: string
+  ctaHref: string
 }
 
 const AUTOPLAY_DELAY_MS = 7000
@@ -26,15 +30,27 @@ const AUTOPLAY_DELAY_MS = 7000
 const slides: SlideContent[] = [
   {
     id: 1,
-    text: 'Cuidado que enamora',
+    title: 'Hazlo feliz todos los días',
+    subtitle:
+      'Porque no es solo tu mascota, es parte de tu familia. Dale todo lo que necesita para una vida llena de amor y bienestar.',
+    ctaLabel: 'Descubrir ahora',
+    ctaHref: '/shop/breadcrumb1',
   },
   {
     id: 2,
-    text: 'Bienestar que se siente',
+    title: '¡Un hincha más en casa!',
+    subtitle:
+      'Comparte la pasión con tu peludito y celebren juntos cada gol con la camiseta de la Tri.',
+    ctaLabel: 'Consíguela aquí',
+    ctaHref: '/shop/breadcrumb1?category=ropa&query=camiseta',
   },
   {
     id: 3,
-    text: 'Mucho más que una tienda',
+    title: 'Todo lo que ama, en un solo lugar',
+    subtitle:
+      'Pequeños detalles que lo hacen feliz, con la calidad y cuidado que se merece.',
+    ctaLabel: 'Explorar tienda',
+    ctaHref: '/shop/breadcrumb1',
   },
 ]
 
@@ -126,12 +142,12 @@ const SliderSlideContent = ({
         slide={slide.id}
         priority={priority}
       />
-      <div className="container absolute inset-0 z-[1] flex h-full w-full items-center">
-        <div className="w-full max-w-[760px] px-4 text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.35)] sm:w-[58%]">
-          <h1 className="text-display slider-text-display normal-case">
-            {slide.text}
-          </h1>
-        </div>
+      <div className={`pet-hero-copy pet-hero-copy--slide-${slide.id}`}>
+        <h1 className="pet-hero-title">{slide.title}</h1>
+        <p className="pet-hero-subtitle">{slide.subtitle}</p>
+        <Link className="pet-hero-cta" href={slide.ctaHref}>
+          {slide.ctaLabel}
+        </Link>
       </div>
     </div>
   )

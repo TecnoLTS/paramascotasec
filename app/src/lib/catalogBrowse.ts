@@ -4,8 +4,8 @@ import { normalizeProductSearch } from '@/lib/productSearch'
 export const CATALOG_PRIMARY_FILTER_IDS = [
   'todas',
   'ofertas',
-  'ropa',
   'alimento',
+  'ropa',
   'salud',
   'accesorios',
 ] as const

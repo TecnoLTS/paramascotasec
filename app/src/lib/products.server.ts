@@ -1,6 +1,7 @@
 import { unstable_cache } from 'next/cache'
 import { fetchProducts } from '@/lib/products'
 import { getProductPageSettings } from '@/lib/api/settings'
+import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 import { ProductType } from '@/type/ProductType'
 
 export type ProductsLoadResult = {
@@ -41,7 +42,7 @@ export const loadProducts = async (): Promise<ProductsLoadResult> => {
       getCachedProducts(),
       getCachedProductPageSettings(),
     ])
-    const withSettings = products.map((product) => ({ ...product, pageSettings: settingsResult }))
+    const withSettings = orderProductsFoodFirst(products).map((product) => ({ ...product, pageSettings: settingsResult }))
     return { products: withSettings, error: null, pageSettings: settingsResult }
   } catch (err: any) {
     return {

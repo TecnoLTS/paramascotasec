@@ -14,10 +14,11 @@ import Brand from '@/components/Pet/Brand'
 import Footer from '@/components/Footer/Footer'
 import ModalNewsletter from '@/components/Modal/ModalNewsletter'
 import { fetchProducts } from '@/lib/products'
+import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 export const revalidate = 60
 
 export default async function HomePet() {
-    const products = await fetchProducts()
+    const products = orderProductsFoodFirst(await fetchProducts())
 
     return (
         <>

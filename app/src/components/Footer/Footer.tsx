@@ -42,7 +42,7 @@ const Footer = ({ categoryIds }: FooterProps) => {
                     <div className="content-footer grid grid-cols-1 items-start gap-x-10 gap-y-12 md:grid-cols-2 xl:grid-cols-4">
                         <div className="item min-w-0">
                             <div className="pb-5 text-[15px] font-bold uppercase tracking-[0.06em] text-heading">Contacto</div>
-                            <div className='grid grid-cols-[auto_1fr] items-start gap-x-4 gap-y-3 text-[17px] leading-[1.45] max-sm:text-base'>
+                            <div className='grid grid-cols-[auto_1fr] items-start gap-x-4 gap-y-3 text-[14px] leading-[1.45]'>
                                 <div className="flex h-[28px] w-[28px] items-center justify-center text-secondary" aria-hidden="true">
                                     <span className="text-[18px] leading-none">@</span>
                                 </div>
@@ -95,7 +95,7 @@ const Footer = ({ categoryIds }: FooterProps) => {
 
                         <div className="item min-w-0">
                             <div className="pb-5 text-[15px] font-bold uppercase tracking-[0.06em] text-heading">Información</div>
-                            <div className="flex flex-col items-start gap-3 text-[17px] leading-[1.45] max-sm:text-base">
+                            <div className="flex flex-col items-start gap-3 text-[14px] leading-[1.45]">
                                 <Link className='hover:text-green-600 duration-300' href={'/pages/about'}>Conócenos</Link>
                                 <Link className='hover:text-green-600 duration-300' href={'/pages/contact'}>Contáctanos</Link>
                                 <Link className='hover:text-green-600 duration-300' href={'/pages/preguntas-frecuentes'}>Preguntas frecuentes</Link>
@@ -104,7 +104,7 @@ const Footer = ({ categoryIds }: FooterProps) => {
 
                         <div className="item min-w-0">
                             <div className="pb-5 text-[15px] font-bold uppercase tracking-[0.06em] text-heading">Categorías</div>
-                            <div className="flex flex-col items-start gap-3 text-[17px] leading-[1.45] max-sm:text-base">
+                            <div className="flex flex-col items-start gap-3 text-[14px] leading-[1.45]">
                                 {footerCategories.map((categoryId) => (
                                     <Link
                                         key={categoryId}
@@ -119,7 +119,7 @@ const Footer = ({ categoryIds }: FooterProps) => {
 
                         <div className="item min-w-0">
                             <div className="pb-5 text-[15px] font-bold uppercase tracking-[0.06em] text-heading">Atención al cliente</div>
-                            <div className="flex flex-col items-start gap-3 text-[17px] leading-[1.45] max-sm:text-base">
+                            <div className="flex flex-col items-start gap-3 text-[14px] leading-[1.45]">
                                 <Link className='hover:text-green-600 duration-300' href={'/my-account'}>Mi cuenta</Link>
                                 <Link 
                                     className='hover:text-green-600 duration-300' 

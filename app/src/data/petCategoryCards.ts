@@ -337,9 +337,7 @@ export const PET_FOOTER_CATEGORY_IDS = Object.values(PET_CATEGORY_DEFINITIONS)
   .filter((category) => category.showInFooter)
   .map((category) => category.id)
 
-export const PET_SHOP_BROWSE_CATEGORY_IDS = Object.values(PET_CATEGORY_DEFINITIONS)
-  .filter((category) => category.showInShopBrowse)
-  .map((category) => category.id)
+export const PET_SHOP_BROWSE_CATEGORY_IDS: string[] = ['todos', 'alimento', 'ropa', 'accesorios', 'salud']
 
 export const PET_CATEGORY_FILTERS = Object.values(PET_CATEGORY_DEFINITIONS).reduce<Record<string, PetCategoryFilter>>(
   (acc, category) => {

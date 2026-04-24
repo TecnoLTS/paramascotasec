@@ -3,6 +3,7 @@ import { fetchProducts } from '@/lib/products'
 import { Metadata } from 'next'
 import { getSiteConfig } from '@/lib/site'
 import ParamascotasecHome from '@/tenants/paramascotasec.com/Home'
+import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 
 export async function generateMetadata(): Promise<Metadata> {
     const site = getSiteConfig()
@@ -19,7 +20,7 @@ export const revalidate = 60
 export default async function HomePet() {
     let products = [] as Awaited<ReturnType<typeof fetchProducts>>
     try {
-        products = await fetchProducts()
+        products = orderProductsFoodFirst(await fetchProducts())
     } catch (error) {
         console.error('No se pudieron cargar productos en HomePet:', error)
     }
