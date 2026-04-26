@@ -104,7 +104,7 @@ const buildStrictReportOnlyCsp = (nonce: string) =>
     "object-src 'none'",
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self' https:",
+    "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: https:",
     "connect-src 'self' https: wss:",
     "font-src 'self' data:",

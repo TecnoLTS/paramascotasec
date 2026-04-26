@@ -32,17 +32,19 @@ const ParamascotasecHome = ({
 
   return (
     <>
-      <div id="header" className="relative w-full style-pet">
+      <header id="header" className="relative w-full style-pet">
         <MenuPet searchProducts={products} availableCategoryIds={availableCategoryIds} />
+      </header>
+      <main id="main-content">
         <SliderPet />
-      </div>
-      <Collection categories={homeCategories} />
-      <AllProducts data={products} />
-      <Benefit props="md:py-10 py-5" />
-      <ChooseUs />
-      <FeatureProduct data={products} start={0} limit={4} />
-      <Collection2 categories={homeFeaturedCategories} />
-      <Brand products={products} />
+        <Collection categories={homeCategories} />
+        <AllProducts data={products} />
+        <Benefit props="md:py-10 py-5" />
+        <ChooseUs />
+        <FeatureProduct data={products} start={0} limit={4} />
+        <Collection2 categories={homeFeaturedCategories} />
+        <Brand products={products} />
+      </main>
       <Footer categoryIds={footerCategoryIds} />
     </>
   )

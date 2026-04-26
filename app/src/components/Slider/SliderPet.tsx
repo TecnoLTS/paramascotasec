@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { getImageProps } from 'next/image'
 import React, { useEffect, useState } from 'react'
+import { versionLocalImagePath } from '@/lib/staticAsset'
 
 type SliderSuffix =
   | 'mobile-xs'
@@ -78,6 +80,18 @@ const sourceOrder: Array<{ media?: string; suffix: SliderSuffix }> = [
   { suffix: 'mobile-xs' },
 ]
 
+const sliderDimensions: Record<SliderSuffix, { width: number; height: number }> = {
+  'mobile-xs': { width: 960, height: 480 },
+  mobile: { width: 1200, height: 600 },
+  'mobile-wide': { width: 1440, height: 550 },
+  tablet: { width: 1920, height: 800 },
+  laptop: { width: 2560, height: 533 },
+  desktop: { width: 2560, height: 500 },
+  fhd: { width: 3840, height: 720 },
+  qhd: { width: 5120, height: 1300 },
+  uhd: { width: 6400, height: 2200 },
+}
+
 const buildCandidateSources = (slide: SlideId, suffix: SliderSuffix) =>
   Array.from(
     new Set([
@@ -85,6 +99,31 @@ const buildCandidateSources = (slide: SlideId, suffix: SliderSuffix) =>
       ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.jpg`),
     ]),
   )
+
+const getHeroImageProps = ({
+  alt,
+  priority,
+  slide,
+  suffix,
+}: {
+  alt: string
+  priority?: boolean
+  slide: SlideId
+  suffix: SliderSuffix
+}) => {
+  const dimensions = sliderDimensions[suffix]
+  return getImageProps({
+    alt,
+    decoding: 'async',
+    fetchPriority: priority ? 'high' : 'auto',
+    height: dimensions.height,
+    loading: priority ? 'eager' : 'lazy',
+    quality: priority ? 82 : 75,
+    sizes: '100vw',
+    src: versionLocalImagePath(`/images/slider/slade${slide}-${suffix}.jpg`),
+    width: dimensions.width,
+  }).props
+}
 
 const HeroPicture = ({
   alt,
@@ -103,25 +142,34 @@ const HeroPicture = ({
   }, [slide])
 
   const fallbackSrc = fallbackCandidates[Math.min(fallbackIndex, fallbackCandidates.length - 1)]
+  const fallbackProps = getHeroImageProps({
+    alt,
+    priority,
+    slide,
+    suffix: 'desktop',
+  })
 
   return (
     <picture className="block h-full w-full">
-      {sourceOrder.map(({ media, suffix }) => (
-        <source
-          key={`${slide}-${suffix}`}
-          media={media}
-          srcSet={`/images/slider/slade${slide}-${suffix}.jpg`}
-        />
-      ))}
+      {sourceOrder.map(({ media, suffix }) => {
+        const sourceProps = getHeroImageProps({ alt, priority, slide, suffix })
+
+        return (
+          <source
+            key={`${slide}-${suffix}`}
+            media={media}
+            sizes={sourceProps.sizes}
+            srcSet={sourceProps.srcSet}
+          />
+        )
+      })}
       <img
-        src={fallbackSrc}
+        {...fallbackProps}
         alt={alt}
-        loading={priority ? 'eager' : 'lazy'}
-        fetchPriority={priority ? 'high' : 'auto'}
-        decoding="async"
         onError={() => {
           setFallbackIndex((prev) => (prev >= fallbackCandidates.length - 1 ? prev : prev + 1))
         }}
+        src={versionLocalImagePath(fallbackSrc)}
         className="block h-full w-full object-cover object-center"
       />
     </picture>
@@ -129,9 +177,11 @@ const HeroPicture = ({
 }
 
 const SliderSlideContent = ({
+  active,
   slide,
   priority,
 }: {
+  active: boolean
   slide: SlideContent
   priority?: boolean
 }) => {
@@ -145,9 +195,15 @@ const SliderSlideContent = ({
       <div className={`pet-hero-copy pet-hero-copy--slide-${slide.id}`}>
         <h1 className="pet-hero-title">{slide.title}</h1>
         <p className="pet-hero-subtitle">{slide.subtitle}</p>
-        <Link className="pet-hero-cta" href={slide.ctaHref}>
-          {slide.ctaLabel}
-        </Link>
+        {active ? (
+          <Link className="pet-hero-cta" href={slide.ctaHref}>
+            {slide.ctaLabel}
+          </Link>
+        ) : (
+          <span className="pet-hero-cta" aria-hidden="true">
+            {slide.ctaLabel}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -245,8 +301,9 @@ const SliderPet = () => {
                 key={slide.id}
                 className="relative min-w-0 h-full flex-[0_0_100%]"
                 aria-hidden={selectedIndex !== index}
+                inert={selectedIndex !== index ? true : undefined}
               >
-                <SliderSlideContent slide={slide} priority={index === 0} />
+                <SliderSlideContent active={selectedIndex === index} slide={slide} priority={index === 0} />
               </div>
             ))}
           </div>
@@ -261,12 +318,16 @@ const SliderPet = () => {
                 aria-label={`Ir al slide ${index + 1}`}
                 aria-pressed={selectedIndex === index}
                 onClick={() => goToSlide(index)}
-                className={`h-3 w-3 rounded-full border transition-all duration-300 ${
+                className="flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]"
+              >
+                <span
+                  className={`block h-3 w-3 rounded-full border transition-all duration-300 ${
                   selectedIndex === index
                     ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_4px_rgba(10,123,143,0.18)]'
                     : 'border-[var(--blue)]/45 bg-white hover:bg-[var(--blue)]/12'
-                }`}
-              />
+                  }`}
+                />
+              </button>
             ))}
           </div>
         </div>

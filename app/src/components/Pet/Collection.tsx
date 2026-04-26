@@ -73,9 +73,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
     event.stopPropagation()
   }
 
-  const renderCategoryCard = (category: PetCategoryCard, index: number, wrapperClassName: string) => {
-    const isPriority = index < 5
-
+  const renderCategoryCard = (category: PetCategoryCard, wrapperClassName: string) => {
     return (
       <button
         key={category.id}
@@ -93,8 +91,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             quality={90}
             sizes="(min-width: 1200px) 202px, (min-width: 992px) calc((100vw - 32px - 64px) / 5), (min-width: 768px) calc((100vw - 32px - 48px) / 5), 132px"
             className="w-full h-full object-cover"
-            priority={isPriority}
-            loading={isPriority ? 'eager' : 'lazy'}
+            loading="lazy"
             draggable={false}
           />
         </div>
@@ -121,10 +118,9 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
                 className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
               >
-                {resolvedCategories.map((category, index) =>
+                {resolvedCategories.map((category) =>
                   renderCategoryCard(
                     category,
-                    index,
                     'min-w-0 flex-none basis-[calc((100%-24px)/3)] snap-start'
                   )
                 )}
@@ -132,8 +128,8 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             </div>
           </div>
           <div className="hidden md:mx-auto md:grid md:w-full md:max-w-[1110px] md:grid-cols-5 md:gap-4 lg:max-w-[1160px] lg:gap-5">
-            {resolvedCategories.map((category, index) =>
-              renderCategoryCard(category, index, 'w-full')
+            {resolvedCategories.map((category) =>
+              renderCategoryCard(category, 'w-full')
             )}
           </div>
         </div>

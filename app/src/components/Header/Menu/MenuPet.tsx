@@ -469,9 +469,14 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
 
                 <div className="container mx-auto h-full">
                     <div className="header-main flex items-center justify-between h-full">
-                        <div className="menu-mobile-icon lg:hidden flex items-center" onClick={handleMenuMobile}>
-                            <i className="icon-category text-2xl"></i>
-                        </div>
+                        <button
+                            type="button"
+                            className="menu-mobile-icon flex h-11 w-11 items-center justify-center border-0 bg-transparent p-0 text-black lg:hidden"
+                            onClick={handleMenuMobile}
+                            aria-label="Abrir menú"
+                        >
+                            <i className="icon-category text-2xl" aria-hidden="true"></i>
+                        </button>
                         <Link href={'/'} className='flex items-center'>
                             <div className="relative h-[55px] w-[126px] md:h-[80px] md:w-[184px]">
                                 <Image
@@ -513,6 +518,8 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
                                         }}
                                     />
                                     <button
+                                        type="button"
+                                        aria-label="Buscar productos"
                                         className="search-button mr-2 flex h-[30px] min-w-[30px] items-center justify-center rounded-full bg-[var(--blue)] px-0 text-white transition-all duration-300 hover:bg-[var(--bluesecondary)]"
                                         onClick={() => {
                                             setIsSearchFocused(false)
@@ -606,7 +613,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
                                     >
                                         {showAuthenticatedMenu ? (
                                             <>
-                                                <Link href={'/my-account'} className="button-main w-full text-center">Panel</Link>
+                                                <Link href={'/my-account'} prefetch={false} className="button-main w-full text-center">Panel</Link>
                                                 <button
                                                     type="button"
                                                     onClick={handleLogout}
@@ -623,7 +630,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
                                                 <div className="text-secondary text-center mt-3 pb-4">¿No tienes una cuenta?
                                                     <Link href={'/register'} className='text-black pl-1 hover:underline'>Regístrate</Link>
                                                 </div>
-                                                <Link href={'/my-account'} className="button-main bg-white text-black border border-black w-full text-center">Panel</Link>
+                                                <Link href={'/my-account'} prefetch={false} className="button-main bg-white text-black border border-black w-full text-center">Panel</Link>
                                                 <div className="bottom mt-4 pt-4 border-t border-line"></div>
                                                 <Link href={'/pages/contact'} className='body1 hover:underline'>Soporte</Link>
                                             </>

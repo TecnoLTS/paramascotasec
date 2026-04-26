@@ -11,7 +11,7 @@ import { getSiteConfig } from '@/lib/site'
 import { versionLocalImagePath } from '@/lib/staticAsset'
 import { fetchSuggestionsData } from '@/lib/server/suggestions'
 
-const instrument = Instrument_Sans({ subsets: ['latin'], preload: false })
+const instrument = Instrument_Sans({ subsets: ['latin'], display: 'swap' })
 const serverTimeLeft: CountdownTimeType = countdownTime();
 
 export async function generateMetadata(): Promise<Metadata> {

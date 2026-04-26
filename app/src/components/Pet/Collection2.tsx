@@ -37,7 +37,6 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
         options?: {
             aspectClass?: string
             imageVariant?: PetCategoryFeaturedImageVariant
-            priority?: boolean
             sizes?: string
             labelWidthClass?: string
             wrapperClass?: string
@@ -58,7 +57,7 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                         width={1000}
                         height={1000}
                         quality={90}
-                        priority={options?.priority}
+                        loading="lazy"
                         sizes={options?.sizes ?? '(min-width: 1280px) 360px, (min-width: 640px) 44vw, 92vw'}
                         className='h-full w-full object-cover'
                     />
@@ -86,7 +85,6 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                         {renderCategoryTile(primary, {
                             aspectClass: 'aspect-[16/10]',
                             imageVariant: 'mobilePrimary',
-                            priority: true,
                             sizes: sizesMobilePrimary,
                             labelWidthClass: 'w-[calc(100%-28px)] max-w-[210px]',
                         })}
@@ -95,7 +93,6 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                         {renderCategoryTile(secondaryTop, {
                             aspectClass: 'aspect-square',
                             imageVariant: 'mobileSecondary',
-                            priority: true,
                             sizes: sizesMobileSecondary,
                             labelWidthClass: 'w-[calc(100%-20px)] max-w-[160px]',
                         })}
@@ -114,7 +111,6 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                         {renderCategoryTile(primary, {
                             aspectClass: 'aspect-[630/620]',
                             imageVariant: 'desktopPrimary',
-                            priority: true,
                             sizes: sizesDesktopPrimary,
                             labelWidthClass: 'lg:w-[220px]',
                         })}
@@ -124,7 +120,6 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                             {renderCategoryTile(secondaryTop, {
                                 aspectClass: 'aspect-[630/295]',
                                 imageVariant: 'desktopSecondary',
-                                priority: true,
                                 sizes: sizesDesktopSecondary,
                                 labelWidthClass: 'lg:w-[220px]',
                             })}

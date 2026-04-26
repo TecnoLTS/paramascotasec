@@ -40,7 +40,7 @@ const ChooseUs = () => {
                             <FeatureIcon weight="duotone" className={`${compact ? 'text-[28px]' : 'text-3xl sm:text-4xl'} ${feature.iconColor}`} />
                         </div>
                         <div className="text-content pt-1 min-w-0">
-                            <h4 className={`mb-2 text-[#1F3B3B] transition-colors group-hover:text-[#1F3B3B] ${compact ? 'text-lg leading-6 font-semibold' : 'text-[22px] leading-[30px] font-semibold'}`}>{feature.title}</h4>
+                            <h3 className={`mb-2 text-[#1F3B3B] transition-colors group-hover:text-[#1F3B3B] ${compact ? 'text-lg leading-6 font-semibold' : 'text-[22px] leading-[30px] font-semibold'}`}>{feature.title}</h3>
                             <p className={`caption1 text-secondary leading-relaxed ${compact ? 'text-[13px]' : ''}`}>{feature.description}</p>
                         </div>
                     </div>
