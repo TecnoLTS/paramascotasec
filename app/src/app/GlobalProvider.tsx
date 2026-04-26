@@ -10,6 +10,7 @@ import { ModalCompareProvider } from '@/context/ModalCompareContext'
 import { ModalSearchProvider } from '@/context/ModalSearchContext'
 import { ModalQuickviewProvider } from '@/context/ModalQuickviewContext'
 import { SiteProvider } from '@/context/SiteContext'
+import WhatsAppFloatingButton from '@/components/WhatsAppFloatingButton'
 
 const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
@@ -23,6 +24,7 @@ const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =
                                     <ModalSearchProvider>
                                         <ModalQuickviewProvider>
                                             {children}
+                                            <WhatsAppFloatingButton />
                                         </ModalQuickviewProvider>
                                     </ModalSearchProvider>
                                 </ModalCompareProvider>

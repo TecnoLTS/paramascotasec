@@ -16,6 +16,10 @@ export type ProductsLoadResult = {
   }
 }
 
+type LoadProductsOptions = {
+  fresh?: boolean
+}
+
 const defaultProductPageSettings = {
   deliveryEstimate: '14 de enero - 18 de enero',
   viewerCount: 38,
@@ -36,10 +40,11 @@ const getCachedProductPageSettings = unstable_cache(
   { revalidate: 300, tags: ['catalog-product-page-settings'] },
 )
 
-export const loadProducts = async (): Promise<ProductsLoadResult> => {
+export const loadProducts = async (options: LoadProductsOptions = {}): Promise<ProductsLoadResult> => {
   try {
+    const useFreshProducts = options.fresh === true
     const [products, settingsResult] = await Promise.all([
-      getCachedProducts(),
+      useFreshProducts ? fetchProducts({ fresh: true }) : getCachedProducts(),
       getCachedProductPageSettings(),
     ])
     const withSettings = orderProductsFoodFirst(products).map((product) => ({ ...product, pageSettings: settingsResult }))

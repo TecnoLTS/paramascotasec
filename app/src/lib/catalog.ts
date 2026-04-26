@@ -29,6 +29,57 @@ const escapeRegExp = (value: string) =>
 const requiresSeparatedVariantSuffix = (label: string) =>
   /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
 
+const buildFlexibleUnitPattern = (unit: string) => {
+  const normalized = unit.toUpperCase()
+
+  switch (normalized) {
+    case 'KG':
+    case 'KGS':
+    case 'K':
+      return '(?:KGS?|KG|K)'
+    case 'GR':
+    case 'G':
+      return '(?:GR|G)'
+    case 'ML':
+      return '(?:MLS?|ML)'
+    case 'TABS':
+    case 'TAB':
+      return 'TABS?'
+    case 'UN':
+    case 'UNI':
+      return '(?:UN|UNI)'
+    default:
+      return escapeRegExp(normalized)
+  }
+}
+
+const buildFlexibleVariantSuffixPattern = (label: string) => {
+  const normalized = label
+    .trim()
+    .toUpperCase()
+    .replace(/,/g, '.')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/(\d)\s+(KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)\b/g, '$1$2')
+    .replace(/\s+/g, ' ')
+
+  const parts = normalized
+    .split(/(\d+(?:\.\d+)?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)\b)/)
+    .filter(Boolean)
+
+  return parts
+    .map((part) => {
+      const measureMatch = part.match(/^(\d+(?:\.\d+)?)(KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)$/)
+      if (measureMatch) {
+        return `${escapeRegExp(measureMatch[1])}\\s*${buildFlexibleUnitPattern(measureMatch[2])}`
+      }
+
+      return escapeRegExp(part)
+        .replace(/\s+/g, '\\s*')
+        .replace(/\\-/g, '\\s*-\\s*')
+    })
+    .join('')
+}
+
 const looksLikeSizeValue = (value?: string | null) =>
   /^(?:XXS|XS|S|M|L|XL|XXL|STANDARD|\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ)|X?\d+)$/i.test((value ?? '').trim())
 
@@ -125,7 +176,7 @@ export const getProductVariantBaseName = (product: ProductType) => {
   let strippedName = normalizedName
 
   candidateLabels.forEach((label) => {
-    const escapedLabel = escapeRegExp(label).replace(/\s+/g, '\\s*')
+    const escapedLabel = buildFlexibleVariantSuffixPattern(label)
     const separator = requiresSeparatedVariantSuffix(label) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
     strippedName = strippedName.replace(new RegExp(`${separator}${escapedLabel}$`, 'i'), '').trim()
   })

@@ -809,6 +809,8 @@ export default function ProductEditorModal({
         return new Set(
             (existingProducts || [])
                 .filter((product) => {
+                    const isArchived = String(product?.attributes?.archived || '').trim().toLowerCase() === 'true'
+                    if (isArchived) return false
                     if (!shouldExcludeCurrent) return true
                     return getAdminProductEntityId(product) !== currentEntityId
                 })

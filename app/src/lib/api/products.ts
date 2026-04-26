@@ -31,17 +31,22 @@ const invalidateClientProductsCache = () => {
   inFlightProductsRequest = null
 }
 
-export const listProducts = async () => {
-  const cached = getCachedClientProducts()
+export const listProducts = async (options?: { cache?: RequestCache }) => {
+  const cacheMode = options?.cache
+  const useClientCache = shouldUseClientProductsCache() && cacheMode !== 'no-store'
+  const cached = useClientCache ? getCachedClientProducts() : null
   if (cached) {
     return cached
   }
 
-  if (shouldUseClientProductsCache() && inFlightProductsRequest) {
+  if (useClientCache && inFlightProductsRequest) {
     return inFlightProductsRequest
   }
 
-  const request = fetchJson<unknown>(apiEndpoints.products)
+  const request = fetchJson<unknown>(
+    apiEndpoints.products,
+    cacheMode ? { cache: cacheMode } : undefined,
+  )
     .then((data) => {
       if (!Array.isArray(data)) {
         if (typeof window === 'undefined') {
@@ -51,14 +56,18 @@ export const listProducts = async () => {
       }
 
       const mappedProducts = mapProductsToDto(data)
-      setCachedClientProducts(mappedProducts)
+      if (useClientCache) {
+        setCachedClientProducts(mappedProducts)
+      }
       return mappedProducts
     })
     .finally(() => {
-      inFlightProductsRequest = null
+      if (useClientCache) {
+        inFlightProductsRequest = null
+      }
     })
 
-  if (shouldUseClientProductsCache()) {
+  if (useClientCache) {
     inFlightProductsRequest = request
   }
 

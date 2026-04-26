@@ -37,31 +37,36 @@ const invalidateGroupedProductsCache = () => {
   inFlightGroupedProductsRequest = null
 }
 
-export const fetchProducts = async () => {
+export const fetchProducts = async (options?: { fresh?: boolean }) => {
   // Evita romper el build cuando no hay base de datos disponible en la etapa de compilación.
   if (isBuild && !process.env.DATABASE_URL) return []
+  const useFreshFetch = options?.fresh === true
 
-  const cachedProducts = getCachedGroupedProducts()
+  const cachedProducts = useFreshFetch ? null : getCachedGroupedProducts()
   if (cachedProducts) {
     return cachedProducts
   }
 
-  if (shouldUseClientGroupedProductsCache() && inFlightGroupedProductsRequest) {
+  if (!useFreshFetch && shouldUseClientGroupedProductsCache() && inFlightGroupedProductsRequest) {
     return inFlightGroupedProductsRequest
   }
 
   try {
-    const request = listProducts()
+    const request = listProducts(useFreshFetch ? { cache: 'no-store' } : undefined)
       .then((products) => {
         const groupedProducts = groupCatalogProducts(products)
-        setCachedGroupedProducts(groupedProducts)
+        if (!useFreshFetch) {
+          setCachedGroupedProducts(groupedProducts)
+        }
         return groupedProducts
       })
       .finally(() => {
-        inFlightGroupedProductsRequest = null
+        if (!useFreshFetch) {
+          inFlightGroupedProductsRequest = null
+        }
       })
 
-    if (shouldUseClientGroupedProductsCache()) {
+    if (!useFreshFetch && shouldUseClientGroupedProductsCache()) {
       inFlightGroupedProductsRequest = request
     }
 

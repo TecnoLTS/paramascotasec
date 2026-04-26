@@ -28,7 +28,7 @@ export async function generateMetadata(
 
     if (!id) return {}
 
-    const { products } = await loadProducts()
+    const { products } = await loadProducts({ fresh: true })
     const product = findCatalogProduct(products, id)
     if (!product) return { title: 'Producto no encontrado' }
 
@@ -60,7 +60,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
     const nonce = requestHeaders.get('x-nonce') || undefined
     const site = getSiteConfig()
     const resolvedSearchParams = await searchParams
-    const { products: productsWithSettings } = await loadProducts()
+    const { products: productsWithSettings } = await loadProducts({ fresh: true })
     const availableCategoryIds = buildCatalogCategoryCards(productsWithSettings).map((category) => category.id)
     const footerCategoryIds = availableCategoryIds.filter((categoryId) => categoryId.toLowerCase() !== 'todos')
     const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (productsWithSettings[0]?.id ?? '')

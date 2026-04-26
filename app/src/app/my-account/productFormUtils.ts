@@ -34,6 +34,57 @@ const escapeRegExp = (value: string) =>
 const requiresSeparatedVariantSuffix = (label: string) =>
     /^(XXS|XS|S|M|L|XL|XXL|STANDARD)$/i.test(label.trim())
 
+const buildFlexibleUnitPattern = (unit: string) => {
+    const normalized = unit.toUpperCase()
+
+    switch (normalized) {
+        case 'KG':
+        case 'KGS':
+        case 'K':
+            return '(?:KGS?|KG|K)'
+        case 'GR':
+        case 'G':
+            return '(?:GR|G)'
+        case 'ML':
+            return '(?:MLS?|ML)'
+        case 'TABS':
+        case 'TAB':
+            return 'TABS?'
+        case 'UN':
+        case 'UNI':
+            return '(?:UN|UNI)'
+        default:
+            return escapeRegExp(normalized)
+    }
+}
+
+const buildFlexibleVariantSuffixPattern = (label: string) => {
+    const normalized = label
+        .trim()
+        .toUpperCase()
+        .replace(/,/g, '.')
+        .replace(/\s*-\s*/g, '-')
+        .replace(/(\d)\s+(KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)\b/g, '$1$2')
+        .replace(/\s+/g, ' ')
+
+    const parts = normalized
+        .split(/(\d+(?:\.\d+)?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)\b)/)
+        .filter(Boolean)
+
+    return parts
+        .map((part) => {
+            const measureMatch = part.match(/^(\d+(?:\.\d+)?)(KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TABS?|DS|UN|UNI|PACK|PZA|PZ)$/)
+            if (measureMatch) {
+                return `${escapeRegExp(measureMatch[1])}\\s*${buildFlexibleUnitPattern(measureMatch[2])}`
+            }
+
+            return escapeRegExp(part)
+                .replace(/\s+/g, '\\s*')
+                .replace(/\\-/g, '\\s*-\\s*')
+        })
+        .join('')
+}
+
 const normalizeVariantComparisonValue = (value: unknown) =>
     normalizeMeasurementLabel(String(value || '')).trim().toLowerCase()
 
@@ -267,7 +318,7 @@ export const resolveProductVariantBaseName = (product: any) => {
     candidates.forEach((candidate) => {
         const separator = requiresSeparatedVariantSuffix(candidate) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
         strippedName = strippedName
-            .replace(new RegExp(`${separator}${escapeRegExp(candidate).replace(/\s+/g, '\\s*')}$`, 'i'), '')
+            .replace(new RegExp(`${separator}${buildFlexibleVariantSuffixPattern(candidate)}$`, 'i'), '')
             .trim()
     })
 
@@ -554,6 +605,27 @@ export const createEmptyPurchaseInvoice = (supplierName = '', purchaseTaxRate = 
     notes: ''
 })
 
+const createPurchaseInvoiceFromSourceProduct = (product: any, purchaseTaxRate = ''): PurchaseInvoiceFormState => {
+    const lastPurchaseInvoice = product?.lastPurchaseInvoice || product?.inventory?.lastPurchaseInvoice || null
+    const invoiceNumber = String(lastPurchaseInvoice?.invoiceNumber || '').trim()
+    const supplierName = String(
+        lastPurchaseInvoice?.supplierName
+        || product?.attributes?.supplier
+        || product?.supplier
+        || ''
+    ).trim()
+    const supplierDocument = String(lastPurchaseInvoice?.supplierDocument || '').trim()
+    const issuedAt = String(lastPurchaseInvoice?.issuedAt || '').trim()
+
+    return {
+        ...createEmptyPurchaseInvoice(supplierName, purchaseTaxRate),
+        invoiceNumber,
+        supplierName,
+        supplierDocument,
+        issuedAt: issuedAt || getTodayDateInputValue(),
+    }
+}
+
 export const createImageEntry = () => ({ url: '', width: '', height: '' })
 
 const requiredImageSizes = {
@@ -668,6 +740,7 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
     const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const sourceVariantLabel = resolveProductVariantLabel(productType, product?.attributes, product)
     const sourceVariantFieldKey = inferDuplicateVariantFieldKey(productType, product?.attributes, product)
+    const purchaseTaxRate = String(duplicatedForm.attributes?.purchaseTaxRate || '').trim()
 
     duplicatedAttributes.sku = ''
     duplicatedAttributes.lotCode = ''
@@ -684,9 +757,6 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
         quantity: '',
         published: false,
         attributes: duplicatedAttributes,
-        purchaseInvoice: createEmptyPurchaseInvoice(
-            String(duplicatedForm.attributes?.supplier || '').trim(),
-            String(duplicatedForm.attributes?.purchaseTaxRate || '').trim()
-        ),
+        purchaseInvoice: createPurchaseInvoiceFromSourceProduct(product, purchaseTaxRate),
     }
 }

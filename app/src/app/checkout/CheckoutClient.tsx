@@ -14,8 +14,10 @@ import { getStoredSessionUser, hasCookieSessionMarker, setCookieSessionMarker, s
 import { clearCheckoutDraft, isCountryEcuador, loadCheckoutDraft, normalizeCountryToEcuador, saveCheckoutDraft } from '@/lib/checkoutDraft'
 import { buildLiveAvailabilityMap, fetchLiveCatalogSnapshot } from '@/lib/liveCatalog'
 import { normalizeSavedAddresses } from '@/app/my-account/customerDataUtils'
+import { getSiteConfig } from '@/lib/site'
 
 const PASSWORD_MIN_LENGTH = 8
+const site = getSiteConfig()
 
 interface AddressData {
     firstName: string;
@@ -1689,12 +1691,44 @@ const Checkout = () => {
                                                 <p className="text-sm text-[#374151] font-medium">Transferencia bancaria</p>
                                             </div>
                                             <p className="text-sm text-[#374151]">
-                                                <strong>Datos bancarios:</strong><br />
-                                                Banco: Banco Ejemplo<br />
-                                                Cuenta: 1234567890<br />
-                                                IBAN: ES91 2100 0418 4502 0005 1332<br />
-                                                Concepto: Pedido #{transferOrderRef}
+                                                <strong>Datos bancarios:</strong>
                                             </p>
+                                            <div className="space-y-3 text-sm text-[#374151]">
+                                                <div>
+                                                    <p className="font-medium text-[#111827]">Banco Pichincha</p>
+                                                    <p>Cuenta de ahorro: 2212851809</p>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-[#111827]">Banco Pacífico</p>
+                                                    <p>Cuenta de ahorro: 1056034091</p>
+                                                </div>
+                                                <div>
+                                                    <p>A nombre de: Glaymel Vasquez</p>
+                                                    <p>Cédula: 1759687682</p>
+                                                </div>
+                                                <div>
+                                                    <p>Concepto: Pedido #{transferOrderRef}</p>
+                                                    <p>
+                                                        Envía el comprobante a{' '}
+                                                        <a
+                                                            href={`mailto:${site.contact.email}`}
+                                                            className="font-medium text-[#2e4d4d] hover:underline"
+                                                        >
+                                                            {site.contact.email}
+                                                        </a>
+                                                        {' '}o al WhatsApp{' '}
+                                                        <a
+                                                            href={`https://wa.me/${site.contact.whatsappNumber}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="font-medium text-[#2e4d4d] hover:underline"
+                                                        >
+                                                            {site.contact.whatsappLabel}
+                                                        </a>
+                                                        .
+                                                    </p>
+                                                </div>
+                                            </div>
                                             <div className="grid sm:grid-cols-2 gap-4">
                                                 <input
                                                     type="text"
