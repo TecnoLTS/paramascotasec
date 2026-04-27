@@ -143,81 +143,81 @@ input[type="file"] {
 }
 
 /* Marco real del hero principal de SliderPet */
-/* < 480px -> slade1/2/3-mobile-xs.jpg -> sugerida: 960x480 */
+/* < 480px -> slade1/2/3-mobile-xs.webp -> sugerida: 960x480 */
 .pet-hero-frame {
   aspect-ratio: 960 / 480;
-  --pet-hero-title-size: clamp(9px, 2.8vw, 12px);
-  --pet-hero-subtitle-size: clamp(5.5px, 1.35vw, 7px);
-  --pet-hero-cta-size: clamp(6px, 1.45vw, 7.5px);
-  --pet-hero-title-line: 1.18;
-  --pet-hero-subtitle-line: 1.85;
-  --pet-hero-subtitle-gap: 5px;
+  --pet-hero-title-size: clamp(20px, 6.2vw, 28px);
+  --pet-hero-subtitle-size: clamp(10px, 2.9vw, 13px);
+  --pet-hero-cta-size: clamp(9px, 2.6vw, 12px);
+  --pet-hero-title-line: 1.12;
+  --pet-hero-subtitle-line: 1.32;
+  --pet-hero-subtitle-gap: 4px;
   --pet-hero-cta-gap: 6px;
-  --pet-hero-cta-pad-y: 3px;
-  --pet-hero-cta-pad-x: 8px;
+  --pet-hero-cta-pad-y: 4px;
+  --pet-hero-cta-pad-x: 9px;
 }
 
-@media (min-width: 480px) { /* xs+ -> slade1/2/3-mobile.jpg -> sugerida: 1200x600 */
+@media (min-width: 480px) { /* xs+ -> slade1/2/3-mobile.webp -> sugerida: 1200x600 */
   .pet-hero-frame {
     aspect-ratio: 1200 / 600;
-    --pet-hero-title-size: clamp(11px, 2.35vw, 14px);
-    --pet-hero-subtitle-size: clamp(6.5px, 1.25vw, 8px);
-    --pet-hero-cta-size: clamp(7px, 1.35vw, 8.5px);
+    --pet-hero-title-size: clamp(24px, 5vw, 31px);
+    --pet-hero-subtitle-size: clamp(10.5px, 2.35vw, 14px);
+    --pet-hero-cta-size: clamp(11px, 2.35vw, 13.5px);
     --pet-hero-title-line: 1.17;
-    --pet-hero-subtitle-line: 1.82;
-    --pet-hero-subtitle-gap: 6px;
-    --pet-hero-cta-gap: 7px;
-    --pet-hero-cta-pad-y: 3px;
-    --pet-hero-cta-pad-x: 9px;
-  }
-}
-
-@media (min-width: 640px) { /* sm -> slade1/2/3-mobile-wide.jpg -> sugerida: 1440x600 */
-  .pet-hero-frame {
-    aspect-ratio: 1440 / 550;
-    --pet-hero-title-size: clamp(13px, 2.25vw, 16px);
-    --pet-hero-subtitle-size: clamp(7px, 1.18vw, 9px);
-    --pet-hero-cta-size: clamp(7.5px, 1.25vw, 9px);
-    --pet-hero-title-line: 1.16;
-    --pet-hero-subtitle-line: 1.78;
-    --pet-hero-subtitle-gap: 7px;
-    --pet-hero-cta-gap: 7px;
-    --pet-hero-cta-pad-y: 4px;
-    --pet-hero-cta-pad-x: 10px;
-  }
-}
-
-@media (min-width: 768px) { /* md -> slade1/2/3-tablet.jpg -> sugerida: 1920x800 */
-  .pet-hero-frame {
-    aspect-ratio: 1920 / 800;
-    --pet-hero-title-size: clamp(14px, 1.85vw, 18px);
-    --pet-hero-subtitle-size: clamp(7.5px, 0.95vw, 9px);
-    --pet-hero-cta-size: clamp(8px, 1vw, 9px);
-    --pet-hero-title-line: 1.15;
-    --pet-hero-subtitle-line: 1.74;
+    --pet-hero-subtitle-line: 1.45;
     --pet-hero-subtitle-gap: 7px;
     --pet-hero-cta-gap: 8px;
-    --pet-hero-cta-pad-y: 4px;
-    --pet-hero-cta-pad-x: 10px;
-  }
-}
-
-@media (min-width: 1024px) { /* lg -> slade1/2/3-laptop.jpg -> sugerida: 2560x533 */
-  .pet-hero-frame {
-    aspect-ratio: 2560 / 533;
-    --pet-hero-title-size: clamp(16px, 1.55vw, 21px);
-    --pet-hero-subtitle-size: clamp(8px, 0.78vw, 10px);
-    --pet-hero-cta-size: clamp(8.5px, 0.82vw, 10.5px);
-    --pet-hero-title-line: 1.14;
-    --pet-hero-subtitle-line: 1.68;
-    --pet-hero-subtitle-gap: 8px;
-    --pet-hero-cta-gap: 8px;
-    --pet-hero-cta-pad-y: 4px;
+    --pet-hero-cta-pad-y: 5px;
     --pet-hero-cta-pad-x: 11px;
   }
 }
 
-@media (min-width: 1280px) { /* xl -> slade1/2/3-desktop.jpg -> sugerida: 2560x500 */
+@media (min-width: 640px) { /* sm -> slade1/2/3-mobile-wide.webp -> sugerida: 1440x600 */
+  .pet-hero-frame {
+    aspect-ratio: 1440 / 550;
+    --pet-hero-title-size: clamp(30px, 4.7vw, 38px);
+    --pet-hero-subtitle-size: clamp(12.5px, 1.95vw, 16px);
+    --pet-hero-cta-size: clamp(12px, 1.9vw, 15px);
+    --pet-hero-title-line: 1.16;
+    --pet-hero-subtitle-line: 1.43;
+    --pet-hero-subtitle-gap: 8px;
+    --pet-hero-cta-gap: 9px;
+    --pet-hero-cta-pad-y: 5px;
+    --pet-hero-cta-pad-x: 12px;
+  }
+}
+
+@media (min-width: 768px) { /* md -> slade1/2/3-tablet.webp -> sugerida: 1920x800 */
+  .pet-hero-frame {
+    aspect-ratio: 1920 / 800;
+    --pet-hero-title-size: clamp(34px, 4.25vw, 44px);
+    --pet-hero-subtitle-size: clamp(14px, 1.7vw, 18px);
+    --pet-hero-cta-size: clamp(13px, 1.65vw, 16px);
+    --pet-hero-title-line: 1.15;
+    --pet-hero-subtitle-line: 1.42;
+    --pet-hero-subtitle-gap: 9px;
+    --pet-hero-cta-gap: 10px;
+    --pet-hero-cta-pad-y: 6px;
+    --pet-hero-cta-pad-x: 13px;
+  }
+}
+
+@media (min-width: 1024px) { /* lg -> slade1/2/3-laptop.webp -> sugerida: 2560x533 */
+  .pet-hero-frame {
+    aspect-ratio: 2560 / 533;
+    --pet-hero-title-size: clamp(30px, 2.95vw, 38px);
+    --pet-hero-subtitle-size: clamp(13px, 1.25vw, 16px);
+    --pet-hero-cta-size: clamp(12px, 1.2vw, 15px);
+    --pet-hero-title-line: 1.14;
+    --pet-hero-subtitle-line: 1.42;
+    --pet-hero-subtitle-gap: 8px;
+    --pet-hero-cta-gap: 9px;
+    --pet-hero-cta-pad-y: 5px;
+    --pet-hero-cta-pad-x: 13px;
+  }
+}
+
+@media (min-width: 1280px) { /* xl -> slade1/2/3-desktop.webp -> sugerida: 2560x500 */
   .pet-hero-frame {
     aspect-ratio: 2560 / 500;
     --pet-hero-title-size: clamp(24px, 2.45vw, 38px);
@@ -232,7 +232,7 @@ input[type="file"] {
   }
 }
 
-@media (min-width: 1920px) { /* fhd -> slade1/2/3-fhd.jpg -> sugerida: 3840x1000 */
+@media (min-width: 1920px) { /* fhd -> slade1/2/3-fhd.webp -> sugerida: 3840x1000 */
   .pet-hero-frame {
     aspect-ratio: 3840 / 720;
     --pet-hero-title-size: clamp(50px, 3.2vw, 66px);
@@ -247,7 +247,7 @@ input[type="file"] {
   }
 }
 
-@media (min-width: 2560px) { /* qhd -> slade1/2/3-qhd.jpg -> sugerida: 5120x1760 */
+@media (min-width: 2560px) { /* qhd -> slade1/2/3-qhd.webp -> sugerida: 5120x1760 */
   .pet-hero-frame {
     aspect-ratio: 5120 / 1300;
     --pet-hero-title-size: clamp(58px, 2.45vw, 72px);
@@ -262,7 +262,7 @@ input[type="file"] {
   }
 }
 
-@media (min-width: 3840px) { /* uhd -> slade1/2/3-uhd.jpg -> sugerida: 6400x2200 */
+@media (min-width: 3840px) { /* uhd -> slade1/2/3-uhd.webp -> sugerida: 6400x2200 */
   .pet-hero-frame {
     aspect-ratio: 6400 / 2200;
     --pet-hero-title-size: clamp(66px, 1.7vw, 78px);
@@ -1063,27 +1063,27 @@ input[type="file"] {
 @media (min-width: 640px) and (max-width: 767.98px) {
   .pet-hero-copy {
     --pet-hero-copy-left: 8%;
-    --pet-hero-copy-top: 15%;
-    --pet-hero-copy-width: 56vw;
-    --pet-hero-copy-max: 430px;
+    --pet-hero-copy-top: 14%;
+    --pet-hero-copy-width: 60vw;
+    --pet-hero-copy-max: 470px;
   }
 
   .pet-hero-copy--slide-1 {
-    --pet-hero-copy-left: 11%;
-    --pet-hero-copy-top: 15%;
-    --pet-hero-copy-width: 54vw;
+    --pet-hero-copy-left: 10%;
+    --pet-hero-copy-top: 14%;
+    --pet-hero-copy-width: 58vw;
   }
 
   .pet-hero-copy--slide-2 {
     --pet-hero-copy-left: 7%;
-    --pet-hero-copy-top: 16%;
-    --pet-hero-copy-width: 52vw;
+    --pet-hero-copy-top: 15%;
+    --pet-hero-copy-width: 57vw;
   }
 
   .pet-hero-copy--slide-3 {
-    --pet-hero-copy-left: 11%;
-    --pet-hero-copy-top: 15%;
-    --pet-hero-copy-width: 58vw;
+    --pet-hero-copy-left: 10%;
+    --pet-hero-copy-top: 14%;
+    --pet-hero-copy-width: 60vw;
   }
 }
 
@@ -1106,26 +1106,48 @@ input[type="file"] {
 
   .pet-hero-copy {
     --pet-hero-copy-left: 7%;
-    --pet-hero-copy-top: 13%;
+    --pet-hero-copy-top: 11%;
     --pet-hero-copy-width: 58vw;
-    --pet-hero-copy-max: 360px;
+    --pet-hero-copy-max: 300px;
   }
 
   .pet-hero-copy--slide-1 {
-    --pet-hero-copy-left: 10%;
-    --pet-hero-copy-top: 13%;
+    --pet-hero-copy-left: 8%;
+    --pet-hero-copy-top: 11%;
     --pet-hero-copy-width: 56vw;
   }
 
   .pet-hero-copy--slide-2 {
     --pet-hero-copy-left: 6%;
-    --pet-hero-copy-top: 14%;
-    --pet-hero-copy-width: 54vw;
+    --pet-hero-copy-top: 11%;
+    --pet-hero-copy-width: 57vw;
   }
 
   .pet-hero-copy--slide-3 {
-    --pet-hero-copy-left: 10%;
-    --pet-hero-copy-top: 13%;
+    --pet-hero-copy-left: 8%;
+    --pet-hero-copy-top: 11%;
     --pet-hero-copy-width: 58vw;
+  }
+}
+
+@media (max-width: 399.98px) {
+  .pet-hero-frame {
+    --pet-hero-title-size: clamp(18px, 5.8vw, 22px);
+    --pet-hero-subtitle-size: clamp(9px, 2.75vw, 11px);
+    --pet-hero-cta-size: clamp(8.5px, 2.5vw, 10px);
+    --pet-hero-title-line: 1.1;
+    --pet-hero-subtitle-line: 1.28;
+    --pet-hero-subtitle-gap: 3px;
+    --pet-hero-cta-gap: 5px;
+    --pet-hero-cta-pad-y: 3px;
+    --pet-hero-cta-pad-x: 8px;
+  }
+
+  .pet-hero-copy,
+  .pet-hero-copy--slide-1,
+  .pet-hero-copy--slide-2,
+  .pet-hero-copy--slide-3 {
+    --pet-hero-copy-top: 10%;
+    --pet-hero-copy-width: 55vw;
   }
 }

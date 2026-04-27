@@ -11,6 +11,7 @@ import {
     CaretRight,
     EnvelopeSimple,
     House,
+    List,
     MagnifyingGlass,
     ShoppingCartSimple,
     Star,
@@ -43,6 +44,7 @@ const Icon = {
     CaretRight,
     EnvelopeSimple,
     House,
+    List,
     MagnifyingGlass,
     ShoppingCartSimple,
     Star,
@@ -338,7 +340,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
                     </div>
                     <div className="banner-ads-block pl-2.5 basis-1/4 min-w-[220px]">
                         <div
-                            className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${banner.image === '/images/collection/14.jpg' || banner.image === '/images/collection/15.jpg' || banner.image === '/images/collection/conocenos_paramascotas.jpg'
+                            className={`banner-ads-item bg-linear rounded-2xl relative overflow-hidden cursor-pointer ${banner.image === '/images/collection/14.webp' || banner.image === '/images/collection/15.webp' || banner.image === '/images/collection/conocenos_paramascotas.webp'
                                     ? 'min-h-[220px]'
                                     : ''
                                 }`}
@@ -411,12 +413,12 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
         normalizedSearchKeyword.length >= minAutocompleteQueryLength &&
         searchProducts.length > 0
     const productSearchIndex = useMemo(() => {
-        if (searchProducts.length === 0) {
+        if (!shouldShowSearchPanel) {
             return new Map<string, string>()
         }
 
         return buildProductSearchIndex(searchProducts)
-    }, [searchProducts])
+    }, [searchProducts, shouldShowSearchPanel])
     const searchSuggestions = useMemo(() => {
         if (!shouldShowSearchPanel) {
             return []
@@ -437,7 +439,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
         const firstThumb = Array.isArray(product.thumbImage) ? product.thumbImage[0] : ''
         const firstImage = Array.isArray(product.images) ? product.images[0] : ''
         const imageValue = typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url ?? ''
-        return normalizeImageSrc(firstThumb || imageValue || '/images/placeholder.jpg')
+        return normalizeImageSrc(firstThumb || imageValue || '/images/product/1.webp')
     }
 
     const handleLogout = async () => {
@@ -475,7 +477,7 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
                             onClick={handleMenuMobile}
                             aria-label="Abrir menú"
                         >
-                            <i className="icon-category text-2xl" aria-hidden="true"></i>
+                            <Icon.List size={28} weight="bold" aria-hidden="true" />
                         </button>
                         <Link href={'/'} className='flex items-center'>
                             <div className="relative h-[55px] w-[126px] md:h-[80px] md:w-[184px]">

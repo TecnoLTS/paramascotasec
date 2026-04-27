@@ -136,8 +136,60 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                 .map((img: any) => img?.url ?? img)
                 .filter(Boolean)
             : []
-    const primaryImage = thumbImages[0] || fullImages[0] || '/images/placeholder.jpg'
-    const shouldBypassOptimizer = (src: string) => src.startsWith('data:') || src.startsWith('blob:')
+    const primaryImage = thumbImages[0] || fullImages[0] || '/images/product/1.webp'
+    const isDirectUploadImage = (src: string) =>
+        src.startsWith('/uploads/') ||
+        src.startsWith('https://paramascotasec.com/uploads/') ||
+        src.startsWith('https://www.paramascotasec.com/uploads/') ||
+        src.startsWith('https://api.paramascotasec.com/uploads/')
+    const shouldBypassOptimizer = (src: string) =>
+        src.startsWith('data:') || src.startsWith('blob:') || isDirectUploadImage(src)
+    const resolveFallbackImage = (src: string) => src || '/images/product/1.webp'
+    const buildUploadVariantUrl = (src: string, width: number) =>
+        src.replace(/\.webp(?=($|[?#]))/i, `-${width}.webp`)
+    const buildUploadSrcSet = (src: string) => {
+        if (!/\.webp($|[?#])/i.test(src)) return undefined
+        return [
+            `${buildUploadVariantUrl(src, 220)} 220w`,
+            `${buildUploadVariantUrl(src, 360)} 360w`,
+            `${src} 640w`,
+        ].join(', ')
+    }
+    const renderProductImage = (src: string) => {
+        const resolvedSrc = resolveFallbackImage(src)
+
+        if (isDirectUploadImage(resolvedSrc)) {
+            return (
+                <img
+                    src={buildUploadVariantUrl(resolvedSrc, 220)}
+                    srcSet={buildUploadSrcSet(resolvedSrc)}
+                    sizes="(min-width: 1024px) 176px, (min-width: 640px) 180px, 45vw"
+                    alt={data.name}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-contain duration-700"
+                    onError={(event) => {
+                        const fallback = '/images/product/1.webp'
+                        if (event.currentTarget.src.endsWith(fallback)) return
+                        event.currentTarget.src = fallback
+                    }}
+                />
+            )
+        }
+
+        return (
+            <Image
+                src={resolvedSrc}
+                width={640}
+                height={800}
+                alt={data.name}
+                sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
+                quality={85}
+                unoptimized={shouldBypassOptimizer(resolvedSrc)}
+                className="w-full h-full object-contain duration-700"
+            />
+        )
+    }
 
     const sizes: string[] = data.sizes ?? []
     const variantDisplayValues = getProductVariantDisplayValues(data)
@@ -174,29 +226,11 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             <div className="product-img w-full aspect-[4/5] max-h-[240px] bg-white">
                                 {activeColor ? (
                                     <>
-                                            <Image
-                                                src={variations.find((item: any) => item.color === activeColor)?.image || primaryImage}
-                                                width={640}
-                                                height={800}
-                                                alt={data.name}
-                                                sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
-                                                quality={85}
-                                                unoptimized={shouldBypassOptimizer(variations.find((item: any) => item.color === activeColor)?.image || primaryImage)}
-                                                className='w-full h-full object-contain duration-700'
-                                            />
+                                        {renderProductImage(variations.find((item: any) => item.color === activeColor)?.image || primaryImage)}
                                     </>
                                 ) : (
                                     <>
-                                        <Image
-                                            src={primaryImage}
-                                            width={640}
-                                            height={800}
-                                            alt={data.name}
-                                            sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
-                                            quality={85}
-                                            unoptimized={shouldBypassOptimizer(primaryImage)}
-                                            className='w-full h-full object-contain duration-700'
-                                        />
+                                        {renderProductImage(primaryImage)}
                                     </>
                                 )}
                             </div>

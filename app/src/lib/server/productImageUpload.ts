@@ -2,15 +2,14 @@ import { NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import sharp from 'sharp'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
 
 const allowedKinds = new Set(['thumb', 'gallery'])
-const allowedTypes: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-}
+const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const outputImageExtension = 'webp'
+const productUploadVariantWidths = [220, 360]
 const maxUploadBytes = 8 * 1024 * 1024
 const backendBase = (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api').replace(/\/$/, '')
 const seoFilenameMaxLength = 140
@@ -120,6 +119,9 @@ const buildSeoImageFileName = (
   return `${clippedBase}-${datedSuffix}-${uniqueSuffix}.${ext}`
 }
 
+const buildVariantFileName = (fileName: string, width: number) =>
+  fileName.replace(/\.webp$/i, `-${width}.webp`)
+
 const resolvePublicDir = async () => {
   const candidates = [
     process.env.UPLOADS_PUBLIC_DIR,
@@ -208,8 +210,7 @@ export const handleProductImageUpload = async (req: Request) => {
         ? (kind as 'thumb' | 'gallery')
         : 'gallery'
     const metadata = parseImageMetadata(formData, req.headers.get('x-forwarded-host') || req.headers.get('host'))
-    const ext = allowedTypes[file.type]
-    if (!ext) {
+    if (!allowedTypes.has(file.type)) {
       return NextResponse.json({ ok: false, error: { message: 'Formato de imagen no permitido.' } }, { status: 400 })
     }
 
@@ -222,12 +223,29 @@ export const handleProductImageUpload = async (req: Request) => {
       return NextResponse.json({ ok: false, error: { message: 'El archivo no coincide con un formato de imagen permitido.' } }, { status: 400 })
     }
 
+    let webpBuffer: Buffer
+    try {
+      webpBuffer = await sharp(buffer, { failOn: 'warning' })
+        .rotate()
+        .webp({ quality: 82, effort: 5 })
+        .toBuffer()
+    } catch {
+      return NextResponse.json({ ok: false, error: { message: 'No se pudo convertir la imagen a WebP.' } }, { status: 400 })
+    }
+
     const publicDir = await resolvePublicDir()
     const uploadDir = path.join(publicDir, 'uploads', 'products')
     await fs.mkdir(uploadDir, { recursive: true })
-    const fileName = buildSeoImageFileName(metadata, kindValue, ext)
+    const fileName = buildSeoImageFileName(metadata, kindValue, outputImageExtension)
     const filePath = path.join(uploadDir, fileName)
-    await fs.writeFile(filePath, buffer)
+    await fs.writeFile(filePath, webpBuffer)
+    await Promise.all(productUploadVariantWidths.map(async (width) => {
+      const variantPath = path.join(uploadDir, buildVariantFileName(fileName, width))
+      await sharp(webpBuffer)
+        .resize({ width, withoutEnlargement: true })
+        .webp({ quality: 78, effort: 5 })
+        .toFile(variantPath)
+    }))
 
     return NextResponse.json({
       ok: true,

@@ -65,7 +65,7 @@ const ModalNewsletter = () => {
                                         const firstImage = Array.isArray(item.images) ? item.images[0] : null
                                         const src = typeof firstImage === 'string'
                                             ? firstImage
-                                            : (firstImage as any)?.url ?? item.thumbImage?.[0] ?? '/images/product/1.jpg'
+                                            : (firstImage as any)?.url ?? item.thumbImage?.[0] ?? '/images/product/1.webp'
                                         return (
                                             <div
                                                 className='product-item item pb-5 flex items-center justify-between gap-3 border-b border-line'

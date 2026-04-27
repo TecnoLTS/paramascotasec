@@ -323,7 +323,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const galleryImages = Array.from(new Set([...productImages, ...variationImages])).filter(Boolean)
   const resolvedGalleryImages = galleryImages.length > 0
     ? galleryImages
-    : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.jpg'])
+    : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.webp'])
   const colorOptions = useMemo(
     () => familyColorValues.map((color) => {
       const matchingVariant = variantProducts.find((product) => normalizeOptionValue(getVariantColorValue(product)) === normalizeOptionValue(color))
@@ -336,7 +336,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     }),
     [familyColorValues, variantProducts],
   )
-  const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.jpg'
+  const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.webp'
 
   const relatedProducts = useMemo(() => {
     if (!productFamily) return []

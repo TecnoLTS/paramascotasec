@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import Image from '@/components/Common/AppImage'
 import { useRouter } from 'next/navigation'
 import { PetCategoryCard, getCategoryCards, getCategoryUrl } from '@/data/petCategoryCards'
+import { versionLocalImagePath } from '@/lib/staticAsset'
 
 interface CollectionProps {
   categories?: PetCategoryCard[]
@@ -73,6 +73,30 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
     event.stopPropagation()
   }
 
+  const getCategoryImageBasePath = (src: string) => {
+    const [pathname] = src.split('?')
+    if (!pathname.startsWith('/images/collection/home-top/') || !pathname.endsWith('.webp')) {
+      return null
+    }
+
+    const fileName = pathname.split('/').pop()
+    return fileName ? fileName.replace(/\.webp$/, '') : null
+  }
+
+  const getCategorySourceSet = (src: string) => {
+    const baseName = getCategoryImageBasePath(src)
+    if (!baseName) return ''
+
+    return [160, 240, 320, 432]
+      .map((width) => {
+        const optimizedSrc = versionLocalImagePath(
+          `/images/collection/home-top/generated/${baseName}-${width}.webp`
+        )
+        return `${optimizedSrc} ${width}w`
+      })
+      .join(', ')
+  }
+
   const renderCategoryCard = (category: PetCategoryCard, wrapperClassName: string) => {
     return (
       <button
@@ -84,16 +108,21 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
         onClick={() => handleCategoryClick(category.id)}
       >
         <div className="bg-img mx-auto w-full rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-[4/5] bg-[#f6f7f9] transition-transform duration-300 group-hover:scale-[1.03]">
-          <Image
-            src={category.image}
-            alt={category.alt || category.label}
-            fill
-            quality={90}
-            sizes="(min-width: 1200px) 202px, (min-width: 992px) calc((100vw - 32px - 64px) / 5), (min-width: 768px) calc((100vw - 32px - 48px) / 5), 132px"
-            className="w-full h-full object-cover"
-            loading="lazy"
-            draggable={false}
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcSet={getCategorySourceSet(category.image)}
+              sizes="(min-width: 1200px) 216px, (min-width: 768px) 20vw, 132px"
+            />
+            <img
+              src={category.image}
+              alt={category.alt || category.label}
+              className="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+            />
+          </picture>
         </div>
         <div className="trending-name text-center mt-3 sm:mt-4 duration-500 w-full">
           <span className="font-semibold text-[13px] leading-[18px] sm:text-[14px] sm:leading-[20px] lg:text-[15px] lg:leading-[22px] text-[var(--blue)]">

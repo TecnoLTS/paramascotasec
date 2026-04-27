@@ -91,8 +91,8 @@ const FaqPage = () => {
                 <section className="relative w-full overflow-hidden">
                     <div className="relative h-[300px] md:h-[500px] w-full">
                         <Image
-                            src={`/images/banner/35.jpg`}
-                            //src={`/images/banner/about-banner-${suffix}.jpg`}
+                            src={`/images/banner/35.webp`}
+                            //src={`/images/banner/about-banner-${suffix}.webp`}
                             fill
                             priority
                             alt='Preguntas Frecuentes'
@@ -132,8 +132,8 @@ const FaqPage = () => {
                                 {/* Imagen Lateral Responsiva */}
                                 <div className="relative w-full aspect-[3/4] rounded-[24px] overflow-hidden hidden lg:block shadow-lg">
                                     <Image 
-                                        //src={`/images/banner/about-1-${suffix}.jpg`}
-                                        src={`/images/banner/36.jpg`}
+                                        //src={`/images/banner/about-1-${suffix}.webp`}
+                                        src={`/images/banner/36.webp`}
                                         fill
                                         alt="Atención al cliente"
                                         className="object-cover hover:scale-105 transition-transform duration-700"

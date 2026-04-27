@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: 'Conócenos - Para Mascotas',
         description: 'Descubre nuestra historia, quiénes somos y nuestra pasión por el cuidado de tus mascotas en Para Mascotas Ecuador.',
-        images: [versionLocalImagePath('/images/banner/about-banner-1920.jpg')],
+        images: [versionLocalImagePath('/images/banner/27.webp')],
     },
 }
 

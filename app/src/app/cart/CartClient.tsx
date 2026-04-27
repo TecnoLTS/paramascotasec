@@ -166,7 +166,7 @@ const Cart = () => {
                                                                                     ? (typeof (product as any).images[0] === 'string'
                                                                                         ? (product as any).images[0]
                                                                                         : ((product as any).images[0]?.url ?? ''))
-                                                                                    : '/images/product/1.jpg'
+                                                                                    : '/images/product/1.webp'
                                                                         }
                                                                         width={1000}
                                                                         height={1000}

@@ -139,7 +139,7 @@ const findMapValueCaseInsensitive = <T,>(map: Record<string, T>, key?: string | 
   return resolvedKey ? map[resolvedKey] : undefined
 }
 
-const DEFAULT_HOME_TOP_IMAGE = versionStaticAssetPath('/images/collection/home-top/catalogo-completo-para-mascotas-4x5.jpg')
+const DEFAULT_HOME_TOP_IMAGE = versionStaticAssetPath('/images/collection/home-top/catalogo-completo-para-mascotas-4x5.webp')
 
 const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
   todos: {
@@ -263,11 +263,11 @@ const PET_CATEGORY_DEFINITIONS: PetCategoryDefinitionMap = {
 
 export const PET_HOME_TOP_ORDER = ['todos', 'ropa', 'alimento', 'salud', 'accesorios'] as const
 
-const topAssetTodos = topAsset('catalogo-completo-para-mascotas-4x5.jpg')
-const topAssetRopa = topAsset('ropa-para-mascotas-4x5.jpg')
-const topAssetAlimento = topAsset('alimento-para-mascotas-4x5.jpg')
-const topAssetSalud = topAsset('salud-para-mascotas-4x5.jpg')
-const topAssetAccesorios = topAsset('accesorios-para-mascotas-4x5.jpg')
+const topAssetTodos = topAsset('catalogo-completo-para-mascotas-4x5.webp')
+const topAssetRopa = topAsset('ropa-para-mascotas-4x5.webp')
+const topAssetAlimento = topAsset('alimento-para-mascotas-4x5.webp')
+const topAssetSalud = topAsset('salud-para-mascotas-4x5.webp')
+const topAssetAccesorios = topAsset('accesorios-para-mascotas-4x5.webp')
 
 export const PET_HOME_TOP_IMAGES: PetCategoryImageMap = {
   todos: topAssetTodos,
@@ -282,16 +282,16 @@ export const PET_HOME_TOP_IMAGES: PetCategoryImageMap = {
 export const PET_HOME_FEATURED_ORDER = ['alimento', 'salud', 'accesorios'] as const
 
 const featuredAlimento: PetCategoryFeaturedImageMap = {
-  mobilePrimary: featuredVariantAsset('mobilePrimary', 'alimentos-para-mascotas-en-ecuador-mobile-principal-16x10.jpg'),
-  desktopPrimary: featuredVariantAsset('desktopPrimary', 'alimentos-para-mascotas-en-ecuador-desktop-principal-4x5.jpg'),
+  mobilePrimary: featuredVariantAsset('mobilePrimary', 'alimentos-para-mascotas-en-ecuador-mobile-principal-16x10.webp'),
+  desktopPrimary: featuredVariantAsset('desktopPrimary', 'alimentos-para-mascotas-en-ecuador-desktop-principal-4x5.webp'),
 }
 const featuredSalud: PetCategoryFeaturedImageMap = {
-  mobileSecondary: featuredVariantAsset('mobileSecondary', 'salud-para-mascotas-en-ecuador-mobile-secundario-square.jpg'),
-  desktopSecondary: featuredVariantAsset('desktopSecondary', 'salud-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg'),
+  mobileSecondary: featuredVariantAsset('mobileSecondary', 'salud-para-mascotas-en-ecuador-mobile-secundario-square.webp'),
+  desktopSecondary: featuredVariantAsset('desktopSecondary', 'salud-para-mascotas-en-ecuador-desktop-secundario-16x10.webp'),
 }
 const featuredAccesorios: PetCategoryFeaturedImageMap = {
-  mobileSecondary: featuredVariantAsset('mobileSecondary', 'accesorios-para-mascotas-en-ecuador-mobile-secundario-square.jpg'),
-  desktopSecondary: featuredVariantAsset('desktopSecondary', 'accesorios-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg'),
+  mobileSecondary: featuredVariantAsset('mobileSecondary', 'accesorios-para-mascotas-en-ecuador-mobile-secundario-square.webp'),
+  desktopSecondary: featuredVariantAsset('desktopSecondary', 'accesorios-para-mascotas-en-ecuador-desktop-secundario-16x10.webp'),
 }
 
 export const PET_HOME_FEATURED_IMAGES: PetCategoryFeaturedImageSetMap = {

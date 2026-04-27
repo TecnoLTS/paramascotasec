@@ -104,7 +104,7 @@ const ModalQuickview = () => {
 
     const resolvedGalleryImages = useMemo(() => {
         if (!activeVariant) {
-            return selectedProduct ? ['/images/product/1.jpg'] : []
+            return selectedProduct ? ['/images/product/1.webp'] : []
         }
 
         const productImages = Array.isArray((activeVariant as any)?.images)
@@ -126,7 +126,7 @@ const ModalQuickview = () => {
             return thumbImages
         }
 
-        return ['/images/product/1.jpg']
+        return ['/images/product/1.webp']
     }, [activeVariant, selectedProduct])
 
     useEffect(() => {

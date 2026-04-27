@@ -607,15 +607,55 @@ export const createEmptyPurchaseInvoice = (supplierName = '', purchaseTaxRate = 
 
 const createPurchaseInvoiceFromSourceProduct = (product: any, purchaseTaxRate = ''): PurchaseInvoiceFormState => {
     const lastPurchaseInvoice = product?.lastPurchaseInvoice || product?.inventory?.lastPurchaseInvoice || null
-    const invoiceNumber = String(lastPurchaseInvoice?.invoiceNumber || '').trim()
+    const procurementLots = Array.isArray(product?.inventory?.procurementDetail?.lots)
+        ? product.inventory.procurementDetail.lots
+        : []
+    const lastInvoicedLot = procurementLots.find((lot: any) => String(lot?.invoice_number || lot?.invoiceNumber || '').trim())
+    const invoiceNumber = String(
+        lastPurchaseInvoice?.invoiceNumber
+        || lastPurchaseInvoice?.invoice_number
+        || lastInvoicedLot?.invoiceNumber
+        || lastInvoicedLot?.invoice_number
+        || product?.lastPurchaseInvoiceNumber
+        || product?.attributes?.purchaseInvoiceNumber
+        || product?.attributes?.purchase_invoice_number
+        || ''
+    ).trim()
     const supplierName = String(
         lastPurchaseInvoice?.supplierName
+        || lastPurchaseInvoice?.supplier_name
+        || lastInvoicedLot?.supplierName
+        || lastInvoicedLot?.supplier_name
+        || product?.lastPurchaseSupplierName
         || product?.attributes?.supplier
         || product?.supplier
         || ''
     ).trim()
-    const supplierDocument = String(lastPurchaseInvoice?.supplierDocument || '').trim()
-    const issuedAt = String(lastPurchaseInvoice?.issuedAt || '').trim()
+    const supplierDocument = String(
+        lastPurchaseInvoice?.supplierDocument
+        || lastPurchaseInvoice?.supplier_document
+        || lastInvoicedLot?.supplierDocument
+        || lastInvoicedLot?.supplier_document
+        || product?.lastPurchaseSupplierDocument
+        || ''
+    ).trim()
+    const issuedAt = String(
+        lastPurchaseInvoice?.issuedAt
+        || lastPurchaseInvoice?.issued_at
+        || lastInvoicedLot?.issuedAt
+        || lastInvoicedLot?.issued_at
+        || product?.lastPurchaseIssuedAt
+        || product?.attributes?.purchaseInvoiceDate
+        || product?.attributes?.purchase_invoice_date
+        || ''
+    ).trim()
+    const notes = String(
+        lastPurchaseInvoice?.notes
+        || lastPurchaseInvoice?.purchaseInvoiceNotes
+        || product?.attributes?.purchaseInvoiceNotes
+        || product?.attributes?.purchase_invoice_notes
+        || ''
+    ).trim()
 
     return {
         ...createEmptyPurchaseInvoice(supplierName, purchaseTaxRate),
@@ -623,6 +663,7 @@ const createPurchaseInvoiceFromSourceProduct = (product: any, purchaseTaxRate = 
         supplierName,
         supplierDocument,
         issuedAt: issuedAt || getTodayDateInputValue(),
+        notes,
     }
 }
 

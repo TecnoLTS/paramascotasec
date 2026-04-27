@@ -515,7 +515,7 @@ const resolveCategoryImage = (categoryId: string, _siteId?: SiteId) => {
   const normalized = normalizeText(categoryId)
   const configuredImage = getCategoryImage(normalized)
 
-  if (configuredImage && configuredImage !== '/images/collection/categoria_todas.jpg') return configuredImage
+  if (configuredImage && configuredImage !== '/images/collection/home-top/catalogo-completo-para-mascotas-4x5.webp') return configuredImage
   if (normalized.includes('perro')) return getCategoryImage('perros')
   if (normalized.includes('gato')) return getCategoryImage('gatos')
   if (normalized.includes('cuidado')) return getCategoryImage('cuidado')
@@ -523,7 +523,7 @@ const resolveCategoryImage = (categoryId: string, _siteId?: SiteId) => {
   if (normalized.includes('ropa')) return getCategoryImage('ropa')
   if (normalized.includes('comedero')) return getCategoryImage('comederos')
   if (normalized.includes('cama')) return getCategoryImage('camas')
-  return '/images/collection/categoria_todas.jpg'
+  return '/images/collection/home-top/catalogo-completo-para-mascotas-4x5.webp'
 }
 
 const resolveCategoryLabel = (categoryId: string, _siteId?: SiteId) => {

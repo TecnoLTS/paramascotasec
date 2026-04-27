@@ -12,7 +12,7 @@ export const pageMetadata: Record<string, PageMeta> = {
     title: 'Conocenos',
     description:
       'Descubre nuestra historia, quienes somos y nuestra pasion por el cuidado de tus mascotas en Para Mascotas Ecuador.',
-    images: ['/images/banner/about-banner-1920.jpg'],
+    images: ['/images/banner/27.webp'],
   },
   'coming-soon': {
     title: 'Proximamente',

@@ -58,7 +58,7 @@ const PrivacyPolicy = () => {
             <main className='bg-[#F8F8F8] min-h-screen'>
                 <section className="relative h-[300px] md:h-[500px] flex items-center justify-center overflow-hidden">
                     <Image
-                        src={'/images/banner/33.jpg'}
+                        src={'/images/banner/33.webp'}
                         fill
                         priority
                         alt='Política de Privacidad'

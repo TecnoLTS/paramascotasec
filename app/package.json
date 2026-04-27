@@ -6,9 +6,12 @@
     "node": ">=20.9.0"
   },
   "scripts": {
+    "images:convert-webp": "node ./scripts/convert-jpg-assets-to-webp.mjs",
+    "images:home-performance": "node ./scripts/generate-home-performance-images.mjs",
     "images:manifest": "node ./scripts/generate-image-version-manifest.mjs",
+    "images:upload-variants": "node ./scripts/generate-upload-image-variants.mjs",
     "predev": "npm run images:manifest",
-    "prebuild": "npm run images:manifest",
+    "prebuild": "npm run images:home-performance && npm run images:upload-variants && npm run images:manifest",
     "prestart": "npm run images:manifest",
     "prelint": "npm run images:manifest",
     "dev": "next dev",
@@ -33,6 +36,7 @@
     "react-fast-marquee": "^1.6.5",
     "react-paginate": "^8.3.0",
     "react-slick": "^0.31.0",
+    "sharp": "^0.34.5",
     "sass": "^1.69.5",
     "slick-carousel": "^1.8.1",
     "swiper": "^12.1.3"

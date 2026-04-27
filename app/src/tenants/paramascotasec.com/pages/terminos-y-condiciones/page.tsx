@@ -71,7 +71,7 @@ const TermsConditions = () => {
                 {/* --- BANNER HEADER --- */}
                 <section className="relative h-[300px] md:h-[500px] flex items-center justify-center overflow-hidden">
                     <Image
-                        src={'/images/banner/32.jpg'}
+                        src={'/images/banner/32.webp'}
                         fill
                         priority
                         alt='Términos y Condiciones Para Mascotas EC'

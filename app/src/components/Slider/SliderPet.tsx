@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { getImageProps } from 'next/image'
 import React, { useEffect, useState } from 'react'
 import { versionLocalImagePath } from '@/lib/staticAsset'
 
@@ -11,6 +10,7 @@ type SliderSuffix =
   | 'mobile-wide'
   | 'tablet'
   | 'laptop'
+  | 'desktop-1440'
   | 'desktop'
   | 'fhd'
   | 'qhd'
@@ -62,6 +62,7 @@ const legacyFallbackBySuffix: Record<SliderSuffix, LegacySuffix[]> = {
   'mobile-wide': ['720', '243'],
   tablet: ['720', '1080'],
   laptop: ['1080', '720'],
+  'desktop-1440': ['1080', '1920'],
   desktop: ['1080', '1920'],
   fhd: ['1920', '1080'],
   qhd: ['2k', '1920'],
@@ -72,7 +73,8 @@ const sourceOrder: Array<{ media?: string; suffix: SliderSuffix }> = [
   { media: '(min-width: 3840px)', suffix: 'uhd' },
   { media: '(min-width: 2560px)', suffix: 'qhd' },
   { media: '(min-width: 1920px)', suffix: 'fhd' },
-  { media: '(min-width: 1280px)', suffix: 'desktop' },
+  { media: '(min-width: 1536px)', suffix: 'desktop' },
+  { media: '(min-width: 1280px)', suffix: 'desktop-1440' },
   { media: '(min-width: 1024px)', suffix: 'laptop' },
   { media: '(min-width: 768px)', suffix: 'tablet' },
   { media: '(min-width: 640px)', suffix: 'mobile-wide' },
@@ -86,6 +88,7 @@ const sliderDimensions: Record<SliderSuffix, { width: number; height: number }> 
   'mobile-wide': { width: 1440, height: 550 },
   tablet: { width: 1920, height: 800 },
   laptop: { width: 2560, height: 533 },
+  'desktop-1440': { width: 1440, height: 281 },
   desktop: { width: 2560, height: 500 },
   fhd: { width: 3840, height: 720 },
   qhd: { width: 5120, height: 1300 },
@@ -95,8 +98,8 @@ const sliderDimensions: Record<SliderSuffix, { width: number; height: number }> 
 const buildCandidateSources = (slide: SlideId, suffix: SliderSuffix) =>
   Array.from(
     new Set([
-      `/images/slider/slade${slide}-${suffix}.jpg`,
-      ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.jpg`),
+      `/images/slider/slade${slide}-${suffix}.webp`,
+      ...legacyFallbackBySuffix[suffix].map((legacy) => `/images/slider/slade${slide}-${legacy}.webp`),
     ]),
   )
 
@@ -112,17 +115,23 @@ const getHeroImageProps = ({
   suffix: SliderSuffix
 }) => {
   const dimensions = sliderDimensions[suffix]
-  return getImageProps({
+  const generatedName = suffix === 'desktop-1440'
+    ? `/images/slider/generated/slade${slide}-desktop-1440.webp`
+    : `/images/slider/generated/slade${slide}-${suffix}.webp`
+  const fallbackName = suffix === 'desktop-1440'
+    ? `/images/slider/slade${slide}-desktop.webp`
+    : `/images/slider/slade${slide}-${suffix}.webp`
+
+  return {
     alt,
-    decoding: 'async',
-    fetchPriority: priority ? 'high' : 'auto',
+    decoding: 'async' as const,
+    fetchPriority: priority ? 'high' as const : 'auto' as const,
     height: dimensions.height,
-    loading: priority ? 'eager' : 'lazy',
-    quality: priority ? 82 : 75,
-    sizes: '100vw',
-    src: versionLocalImagePath(`/images/slider/slade${slide}-${suffix}.jpg`),
+    loading: priority ? 'eager' as const : 'lazy' as const,
+    src: versionLocalImagePath(fallbackName),
+    webpSrc: versionLocalImagePath(generatedName),
     width: dimensions.width,
-  }).props
+  }
 }
 
 const HeroPicture = ({
@@ -148,6 +157,7 @@ const HeroPicture = ({
     slide,
     suffix: 'desktop',
   })
+  const { webpSrc: _fallbackWebpSrc, ...fallbackImageProps } = fallbackProps
 
   return (
     <picture className="block h-full w-full">
@@ -158,13 +168,13 @@ const HeroPicture = ({
           <source
             key={`${slide}-${suffix}`}
             media={media}
-            sizes={sourceProps.sizes}
-            srcSet={sourceProps.srcSet}
+            srcSet={sourceProps.webpSrc}
+            type="image/webp"
           />
         )
       })}
       <img
-        {...fallbackProps}
+        {...fallbackImageProps}
         alt={alt}
         onError={() => {
           setFallbackIndex((prev) => (prev >= fallbackCandidates.length - 1 ? prev : prev + 1))
@@ -185,13 +195,17 @@ const SliderSlideContent = ({
   slide: SlideContent
   priority?: boolean
 }) => {
+  const shouldRenderImage = active || priority
+
   return (
     <div className="slider-item relative h-full w-full overflow-hidden bg-[#46bcd3]">
-      <HeroPicture
-        alt={`Slide principal ${slide.id} de ParaMascotasEC`}
-        slide={slide.id}
-        priority={priority}
-      />
+      {shouldRenderImage ? (
+        <HeroPicture
+          alt={`Slide principal ${slide.id} de ParaMascotasEC`}
+          slide={slide.id}
+          priority={priority}
+        />
+      ) : null}
       <div className={`pet-hero-copy pet-hero-copy--slide-${slide.id}`}>
         <h1 className="pet-hero-title">{slide.title}</h1>
         <p className="pet-hero-subtitle">{slide.subtitle}</p>
@@ -309,8 +323,8 @@ const SliderPet = () => {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-8 z-10 flex items-center justify-center px-4 md:bottom-10 md:px-6">
-          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-3 rounded-full border border-black/10 bg-white/70 px-3 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-x-0 bottom-1 z-10 flex items-center justify-center px-4 sm:bottom-8 md:bottom-10 md:px-6">
+          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 shadow-[0_6px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm sm:gap-2 sm:px-3 sm:py-2 xl:gap-3">
             {slides.map((slide, index) => (
               <button
                 key={slide.id}
@@ -321,9 +335,9 @@ const SliderPet = () => {
                 className="flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]"
               >
                 <span
-                  className={`block h-3 w-3 rounded-full border transition-all duration-300 ${
+                  className={`block h-2.5 w-2.5 rounded-full border transition-all duration-300 sm:h-3 sm:w-3 ${
                   selectedIndex === index
-                    ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_4px_rgba(10,123,143,0.18)]'
+                    ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_3px_rgba(10,123,143,0.18)] sm:shadow-[0_0_0_4px_rgba(10,123,143,0.18)]'
                     : 'border-[var(--blue)]/45 bg-white hover:bg-[var(--blue)]/12'
                   }`}
                 />

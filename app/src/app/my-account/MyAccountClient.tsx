@@ -1151,7 +1151,7 @@ const MyAccount = () => {
         }
     }, [loadDiscountData, showNotification])
 
-    const handleDuplicateVariant = React.useCallback((product: any) => {
+    const handleDuplicateVariant = React.useCallback(async (product: any) => {
         const rate = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
         const multiplier = 1 + rate / 100
         const productType = String(product?.productType || product?.category || '')
@@ -1163,9 +1163,29 @@ const MyAccount = () => {
             )
             return
         }
+        let sourceProduct = product
+        const productId = getAdminProductEntityId(product)
+        if (productId) {
+            try {
+                const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(productId)}?scope=admin&procurement_detail=1`))
+                const normalizedDetail = normalizeAdminProducts([res.body])[0]
+                if (normalizedDetail) {
+                    const procurementDetail = res.body?.inventory?.procurementDetail
+                    sourceProduct = {
+                        ...normalizedDetail,
+                        inventory: {
+                            ...(normalizedDetail.inventory || {}),
+                            ...(procurementDetail ? { procurementDetail } : {}),
+                        },
+                    }
+                }
+            } catch {
+                showNotification('No se pudo cargar el detalle de compra de la base; usaré los datos visibles de la lista.', 'error')
+            }
+        }
         setEditingProduct(null)
         setProductEditorMode('duplicate-variant')
-        setProductEditorInitialForm(createDuplicateVariantFormFromProduct(product, multiplier))
+        setProductEditorInitialForm(createDuplicateVariantFormFromProduct(sourceProduct, multiplier))
         setIsProductModalOpen(true)
         showNotification(`Se creó una copia de la variante. Define una nueva ${getVariantDefinitionFieldLabel(productType)} antes de guardar.`)
     }, [dashboardStats?.tax?.rate, showNotification, vatRate])

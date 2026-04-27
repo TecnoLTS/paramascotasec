@@ -1,7 +1,6 @@
 'use client'
 
 import React from 'react'
-import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import type { ProductPublicationFilter } from '../types'
@@ -101,6 +100,24 @@ const FILTER_OPTIONS: Array<{ key: ProductPublicationFilter; label: string }> = 
     { key: 'published', label: 'Publicados' },
     { key: 'hidden', label: 'Ocultos' }
 ]
+
+const appendAdminImageCacheKey = (src: string, product: any) => {
+    if (!src.startsWith('/uploads/')) return src
+
+    const cacheKey = String(product?.updatedAt || product?.updated_at || product?.modifiedAt || product?.modified_at || '').trim()
+    if (!cacheKey) return src
+
+    const separator = src.includes('?') ? '&' : '?'
+    return `${src}${separator}v=${encodeURIComponent(cacheKey)}`
+}
+
+const resolveAdminProductImage = (product: any) => {
+    const imageSrc = (product.thumbImage && product.thumbImage.length > 0
+        ? product.thumbImage[0]
+        : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1.webp')) as string
+
+    return appendAdminImageCacheKey(imageSrc || '/images/product/1.webp', product)
+}
 
 export default React.memo(function ProductsManagementPanel({
     products,
@@ -422,21 +439,24 @@ export default React.memo(function ProductsManagementPanel({
                             const publicationPending = Boolean(publicationPendingIds[productId])
                             const itemKey = productId || String(product?.id || product?.legacyId || product?.name || `product-${index}`)
                             const variantMeta = getProductVariantMeta(product)
-                            const imageSrc = (product.thumbImage && product.thumbImage.length > 0
-                                ? product.thumbImage[0]
-                                : (product.images && product.images.length > 0 ? product.images[0] : '/images/product/1000x1000.png')) as string
+                            const imageSrc = resolveAdminProductImage(product)
 
                             return (
                                 <tr key={itemKey} className="border-b border-line last:border-0 hover:bg-surface duration-300">
                                     <td className="py-4">
                                         <div className="w-12 h-12 bg-line rounded-lg overflow-hidden">
-                                            <Image
+                                            <img
+                                                key={`${itemKey}-${imageSrc}`}
                                                 src={imageSrc}
-                                                width={100}
-                                                height={100}
                                                 alt={product.name}
-                                                unoptimized={imageSrc.startsWith('/uploads/') || imageSrc.startsWith('/images/')}
+                                                loading="lazy"
+                                                decoding="async"
                                                 className="w-full h-full object-cover"
+                                                onError={(event) => {
+                                                    const fallback = '/images/product/1.webp'
+                                                    if (event.currentTarget.src.endsWith(fallback)) return
+                                                    event.currentTarget.src = fallback
+                                                }}
                                             />
                                         </div>
                                     </td>

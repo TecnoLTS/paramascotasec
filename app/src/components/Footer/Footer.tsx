@@ -11,6 +11,34 @@ type FooterProps = {
     categoryIds?: string[]
 }
 
+const socialIconClassName = 'h-6 w-6'
+
+const FacebookIcon = () => (
+    <svg viewBox="0 0 24 24" className={socialIconClassName} fill="currentColor" aria-hidden="true">
+        <path d="M14 8.5V6.75c0-.8.18-1.25 1.36-1.25H17V2.2c-.8-.08-1.6-.13-2.4-.13-2.38 0-4.02 1.45-4.02 4.12V8.5H8v3.7h2.58V22H14v-9.8h2.8l.44-3.7H14Z" />
+    </svg>
+)
+
+const InstagramIcon = () => (
+    <svg viewBox="0 0 24 24" className={socialIconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+)
+
+const TwitterIcon = () => (
+    <svg viewBox="0 0 24 24" className={socialIconClassName} fill="currentColor" aria-hidden="true">
+        <path d="m13.9 10.5 6.18-7.2h-1.46l-5.37 6.24L8.97 3.3H4.03l6.48 9.44-6.48 7.54h1.46l5.67-6.6 4.53 6.6h4.94l-6.73-9.78Zm-2 2.33-.66-.94-5.22-7.46h2.25l4.22 6.04.66.94 5.48 7.84h-2.25l-4.48-6.42Z" />
+    </svg>
+)
+
+const YoutubeIcon = () => (
+    <svg viewBox="0 0 24 24" className={socialIconClassName} fill="currentColor" aria-hidden="true">
+        <path d="M21.58 7.2a2.77 2.77 0 0 0-1.95-1.96C17.9 4.78 12 4.78 12 4.78s-5.9 0-7.63.46A2.77 2.77 0 0 0 2.42 7.2 28.8 28.8 0 0 0 1.96 12c0 1.63.15 3.25.46 4.8.26.96 1 1.7 1.95 1.96 1.73.46 7.63.46 7.63.46s5.9 0 7.63-.46a2.77 2.77 0 0 0 1.95-1.96c.31-1.55.46-3.17.46-4.8 0-1.63-.15-3.25-.46-4.8ZM10 15.25v-6.5L15.2 12 10 15.25Z" />
+    </svg>
+)
+
 const Footer = ({ categoryIds }: FooterProps) => {
     const site = useSite()
     const currentYear = 2026
@@ -79,16 +107,16 @@ const Footer = ({ categoryIds }: FooterProps) => {
 
                             <div className="list-social mt-7 flex items-center gap-5">
                                 <Link href={site.social.facebook ?? 'https://www.facebook.com/'} target='_blank' className="text-[24px] text-black transition-opacity hover:opacity-70" aria-label="Facebook">
-                                    <div className="icon-facebook"></div>
+                                    <FacebookIcon />
                                 </Link>
                                 <Link href={site.social.instagram ?? 'https://www.instagram.com/'} target='_blank' className="text-[24px] text-black transition-opacity hover:opacity-70" aria-label="Instagram">
-                                    <div className="icon-instagram"></div>
+                                    <InstagramIcon />
                                 </Link>
                                 <Link href={site.social.twitter ?? 'https://www.twitter.com/'} target='_blank' className="text-[24px] text-black transition-opacity hover:opacity-70" aria-label="Twitter">
-                                    <div className="icon-twitter"></div>
+                                    <TwitterIcon />
                                 </Link>
                                 <Link href={site.social.youtube ?? 'https://www.youtube.com/'} target='_blank' className="text-[24px] text-black transition-opacity hover:opacity-70" aria-label="YouTube">
-                                    <div className="icon-youtube"></div>
+                                    <YoutubeIcon />
                                 </Link>
                             </div>
                         </div>

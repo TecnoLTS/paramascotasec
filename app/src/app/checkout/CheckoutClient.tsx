@@ -130,7 +130,7 @@ type CheckoutSummaryImageProps = {
     alt: string;
 }
 
-const CHECKOUT_PLACEHOLDER_IMAGE = '/images/placeholder.jpg'
+const CHECKOUT_PLACEHOLDER_IMAGE = '/images/product/1.webp'
 const ACCOUNT_ADDRESSES_STORAGE_KEY = 'userAddresses'
 const LEGACY_ADDRESSES_STORAGE_KEY = 'savedAddresses'
 const PENDING_CHECKOUT_ADDRESSES_STORAGE_KEY = 'checkoutPendingAddresses'
@@ -811,7 +811,7 @@ const Checkout = () => {
                     || item.images?.[0]
                     || item.variation?.[0]?.image
                     || item.variation?.[0]?.colorImage
-                    || '/images/placeholder.jpg',
+                    || '/images/product/1.webp',
             })),
         [cartState.cartArray]
     )

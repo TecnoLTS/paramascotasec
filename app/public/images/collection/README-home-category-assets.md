@@ -8,11 +8,11 @@ Path:
 `/public/images/collection/home-top`
 
 Files in active use:
-- `catalogo-completo-para-mascotas-4x5.jpg` -> `Todas`
-- `ropa-para-mascotas-4x5.jpg` -> `Ropa`
-- `alimento-para-mascotas-4x5.jpg` -> `Alimento`
-- `salud-para-mascotas-4x5.jpg` -> `Salud`
-- `accesorios-para-mascotas-4x5.jpg` -> `Accesorios`
+- `catalogo-completo-para-mascotas-4x5.webp` -> `Todas`
+- `ropa-para-mascotas-4x5.webp` -> `Ropa`
+- `alimento-para-mascotas-4x5.webp` -> `Alimento`
+- `salud-para-mascotas-4x5.webp` -> `Salud`
+- `accesorios-para-mascotas-4x5.webp` -> `Accesorios`
 
 Recommended source size:
 - `1200x1500`
@@ -28,14 +28,14 @@ Path:
 The current home layout only needs 6 files.
 
 Mobile `<640px`
-- `alimentos-para-mascotas-en-ecuador-mobile-principal-16x10.jpg` -> `1176x736`
-- `salud-para-mascotas-en-ecuador-mobile-secundario-square.jpg` -> `588x588`
-- `accesorios-para-mascotas-en-ecuador-mobile-secundario-square.jpg` -> `588x588`
+- `alimentos-para-mascotas-en-ecuador-mobile-principal-16x10.webp` -> `1176x736`
+- `salud-para-mascotas-en-ecuador-mobile-secundario-square.webp` -> `588x588`
+- `accesorios-para-mascotas-en-ecuador-mobile-secundario-square.webp` -> `588x588`
 
 Desktop `>=640px`
-- `alimentos-para-mascotas-en-ecuador-desktop-principal-4x5.jpg` -> `1260x1240`
-- `salud-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg` -> `1260x590`
-- `accesorios-para-mascotas-en-ecuador-desktop-secundario-16x10.jpg` -> `1260x590`
+- `alimentos-para-mascotas-en-ecuador-desktop-principal-4x5.webp` -> `1260x1240`
+- `salud-para-mascotas-en-ecuador-desktop-secundario-16x10.webp` -> `1260x590`
+- `accesorios-para-mascotas-en-ecuador-desktop-secundario-16x10.webp` -> `1260x590`
 
 Notes
 - `Salud` and `Accesorios` share the same required resolution because they use the same slot size.

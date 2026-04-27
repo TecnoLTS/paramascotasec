@@ -22,7 +22,7 @@ const Banner2 = () => {
                             <div className="absolute -inset-1 bg-white/20 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
                             <div className="relative block w-full max-w-[500px] aspect-[1920/460] overflow-hidden rounded-3xl shadow-2xl transform transition duration-500 hover:scale-[1.02]">
                                 <Image
-                                    src="/images/banner/jornadas-de-adopcion-paramascotas-1920x460.jpg"
+                                    src="/images/banner/jornadas-de-adopcion-paramascotas-1920x460.webp"
                                     alt="Jornadas de adopción"
                                     fill
                                     sizes="(min-width: 1280px) 500px, (min-width: 1024px) 42vw, 90vw"

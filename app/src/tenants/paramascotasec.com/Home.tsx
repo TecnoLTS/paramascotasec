@@ -9,9 +9,9 @@ import { getCategoryCards, getHomeSecondaryCategoryCards } from '@/data/petCateg
 
 const Collection = dynamic(() => import('@/components/Pet/Collection'))
 const Collection2 = dynamic(() => import('@/components/Pet/Collection2'))
-const FeatureProduct = dynamic(() => import('@/components/Pet/FeatureProduct'))
+const DeferredFeatureProduct = dynamic(() => import('@/components/Pet/DeferredFeatureProduct'))
 const ChooseUs = dynamic(() => import('@/components/Pet/ChooseUs'))
-const AllProducts = dynamic(() => import('@/components/Product/AllProducts'))
+const DeferredAllProducts = dynamic(() => import('@/components/Product/DeferredAllProducts'))
 const Benefit = dynamic(() => import('@/components/Pet/Benefit'))
 const Brand = dynamic(() => import('@/components/Pet/Brand'))
 
@@ -38,10 +38,10 @@ const ParamascotasecHome = ({
       <main id="main-content">
         <SliderPet />
         <Collection categories={homeCategories} />
-        <AllProducts data={products} />
+        <DeferredAllProducts data={products} />
         <Benefit props="md:py-10 py-5" />
         <ChooseUs />
-        <FeatureProduct data={products} start={0} limit={4} />
+        <DeferredFeatureProduct data={products} start={0} limit={4} />
         <Collection2 categories={homeFeaturedCategories} />
         <Brand products={products} />
       </main>

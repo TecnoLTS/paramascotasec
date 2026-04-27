@@ -219,7 +219,7 @@ const ModalCart = ({
                                 const rawSrc =
                                     (typeof firstThumb === 'string' ? firstThumb : (firstThumb as any)?.url) ??
                                     (typeof firstImage === 'string' ? firstImage : (firstImage as any)?.url) ??
-                                    '/images/product/1.jpg'
+                                    '/images/product/1.webp'
                                 const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <div key={product.id} className='item py-5 flex items-center justify-between gap-3 border-b border-line'>
@@ -285,12 +285,12 @@ const ModalCart = ({
                                 const src = normalizeImageSrc(rawSrc)
                                 return (
                                     <Image
-                                        src={src || '/images/product/1.jpg'}
+                                        src={src || '/images/product/1.webp'}
                                         width={300}
                                         height={300}
                                         alt={product.name}
                                         className='w-full h-full object-contain object-center'
-                                        unoptimized={shouldUnoptimize(src || '/images/product/1.jpg')}
+                                        unoptimized={shouldUnoptimize(src || '/images/product/1.webp')}
                                     />
                                 )
                             })()}

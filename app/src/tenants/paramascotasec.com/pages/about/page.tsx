@@ -18,7 +18,7 @@ const AboutUs = () => {
                 <section className="about-banner relative w-full overflow-hidden">
                     <div className="relative h-56 sm:h-72 md:h-[420px] lg:h-[500px] w-full">
                         <Image
-                            src="/images/banner/27.jpg"
+                            src="/images/banner/27.webp"
                             fill
                             priority
                             alt="About Us Banner"
@@ -42,7 +42,7 @@ const AboutUs = () => {
                             <div className="hidden md:block">
                                 <div className="relative w-full h-[420px] lg:h-[520px] rounded-[32px] overflow-hidden shadow-xl">
                                     <Image
-                                        src="/images/banner/28.jpg"
+                                        src="/images/banner/28.webp"
                                         fill
                                         alt="Quiénes somos"
                                         className="object-cover hover:scale-105 duration-700"
@@ -53,7 +53,7 @@ const AboutUs = () => {
                             <div className="overflow-hidden">
                                 <div className="md:hidden float-right ml-4 mb-3 relative w-36 h-24 rounded-xl overflow-hidden shadow-md">
                                     <Image
-                                        src="/images/banner/28.jpg"
+                                        src="/images/banner/28.webp"
                                         fill
                                         alt="Quiénes somos móvil"
                                         className="object-cover"
@@ -80,7 +80,7 @@ const AboutUs = () => {
                             <div className="overflow-hidden">
                                 <div className="md:hidden float-left mr-4 mb-3 relative w-36 h-24 rounded-xl overflow-hidden shadow-md">
                                     <Image
-                                        src="/images/banner/30.jpg"
+                                        src="/images/banner/30.webp"
                                         fill
                                         alt="Lo que ofrecemos móvil"
                                         className="object-cover"
@@ -126,7 +126,7 @@ const AboutUs = () => {
                             <div className="hidden md:block">
                                 <div className="relative w-full h-[420px] lg:h-[520px] rounded-[32px] overflow-hidden shadow-xl">
                                     <Image
-                                        src="/images/banner/30.jpg"
+                                        src="/images/banner/30.webp"
                                         fill
                                         alt="Lo que ofrecemos"
                                         className="object-cover hover:scale-105 duration-700"
@@ -147,7 +147,7 @@ const AboutUs = () => {
                         </div>
                         <div className="relative w-full h-52 sm:h-64 md:h-[420px] lg:h-[500px] rounded-[20px] sm:rounded-[24px] md:rounded-[32px] overflow-hidden shadow-xl">
                             <Image
-                                src="/images/banner/31.jpg"
+                                src="/images/banner/31.webp"
                                 fill
                                 alt="Nuestra filosofía"
                                 className="object-cover"

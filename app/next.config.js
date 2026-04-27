@@ -75,6 +75,26 @@ const nextConfig = {
             },
         ]
     },
+    async rewrites() {
+        return [
+            {
+                source: '/images/:path*.jpg',
+                destination: '/images/:path*.webp',
+            },
+            {
+                source: '/images/:path*.jpeg',
+                destination: '/images/:path*.webp',
+            },
+            {
+                source: '/uploads/:path*.jpg',
+                destination: '/uploads/:path*.webp',
+            },
+            {
+                source: '/uploads/:path*.jpeg',
+                destination: '/uploads/:path*.webp',
+            },
+        ]
+    },
 }
 
 module.exports = nextConfig

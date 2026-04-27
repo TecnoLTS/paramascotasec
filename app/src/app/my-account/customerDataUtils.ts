@@ -344,7 +344,7 @@ export const getItemNetPrice = (item: any, order: any) => {
   return multiplier > 0 ? price / multiplier : price
 }
 
-const ORDER_ITEM_IMAGE_FALLBACK = '/images/product/1.jpg'
+const ORDER_ITEM_IMAGE_FALLBACK = '/images/product/1.webp'
 
 export const normalizeOrderItemImage = (value: unknown) => {
   const raw = String(value || '').trim()

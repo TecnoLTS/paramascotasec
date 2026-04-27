@@ -136,12 +136,12 @@ export const siteConfig: SiteConfig = {
     banner: {
       title: ' ',
       subtitle: ' ',
-      image: '/images/collection/14.jpg',
+      image: '/images/collection/14.webp',
     },
     servicesBanner: {
       title: ' ',
       subtitle: ' ',
-      image: '/images/collection/15.jpg',
+      image: '/images/collection/15.webp',
     },
     departmentLinks: SHOP_DEPARTMENT_CATEGORY_IDS.map((categoryId) => ({
       label: getCategoryLabel(categoryId),

@@ -70,7 +70,7 @@ const ChooseUs = () => {
                                 <div className="absolute -bottom-3 -right-3 w-16 h-16 bg-[#8684D4]/10 rounded-full blur-3xl"></div>
                                 <div className="relative block w-full aspect-[5/6] sm:aspect-[4/5] overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.1)]">
                                     <Image
-                                        src="/images/banner/choose-us-pet-2040x1884.jpg"
+                                        src="/images/banner/choose-us-pet-2040x1884.webp"
                                         alt="Perro mirando un corazón de juguete"
                                         fill
                                         sizes="(min-width: 640px) 220px, 38vw"
@@ -93,7 +93,7 @@ const ChooseUs = () => {
                             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-[#8684D4]/10 rounded-full blur-3xl"></div>
                             <div className="relative block w-full aspect-[2040/1884] overflow-hidden rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)]">
                                 <Image
-                                    src="/images/banner/choose-us-pet-2040x1884.jpg"
+                                    src="/images/banner/choose-us-pet-2040x1884.webp"
                                     alt="Perro mirando un corazón de juguete"
                                     fill
                                     sizes="(min-width: 1280px) 620px, (min-width: 1024px) 46vw, 50vw"

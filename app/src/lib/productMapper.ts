@@ -100,6 +100,15 @@ type ProductWithRelations = {
   daysToExpire?: number | string | null
   expirationStatus?: 'none' | 'ok' | 'expiring' | 'expired' | null
   lastPurchaseInvoice?: PurchaseInvoiceSummary | null
+  lastPurchaseInvoiceId?: string | null
+  lastPurchaseInvoiceNumber?: string | null
+  lastPurchaseSupplierName?: string | null
+  lastPurchaseSupplierDocument?: string | null
+  lastPurchaseIssuedAt?: string | null
+  lastPurchaseReceivedAt?: string | null
+  lastPurchaseQuantity?: number | string | null
+  lastPurchaseUnitCost?: number | string | null
+  lastPurchaseLineTotal?: number | string | null
 
   // relaciones
   images?: ({ url: string } | string)[]
@@ -128,27 +137,37 @@ type ProductWithRelations = {
 
 type PurchaseInvoiceSummary = {
   id?: string | null
+  invoice_number?: string | null
   invoiceNumber?: string | null
+  supplier_name?: string | null
   supplierName?: string | null
+  supplier_document?: string | null
   supplierDocument?: string | null
+  issued_at?: string | null
   issuedAt?: string | null
+  received_at?: string | null
   receivedAt?: string | null
   quantity?: number | string | null
+  unit_cost?: number | string | null
   unitCost?: number | string | null
+  line_total?: number | string | null
   lineTotal?: number | string | null
 }
 
 const normalizeImageUrl = (url: string) => {
   if (!url) return url
-  if (url.startsWith('/')) return url
+  const normalizeLocalAssetPath = (path: string) =>
+    path.replace(/\.(jpe?g)(?=($|[?#]))/i, '.webp')
+
+  if (url.startsWith('/')) return normalizeLocalAssetPath(url)
   try {
     const parsed = new URL(url)
-    if (parsed.hostname.startsWith('api.')) {
-      return url
-    }
     const path = parsed.pathname
     if (path.startsWith('/uploads/') || path.startsWith('/images/')) {
-      return path
+      return normalizeLocalAssetPath(path)
+    }
+    if (parsed.hostname.startsWith('api.')) {
+      return url
     }
     return url
   } catch {
@@ -178,15 +197,34 @@ const mapPurchaseInvoiceSummary = (invoice?: PurchaseInvoiceSummary | null) => {
   if (!invoice) return null
   return {
     id: invoice.id ?? null,
-    invoiceNumber: invoice.invoiceNumber ?? null,
-    supplierName: invoice.supplierName ?? null,
-    supplierDocument: invoice.supplierDocument ?? null,
-    issuedAt: invoice.issuedAt ?? null,
-    receivedAt: invoice.receivedAt ?? null,
+    invoiceNumber: invoice.invoiceNumber ?? invoice.invoice_number ?? null,
+    supplierName: invoice.supplierName ?? invoice.supplier_name ?? null,
+    supplierDocument: invoice.supplierDocument ?? invoice.supplier_document ?? null,
+    issuedAt: invoice.issuedAt ?? invoice.issued_at ?? null,
+    receivedAt: invoice.receivedAt ?? invoice.received_at ?? null,
     quantity: Number(invoice.quantity ?? 0),
-    unitCost: Number(invoice.unitCost ?? 0),
-    lineTotal: Number(invoice.lineTotal ?? 0),
+    unitCost: Number(invoice.unitCost ?? invoice.unit_cost ?? 0),
+    lineTotal: Number(invoice.lineTotal ?? invoice.line_total ?? 0),
   }
+}
+
+const resolveLastPurchaseInvoice = (product: ProductWithRelations) => {
+  const nestedInvoice = mapPurchaseInvoiceSummary(product.lastPurchaseInvoice ?? product.inventory?.lastPurchaseInvoice)
+  if (nestedInvoice) return nestedInvoice
+
+  if (!product.lastPurchaseInvoiceId && !product.lastPurchaseInvoiceNumber) return null
+
+  return mapPurchaseInvoiceSummary({
+    id: product.lastPurchaseInvoiceId ?? null,
+    invoiceNumber: product.lastPurchaseInvoiceNumber ?? null,
+    supplierName: product.lastPurchaseSupplierName ?? null,
+    supplierDocument: product.lastPurchaseSupplierDocument ?? null,
+    issuedAt: product.lastPurchaseIssuedAt ?? null,
+    receivedAt: product.lastPurchaseReceivedAt ?? null,
+    quantity: product.lastPurchaseQuantity ?? 0,
+    unitCost: product.lastPurchaseUnitCost ?? 0,
+    lineTotal: product.lastPurchaseLineTotal ?? 0,
+  })
 }
 
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
@@ -212,7 +250,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     ? galleryFromMeta
     : (galleryWithoutThumbs.length > 0 ? galleryWithoutThumbs : images)
   const variations = product.variations?.map(mapVariation) ?? []
-  const lastPurchaseInvoice = mapPurchaseInvoiceSummary(product.lastPurchaseInvoice ?? product.inventory?.lastPurchaseInvoice)
+  const lastPurchaseInvoice = resolveLastPurchaseInvoice(product)
   const variantLabel = [
     normalizedAttributes.variantLabel,
     normalizedAttributes.size,
