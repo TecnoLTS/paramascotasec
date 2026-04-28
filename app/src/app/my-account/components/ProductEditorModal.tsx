@@ -1737,6 +1737,7 @@ export default function ProductEditorModal({
             const nextAttributes: Record<string, string> = {
                 ...(prev.attributes || {}),
                 __variantDefinitionField: fieldKey,
+                variantAxis: fieldKey,
             }
 
             nextAttributes.variantLabel = String(nextAttributes[fieldKey] || '').trim()
@@ -1756,6 +1757,7 @@ export default function ProductEditorModal({
                 ...(prev.attributes || {}),
                 variantLabel: value,
                 __variantDefinitionField: duplicateVariantFieldKey,
+                variantAxis: duplicateVariantFieldKey,
             }
 
             if (duplicateVariantFieldKey === 'presentation' || normalizedType === 'cuidado') {
@@ -1881,7 +1883,7 @@ export default function ProductEditorModal({
             })
             let nextVariantLabel = resolveProductVariantLabel(productType, normalizedAttributes)
             const resolvedProductName = isDuplicateVariantMode
-                ? [duplicateVariantBaseName, nextVariantLabel].filter(Boolean).join(' ').trim()
+                ? duplicateVariantBaseName
                 : name
             if (resolvedProductName && resolvedProductName !== draftVariantName) {
                 normalizedAttributes = enrichVariantAttributes({
@@ -1918,9 +1920,14 @@ export default function ProductEditorModal({
                     nextErrors[variantDefinitionField] = `Debes definir la ${variantDefinitionFieldLabel} de la nueva variante.`
                 } else {
                     normalizedAttributes.variantLabel = nextVariantLabel
+                    normalizedAttributes.variantAxis = duplicateVariantFieldKey
                     if (duplicateSourceVariantFieldValue && duplicateSourceVariantFieldValue === nextVariantFieldValue) {
                         nextErrors[variantDefinitionField] = `La nueva variante debe usar un valor de ${variantDefinitionFieldLabel} distinto al original.`
-                    } else if (duplicateSourceVariantLabel && duplicateSourceVariantLabel.toLowerCase() === nextVariantLabel.toLowerCase()) {
+                    } else if (
+                        duplicateVariantFieldKey === String(initialForm.attributes?.__variantDefinitionField || '').trim()
+                        && duplicateSourceVariantLabel
+                        && duplicateSourceVariantLabel.toLowerCase() === nextVariantLabel.toLowerCase()
+                    ) {
                         nextErrors[variantDefinitionField] = `La nueva variante debe usar un valor distinto a ${duplicateSourceVariantLabel}.`
                     }
                 }

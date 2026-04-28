@@ -168,6 +168,11 @@ const resolveCanonicalVariantLabelByType = (type: string, attributes: Record<str
     const presentation = normalizeMeasurementLabel(String(attributes.presentation || '')).trim()
     const color = titleCaseWords(String(attributes.color || '').trim())
     const explicit = normalizeMeasurementLabel(String(attributes.variantLabel || '')).trim()
+    const variantAxis = String(attributes.variantAxis || attributes.variantDefinitionField || '').trim()
+    if (variantAxis) {
+        const axisValue = normalizeMeasurementLabel(String(attributes[variantAxis] || '')).trim()
+        if (axisValue) return axisValue
+    }
 
     if (normalizedType === 'ropa') {
         return size || color || explicit
@@ -539,6 +544,7 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
         'supplier',
         'taxExempt',
         'variantLabel',
+        'variantAxis',
         'variantBaseName',
         'variantGroupKey',
     ])).forEach((key) => {
@@ -787,6 +793,7 @@ export const createDuplicateVariantFormFromProduct = (product: any, vatMultiplie
     duplicatedAttributes.lotCode = ''
     duplicatedAttributes.expirationDate = ''
     duplicatedAttributes.variantLabel = ''
+    duplicatedAttributes.variantAxis = sourceVariantFieldKey
     duplicatedAttributes.variantBaseName = resolveProductVariantBaseName(product)
     duplicatedAttributes.__sourceVariantLabel = sourceVariantLabel
     duplicatedAttributes.__variantDefinitionField = sourceVariantFieldKey
