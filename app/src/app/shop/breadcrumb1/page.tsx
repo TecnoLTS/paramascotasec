@@ -47,7 +47,7 @@ export default async function BreadCrumb1({ searchParams }: Props) {
 
     let products: ProductType[] = []
     try {
-        products = orderProductsFoodFirst(await fetchProducts())
+        products = orderProductsFoodFirst(await fetchProducts({ fresh: true }))
     } catch (error) {
         console.error('No se pudieron cargar productos en BreadCrumb1:', error)
     }

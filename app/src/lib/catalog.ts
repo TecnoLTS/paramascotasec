@@ -185,6 +185,14 @@ export const getProductVariantBaseName = (product: ProductType) => {
 }
 
 export const getProductVariantGroupKey = (product: ProductType) => {
+  const catalogDisplayMode = (
+    getAttributeValue(product, ['catalogDisplayMode', 'variantDisplayMode'])
+    || String((product.attributes as any)?.showAsSeparateProduct || '')
+  ).trim().toLowerCase()
+  if (['separate', 'individual', 'standalone', 'true', '1', 'yes', 'si', 'sí'].includes(catalogDisplayMode)) {
+    return `single:${product.id}`
+  }
+
   const explicit = (product.variantGroupKey ?? '').trim() || getAttributeValue(product, ['variantGroupKey'])
   if (explicit) return explicit
 

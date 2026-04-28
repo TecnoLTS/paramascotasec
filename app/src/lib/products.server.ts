@@ -28,12 +28,6 @@ const defaultProductPageSettings = {
   returnDays: 100,
 }
 
-const getCachedProducts = unstable_cache(
-  async () => fetchProducts(),
-  ['catalog-products'],
-  { revalidate: 60, tags: ['catalog-products'] },
-)
-
 const getCachedProductPageSettings = unstable_cache(
   async () => getProductPageSettings().catch(() => defaultProductPageSettings),
   ['catalog-product-page-settings'],
@@ -44,7 +38,7 @@ export const loadProducts = async (options: LoadProductsOptions = {}): Promise<P
   try {
     const useFreshProducts = options.fresh === true
     const [products, settingsResult] = await Promise.all([
-      useFreshProducts ? fetchProducts({ fresh: true }) : getCachedProducts(),
+      fetchProducts({ fresh: useFreshProducts || options.fresh !== false }),
       getCachedProductPageSettings(),
     ])
     const withSettings = orderProductsFoodFirst(products).map((product) => ({ ...product, pageSettings: settingsResult }))

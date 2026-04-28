@@ -15,10 +15,10 @@ import Footer from '@/components/Footer/Footer'
 import ModalNewsletter from '@/components/Modal/ModalNewsletter'
 import { fetchProducts } from '@/lib/products'
 import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function HomePet() {
-    const products = orderProductsFoodFirst(await fetchProducts())
+    const products = orderProductsFoodFirst(await fetchProducts({ fresh: true }))
 
     return (
         <>

@@ -8,7 +8,7 @@ let cachedProductsAt = 0
 let inFlightProductsRequest: Promise<ProductType[]> | null = null
 
 const getClientProductsCacheTtlMs = () => (
-  process.env.NODE_ENV === 'development' ? 5000 : 60000
+  0
 )
 
 const shouldUseClientProductsCache = () => typeof window !== 'undefined'

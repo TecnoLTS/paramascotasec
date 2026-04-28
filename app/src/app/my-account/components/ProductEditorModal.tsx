@@ -148,12 +148,17 @@ const formatDecimalForDisplay = (value: string | number | null | undefined, frac
     })
 }
 
+const roundDecimal = (value: number, fractionDigits = 2) => {
+    const factor = 10 ** fractionDigits
+    return Math.round((value + Number.EPSILON) * factor) / factor
+}
+
 const finalizeDecimalForStorage = (value: string | number | null | undefined, fractionDigits = 2) => {
     const raw = String(value ?? '').trim()
     if (!raw) return ''
     const parsed = parseLocalizedDecimal(raw)
     if (!Number.isFinite(parsed)) return ''
-    return roundCurrency(parsed).toFixed(fractionDigits)
+    return roundDecimal(parsed, fractionDigits).toFixed(fractionDigits)
 }
 
 const parseLocalizedDecimal = (value: string | number | null | undefined): number => {
@@ -568,6 +573,7 @@ export default function ProductEditorModal({
     const [activeMoneyField, setActiveMoneyField] = React.useState<'price' | 'pvp' | 'cost' | 'costWithVat' | null>(null)
     const [markupInput, setMarkupInput] = React.useState('')
     const [markupManuallySet, setMarkupManuallySet] = React.useState(false)
+    const [formSessionKey, setFormSessionKey] = React.useState('product-editor-form')
     const [imageUploading, setImageUploading] = React.useState<Record<string, boolean>>({})
     const [saving, setSaving] = React.useState(false)
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
@@ -623,6 +629,7 @@ export default function ProductEditorModal({
         setCostWithVatInput('')
         setCostWithVatManuallySet(false)
         setMarkupManuallySet(false)
+        setFormSessionKey(`product-editor-form-${editorMode}-${Date.now()}`)
         skuManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.sku || '').trim())
         lotManuallyEditedRef.current = Boolean(editingProduct && editorMode !== 'duplicate-variant' && String(initialForm.attributes?.lotCode || '').trim())
         lotSuggestionSeedRef.current = String(Math.floor(Math.random() * 900) + 100)
@@ -1289,6 +1296,15 @@ export default function ProductEditorModal({
 
     const handleBasePriceChange = React.useCallback((value: string) => {
         const nextValue = normalizeDecimalForStorage(value, BASE_PRICE_FRACTION_DIGITS)
+        if (!nextValue) {
+            setMarkupManuallySet(false)
+            setForm((prev) => ({
+                ...prev,
+                price: '',
+                pvp: '',
+            }))
+            return
+        }
         const baseValue = parseLocalizedDecimal(nextValue)
         const pvpValue = effectiveVatMultiplier > 0 ? (baseValue * effectiveVatMultiplier) : baseValue
         setMarkupManuallySet(false)
@@ -1301,6 +1317,15 @@ export default function ProductEditorModal({
 
     const handlePvpPriceChange = React.useCallback((value: string) => {
         const nextValue = normalizeDecimalForStorage(value)
+        if (!nextValue) {
+            setMarkupManuallySet(false)
+            setForm((prev) => ({
+                ...prev,
+                pvp: '',
+                price: '',
+            }))
+            return
+        }
         const pvpValue = parseLocalizedDecimal(nextValue)
         const baseValue = effectiveVatMultiplier > 0 ? (pvpValue / effectiveVatMultiplier) : pvpValue
         setMarkupManuallySet(false)
@@ -1315,6 +1340,12 @@ export default function ProductEditorModal({
         const nextValue = normalizeDecimalForStorage(value)
         setMarkupManuallySet(false)
         setCostWithVatManuallySet(false)
+        if (!nextValue) {
+            setCostWithVatInput('')
+            setForm((prev) => ({ ...prev, cost: '' }))
+            clearErrors('cost')
+            return
+        }
         setForm((prev) => ({ ...prev, cost: nextValue }))
         clearErrors('cost')
     }, [clearErrors])
@@ -1323,6 +1354,12 @@ export default function ProductEditorModal({
         const nextValue = normalizeDecimalForStorage(value)
         setCostWithVatInput(nextValue)
         setCostWithVatManuallySet(true)
+        if (!nextValue) {
+            setMarkupManuallySet(false)
+            setForm((prev) => ({ ...prev, cost: '' }))
+            clearErrors('cost')
+            return
+        }
         const grossCost = parseLocalizedDecimal(nextValue)
         const baseCost = purchaseVatMultiplier > 0 ? (grossCost / purchaseVatMultiplier) : grossCost
         setMarkupManuallySet(false)
@@ -1337,6 +1374,7 @@ export default function ProductEditorModal({
         const nextValue = normalizeDecimalForStorage(value)
         setMarkupInput(nextValue)
         setMarkupManuallySet(true)
+        if (!nextValue) return
         const markupValue = parseLocalizedDecimal(nextValue)
         const currentCost = parseLocalizedDecimal(form.cost)
         const normalizedMarkup = Number.isFinite(markupValue) ? Math.max(0, markupValue) : 0
@@ -1414,6 +1452,8 @@ export default function ProductEditorModal({
 
     const productBasePrice = parseLocalizedDecimal(deferredForm.price)
     const productCost = parseLocalizedDecimal(deferredForm.cost)
+    const hasBasePriceInput = String(deferredForm.price || '').trim() !== ''
+    const hasCostInput = String(deferredForm.cost || '').trim() !== ''
     const productCostWithVat = roundCurrency(productCost * purchaseVatMultiplier)
     const productPvpPrice = parseLocalizedDecimal(deferredForm.pvp) || (productBasePrice * effectiveVatMultiplier)
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1421,7 +1461,7 @@ export default function ProductEditorModal({
         && productCost > 0
         && Number.isFinite(productBasePrice)
         && productBasePrice < productCost
-    const productGrossProfit = Math.max(productBasePrice - productCost, 0)
+    const productGrossProfit = productBasePrice - productCost
     const productGrossMargin = productBasePrice > 0 ? (productGrossProfit / productBasePrice) * 100 : 0
     const productMarkup = productCost > 0 ? (productGrossProfit / productCost) * 100 : 0
     const productVatAmount = Math.max(productPvpPrice - productBasePrice, 0)
@@ -1429,8 +1469,10 @@ export default function ProductEditorModal({
     const productGrossMarginLabel = productGrossMargin.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productMarkupLabel = productMarkup.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productVatAmountLabel = productVatAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const productMarkupInputValue = Number.isFinite(productMarkup) ? String(Number(productMarkup.toFixed(2))) : ''
-    const productCostWithVatInputValue = Number.isFinite(productCostWithVat) ? productCostWithVat.toFixed(2) : ''
+    const productMarkupInputValue = hasBasePriceInput && hasCostInput && productCost > 0 && Number.isFinite(productMarkup)
+        ? String(Number(productMarkup.toFixed(2)))
+        : ''
+    const productCostWithVatInputValue = hasCostInput && Number.isFinite(productCostWithVat) ? productCostWithVat.toFixed(2) : ''
 
     React.useEffect(() => {
         if (!costWithVatManuallySet) {
@@ -1464,7 +1506,7 @@ export default function ProductEditorModal({
     const purchaseInvoiceTitle = deferredEditingProduct
         ? `Factura para ingreso de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
         : `Factura para stock inicial de ${stockEntryDelta} unidad${stockEntryDelta === 1 ? '' : 'es'}`
-    const hasProductCostPreview = Number.isFinite(productCost) && productCost > 0
+    const hasProductCostPreview = hasCostInput && Number.isFinite(productCost) && productCost > 0
     const suggestedBasePricePreview = hasProductCostPreview
         ? getSuggestedBasePriceForCostPreview(productCost, effectiveVatMultiplier, normalizedMargins, normalizedCalc)
         : 0
@@ -2097,7 +2139,14 @@ export default function ProductEditorModal({
                 </div>
 
                 <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-                    <form id="product-form" ref={formRef} onSubmit={handleSave} className="xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6 xl:items-start">
+                    <form
+                        key={formSessionKey}
+                        id="product-form"
+                        ref={formRef}
+                        onSubmit={handleSave}
+                        autoComplete="off"
+                        className="xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6 xl:items-start"
+                    >
                         <div className="space-y-6 min-w-0">
                         {productFormErrorEntries.length > 0 && (
                             <div className="p-4 rounded-xl border border-red/30 bg-red/5">
@@ -2127,6 +2176,39 @@ export default function ProductEditorModal({
                                 </div>
                                 {duplicateVariantBaseError && <p className="text-xs text-red mt-1">{duplicateVariantBaseError}</p>}
                                 <p className="text-secondary text-xs mt-2">Se toma del producto original y queda bloqueado para no romper la agrupación de variantes en la tienda.</p>
+                            </div>
+                        )}
+                        {!isRestockMode && (
+                            <div className="rounded-xl border border-line bg-surface p-5">
+                                <div className="text-sm font-semibold mb-3">Visualización de variantes en tienda</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                                            String(form.attributes?.catalogDisplayMode || 'grouped') !== 'separate'
+                                                ? 'border-black bg-white'
+                                                : 'border-line bg-white hover:border-black'
+                                        }`}
+                                        onClick={() => setAttribute('catalogDisplayMode', 'grouped')}
+                                        disabled={saving}
+                                    >
+                                        <div className="text-sm font-bold">Agrupada</div>
+                                        <div className="text-xs text-secondary mt-1">Una sola tarjeta pública con selector de talla, color o presentación.</div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                                            String(form.attributes?.catalogDisplayMode || 'grouped') === 'separate'
+                                                ? 'border-black bg-white'
+                                                : 'border-line bg-white hover:border-black'
+                                        }`}
+                                        onClick={() => setAttribute('catalogDisplayMode', 'separate')}
+                                        disabled={saving}
+                                    >
+                                        <div className="text-sm font-bold">Separada</div>
+                                        <div className="text-xs text-secondary mt-1">Esta variante aparece como producto propio en listados y búsqueda.</div>
+                                    </button>
+                                </div>
                             </div>
                         )}
                         {isRestockMode && editingProduct && (
@@ -2166,7 +2248,7 @@ export default function ProductEditorModal({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="text-secondary text-sm font-bold uppercase mb-2 block">Nombre del Producto</label>
-                                    <input type="text" className={getInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); clearErrors('name') }} required placeholder="Ej: Camiseta Deportiva" disabled={saving || isDuplicateVariantMode || isRestockMode} />
+                                    <input type="text" name={`${formSessionKey}-name`} autoComplete="off" className={getInputClass('name', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')} value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); clearErrors('name') }} required placeholder="Ej: Camiseta Deportiva" disabled={saving || isDuplicateVariantMode || isRestockMode} />
                                     {formErrors.name && <p className="text-xs text-red mt-1">{formErrors.name}</p>}
                                     {isDuplicateVariantMode && <p className="text-secondary text-xs mt-2">El nombre se genera automáticamente con la familia y el valor de variante para mantener la agrupación.</p>}
                                     {isRestockMode && <p className="text-secondary text-xs mt-2">Queda bloqueado en reposición para evitar cambios accidentales.</p>}
@@ -2196,7 +2278,7 @@ export default function ProductEditorModal({
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio base (sin IVA)</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="text" inputMode="decimal" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedBasePrice} onFocus={() => setActiveMoneyField('price')} onBlur={() => handleMoneyFieldBlur('price')} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} placeholder="0,00" />
+                                            <input type="text" name={`${formSessionKey}-price-net`} autoComplete="off" inputMode="decimal" className={getInputClass('price', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedBasePrice} onFocus={() => setActiveMoneyField('price')} onBlur={() => handleMoneyFieldBlur('price')} onChange={e => { handleBasePriceChange(e.target.value); clearErrors('price') }} required disabled={saving} placeholder="0,00" />
                                         </div>
                                         {formErrors.price && <p className="text-xs text-red mt-1">{formErrors.price}</p>}
                                         {productWouldSellAtLoss && !formErrors.price && (
@@ -2209,6 +2291,8 @@ export default function ProductEditorModal({
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                             <input
                                                 type="text"
+                                                name={`${formSessionKey}-price-gross`}
+                                                autoComplete="off"
                                                 inputMode="decimal"
                                                 className="border border-line rounded-lg pl-8 pr-4 py-3 w-full focus:border-black outline-none transition-all"
                                                 value={displayedPvpPrice}
@@ -2229,7 +2313,7 @@ export default function ProductEditorModal({
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo sin IVA</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
-                                            <input type="text" inputMode="decimal" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedCost} onFocus={() => setActiveMoneyField('cost')} onBlur={() => handleMoneyFieldBlur('cost')} placeholder={editingProduct ? 'Costo base unitario' : 'Ej: 5,50'} onChange={e => handleCostChange(e.target.value)} required disabled={saving} />
+                                            <input type="text" name={`${formSessionKey}-cost-net`} autoComplete="off" inputMode="decimal" className={getInputClass('cost', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')} value={displayedCost} onFocus={() => setActiveMoneyField('cost')} onBlur={() => handleMoneyFieldBlur('cost')} placeholder={editingProduct ? 'Costo base unitario' : 'Ej: 5,50'} onChange={e => handleCostChange(e.target.value)} required disabled={saving} />
                                         </div>
                                         {formErrors.cost && <p className="text-xs text-red mt-1">{formErrors.cost}</p>}
                                         <p className="text-secondary text-xs mt-2">{isRestockMode ? 'Costo unitario base usado para margen, utilidad y stock.' : (editingProduct ? 'Costo real sin IVA. Este valor es la base para margen y utilidad.' : 'Ingresa el costo base sin IVA para calcular el precio correctamente.')}</p>
@@ -2240,6 +2324,8 @@ export default function ProductEditorModal({
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
                                             <input
                                                 type="text"
+                                                name={`${formSessionKey}-cost-gross`}
+                                                autoComplete="off"
                                                 inputMode="decimal"
                                                 className="border border-line rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all focus:border-black"
                                                 value={displayedCostWithVat}
@@ -2259,6 +2345,8 @@ export default function ProductEditorModal({
                                         <div className="relative">
                                             <input
                                                 type="text"
+                                                name={`${formSessionKey}-purchase-tax-rate`}
+                                                autoComplete="off"
                                                 inputMode="decimal"
                                                 className={getInputClass('purchaseInvoicePurchaseTaxRate', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
                                                 value={form.purchaseInvoice.purchaseTaxRate || ''}
@@ -2288,6 +2376,8 @@ export default function ProductEditorModal({
                                         <div className="relative">
                                             <input
                                                 type="text"
+                                                name={`${formSessionKey}-markup`}
+                                                autoComplete="off"
                                                 inputMode="decimal"
                                                 className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all focus:border-black"
                                                 value={markupInput}
@@ -2322,6 +2412,8 @@ export default function ProductEditorModal({
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">{isRestockMode ? 'Unidades a ingresar' : 'Stock Disponible'}</label>
                                         <input
                                             type="number"
+                                            name={`${formSessionKey}-quantity`}
+                                            autoComplete="off"
                                             step="1"
                                             min="0"
                                             className={getInputClass('quantity', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
@@ -2331,7 +2423,7 @@ export default function ProductEditorModal({
                                                 if (isRestockMode) {
                                                     handleRestockUnitsChange(e.target.value)
                                                 } else {
-                                                    setForm({ ...form, quantity: e.target.value })
+                                                    setForm((prev) => ({ ...prev, quantity: e.target.value }))
                                                     clearErrors('quantity')
                                                 }
                                             }}
@@ -2363,7 +2455,7 @@ export default function ProductEditorModal({
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="rounded-xl bg-white border border-line px-4 py-3">
                                             <div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div>
-                                            <div className="text-lg font-bold text-success">${productProfitLabel}</div>
+                                            <div className={`text-lg font-bold ${productGrossProfit < 0 ? 'text-red' : 'text-success'}`}>${productProfitLabel}</div>
                                             <div className="text-xs text-secondary">Base sin IVA</div>
                                         </div>
                                         <div className="rounded-xl bg-white border border-line px-4 py-3">
@@ -2420,6 +2512,8 @@ export default function ProductEditorModal({
                                         <div className="relative">
                                             <input
                                                 type="text"
+                                                name={`${formSessionKey}-purchase-invoice-tax-rate`}
+                                                autoComplete="off"
                                                 inputMode="decimal"
                                                 className={getInputClass('purchaseInvoicePurchaseTaxRate', 'border rounded-lg px-4 py-3 w-full outline-none transition-all')}
                                                 value={form.purchaseInvoice.purchaseTaxRate || ''}

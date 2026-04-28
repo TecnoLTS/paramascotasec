@@ -15,12 +15,12 @@ export async function generateMetadata(): Promise<Metadata> {
     }
 }
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function HomePet() {
     let products = [] as Awaited<ReturnType<typeof fetchProducts>>
     try {
-        products = orderProductsFoodFirst(await fetchProducts())
+        products = orderProductsFoodFirst(await fetchProducts({ fresh: true }))
     } catch (error) {
         console.error('No se pudieron cargar productos en HomePet:', error)
     }

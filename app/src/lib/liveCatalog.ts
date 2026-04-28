@@ -12,7 +12,7 @@ let cachedSnapshotAt = 0
 let inFlightSnapshot: Promise<LiveCatalogSnapshot> | null = null
 
 const getSnapshotTtlMs = () => {
-  return process.env.NODE_ENV === 'development' ? 5000 : 60000
+  return 0
 }
 
 export const getLiveProductAvailableStock = (product?: ProductType | null) => {
@@ -55,7 +55,7 @@ export const fetchLiveCatalogSnapshot = async (): Promise<LiveCatalogSnapshot> =
     return inFlightSnapshot
   }
 
-  inFlightSnapshot = listProducts()
+  inFlightSnapshot = listProducts({ cache: 'no-store' })
     .then((rawProducts) => {
       const snapshot = {
         rawProducts,

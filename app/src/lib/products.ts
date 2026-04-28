@@ -14,7 +14,7 @@ let cachedGroupedProductsAt = 0
 let inFlightGroupedProductsRequest: Promise<ProductType[]> | null = null
 
 const getClientGroupedProductsCacheTtlMs = () => (
-  process.env.NODE_ENV === 'development' ? 5000 : 60000
+  0
 )
 
 const shouldUseClientGroupedProductsCache = () => typeof window !== 'undefined'
