@@ -739,6 +739,7 @@ export const createEmptyProductForm = (): ProductFormState => ({
     name: '',
     price: '',
     pvp: '',
+    marketPrice: '',
     cost: '',
     taxExempt: false,
     quantity: '',
@@ -755,6 +756,7 @@ export const createEmptyProductForm = (): ProductFormState => ({
 
 export const createProductFormFromProduct = (product: any, vatMultiplier: number): ProductFormState => {
     const pvpPrice = Number(product?.price ?? 0)
+    const marketPrice = Number(product?.originPrice ?? 0)
     const productType = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const attributes = enrichVariantAttributes({
         type: productType,
@@ -808,6 +810,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         name: String(product?.name || ''),
         price: Number.isFinite(basePrice) ? basePrice.toFixed(BASE_PRICE_FRACTION_DIGITS) : String(product?.price || ''),
         pvp: Number.isFinite(pvpPrice) ? pvpPrice.toFixed(2) : String(product?.price || ''),
+        marketPrice: Number.isFinite(marketPrice) && marketPrice > pvpPrice ? marketPrice.toFixed(2) : '',
         cost: String(product?.business?.cost ?? product?.cost ?? 0),
         taxExempt,
         quantity: String(product?.quantity ?? ''),

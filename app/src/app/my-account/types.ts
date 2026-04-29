@@ -361,6 +361,7 @@ export type ProductFormState = {
     name: string;
     price: string;
     pvp: string;
+    marketPrice: string;
     cost: string;
     taxExempt: boolean;
     quantity: string;

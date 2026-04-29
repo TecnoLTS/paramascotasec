@@ -570,7 +570,7 @@ export default function ProductEditorModal({
     const [form, setForm] = React.useState<ProductFormState>(initialForm)
     const [costWithVatInput, setCostWithVatInput] = React.useState('')
     const [costWithVatManuallySet, setCostWithVatManuallySet] = React.useState(false)
-    const [activeMoneyField, setActiveMoneyField] = React.useState<'price' | 'pvp' | 'cost' | 'costWithVat' | null>(null)
+    const [activeMoneyField, setActiveMoneyField] = React.useState<'price' | 'pvp' | 'marketPrice' | 'cost' | 'costWithVat' | null>(null)
     const [markupInput, setMarkupInput] = React.useState('')
     const [markupManuallySet, setMarkupManuallySet] = React.useState(false)
     const [formSessionKey, setFormSessionKey] = React.useState('product-editor-form')
@@ -1336,6 +1336,14 @@ export default function ProductEditorModal({
         }))
     }, [effectiveVatMultiplier])
 
+    const handleMarketPriceChange = React.useCallback((value: string) => {
+        const nextValue = normalizeDecimalForStorage(value)
+        setForm((prev) => ({
+            ...prev,
+            marketPrice: nextValue,
+        }))
+    }, [])
+
     const handleCostChange = React.useCallback((value: string) => {
         const nextValue = normalizeDecimalForStorage(value)
         setMarkupManuallySet(false)
@@ -1397,7 +1405,7 @@ export default function ProductEditorModal({
         }))
     }, [effectiveVatMultiplier, form.cost])
 
-    const handleMoneyFieldBlur = React.useCallback((field: 'price' | 'pvp' | 'cost' | 'costWithVat') => {
+    const handleMoneyFieldBlur = React.useCallback((field: 'price' | 'pvp' | 'marketPrice' | 'cost' | 'costWithVat') => {
         setActiveMoneyField((current) => (current === field ? null : current))
 
         if (field === 'costWithVat') {
@@ -1456,7 +1464,17 @@ export default function ProductEditorModal({
     const hasCostInput = String(deferredForm.cost || '').trim() !== ''
     const productCostWithVat = roundCurrency(productCost * purchaseVatMultiplier)
     const productPvpPrice = parseLocalizedDecimal(deferredForm.pvp) || (productBasePrice * effectiveVatMultiplier)
+    const productMarketPrice = parseLocalizedDecimal(deferredForm.marketPrice)
+    const hasMarketPriceInput = String(deferredForm.marketPrice || '').trim() !== ''
+    const productOfferAmount = hasMarketPriceInput && productMarketPrice > productPvpPrice
+        ? roundCurrency(productMarketPrice - productPvpPrice)
+        : 0
+    const productOfferPercent = hasMarketPriceInput && productMarketPrice > productPvpPrice && productMarketPrice > 0
+        ? Math.floor(100 - ((productPvpPrice / productMarketPrice) * 100))
+        : 0
     const productPvpPriceLabel = productPvpPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productMarketPriceLabel = productMarketPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const productOfferAmountLabel = productOfferAmount.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const productWouldSellAtLoss = Number.isFinite(productCost)
         && productCost > 0
         && Number.isFinite(productBasePrice)
@@ -1482,6 +1500,7 @@ export default function ProductEditorModal({
 
     const displayedBasePrice = activeMoneyField === 'price' ? form.price : formatDecimalForDisplay(form.price)
     const displayedPvpPrice = activeMoneyField === 'pvp' ? form.pvp : formatDecimalForDisplay(form.pvp)
+    const displayedMarketPrice = activeMoneyField === 'marketPrice' ? form.marketPrice : formatDecimalForDisplay(form.marketPrice)
     const displayedCost = activeMoneyField === 'cost' ? form.cost : formatDecimalForDisplay(form.cost)
     const displayedCostWithVat = activeMoneyField === 'costWithVat' ? costWithVatInput : formatDecimalForDisplay(costWithVatInput)
 
@@ -1855,6 +1874,8 @@ export default function ProductEditorModal({
             const category = normalizeProductCategory(form.category, productType)
             const description = String(form.description || '').trim()
             const basePrice = parseLocalizedDecimal(form.price)
+            const pvpPrice = parseLocalizedDecimal(form.pvp)
+            const marketPrice = parseLocalizedDecimal(form.marketPrice)
             const currentCost = parseLocalizedDecimal(form.cost)
             const previousQuantity = Number(editingProduct?.quantity ?? 0)
             const quantity = isRestockMode && editingProduct
@@ -1866,6 +1887,12 @@ export default function ProductEditorModal({
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
             if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
+            if (String(form.marketPrice || '').trim() !== '' && (!Number.isFinite(marketPrice) || marketPrice < 0)) {
+                nextErrors.marketPrice = 'El precio mercado debe ser un número válido mayor o igual a 0.'
+            }
+            if (String(form.marketPrice || '').trim() !== '' && Number.isFinite(marketPrice) && Number.isFinite(pvpPrice) && marketPrice <= pvpPrice) {
+                nextErrors.marketPrice = 'El precio mercado debe ser mayor al PVP actual para generar una oferta.'
+            }
             if (!Number.isFinite(currentCost) || currentCost < 0) nextErrors.cost = 'El costo debe ser un número válido mayor o igual a 0.'
             if (Number.isFinite(basePrice) && Number.isFinite(currentCost) && currentCost > 0 && basePrice < currentCost) {
                 nextErrors.price = 'El precio base no puede ser menor al costo del producto.'
@@ -2044,6 +2071,10 @@ export default function ProductEditorModal({
             const data = {
                 name: resolvedProductName,
                 price: basePrice,
+                originPrice: String(form.marketPrice || '').trim() !== ''
+                    ? roundCurrency(effectiveVatMultiplier > 0 ? (marketPrice / effectiveVatMultiplier) : marketPrice)
+                    : basePrice,
+                sale: String(form.marketPrice || '').trim() !== '' && marketPrice > pvpPrice,
                 cost: currentCost,
                 quantity,
                 category,
@@ -2317,6 +2348,31 @@ export default function ProductEditorModal({
                                         </p>
                                     </div>
                                     <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Precio mercado</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
+                                            <input
+                                                type="text"
+                                                name={`${formSessionKey}-price-market`}
+                                                autoComplete="off"
+                                                inputMode="decimal"
+                                                className={getInputClass('marketPrice', 'border rounded-lg pl-8 pr-4 py-3 w-full outline-none transition-all')}
+                                                value={displayedMarketPrice}
+                                                onFocus={() => setActiveMoneyField('marketPrice')}
+                                                onBlur={() => handleMoneyFieldBlur('marketPrice')}
+                                                onChange={e => { handleMarketPriceChange(e.target.value); clearErrors('marketPrice') }}
+                                                disabled={saving}
+                                                placeholder="Opcional"
+                                            />
+                                        </div>
+                                        {formErrors.marketPrice && <p className="text-xs text-red mt-1">{formErrors.marketPrice}</p>}
+                                        <p className="text-secondary text-xs mt-2">
+                                            {hasMarketPriceInput
+                                                ? `Mercado actual: $${productMarketPriceLabel}. Descuento visible: $${productOfferAmountLabel} (${productOfferPercent}%).`
+                                                : 'Si defines un precio mayor al PVP, el producto saldrá con etiqueta de oferta en la tienda.'}
+                                        </p>
+                                    </div>
+                                    <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Costo sin IVA</label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">$</span>
@@ -2479,6 +2535,16 @@ export default function ProductEditorModal({
                                             <div className="text-[10px] uppercase font-bold text-secondary">IVA estimado</div>
                                             <div className="text-lg font-bold">${productVatAmountLabel}</div>
                                             <div className="text-xs text-secondary">{form.taxExempt ? 'Producto exento, sin recargo de IVA.' : 'Diferencia entre PVP y base'}</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">Monto oferta</div>
+                                            <div className={`text-lg font-bold ${productOfferAmount > 0 ? 'text-success' : 'text-secondary'}`}>${productOfferAmountLabel}</div>
+                                            <div className="text-xs text-secondary">Precio mercado menos PVP</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white border border-line px-4 py-3">
+                                            <div className="text-[10px] uppercase font-bold text-secondary">% oferta</div>
+                                            <div className={`text-lg font-bold ${productOfferPercent > 0 ? 'text-success' : 'text-secondary'}`}>{productOfferPercent.toLocaleString('es-EC', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%</div>
+                                            <div className="text-xs text-secondary">Descuento visible en marketplace</div>
                                         </div>
                                     </div>
                                 </div>
