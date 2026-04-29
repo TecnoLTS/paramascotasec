@@ -85,6 +85,14 @@ const buildFlexibleVariantSuffixPattern = (label: string) => {
         .join('')
 }
 
+const variantLabelMatchesValue = (value: string, label: string) => {
+    const trimmedValue = value.trim()
+    const trimmedLabel = label.trim()
+    if (!trimmedValue || !trimmedLabel) return false
+
+    return new RegExp(`^${buildFlexibleVariantSuffixPattern(trimmedLabel)}$`, 'i').test(trimmedValue)
+}
+
 const normalizeVariantComparisonValue = (value: unknown) =>
     normalizeMeasurementLabel(String(value || '')).trim().toLowerCase()
 
@@ -174,12 +182,22 @@ const resolveCanonicalVariantLabelByType = (type: string, attributes: Record<str
         if (axisValue) return axisValue
     }
 
+    const shouldPreserveDetailedExplicitLabel = Boolean(
+        explicit
+        && size
+        && color
+        && explicit.toLowerCase() !== size.toLowerCase()
+        && explicit.toLowerCase() !== color.toLowerCase()
+        && explicit.toLowerCase().includes(size.toLowerCase())
+        && explicit.toLowerCase().includes(color.toLowerCase())
+    )
+
     if (normalizedType === 'ropa') {
-        return size || color || explicit
+        return shouldPreserveDetailedExplicitLabel ? explicit : (size || color || explicit)
     }
 
     if (normalizedType === 'accesorios') {
-        return color || size || presentation || explicit
+        return shouldPreserveDetailedExplicitLabel ? explicit : (color || size || presentation || explicit)
     }
 
     if (normalizedType === 'cuidado') {
@@ -301,17 +319,16 @@ export const resolveProductVariantLabel = (
 }
 
 export const resolveProductVariantBaseName = (product: any) => {
-    const explicitBaseName = String(product?.variantBaseName || product?.attributes?.variantBaseName || '').trim()
-    if (explicitBaseName) return explicitBaseName
-
     const fullName = String(product?.name || '').trim()
     if (!fullName) return ''
 
     const type = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
     const variantLabel = resolveProductVariantLabel(type, product?.attributes, product)
-    if (!variantLabel) return fullName
-
-    const candidates = Array.from(new Set([
+    const explicitCandidates = [
+        String(product?.variantBaseName || '').trim(),
+        String(product?.attributes?.variantBaseName || '').trim(),
+    ].filter(Boolean)
+    const variantCandidates = Array.from(new Set([
         variantLabel,
         ...getVariantCandidateValues(type, {
             ...(product || {}),
@@ -319,8 +336,33 @@ export const resolveProductVariantBaseName = (product: any) => {
         }),
     ].filter(Boolean)))
 
+    for (const candidate of explicitCandidates) {
+        if (fullName === candidate) {
+            return candidate
+        }
+
+        const suffix = fullName.toLowerCase().startsWith(candidate.toLowerCase())
+            ? fullName.slice(candidate.length).replace(/^(?:\s+|-)+/, '').trim()
+            : ''
+        if (suffix && variantCandidates.some((label) => variantLabelMatchesValue(suffix, label))) {
+            return candidate
+        }
+
+        for (const label of variantCandidates) {
+            const separator = requiresSeparatedVariantSuffix(label) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
+            const derived = fullName
+                .replace(new RegExp(`${separator}${buildFlexibleVariantSuffixPattern(label)}$`, 'i'), '')
+                .trim()
+            if (derived && derived.toLowerCase() === candidate.toLowerCase()) {
+                return candidate
+            }
+        }
+    }
+
+    if (!variantLabel) return fullName
+
     let strippedName = fullName
-    candidates.forEach((candidate) => {
+    variantCandidates.forEach((candidate) => {
         const separator = requiresSeparatedVariantSuffix(candidate) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
         strippedName = strippedName
             .replace(new RegExp(`${separator}${buildFlexibleVariantSuffixPattern(candidate)}$`, 'i'), '')
@@ -385,8 +427,8 @@ export const enrichVariantAttributes = ({
         variantBaseName: nextAttributes.variantBaseName,
     }
 
-    const resolvedBaseName = String(nextAttributes.variantBaseName || '').trim()
-        || resolveProductVariantBaseName(synthesizedProduct)
+    const resolvedBaseName = resolveProductVariantBaseName(synthesizedProduct)
+        || String(nextAttributes.variantBaseName || '').trim()
 
     if (resolvedBaseName) {
         nextAttributes.variantBaseName = resolvedBaseName

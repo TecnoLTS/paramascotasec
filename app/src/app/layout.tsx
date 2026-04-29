@@ -25,6 +25,10 @@ const homeHeroPreloads = [
   { media: '(min-width: 3840px)', src: '/images/slider/generated/slade1-uhd.webp' },
 ]
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
+
 export async function generateMetadata(): Promise<Metadata> {
   const site = getSiteConfig()
   const siteUrl = site.baseUrl.replace(/\/$/, '')

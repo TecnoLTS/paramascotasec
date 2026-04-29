@@ -83,6 +83,43 @@ const buildFlexibleVariantSuffixPattern = (label: string) => {
 const looksLikeSizeValue = (value?: string | null) =>
   /^(?:XXS|XS|S|M|L|XL|XXL|STANDARD|\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ)|X?\d+)$/i.test((value ?? '').trim())
 
+const variantLabelMatchesValue = (value: string, label: string) => {
+  const trimmedValue = value.trim()
+  const trimmedLabel = label.trim()
+  if (!trimmedValue || !trimmedLabel) return false
+
+  return new RegExp(`^${buildFlexibleVariantSuffixPattern(trimmedLabel)}$`, 'i').test(trimmedValue)
+}
+
+const isVariantBaseNameConsistent = (fullName: string, candidateBaseName: string, variantLabels: string[]) => {
+  const normalizedName = fullName.trim().toLowerCase()
+  const normalizedBase = candidateBaseName.trim().toLowerCase()
+  if (!normalizedName || !normalizedBase) return false
+
+  if (normalizedName === normalizedBase) return true
+
+  if (normalizedName.startsWith(normalizedBase)) {
+    const suffix = fullName
+      .slice(candidateBaseName.length)
+      .replace(/^(?:\s+|-)+/, '')
+      .trim()
+    if (suffix && variantLabels.some((label) => variantLabelMatchesValue(suffix, label))) {
+      return true
+    }
+  }
+
+  if (variantLabels.length === 0) return false
+
+  return variantLabels.some((label) => {
+    if (!label.trim()) return false
+    const escapedLabel = buildFlexibleVariantSuffixPattern(label)
+    const separator = requiresSeparatedVariantSuffix(label) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
+    const derived = fullName.replace(new RegExp(`${separator}${escapedLabel}$`, 'i'), '').trim().toLowerCase()
+
+    return derived !== '' && derived === normalizedBase
+  })
+}
+
 const getAttributeValue = (product: ProductType, keys: string[]) => {
   const attributes = product.attributes ?? {}
   for (const key of keys) {
@@ -154,25 +191,38 @@ const getProductVariantSizeValue = (product: ProductType) => {
 export const getProductVariantPresentation = (product: ProductType) =>
   normalizeMeasurementLabel(getAttributeValue(product, ['presentation', 'packaging']))
 
-const hasExplicitVariantGrouping = (product: ProductType) => {
-  const explicitGroupKey = (product.variantGroupKey ?? '').trim() || getAttributeValue(product, ['variantGroupKey'])
-  const explicitBaseName = (product.variantBaseName ?? '').trim() || getAttributeValue(product, ['variantBaseName'])
-  return Boolean(explicitGroupKey || explicitBaseName)
-}
-
 export const getProductVariantBaseName = (product: ProductType) => {
-  const explicit = (product.variantBaseName ?? '').trim()
-  if (explicit) return explicit
-
-  const attributeBase = getAttributeValue(product, ['variantBaseName'])
-  if (attributeBase) return attributeBase
-
   const rawVariantLabel = extractProductVariantLabel(product)
   const variantLabel = normalizeMeasurementLabel(rawVariantLabel)
   const normalizedName = (product.name ?? '').trim()
   if (!rawVariantLabel && !variantLabel) return normalizedName
 
-  const candidateLabels = Array.from(new Set([rawVariantLabel, variantLabel].filter(Boolean)))
+  const candidateLabels = Array.from(new Set([
+    rawVariantLabel,
+    variantLabel,
+    getAttributeValue(product, ['variantLabel']),
+    getAttributeValue(product, ['size']),
+    getAttributeValue(product, ['weight']),
+    getAttributeValue(product, ['presentation']),
+    getAttributeValue(product, ['packaging']),
+    getAttributeValue(product, ['dosage']),
+    getAttributeValue(product, ['volume']),
+    getAttributeValue(product, ['range']),
+    getAttributeValue(product, ['color']),
+  ].filter(Boolean)))
+
+  const explicitCandidates = [
+    (product.variantBaseName ?? '').trim(),
+    getAttributeValue(product, ['variantBaseName']),
+  ].filter(Boolean)
+
+  const consistentExplicit = explicitCandidates.find((candidate) =>
+    isVariantBaseNameConsistent(normalizedName, candidate, candidateLabels)
+  )
+  if (consistentExplicit) {
+    return consistentExplicit
+  }
+
   let strippedName = normalizedName
 
   candidateLabels.forEach((label) => {
@@ -190,13 +240,6 @@ export const getProductVariantGroupKey = (product: ProductType) => {
     || String((product.attributes as any)?.showAsSeparateProduct || '')
   ).trim().toLowerCase()
   if (['separate', 'individual', 'standalone', 'true', '1', 'yes', 'si', 'sí'].includes(catalogDisplayMode)) {
-    return `single:${product.id}`
-  }
-
-  const explicit = (product.variantGroupKey ?? '').trim() || getAttributeValue(product, ['variantGroupKey'])
-  if (explicit) return explicit
-
-  if (!hasExplicitVariantGrouping(product)) {
     return `single:${product.id}`
   }
 
@@ -518,6 +561,29 @@ export const findCatalogProduct = (products: ProductType[], idOrSlug: string) =>
       variant.slug === idOrSlug
     )
   )
+
+export const findCatalogProductForDetail = (products: ProductType[], idOrSlug: string) => {
+  const product = findCatalogProduct(products, idOrSlug)
+  if (!product) return undefined
+
+  const matchedVariant = getProductVariants(product).find((variant) =>
+    variant.id === idOrSlug ||
+    variant.internalId === idOrSlug ||
+    variant.slug === idOrSlug
+  )
+
+  if (!matchedVariant) return product
+
+  return {
+    ...product,
+    name: matchedVariant.name || product.name,
+    description: matchedVariant.description || product.description,
+    slug: matchedVariant.slug || product.slug,
+    thumbImage: matchedVariant.thumbImage?.length ? matchedVariant.thumbImage : product.thumbImage,
+    images: matchedVariant.images?.length ? matchedVariant.images : product.images,
+    imageMeta: matchedVariant.imageMeta?.length ? matchedVariant.imageMeta : product.imageMeta,
+  }
+}
 
 const resolveCategoryImage = (categoryId: string, _siteId?: SiteId) => {
   const normalized = normalizeText(categoryId)

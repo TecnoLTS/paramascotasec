@@ -104,6 +104,9 @@ const isPublicApiPath = (pathname: string, method?: string) => {
 }
 
 const shouldDisableServerCache = (pathname: string) => {
+  if (pathname === '/api/products' || pathname.startsWith('/api/products/')) {
+    return true
+  }
   return false
 }
 

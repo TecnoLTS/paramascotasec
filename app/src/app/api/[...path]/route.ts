@@ -37,6 +37,9 @@ const forward = async (req: NextRequest) => {
   const resHeaders = new Headers(res.headers)
   resHeaders.delete('content-encoding')
   resHeaders.delete('content-length')
+  resHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  resHeaders.set('Pragma', 'no-cache')
+  resHeaders.set('Expires', '0')
 
   return new Response(await res.arrayBuffer(), {
     status: res.status,

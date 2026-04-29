@@ -3,49 +3,14 @@ import { apiEndpoints } from './endpoints'
 import { ProductType } from '@/type/ProductType'
 import { mapProductToDto, mapProductsToDto } from '@/lib/productMapper'
 
-let cachedProducts: ProductType[] | null = null
-let cachedProductsAt = 0
-let inFlightProductsRequest: Promise<ProductType[]> | null = null
-
-const getClientProductsCacheTtlMs = () => (
-  0
-)
-
-const shouldUseClientProductsCache = () => typeof window !== 'undefined'
-
-const getCachedClientProducts = () => {
-  if (!shouldUseClientProductsCache() || !cachedProducts) return null
-  if (Date.now() - cachedProductsAt >= getClientProductsCacheTtlMs()) return null
-  return cachedProducts
-}
-
-const setCachedClientProducts = (products: ProductType[]) => {
-  if (!shouldUseClientProductsCache()) return
-  cachedProducts = products
-  cachedProductsAt = Date.now()
-}
-
 const invalidateClientProductsCache = () => {
-  cachedProducts = null
-  cachedProductsAt = 0
-  inFlightProductsRequest = null
 }
 
 export const listProducts = async (options?: { cache?: RequestCache }) => {
-  const cacheMode = options?.cache
-  const useClientCache = shouldUseClientProductsCache() && cacheMode !== 'no-store'
-  const cached = useClientCache ? getCachedClientProducts() : null
-  if (cached) {
-    return cached
-  }
-
-  if (useClientCache && inFlightProductsRequest) {
-    return inFlightProductsRequest
-  }
-
-  const request = fetchJson<unknown>(
+  const cacheMode = options?.cache || 'no-store'
+  return fetchJson<unknown>(
     apiEndpoints.products,
-    cacheMode ? { cache: cacheMode } : undefined,
+    { cache: cacheMode },
   )
     .then((data) => {
       if (!Array.isArray(data)) {
@@ -55,27 +20,12 @@ export const listProducts = async (options?: { cache?: RequestCache }) => {
         return []
       }
 
-      const mappedProducts = mapProductsToDto(data)
-      if (useClientCache) {
-        setCachedClientProducts(mappedProducts)
-      }
-      return mappedProducts
+      return mapProductsToDto(data)
     })
-    .finally(() => {
-      if (useClientCache) {
-        inFlightProductsRequest = null
-      }
-    })
-
-  if (useClientCache) {
-    inFlightProductsRequest = request
-  }
-
-  return request
 }
 
 export const getProduct = async (id: string) => {
-  const data = await fetchJson<any>(apiEndpoints.product(id))
+  const data = await fetchJson<any>(apiEndpoints.product(id), { cache: 'no-store' })
   return mapProductToDto(data)
 }
 

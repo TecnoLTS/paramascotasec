@@ -361,7 +361,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                 </div>
                             </div>
                             <div className="product-name text-title duration-300">{data.name}</div>
-                            {hasVariantChoices && variantDisplayValues.length > 0 && (
+                            {variantDisplayValues.length > 0 && (
                                 <div className="caption1 text-secondary mt-1">Presentaciones: {variantDisplayValues.join(', ')}</div>
                             )}
                             <div className="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
@@ -474,7 +474,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                 <div className='flex items-start gap-7 max-lg:gap-4 max-lg:flex-wrap max-lg:w-full max-sm:flex-col max-sm:w-full'>
                                     <div className="product-infor max-sm:w-full flex-1 min-w-[260px]">
                                         <div onClick={handleDetailProduct} className="product-name heading6 inline-block duration-300">{data.name}</div>
-                                        {hasVariantChoices && variantDisplayValues.length > 0 && (
+                                        {variantDisplayValues.length > 0 && (
                                             <div className="caption1 text-secondary mt-1">Presentaciones: {variantDisplayValues.join(', ')}</div>
                                         )}
                                         <div className="product-price-block flex items-center gap-2 flex-wrap mt-2 duration-300 relative z-[1]">
@@ -598,7 +598,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                     </div>
                     <div className="product-infor mt-4">
                         <span className="text-title">{data.name}</span>
-                        {hasVariantChoices && variantDisplayValues.length > 0 && (
+                        {variantDisplayValues.length > 0 && (
                             <div className="caption1 text-secondary mt-1">Presentaciones: {variantDisplayValues.join(', ')}</div>
                         )}
                         {showReviewSummary && (

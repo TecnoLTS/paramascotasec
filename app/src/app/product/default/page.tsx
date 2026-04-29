@@ -6,7 +6,7 @@ import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
 import { loadProducts } from '@/lib/products.server'
 import { generateProductJsonLd } from '@/lib/seo'
-import { buildCatalogCategoryCards, findCatalogProduct } from '@/lib/catalog'
+import { buildCatalogCategoryCards, findCatalogProduct, findCatalogProductForDetail } from '@/lib/catalog'
 import { getSiteConfig } from '@/lib/site'
 
 type SearchParams = {
@@ -29,7 +29,7 @@ export async function generateMetadata(
     if (!id) return {}
 
     const { products } = await loadProducts({ fresh: true })
-    const product = findCatalogProduct(products, id)
+    const product = findCatalogProductForDetail(products, id)
     if (!product) return { title: 'Producto no encontrado' }
 
     const previousImages = (await parent).openGraph?.images || []
@@ -64,7 +64,7 @@ const ProductDefault = async ({ searchParams }: Props) => {
     const availableCategoryIds = buildCatalogCategoryCards(productsWithSettings).map((category) => category.id)
     const footerCategoryIds = availableCategoryIds.filter((categoryId) => categoryId.toLowerCase() !== 'todos')
     const productId = typeof resolvedSearchParams?.id === 'string' ? resolvedSearchParams.id : (productsWithSettings[0]?.id ?? '')
-    const currentProduct = findCatalogProduct(productsWithSettings, productId)
+    const currentProduct = findCatalogProductForDetail(productsWithSettings, productId)
 
     return (
         <>
