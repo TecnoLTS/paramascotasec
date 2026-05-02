@@ -4,6 +4,7 @@ import { Metadata } from 'next'
 import { getSiteConfig } from '@/lib/site'
 import ParamascotasecHome from '@/tenants/paramascotasec.com/Home'
 import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
+import { toCanonicalUrl } from '@/lib/publicUrl'
 
 export async function generateMetadata(): Promise<Metadata> {
     const site = getSiteConfig()
@@ -12,6 +13,9 @@ export async function generateMetadata(): Promise<Metadata> {
         title: `${site.name} - Tu Tienda de Mascotas en Ecuador`,
         description: site.description,
         keywords: ['mascotas', 'perros', 'gatos', 'alimento para mascotas', 'Ecuador', 'tienda de mascotas online'],
+        alternates: {
+            canonical: toCanonicalUrl('/'),
+        },
     }
 }
 

@@ -13,6 +13,7 @@ import { getCategoryFilter, getCategoryUrl, getCategoryLabel, getShopBrowseCateg
 import { useSite } from '@/context/SiteContext';
 import { getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
 import { buildProductSearchIndex, filterProductsBySearch, matchesProductSearch, sanitizeProductSearchQuery } from '@/lib/productSearch';
+import { CATALOG_PRIMARY_FILTER_IDS, type CatalogPrimaryFilterId } from '@/lib/catalogBrowse'
 import {
     getProductColorValues,
     getProductMaterialValues,
@@ -31,6 +32,12 @@ interface Props {
 
 const sortLabels = (values: Iterable<string>) =>
     Array.from(new Set(values)).sort((left, right) => left.localeCompare(right, 'es'))
+
+const getPrimaryFilterLabel = (filterId: CatalogPrimaryFilterId) => {
+    if (filterId === 'todas') return 'Todas'
+    if (filterId === 'ofertas') return 'Ofertas'
+    return getCategoryLabel(filterId)
+}
 
 const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gender, category, searchQuery }) => {
     useSite()
@@ -169,6 +176,31 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
         return initialCounts
     }, [data, effectiveSearchQuery, getIndexedAttributes, productSearchIndex])
+    const catalogPrimaryCounts = useMemo(() => {
+        const counts = new Map<CatalogPrimaryFilterId, number>()
+        const searchScopedProducts = effectiveSearchQuery
+            ? data.filter((product) => matchesProductSearch(productSearchIndex.get(product.id) ?? '', effectiveSearchQuery))
+            : data
+
+        CATALOG_PRIMARY_FILTER_IDS.forEach((filterId) => {
+            if (filterId === 'todas') {
+                counts.set(filterId, searchScopedProducts.length)
+                return
+            }
+
+            if (filterId === 'ofertas') {
+                counts.set(filterId, searchScopedProducts.filter((product) => getIndexedAttributes(product).onSale).length)
+                return
+            }
+
+            counts.set(
+                filterId,
+                searchScopedProducts.filter((product) => matchesPetCategoryFilter(product, getCategoryFilter(filterId))).length
+            )
+        })
+
+        return counts
+    }, [data, effectiveSearchQuery, getIndexedAttributes, productSearchIndex])
 
     const categoryCounts = useCallback((categoryId: string) => (
         categoryId === 'todos'
@@ -199,6 +231,11 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
         url.searchParams.set('query', sanitizedQuery)
         return `${url.pathname}${url.search}`
     }, [searchInput])
+    const buildPrimaryFilterHref = useCallback((filterId: CatalogPrimaryFilterId) => {
+        if (filterId === 'todas') return buildCategoryHref('todos')
+        if (filterId === 'ofertas') return buildCategoryHref('descuentos')
+        return buildCategoryHref(filterId)
+    }, [buildCategoryHref])
     const clearSearchQuery = useCallback(() => {
         setSearchInput('')
         const nextParams = new URLSearchParams(searchParams.toString())
@@ -384,6 +421,11 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
     }, [data, effectiveSearchQuery, matchesProduct, productSearchIndex, sortOption])
 
     const totalProducts = filteredData.length
+    const activePrimaryFilter: CatalogPrimaryFilterId = isDiscountCategory
+        ? 'ofertas'
+        : CATALOG_PRIMARY_FILTER_IDS.includes(normalizedCategory as CatalogPrimaryFilterId)
+            ? normalizedCategory as CatalogPrimaryFilterId
+            : 'todas'
     const selectedType = type
     const selectedSize = size
     const selectedColor = color
@@ -427,7 +469,7 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
 
     return (
         <>
-            <div ref={productsRef} className="shop-product breadcrumb1 lg:py-20 md:py-14 py-10">
+            <div ref={productsRef} className="shop-product breadcrumb1 lg:py-10 md:py-14 py-10">
                 <div className="container">
                     <div className="flex max-md:flex-wrap max-md:flex-col-reverse gap-y-8">
                         <div className="sidebar lg:w-1/4 md:w-1/3 w-full md:pr-12">
@@ -554,44 +596,72 @@ const ShopBreadCrumb1: React.FC<Props> = ({ data, productPerPage, dataType, gend
                             )}
                         </div>
                         <div className="list-product-block lg:w-3/4 md:w-2/3 w-full md:pl-3">
-                            <div className="mb-6 rounded-[28px] border border-line bg-white px-4 py-4 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:px-5">
-                                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                                    <div className="relative flex-1">
-                                        <input
-                                            aria-label="Buscar en tienda"
-                                            autoComplete="off"
-                                            className="h-12 w-full rounded-full border border-[rgba(0,127,155,0.18)] bg-white pl-5 pr-24 text-[15px] text-black shadow-[0_8px_20px_rgba(15,23,42,0.05)] outline-none duration-300 placeholder:text-[rgba(15,23,42,0.45)] focus:border-[var(--blue)] focus:shadow-[0_12px_28px_rgba(0,127,155,0.12)]"
-                                            onChange={(event) => setSearchInput(event.target.value)}
-                                            placeholder="Buscar por marca, producto, categoría o SKU"
-                                            spellCheck={false}
-                                            suppressHydrationWarning
-                                            type="search"
-                                            value={searchInput}
-                                        />
-                                        {searchInput ? (
-                                            <button
-                                                className="absolute right-3 top-1/2 inline-flex h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(0,127,155,0.14)] bg-[rgba(0,127,155,0.06)] px-3 text-[12px] font-semibold text-[var(--blue)] duration-300 hover:bg-[rgba(0,127,155,0.12)] hover:text-black"
-                                                onClick={clearSearchQuery}
-                                                type="button"
-                                            >
-                                                Limpiar
-                                            </button>
-                                        ) : (
-                                            <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--blue)]">
-                                                Buscar
+                            <div className="menu-tab md:mt-8 mt-6 mb-6">
+                                <div className="rounded-[32px] border border-line bg-white px-4 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)] sm:px-6 sm:py-6 lg:px-7">
+                                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                        <div className="relative flex-1">
+                                            <input
+                                                aria-label="Buscar en el catalogo"
+                                                autoComplete="off"
+                                                className="h-12 w-full rounded-full border border-[rgba(0,127,155,0.18)] bg-white pl-5 pr-24 text-[15px] text-black shadow-[0_8px_20px_rgba(15,23,42,0.05)] outline-none duration-300 placeholder:text-[rgba(15,23,42,0.45)] focus:border-[var(--blue)] focus:shadow-[0_12px_28px_rgba(0,127,155,0.12)]"
+                                                onChange={(event) => setSearchInput(event.target.value)}
+                                                placeholder="Buscar en el catálogo"
+                                                spellCheck={false}
+                                                suppressHydrationWarning
+                                                type="search"
+                                                value={searchInput}
+                                            />
+                                            {searchInput ? (
+                                                <button
+                                                    className="absolute right-3 top-1/2 inline-flex h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(0,127,155,0.14)] bg-[rgba(0,127,155,0.06)] px-3 text-[12px] font-semibold text-[var(--blue)] duration-300 hover:bg-[rgba(0,127,155,0.12)] hover:text-black"
+                                                    onClick={clearSearchQuery}
+                                                    type="button"
+                                                >
+                                                    Limpiar
+                                                </button>
+                                            ) : (
+                                                <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--blue)]">
+                                                    Buscar
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                                            <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                                                {filteredData.length} producto{filteredData.length === 1 ? '' : 's'}
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
 
-                                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                                        <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
-                                            {filteredData.length} producto{filteredData.length === 1 ? '' : 's'}
+                                    <div className="mt-5">
+                                        <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
+                                            Categorías principales
                                         </div>
-                                        {effectiveSearchQuery && (
-                                            <div className="inline-flex items-center rounded-full bg-surface px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-secondary">
-                                                Búsqueda activa
-                                            </div>
-                                        )}
+                                        <div className="flex flex-wrap justify-center gap-2.5 lg:justify-start">
+                                            {CATALOG_PRIMARY_FILTER_IDS.filter((filterId) => {
+                                                const count = catalogPrimaryCounts.get(filterId) ?? 0
+                                                return filterId === 'todas' || count > 0
+                                            }).map((filterId) => {
+                                                const isActive = activePrimaryFilter === filterId
+                                                const count = catalogPrimaryCounts.get(filterId) ?? 0
+
+                                                return (
+                                                    <Link
+                                                        key={filterId}
+                                                        aria-current={isActive ? 'page' : undefined}
+                                                        className={`tab-item inline-flex min-h-[48px] items-center gap-2.5 rounded-full border px-4 py-2.5 text-left font-semibold duration-300 ${isActive ? 'border-[var(--blue)] bg-[var(--blue)] text-white shadow-[0_10px_24px_rgba(0,127,155,0.24)]' : 'border-line bg-white text-secondary shadow-sm hover:-translate-y-0.5 hover:border-[var(--blue)] hover:text-[var(--blue)] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'}`}
+                                                        href={buildPrimaryFilterHref(filterId)}
+                                                    >
+                                                        <span className="text-[14px] leading-[20px] sm:text-[15px] sm:leading-[22px]">
+                                                            {getPrimaryFilterLabel(filterId)}
+                                                        </span>
+                                                        <span className={`min-w-[30px] rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-[1] ${isActive ? 'bg-white/18 text-white' : 'bg-surface text-secondary'}`}>
+                                                            {count}
+                                                        </span>
+                                                    </Link>
+                                                )
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

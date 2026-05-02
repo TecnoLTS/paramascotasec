@@ -1,13 +1,14 @@
 import React from 'react'
 import { Metadata } from 'next'
 import { getSiteConfig } from '@/lib/site'
-import MenuOne from '@/components/Header/Menu/MenuPet'
+import MenuPet from '@/components/Header/Menu/MenuPet'
 import ShopBreadCrumb1 from '@/components/Shop/ShopBreadCrumb1'
 import Footer from '@/components/Footer/Footer'
 import { fetchProducts } from '@/lib/products'
 import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 import { ProductType } from '@/type/ProductType'
 import { buildCatalogCategoryCards } from '@/lib/catalog'
+import { toCanonicalUrl } from '@/lib/publicUrl'
 
 type SearchParams = {
     type?: string | string[]
@@ -31,10 +32,17 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     let title = 'Tienda Online'
     if (category) title = `${category.charAt(0).toUpperCase() + category.slice(1)}`
     if (gender) title += ` - ${gender.charAt(0).toUpperCase() + gender.slice(1)}`
+    const canonicalParams = new URLSearchParams()
+    if (category) canonicalParams.set('category', category)
+    if (gender) canonicalParams.set('gender', gender)
+    const canonicalQuery = canonicalParams.toString()
 
     return {
         title: `${title} | ${site.name}`,
         description: `Explora nuestra seleccion de productos de ${category || 'catalogo'} ${gender || ''}.`,
+        alternates: {
+            canonical: toCanonicalUrl(`/shop/breadcrumb1${canonicalQuery ? `?${canonicalQuery}` : ''}`),
+        },
     }
 }
 
@@ -56,9 +64,9 @@ export default async function BreadCrumb1({ searchParams }: Props) {
 
     return (
         <>
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" searchProducts={products} availableCategoryIds={availableCategoryIds} />
-            </div>
+            <header id="header" className="relative w-full style-pet">
+                <MenuPet props="bg-transparent" searchProducts={products} availableCategoryIds={availableCategoryIds} />
+            </header>
             {!products.length ? (
                 <div className="container py-10 text-center">No hay productos disponibles.</div>
             ) : (

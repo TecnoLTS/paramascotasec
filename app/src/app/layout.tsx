@@ -9,6 +9,8 @@ import { countdownTime } from '@/store/countdownTime'
 import { getSiteConfig } from '@/lib/site'
 import { versionLocalImagePath } from '@/lib/staticAsset'
 import { fetchSuggestionsData } from '@/lib/server/suggestions'
+import { generatePetStoreJsonLd, generateWebSiteJsonLd } from '@/lib/seo'
+import { getCanonicalSiteUrl } from '@/lib/publicUrl'
 
 const instrument = Instrument_Sans({ subsets: ['latin'], display: 'swap' })
 const serverTimeLeft: CountdownTimeType = countdownTime();
@@ -31,7 +33,7 @@ export const fetchCache = 'force-no-store'
 
 export async function generateMetadata(): Promise<Metadata> {
   const site = getSiteConfig()
-  const siteUrl = site.baseUrl.replace(/\/$/, '')
+  const siteUrl = getCanonicalSiteUrl()
   const ogImage = versionLocalImagePath('/images/slider/bg-pet1-1.png')
 
   return {
@@ -42,6 +44,17 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: site.description,
     applicationName: site.name,
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+        'max-video-preview': -1,
+      },
+    },
     openGraph: {
       title: site.name,
       description: site.description,
@@ -77,9 +90,7 @@ export default async function RootLayout({
   const forwardedHost = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
   const forwardedProto = requestHeaders.get('x-forwarded-proto')
   const site = getSiteConfig()
-  const siteUrl = site.baseUrl.replace(/\/$/, '')
-  const logoImage = versionLocalImagePath(site.logo.src)
-  const sameAs = [site.social.facebook, site.social.instagram, site.social.twitter, site.social.youtube].filter(Boolean)
+  const siteUrl = getCanonicalSiteUrl()
   const initialSuggestions = await fetchSuggestionsData({
     host: forwardedHost,
     proto: forwardedProto || new URL(siteUrl).protocol.replace(':', ''),
@@ -110,21 +121,14 @@ export default async function RootLayout({
             nonce={nonce}
             type="application/ld+json"
             dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
-                '@context': 'https://schema.org',
-                '@type': 'Organization',
-                name: site.name,
-                url: siteUrl,
-                logo: `${siteUrl}${logoImage}`,
-                contactPoint: {
-                  '@type': 'ContactPoint',
-                  telephone: site.contact.whatsappLabel,
-                  contactType: 'customer service',
-                  areaServed: 'EC',
-                  availableLanguage: 'Spanish'
-                },
-                sameAs
-              })
+              __html: JSON.stringify(generatePetStoreJsonLd(site))
+            }}
+          />
+          <script
+            nonce={nonce}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(generateWebSiteJsonLd(site))
             }}
           />
         </GlobalProvider>

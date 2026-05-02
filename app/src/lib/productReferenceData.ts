@@ -5,6 +5,7 @@ import {
 } from '@/lib/productTaxonomy'
 
 export const PRODUCT_REFERENCE_KEYS = [
+  'categories',
   'brands',
   'suppliers',
   'sizes',
@@ -34,6 +35,7 @@ export type ProductSupplierReference = {
 }
 
 export type ProductReferenceData = {
+  categories: string[]
   brands: string[]
   suppliers: ProductSupplierReference[]
   sizes: string[]
@@ -123,6 +125,7 @@ export const createProductSupplierReferenceId = (
 }
 
 export const createEmptyProductReferenceData = (): ProductReferenceData => ({
+  categories: PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
   brands: [],
   suppliers: [],
   sizes: [],
@@ -267,7 +270,16 @@ export const normalizeProductReferenceData = (input?: Partial<Record<ProductRefe
       return
     }
 
-    defaults[key] = normalizeReferenceList(source[key]) as never
+    const normalized = normalizeReferenceList(source[key])
+    if (key === 'categories') {
+      defaults.categories = normalizeReferenceList([
+        ...PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
+        ...normalized,
+      ])
+      return
+    }
+
+    defaults[key] = normalized as never
   })
 
   return defaults
@@ -351,6 +363,15 @@ export const getSupplierSearchText = (supplier: ProductSupplierReference) =>
     .join(' ')
 
 export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
+  {
+    key: 'categories',
+    title: 'Categorías públicas',
+    sidebarTitle: 'Categorías',
+    description: 'Categorías visibles en tienda, filtros, sitemap y fichas de producto.',
+    itemLabel: 'categoría',
+    placeholder: 'Ej: Snacks naturales',
+    menuIcon: 'Tag',
+  },
   {
     key: 'brands',
     title: 'Marcas',
@@ -463,11 +484,6 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
 ]
 
 export const PRODUCT_SYSTEM_REFERENCE_GROUPS: ProductSystemReferenceGroup[] = [
-  {
-    title: 'Categorias publicas',
-    description: 'Se mantienen controladas por el sistema para evitar cruces entre Alimento, ropa, salud y accesorios.',
-    values: PRODUCT_CATEGORY_OPTIONS.map((option) => option.label),
-  },
   {
     title: 'Tipos de producto',
     description: 'Definen atributos y validaciones del editor.',

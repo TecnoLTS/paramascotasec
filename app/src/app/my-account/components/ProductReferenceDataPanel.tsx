@@ -103,7 +103,7 @@ export default React.memo(function ProductReferenceDataPanel({
                     <div className="heading5">Catálogos operativos</div>
                     <p className="text-secondary mt-2 max-w-3xl">
                         Administra las opciones reutilizables del editor de productos. Aquí registras, consultas y editas
-                        marcas, proveedores, tallas, materiales y demás listas operativas sin dejar texto libre descontrolado.
+                        categorías, marcas, proveedores, tallas, materiales y demás listas operativas sin dejar texto libre descontrolado.
                     </p>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 xl:min-w-[420px]">
@@ -150,10 +150,10 @@ export default React.memo(function ProductReferenceDataPanel({
             <div className="p-5 rounded-2xl border border-line bg-surface mb-6">
                 <div className="text-sm font-semibold mb-3">Taxonomía fija del sistema</div>
                 <p className="text-secondary text-xs mb-4">
-                    Categoría pública, tipo de producto y mascota se mantienen controlados por el sistema para no romper
-                    filtros, colecciones y reglas del catálogo. Aquí solo administras listas operativas.
+                    Tipo de producto y mascota siguen controlando atributos y validaciones del editor. Las categorías públicas
+                    se administran como catálogo operativo y quedan disponibles para tienda, filtros y sitemap.
                 </p>
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {PRODUCT_SYSTEM_REFERENCE_GROUPS.map((group) => (
                         <div key={group.title} className="rounded-2xl border border-line bg-white p-4">
                             <div className="text-xs uppercase font-bold text-secondary mb-2">{group.title}</div>

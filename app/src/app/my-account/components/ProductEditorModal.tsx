@@ -737,6 +737,13 @@ export default function ProductEditorModal({
     const tagOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.tags, form.attributes?.tag), [form.attributes?.tag, referenceData.tags])
     const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
     const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
+    const categoryOptions = React.useMemo(
+        () => getReferenceOptionsWithCurrent([
+            ...PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
+            ...referenceData.categories,
+        ], form.category),
+        [form.category, referenceData.categories]
+    )
     const duplicateVariantOptions = React.useMemo(() => {
         if (duplicateVariantFieldKey === 'presentation') return presentationOptions
         if (duplicateVariantFieldKey === 'color') return colorOptions
@@ -776,7 +783,7 @@ export default function ProductEditorModal({
         [form.category, form.productType]
     )
     const primaryCategoryLabel = React.useMemo(
-        () => PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === primaryCategory)?.label || '',
+        () => PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === primaryCategory)?.label || primaryCategory,
         [primaryCategory]
     )
     const selectedPurchaseSupplier = React.useMemo(
@@ -2669,31 +2676,45 @@ export default function ProductEditorModal({
                                     </div>
                                     <div>
                                         <label className="text-secondary text-sm font-bold uppercase mb-2 block">Categoría principal visible</label>
-                                        <div className="border border-line rounded-lg px-4 py-3 w-full bg-white min-h-[52px] flex items-center">
-                                            {primaryCategoryLabel || <span className="text-secondary">Se asigna automáticamente al elegir el tipo</span>}
-                                        </div>
-                                        <p className="text-secondary text-xs mt-2">Se deriva del tipo para evitar inconsistencias entre catálogo, filtros y ficha pública.</p>
+                                        <select
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black disabled:bg-surface disabled:text-secondary"
+                                            value={form.category}
+                                            onChange={(event) => setForm({ ...form, category: event.target.value })}
+                                            disabled={saving || !form.productType || isRestockMode}
+                                        >
+                                            <option value="">Selecciona categoría</option>
+                                            {categoryOptions.map((category) => {
+                                                const label = PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category
+                                                return <option key={`primary-category-${category}`} value={category}>{label}</option>
+                                            })}
+                                        </select>
+                                        <p className="text-secondary text-xs mt-2">
+                                            {primaryCategoryLabel
+                                                ? `Visible como ${primaryCategoryLabel}. Puedes registrar más categorías en Catálogos operativos.`
+                                                : 'Elige primero el tipo de producto y luego la categoría visible.'}
+                                        </p>
                                     </div>
                                     <div className="md:col-span-2">
                                         <div className="text-secondary text-xs uppercase font-bold mb-2">También mostrar en</div>
                                         <div className="flex flex-wrap gap-2">
-                                            {PRODUCT_CATEGORY_OPTIONS
-                                                .filter((option) => option.value !== primaryCategory)
-                                                .map((option) => {
-                                                    const isSelected = selectedAdditionalCategories.includes(option.value)
+                                            {categoryOptions
+                                                .filter((category) => category !== primaryCategory)
+                                                .map((category) => {
+                                                    const label = PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category
+                                                    const isSelected = selectedAdditionalCategories.includes(category)
                                                     return (
                                                         <button
-                                                            key={`additional-category-${option.value}`}
+                                                            key={`additional-category-${category}`}
                                                             type="button"
                                                             className={`px-3 py-2 rounded-full border text-sm font-semibold transition-all ${
                                                                 isSelected
                                                                     ? 'bg-black text-white border-black'
                                                                     : 'bg-white border-line hover:border-black'
                                                             }`}
-                                                            onClick={() => toggleAdditionalCategory(option.value)}
+                                                            onClick={() => toggleAdditionalCategory(category)}
                                                             disabled={saving || !form.productType || isRestockMode}
                                                         >
-                                                            {option.label}
+                                                            {label}
                                                         </button>
                                                     )
                                                 })}

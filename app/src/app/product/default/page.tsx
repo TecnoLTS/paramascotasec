@@ -6,8 +6,9 @@ import Default from '@/components/Product/Detail/Default';
 import Footer from '@/components/Footer/Footer'
 import { loadProducts } from '@/lib/products.server'
 import { generateProductJsonLd } from '@/lib/seo'
-import { buildCatalogCategoryCards, findCatalogProduct, findCatalogProductForDetail } from '@/lib/catalog'
+import { buildCatalogCategoryCards, findCatalogProductForDetail, getProductDetailRouteId } from '@/lib/catalog'
 import { getSiteConfig } from '@/lib/site'
+import { toCanonicalUrl } from '@/lib/publicUrl'
 
 type SearchParams = {
     id?: string | string[]
@@ -40,6 +41,9 @@ export async function generateMetadata(
     return {
         title: product.name,
         description: product.description.substring(0, 160),
+        alternates: {
+            canonical: toCanonicalUrl(`/product/default?id=${encodeURIComponent(getProductDetailRouteId(product))}`),
+        },
         openGraph: {
             title: product.name,
             description: product.description.substring(0, 160),

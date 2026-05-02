@@ -130,8 +130,11 @@ export const normalizeProductType = (value?: string | null, fallbackCategory?: s
 }
 
 export const normalizeProductCategory = (value?: string | null, fallbackProductType?: string | null) => {
-  const normalizedValue = resolveCanonicalProductCategory(normalizedToken(value))
+  const raw = collapseWhitespace(value)
+  const normalizedValue = resolveCanonicalProductCategory(normalizedToken(raw))
   if (normalizedValue) return normalizedValue
+
+  if (raw) return raw
 
   const normalizedType = normalizeProductType(fallbackProductType)
   if (normalizedType) return getDefaultCategoryForProductType(normalizedType)

@@ -1,13 +1,25 @@
 import type { MetadataRoute } from 'next'
-
-const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+import { getCanonicalSiteUrl } from '@/lib/publicUrl'
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = getCanonicalSiteUrl()
+
   return {
     rules: [
       {
         userAgent: '*',
         allow: '/',
+        disallow: [
+          '/api/',
+          '/cart',
+          '/checkout',
+          '/checkout2',
+          '/login',
+          '/register',
+          '/forgot-password',
+          '/my-account',
+          '/wishlist',
+        ],
       },
     ],
     sitemap: [`${baseUrl}/sitemap.xml`],

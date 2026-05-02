@@ -1,50 +1,92 @@
 import type { MetadataRoute } from 'next'
-import { getProductDetailRouteId } from '@/lib/catalog'
+import { getProductDetailRouteId, buildCatalogCategoryCards } from '@/lib/catalog'
 import { fetchProducts } from '@/lib/products'
+import { getCategoryUrl } from '@/data/petCategoryCards'
+import { getCanonicalSiteUrl, toCanonicalUrl } from '@/lib/publicUrl'
+import type { ProductType } from '@/type/ProductType'
 
-const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const isBuild = process.env.NEXT_PHASE === 'phase-production-build'
+export const dynamic = 'force-dynamic'
+
+const getValidDate = (value?: string | null) => {
+  if (!value) return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+const getProductLastModified = (product: ProductType) => {
+  const variantDates = product.variantOptions
+    ?.flatMap((variant) => [variant.product.updatedAt, variant.product.createdAt])
+    .map(getValidDate)
+    .filter((date): date is Date => Boolean(date)) ?? []
+
+  const productDates = [product.updatedAt, product.createdAt]
+    .map(getValidDate)
+    .filter((date): date is Date => Boolean(date))
+
+  const latestTime = [...productDates, ...variantDates]
+    .reduce((latest, date) => Math.max(latest, date.getTime()), 0)
+
+  return latestTime > 0 ? new Date(latestTime) : new Date()
+}
+
+const isIndexableProduct = (product: ProductType) =>
+  product.published !== false && Boolean(getProductDetailRouteId(product))
+
+const getProductUrl = (baseUrl: string, product: ProductType) => {
+  const params = new URLSearchParams({ id: String(getProductDetailRouteId(product)) })
+  return `${baseUrl}/product/default?${params.toString()}`
+}
+
+const uniqueSitemapEntries = (entries: MetadataRoute.Sitemap) => {
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    if (seen.has(entry.url)) return false
+    seen.add(entry.url)
+    return true
+  })
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = getCanonicalSiteUrl()
+  const generatedAt = new Date()
+
   const staticRoutes: MetadataRoute.Sitemap = [
     '',
     '/shop/breadcrumb1',
-    '/cart',
-    '/checkout',
-    '/login',
-    '/register',
-    '/my-account',
-    '/order-tracking',
+    '/pages/about',
+    '/pages/contact',
+    '/pages/faqs',
+    '/pages/preguntas-frecuentes',
+    '/pages/politica-de-privacidad',
+    '/pages/terminos-y-condiciones',
+    '/pages/customer-feedbacks',
+    '/pages/store-list',
   ].map((path) => ({
-    url: `${baseUrl}${path}`,
-    lastModified: new Date(),
+    url: toCanonicalUrl(path),
+    lastModified: generatedAt,
     changeFrequency: path === '' ? 'daily' : 'weekly',
-    priority: path === '' ? 1 : 0.8,
+    priority: path === '' ? 1 : path === '/shop/breadcrumb1' ? 0.9 : 0.5,
   }))
 
-  if (isBuild) {
-    return staticRoutes
-  }
-
   try {
-    const products = await fetchProducts()
+    const products = (await fetchProducts({ fresh: true })).filter(isIndexableProduct)
     const productRoutes: MetadataRoute.Sitemap = products.map((product) => ({
-      url: `${baseUrl}/product/default?id=${getProductDetailRouteId(product)}`,
-      lastModified: new Date(), // Ideally we'd have a updatedAt field
+      url: getProductUrl(baseUrl, product),
+      lastModified: getProductLastModified(product),
       changeFrequency: 'weekly',
       priority: 0.6,
     }))
 
-    // We could add categories too if we had a list
-    const categories = Array.from(new Set(products.map(p => p.category)))
-    const categoryRoutes: MetadataRoute.Sitemap = categories.map(cat => ({
-      url: `${baseUrl}/shop/breadcrumb1?category=${cat}`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.7,
-    }))
+    const categoryRoutes: MetadataRoute.Sitemap = buildCatalogCategoryCards(products)
+      .filter((category) => category.id.toLowerCase() !== 'todos')
+      .map((category) => ({
+        url: toCanonicalUrl(getCategoryUrl(category.id)),
+        lastModified: generatedAt,
+        changeFrequency: 'daily',
+        priority: 0.75,
+      }))
 
-    return [...staticRoutes, ...categoryRoutes, ...productRoutes]
+    return uniqueSitemapEntries([...staticRoutes, ...categoryRoutes, ...productRoutes])
   } catch (err) {
     console.error('No se pudo generar sitemap dinámico', err)
     return staticRoutes
