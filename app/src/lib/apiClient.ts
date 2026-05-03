@@ -611,23 +611,3 @@ export async function requestApi<T>(path: string, init?: ApiRequestInit): Promis
 
   return { ok: true, status: result.status, body: result.body as T }
 }
-/*
-// Ejemplo de wrapper estandarizado para reuso
-type EjemploResponse = { ok: boolean; message: string; timestamp: string }
-export const fetchEjemplo = () => fetchJson<EjemploResponse>('/api/ejemplo')
-
-// Ejemplo de wrapper estandarizado para reuso
-type EjemploResponse2 = { ok: boolean; message: string; timestamp: string }
-export const fetchEjemplo2 = () => fetchJson<EjemploResponse2>('/api/ejemplo2')
-
-import { fetchEjemplo } from '@/lib/apiClient'
-
-const load = async () => {
-  try {
-    const data = await fetchEjemplo() // devuelve { ok, message, timestamp }
-    // usar data...
-  } catch (err) {
-    // manejar error
-  }
-}
-  */

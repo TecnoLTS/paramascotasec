@@ -32,8 +32,6 @@ export const apiEndpoints = {
   reports: {
     recentOrders: '/api/reports/recent-orders',
   },
-  ejemplo: '/api/ejemplo',
-  ejemplo2: '/api/ejemplo2',
 } as const
 
 export type ApiEndpointKey = keyof typeof apiEndpoints

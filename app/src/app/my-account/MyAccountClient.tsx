@@ -1867,10 +1867,26 @@ const MyAccount = () => {
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [isPurchaseInvoiceModalOpen, purchaseInvoiceDetailLoading])
 
-    const handleLogout = React.useCallback(() => {
-        requestApi('/api/auth/logout', { method: 'POST' }).catch(() => null)
+    const handleLogout = React.useCallback(async () => {
+        // Clear in-memory state immediately so the panel can't be re-opened via SPA navigation.
+        setAuthBootstrapping(true)
+        setUser(null)
+        setActiveTab(undefined)
+        setAdminDataError(null)
+        setDashboardStats(null)
+        setAdminOrdersList([])
+        setAdminProductsList([])
+        setAdminUsersList([])
         clearStoredSession()
-        router.push('/login')
+
+        try {
+            await requestApi('/api/auth/logout', { method: 'POST' })
+        } catch {
+            // Even if the backend is unreachable, we still treat the user as logged out locally.
+        }
+
+        router.replace('/login')
+        router.refresh()
     }, [router])
 
     const handleActiveAddress = (order: 'shipping' | 'billing') => {

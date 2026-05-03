@@ -17,5 +17,3 @@ export { fetchJson, requestApi } from '@/lib/apiClient'
 export type HealthResponse = { estado: string; fecha: string; base_de_datos: string }
 
 export const healthApi = () => fetchJson<HealthResponse>(apiEndpoints.health)
-export const ejemploApi = () => fetchJson<HealthResponse>(apiEndpoints.ejemplo)
-export const ejemplo2Api = () => fetchJson<HealthResponse>(apiEndpoints.ejemplo2)

@@ -1,13 +1,15 @@
 /** @type {import('next').NextConfig} */
 const imageOptimizationDisabled = process.env.NEXT_IMAGE_UNOPTIMIZED === '1'
-const allowedDevOrigins = [
-    'paramascotasec.com',
-    'www.paramascotasec.com',
-    '192.168.100.229',
-    '80.241.213.31',
-    'localhost',
-    '127.0.0.1',
-]
+const allowedDevOrigins = process.env.NODE_ENV === 'production'
+    ? ['paramascotasec.com', 'www.paramascotasec.com']
+    : [
+        'paramascotasec.com',
+        'www.paramascotasec.com',
+        '192.168.100.229',
+        '80.241.213.31',
+        'localhost',
+        '127.0.0.1',
+    ]
 
 const nextConfig = {
     reactStrictMode: true,
@@ -30,11 +32,13 @@ const nextConfig = {
                 protocol: 'https',
                 hostname: 'images.pexels.com',
             },
-            {
-                protocol: 'http',
-                hostname: 'localhost',
-                port: '8080',
-            },
+            ...(process.env.NODE_ENV === 'production'
+                ? []
+                : [{
+                    protocol: 'http',
+                    hostname: 'localhost',
+                    port: '8080',
+                }]),
             {
                 protocol: 'https',
                 hostname: 'api.paramascotasec.com',

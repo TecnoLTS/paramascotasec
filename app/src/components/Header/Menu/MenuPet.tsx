@@ -30,6 +30,7 @@ import { getProductDetailRouteId } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 import { ProductType } from '@/type/ProductType'
 import { clearStoredSession, getStoredSessionUser } from '@/lib/authSession'
+import { requestApi } from '@/lib/apiClient'
 
 type MenuPetProps = {
     props?: string;
@@ -443,21 +444,22 @@ const MenuPet: React.FC<MenuPetProps> = ({ props, searchProducts = [], available
     }
 
     const handleLogout = async () => {
-        try {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                credentials: 'include',
-            })
-        } catch {}
-
+        // Logout must be "strong" in SPA: clear local state immediately, then invalidate cookies server-side.
         clearStoredSession()
         setAccountDisplayName('Mi cuenta')
         setIsAuthenticated(false)
+
+        try {
+            // Must go through requestApi so CSRF/cookies behave exactly like the panel lateral logout.
+            await requestApi('/api/auth/logout', { method: 'POST' })
+        } catch {}
+
         if (openLoginPopup) {
             handleLoginPopup()
         }
+
+        router.replace('/login')
         router.refresh()
-        router.push('/')
     }
 
     return (
