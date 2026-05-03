@@ -271,7 +271,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   return {
     id: product.legacyId ?? product.id,
     internalId: product.id,
-    category: normalizeProductCategory(product.category, product.productType ?? ''),
+    category: normalizeProductCategory(product.category),
     productType: product.productType ?? '',
     type: product.type ?? '',
     name: product.name,

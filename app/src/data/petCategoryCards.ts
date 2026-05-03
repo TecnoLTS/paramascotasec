@@ -469,7 +469,7 @@ export const matchesPetCategoryFilter = (
 ) => {
   const resolvedFilter = resolvePetCategoryFilter(filter, options)
   const productType = normalizeProductType(product.productType, product.category)
-  const productCategory = normalizeProductCategory(product.category, productType)
+  const productCategory = normalizeProductCategory(product.category)
   const additionalCategories = uniqueNormalizedValues(
     parseAdditionalCategoryValues(product.attributes?.catalogCategories),
     normalizeProductCategory

@@ -87,39 +87,17 @@ const resolveCanonicalProductType = (token: string) => {
   return ''
 }
 
-const resolveCanonicalProductCategory = (token: string) => {
-  if (!token) return ''
-
-  if (matchesAny(token, ['ropa', 'vestimenta', 'vestido', 'prenda', 'abrigo', 'camiseta', 'sueter', 'sudadera'])) {
-    return 'ropa'
-  }
-
-  if (matchesAny(token, ['cuidado', 'cuidados', 'higiene', 'medicina', 'medicinas', 'salud', 'farmacia', 'antiparasit', 'pipeta', 'shampoo'])) {
-    return 'salud'
-  }
-
-  if (matchesAny(token, ['Alimento', 'alimento', 'snack', 'golosina', 'croqueta', 'pienso', 'lata'])) {
-    return 'Alimento'
-  }
-
-  if (matchesAny(token, ['accesorio', 'accesorios', 'juguete', 'juguetes', 'cama', 'camas', 'comedero', 'comederos', 'plato', 'platos', 'correa', 'correas', 'collar', 'collares', 'arnes', 'arneses', 'transportadora', 'transportadoras', 'bolsa', 'bolsas'])) {
-    return 'accesorios'
-  }
-
-  return ''
-}
-
 export const getDefaultCategoryForProductType = (productType?: string | null) => {
   const normalizedType = normalizeProductType(productType)
   return CATEGORY_BY_TYPE[normalizedType] ?? ''
 }
 
 export const getDefaultProductTypeForCategory = (category?: string | null) => {
-  const normalizedCategory = resolveCanonicalProductCategory(normalizedToken(category))
-  if (normalizedCategory === 'salud') return 'cuidado'
-  if (normalizedCategory === 'Alimento') return 'Alimento'
-  if (normalizedCategory === 'ropa') return 'ropa'
-  if (normalizedCategory === 'accesorios') return 'accesorios'
+  const token = normalizedToken(category)
+  if (token === 'salud') return 'cuidado'
+  if (token === 'alimento') return 'Alimento'
+  if (token === 'ropa') return 'ropa'
+  if (token === 'accesorios') return 'accesorios'
   return ''
 }
 
@@ -130,15 +108,9 @@ export const normalizeProductType = (value?: string | null, fallbackCategory?: s
 }
 
 export const normalizeProductCategory = (value?: string | null, fallbackProductType?: string | null) => {
+  void fallbackProductType
   const raw = collapseWhitespace(value)
-  const normalizedValue = resolveCanonicalProductCategory(normalizedToken(raw))
-  if (normalizedValue) return normalizedValue
-
   if (raw) return raw
-
-  const normalizedType = normalizeProductType(fallbackProductType)
-  if (normalizedType) return getDefaultCategoryForProductType(normalizedType)
-
   return ''
 }
 
@@ -204,7 +176,7 @@ export const normalizeProductCategoryList = (values: Array<string | null | undef
   Array.from(
     new Set(
       values
-        .map((value) => normalizeProductCategory(value))
+        .map((value) => collapseWhitespace(value))
         .filter(Boolean)
     )
   )

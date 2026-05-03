@@ -19,9 +19,7 @@ import {
 import {
     APPAREL_GENDER_OPTIONS,
     PET_SPECIES_OPTIONS,
-    PRODUCT_CATEGORY_OPTIONS,
     PRODUCT_TYPE_OPTIONS,
-    getDefaultCategoryForProductType,
     normalizeProductCategory,
     normalizeProductType,
     normalizeProductSpecies,
@@ -738,10 +736,7 @@ export default function ProductEditorModal({
     const flavorOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.flavors, form.attributes?.flavor), [form.attributes?.flavor, referenceData.flavors])
     const ageRangeOptions = React.useMemo(() => getReferenceOptionsWithCurrent(referenceData.ageRanges, form.attributes?.age), [form.attributes?.age, referenceData.ageRanges])
     const categoryOptions = React.useMemo(
-        () => getReferenceOptionsWithCurrent([
-            ...PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
-            ...referenceData.categories,
-        ], form.category),
+        () => getReferenceOptionsWithCurrent(referenceData.categories, form.category),
         [form.category, referenceData.categories]
     )
     const duplicateVariantOptions = React.useMemo(() => {
@@ -779,12 +774,8 @@ export default function ProductEditorModal({
         return 'Registra primero las tallas o tamaños en Catálogos operativos:'
     }, [duplicateVariantFieldKey, form.category, form.productType])
     const primaryCategory = React.useMemo(
-        () => normalizeProductCategory(form.category, form.productType),
-        [form.category, form.productType]
-    )
-    const primaryCategoryLabel = React.useMemo(
-        () => PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === primaryCategory)?.label || primaryCategory,
-        [primaryCategory]
+        () => normalizeProductCategory(form.category),
+        [form.category]
     )
     const selectedPurchaseSupplier = React.useMemo(
         () => findSupplierReference(referenceData.suppliers, form.purchaseInvoice?.supplierName),
@@ -1055,14 +1046,7 @@ export default function ProductEditorModal({
         setForm((prev) => {
             const normalizedType = normalizeProductType(value, prev.category)
             const nextAttributes = getAttributesForTypeChange(normalizedType, prev.attributes)
-            const defaultCategory = getDefaultCategoryForProductType(normalizedType)
-            const previousPrimaryCategory = normalizeProductCategory(prev.category, prev.productType)
             const preservedAdditionalCategories = parseSerializedProductCategories(prev.attributes?.catalogCategories)
-                .filter((category) => category !== defaultCategory)
-
-            if (previousPrimaryCategory && previousPrimaryCategory !== defaultCategory && !preservedAdditionalCategories.includes(previousPrimaryCategory)) {
-                preservedAdditionalCategories.unshift(previousPrimaryCategory)
-            }
 
             nextAttributes.catalogCategories = serializeProductCategories(preservedAdditionalCategories)
 
@@ -1074,7 +1058,7 @@ export default function ProductEditorModal({
             return {
                 ...prev,
                 productType: normalizedType,
-                category: defaultCategory,
+                category: prev.category,
                 attributes: nextAttributes
             }
         })
@@ -1878,7 +1862,7 @@ export default function ProductEditorModal({
             const name = String(form.name || '').trim()
             const brand = String(form.brand || '').trim()
             const productType = normalizeProductType(form.productType, form.category)
-            const category = normalizeProductCategory(form.category, productType)
+            const category = normalizeProductCategory(form.category)
             const description = String(form.description || '').trim()
             const basePrice = parseLocalizedDecimal(form.price)
             const pvpPrice = parseLocalizedDecimal(form.pvp)
@@ -1893,6 +1877,7 @@ export default function ProductEditorModal({
             if (!isDuplicateVariantMode && name.length < 3) nextErrors.name = 'El nombre debe tener al menos 3 caracteres.'
             if (!brand) nextErrors.brand = 'La marca es obligatoria.'
             if (!productType) nextErrors.productType = 'Selecciona el tipo de producto.'
+            if (!category) nextErrors.category = 'Selecciona la categoría visible registrada en Catálogos operativos.'
             if (!Number.isFinite(basePrice) || basePrice < 0) nextErrors.price = 'El precio base debe ser un número válido mayor o igual a 0.'
             if (String(form.marketPrice || '').trim() !== '' && (!Number.isFinite(marketPrice) || marketPrice < 0)) {
                 nextErrors.marketPrice = 'El precio mercado debe ser un número válido mayor o igual a 0.'
@@ -2684,13 +2669,13 @@ export default function ProductEditorModal({
                                         >
                                             <option value="">Selecciona categoría</option>
                                             {categoryOptions.map((category) => {
-                                                const label = PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category
-                                                return <option key={`primary-category-${category}`} value={category}>{label}</option>
+                                                return <option key={`primary-category-${category}`} value={category}>{category}</option>
                                             })}
                                         </select>
+                                        {formErrors.category && <p className="text-xs text-red mt-1">{formErrors.category}</p>}
                                         <p className="text-secondary text-xs mt-2">
-                                            {primaryCategoryLabel
-                                                ? `Visible como ${primaryCategoryLabel}. Puedes registrar más categorías en Catálogos operativos.`
+                                            {primaryCategory
+                                                ? `Visible como ${primaryCategory}. Puedes registrar más categorías en Catálogos operativos.`
                                                 : 'Elige primero el tipo de producto y luego la categoría visible.'}
                                         </p>
                                     </div>
@@ -2700,7 +2685,6 @@ export default function ProductEditorModal({
                                             {categoryOptions
                                                 .filter((category) => category !== primaryCategory)
                                                 .map((category) => {
-                                                    const label = PRODUCT_CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category
                                                     const isSelected = selectedAdditionalCategories.includes(category)
                                                     return (
                                                         <button
@@ -2714,7 +2698,7 @@ export default function ProductEditorModal({
                                                             onClick={() => toggleAdditionalCategory(category)}
                                                             disabled={saving || !form.productType || isRestockMode}
                                                         >
-                                                            {label}
+                                                            {category}
                                                         </button>
                                                     )
                                                 })}

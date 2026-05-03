@@ -6585,7 +6585,7 @@ const MyAccount = () => {
                                                     className="border-line mt-2 px-4 py-3 w-full rounded-lg"
                                                     id="newPassword"
                                                     type="password"
-                                                    placeholder="Mínimo 8 caracteres"
+                                                    placeholder="Mínimo 12 caracteres"
                                                     autoComplete="new-password"
                                                     value={passwordForm.newPassword}
                                                     onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}

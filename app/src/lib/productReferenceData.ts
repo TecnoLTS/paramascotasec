@@ -1,6 +1,5 @@
 import {
   PET_SPECIES_OPTIONS,
-  PRODUCT_CATEGORY_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
 } from '@/lib/productTaxonomy'
 
@@ -125,7 +124,7 @@ export const createProductSupplierReferenceId = (
 }
 
 export const createEmptyProductReferenceData = (): ProductReferenceData => ({
-  categories: PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
+  categories: [],
   brands: [],
   suppliers: [],
   sizes: [],
@@ -270,16 +269,7 @@ export const normalizeProductReferenceData = (input?: Partial<Record<ProductRefe
       return
     }
 
-    const normalized = normalizeReferenceList(source[key])
-    if (key === 'categories') {
-      defaults.categories = normalizeReferenceList([
-        ...PRODUCT_CATEGORY_OPTIONS.map((option) => option.value),
-        ...normalized,
-      ])
-      return
-    }
-
-    defaults[key] = normalized as never
+    defaults[key] = normalizeReferenceList(source[key]) as never
   })
 
   return defaults

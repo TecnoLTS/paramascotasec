@@ -420,7 +420,7 @@ export const enrichVariantAttributes = ({
 
     const synthesizedProduct = {
         name: rawName,
-        category: normalizeProductCategory(String(category || ''), normalizedType),
+        category: normalizeProductCategory(String(category || '')),
         productType: normalizedType,
         attributes: nextAttributes,
         variantLabel: nextAttributes.variantLabel,
@@ -814,7 +814,7 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         cost: String(product?.business?.cost ?? product?.cost ?? 0),
         taxExempt,
         quantity: String(product?.quantity ?? ''),
-        category: normalizeProductCategory(product?.category || '', productType),
+        category: normalizeProductCategory(product?.category || ''),
         brand: String(product?.brand || 'Generico'),
         description: String(product?.description || ''),
         productType,
