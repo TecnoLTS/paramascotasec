@@ -5,6 +5,7 @@ import Image from '@/components/Common/AppImage'
 import dynamic from 'next/dynamic'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
+import CheckoutLocationPicker from '@/components/Checkout/CheckoutLocationPicker'
 import {
     Archive,
     ArrowDownLeft,
@@ -76,7 +77,7 @@ const PASSIVE_REFRESH_SAFE_TABS = new Set([
 ])
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { requestApi } from '@/lib/apiClient'
+import { fetchJson, requestApi } from '@/lib/apiClient'
 import { clearStoredSession, setStoredSessionUser } from '@/lib/authSession'
 import { createDiscount, listDiscountAudit, listDiscounts, updateDiscount, updateDiscountStatus } from '@/lib/api/discounts'
 import type { AdminDiscountAuditRow, AdminDiscountCode, AdminDiscountPayload, AdminDiscountType } from '@/lib/api/discounts'
@@ -131,6 +132,7 @@ import {
     getLocalSalePaymentMethodLabel,
 } from './formatting'
 import AccountSidebar from './components/AccountSidebar'
+import AdminShippingSettingsPanel from './components/AdminShippingSettingsPanel'
 import { useAdminSidebarNavigation } from './hooks/useAdminSidebarNavigation'
 import { useAuthBootstrap } from './hooks/useAuthBootstrap'
 import { useAdminDataLoader } from './hooks/useAdminDataLoader'
@@ -883,7 +885,34 @@ const MyAccount = () => {
     const [vatRate, setVatRate] = useState<number>(0)
     const [vatLoading, setVatLoading] = useState(false)
     const [vatSaving, setVatSaving] = useState(false)
-    const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
+    const [shippingRates, setShippingRates] = useState<{
+        delivery: number
+        pickup: number
+        taxRate: number
+        storeAddress: string
+        storeLatitude: number
+        storeLongitude: number
+        freeShippingRadiusKm: number
+        shippingKmFlatRateLimit: number
+        shippingPerKmRate: number
+        mapMinSearchChars: number
+        mapLookupCooldownSeconds: number
+        mapSessionLookupLimit: number
+    }>({
+        delivery: 0,
+        pickup: 0,
+        taxRate: 0,
+        storeAddress: 'Av. de la Prensa y Juan Paz y Miño, 170104 Quito',
+        storeLatitude: -0.148306,
+        storeLongitude: -78.490870,
+
+        freeShippingRadiusKm: 5,
+        shippingKmFlatRateLimit: 7,
+        shippingPerKmRate: 1,
+        mapMinSearchChars: 6,
+        mapLookupCooldownSeconds: 3,
+        mapSessionLookupLimit: 12,
+    })
     const [shippingLoading, setShippingLoading] = useState(false)
     const [shippingSaving, setShippingSaving] = useState(false)
     const [marginSettings, setMarginSettings] = useState<PricingMargins>({ baseMargin: 30, minMargin: 15, targetMargin: 35, promoBuffer: 5 })
@@ -1484,6 +1513,19 @@ const MyAccount = () => {
         try {
             setAddressSaving(true)
             const normalizedAddresses = normalizeSavedAddresses(savedAddresses)
+            const invalidShippingAddress = normalizedAddresses.find((entry) =>
+                entry.shipping.latitude === null
+                || entry.shipping.latitude === undefined
+                || entry.shipping.longitude === null
+                || entry.shipping.longitude === undefined
+                || !String(entry.shipping.street || '').trim()
+                || !String(entry.shipping.city || '').trim()
+            )
+            if (invalidShippingAddress) {
+                showNotification('Cada dirección de envío debe seleccionarse en el mapa para poder guardarse como principal o alternativa.', 'error')
+                setAddressSaving(false)
+                return
+            }
             const res = await requestApi<{ addresses: SavedAddressEntry[] }>('/api/user/addresses', {
                 method: 'PUT',
                 headers: {
@@ -1810,11 +1852,33 @@ const MyAccount = () => {
         if (!user || user.role !== 'admin') return
         setShippingLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping'))
+            const res = await withTransientRetry(() => requestApi<{
+                delivery: number
+                pickup: number
+                tax_rate: number
+                store_address?: string
+                store_latitude?: number
+                store_longitude?: number
+                free_shipping_radius_km?: number
+                shipping_km_flat_rate_limit?: number
+                shipping_per_km_rate?: number
+                map_min_search_chars?: number
+                map_lookup_cooldown_seconds?: number
+                map_session_lookup_limit?: number
+            }>('/api/admin/settings/shipping'))
             setShippingRates({
                 delivery: Number(res.body.delivery ?? 0),
                 pickup: Number(res.body.pickup ?? 0),
-                taxRate: Number(res.body.tax_rate ?? 0)
+                taxRate: Number(res.body.tax_rate ?? 0),
+                storeAddress: String(res.body.store_address ?? 'Av. de la Prensa y Juan Paz y Miño, 170104 Quito'),
+                storeLatitude: Number(res.body.store_latitude ?? -0.148306),
+                storeLongitude: Number(res.body.store_longitude ?? -78.490870),
+                freeShippingRadiusKm: Number(res.body.free_shipping_radius_km ?? 5),
+                shippingKmFlatRateLimit: Number(res.body.shipping_km_flat_rate_limit ?? 7),
+                shippingPerKmRate: Number(res.body.shipping_per_km_rate ?? 1),
+                mapMinSearchChars: Number(res.body.map_min_search_chars ?? 6),
+                mapLookupCooldownSeconds: Number(res.body.map_lookup_cooldown_seconds ?? 3),
+                mapSessionLookupLimit: Number(res.body.map_session_lookup_limit ?? 12),
             })
         } catch (error) {
             console.error(error)
@@ -1829,6 +1893,42 @@ const MyAccount = () => {
             setShippingLoading(false)
         }
     }
+
+    const loadPublicShippingConfig = React.useCallback(async () => {
+        try {
+            const data = await fetchJson<{
+                delivery: number
+                pickup: number
+                tax_rate?: number
+                store_address?: string
+                store_latitude?: number
+                store_longitude?: number
+                free_shipping_radius_km?: number
+                shipping_km_flat_rate_limit?: number
+                shipping_per_km_rate?: number
+                map_min_search_chars?: number
+                map_lookup_cooldown_seconds?: number
+                map_session_lookup_limit?: number
+            }>('/api/settings/shipping')
+            setShippingRates((prev) => ({
+                ...prev,
+                delivery: Number(data.delivery ?? prev.delivery),
+                pickup: Number(data.pickup ?? prev.pickup),
+                taxRate: Number(data.tax_rate ?? prev.taxRate),
+                storeAddress: String(data.store_address ?? prev.storeAddress),
+                storeLatitude: Number(data.store_latitude ?? prev.storeLatitude),
+                storeLongitude: Number(data.store_longitude ?? prev.storeLongitude),
+                freeShippingRadiusKm: Number(data.free_shipping_radius_km ?? prev.freeShippingRadiusKm),
+                shippingKmFlatRateLimit: Number(data.shipping_km_flat_rate_limit ?? prev.shippingKmFlatRateLimit),
+                shippingPerKmRate: Number(data.shipping_per_km_rate ?? prev.shippingPerKmRate),
+                mapMinSearchChars: Number(data.map_min_search_chars ?? prev.mapMinSearchChars),
+                mapLookupCooldownSeconds: Number(data.map_lookup_cooldown_seconds ?? prev.mapLookupCooldownSeconds),
+                mapSessionLookupLimit: Number(data.map_session_lookup_limit ?? prev.mapSessionLookupLimit),
+            }))
+        } catch (error) {
+            console.error(error)
+        }
+    }, [])
 
     const normalizePurchaseInvoiceSummary = (input: any): PurchaseInvoiceSummary => ({
         id: String(input?.id || ''),
@@ -2142,7 +2242,20 @@ const MyAccount = () => {
     const handleSaveShipping = async () => {
         setShippingSaving(true)
         try {
-            const res = await requestApi<{ delivery: number; pickup: number; tax_rate: number }>('/api/admin/settings/shipping', {
+            const res = await requestApi<{
+                delivery: number
+                pickup: number
+                tax_rate: number
+                store_address?: string
+                store_latitude?: number
+                store_longitude?: number
+                free_shipping_radius_km?: number
+                shipping_km_flat_rate_limit?: number
+                shipping_per_km_rate?: number
+                map_min_search_chars?: number
+                map_lookup_cooldown_seconds?: number
+                map_session_lookup_limit?: number
+            }>('/api/admin/settings/shipping', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2150,13 +2263,31 @@ const MyAccount = () => {
                 body: JSON.stringify({
                     delivery: shippingRates.delivery,
                     pickup: shippingRates.pickup,
-                    tax_rate: shippingRates.taxRate
+                    tax_rate: shippingRates.taxRate,
+                    store_address: shippingRates.storeAddress,
+                    store_latitude: shippingRates.storeLatitude,
+                    store_longitude: shippingRates.storeLongitude,
+                    free_shipping_radius_km: shippingRates.freeShippingRadiusKm,
+                    shipping_km_flat_rate_limit: shippingRates.shippingKmFlatRateLimit,
+                    shipping_per_km_rate: shippingRates.shippingPerKmRate,
+                    map_min_search_chars: shippingRates.mapMinSearchChars,
+                    map_lookup_cooldown_seconds: shippingRates.mapLookupCooldownSeconds,
+                    map_session_lookup_limit: shippingRates.mapSessionLookupLimit,
                 })
             })
             setShippingRates({
                 delivery: Number(res.body.delivery ?? 0),
                 pickup: Number(res.body.pickup ?? 0),
-                taxRate: Number(res.body.tax_rate ?? 0)
+                taxRate: Number(res.body.tax_rate ?? 0),
+                storeAddress: String(res.body.store_address ?? shippingRates.storeAddress),
+                storeLatitude: Number(res.body.store_latitude ?? shippingRates.storeLatitude),
+                storeLongitude: Number(res.body.store_longitude ?? shippingRates.storeLongitude),
+                freeShippingRadiusKm: Number(res.body.free_shipping_radius_km ?? shippingRates.freeShippingRadiusKm),
+                shippingKmFlatRateLimit: Number(res.body.shipping_km_flat_rate_limit ?? shippingRates.shippingKmFlatRateLimit),
+                shippingPerKmRate: Number(res.body.shipping_per_km_rate ?? shippingRates.shippingPerKmRate),
+                mapMinSearchChars: Number(res.body.map_min_search_chars ?? shippingRates.mapMinSearchChars),
+                mapLookupCooldownSeconds: Number(res.body.map_lookup_cooldown_seconds ?? shippingRates.mapLookupCooldownSeconds),
+                mapSessionLookupLimit: Number(res.body.map_session_lookup_limit ?? shippingRates.mapSessionLookupLimit),
             })
             showNotification('Costos de envío actualizados.')
         } catch (error) {
@@ -2706,6 +2837,12 @@ const MyAccount = () => {
         if (localSaleSelectedQuotationId || localSaleQuoteHistory.length === 0) return
         setLocalSaleSelectedQuotationId(localSaleQuoteHistory[0].id)
     }, [localSaleQuoteHistory, localSaleSelectedQuotationId])
+
+    React.useEffect(() => {
+        if (!user) return
+        if (user.role === 'admin') return
+        loadPublicShippingConfig()
+    }, [loadPublicShippingConfig, user])
 
     const currentAddress = savedAddresses[currentAddrIndex] || createEmptySavedAddressEntry('Dirección principal')
     const currentDateLabel = formatDateEcuador(new Date(), {
@@ -4099,6 +4236,20 @@ const MyAccount = () => {
         setSavedAddresses(newAddresses)
     }
 
+    const updateAddressPartial = (type: 'billing' | 'shipping', partial: Record<string, unknown>) => {
+        const newAddresses = [...savedAddresses]
+        const addr = newAddresses[currentAddrIndex]
+        if (!addr) return
+        addr[type] = { ...addr[type], ...partial }
+
+        if (addr.isSame) {
+            const otherType = type === 'billing' ? 'shipping' : 'billing'
+            addr[otherType] = { ...addr[otherType], ...partial }
+        }
+
+        setSavedAddresses(newAddresses)
+    }
+
     const handleBillingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
         const field = id.replace('billing', '').charAt(0).toLowerCase() + id.replace('billing', '').slice(1);
@@ -4131,6 +4282,16 @@ const MyAccount = () => {
         } else {
             showNotification('Máximo 3 direcciones permitidas.', 'error')
         }
+    }
+
+    const makePrimaryAddress = (index: number) => {
+        if (index <= 0 || index >= savedAddresses.length) return
+        const nextAddresses = [...savedAddresses]
+        const [selected] = nextAddresses.splice(index, 1)
+        nextAddresses.unshift(selected)
+        setSavedAddresses(nextAddresses)
+        setCurrentAddrIndex(0)
+        showNotification('Esta dirección quedó como principal para checkout.')
     }
 
     const removeAddress = (index: number) => {
@@ -6980,7 +7141,7 @@ const MyAccount = () => {
                                     {activeTab === 'taxes' && (
                                         <div className="tab text-content w-full">
                                             <div className="heading5 pb-4">Impuestos y cargos</div>
-                                            <p className="text-secondary mb-6">Configura IVA y ajustes de envío que impactan el precio final.</p>
+                                            <p className="text-secondary mb-6">Configura IVA general de la tienda. La operación de envíos y mapa está en la pestaña <span className="font-semibold text-black">Envíos y mapa</span>.</p>
                                             <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
                                                 <div className="flex flex-col md:flex-row md:items-end gap-4">
                                                     <div className="flex-1 group">
@@ -7016,82 +7177,17 @@ const MyAccount = () => {
                                                 </div>
                                             </div>
                                             <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
-                                                <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-                                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="group">
-                                                            <label
-                                                                htmlFor="shippingDelivery"
-                                                                className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                                title="Se suma al total del pedido cuando el cliente elige envío a domicilio."
-                                                            >
-                                                                Envío a domicilio ($)
-                                                            </label>
-                                                            <input
-                                                                id="shippingDelivery"
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                className="border border-line px-4 py-2 rounded-lg w-full"
-                                                                value={shippingRates.delivery}
-                                                                onChange={(e) => setShippingRates({ ...shippingRates, delivery: Number(e.target.value) })}
-                                                                disabled={shippingLoading || shippingSaving}
-                                                            />
-                                                            <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                Aumentar este valor incrementa el costo final del pedido para envíos a domicilio.
-                                                            </p>
-                                                        </div>
-                                                        <div className="group">
-                                                            <label
-                                                                htmlFor="shippingPickup"
-                                                                className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                                title="Costo aplicado cuando el cliente recoge en tienda."
-                                                            >
-                                                                Retiro en tienda ($)
-                                                            </label>
-                                                            <input
-                                                                id="shippingPickup"
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                className="border border-line px-4 py-2 rounded-lg w-full"
-                                                                value={shippingRates.pickup}
-                                                                onChange={(e) => setShippingRates({ ...shippingRates, pickup: Number(e.target.value) })}
-                                                                disabled={shippingLoading || shippingSaving}
-                                                            />
-                                                            <p className="text-[11px] text-secondary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                Define el cargo por retiro en tienda; 0 significa retiro gratuito.
-                                                            </p>
-                                                        </div>
-                                                        <div className="md:col-span-2 group">
-                                                            <label
-                                                                htmlFor="shippingTaxRate"
-                                                                className="text-secondary text-xs uppercase font-bold mb-2 block"
-                                                                title="Porcentaje de IVA que se suma al costo de envío."
-                                                            >
-                                                                IVA aplicado al envío (%)
-                                                            </label>
-                                                            <input
-                                                                id="shippingTaxRate"
-                                                                type="number"
-                                                                step="0.1"
-                                                                min="0"
-                                                                className="border border-line px-4 py-2 rounded-lg w-full"
-                                                                value={shippingRates.taxRate}
-                                                                onChange={(e) => setShippingRates({ ...shippingRates, taxRate: Number(e.target.value) })}
-                                                                disabled={shippingLoading || shippingSaving}
-                                                            />
-                                                            <p className="text-secondary text-xs mt-2">Se suma al envío para cubrir impuestos. Ej: 15% incrementa el costo final.</p>
-                                                            <p className="text-[11px] text-secondary mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                A mayor IVA de envío, mayor total del pedido cuando hay costos logísticos.
-                                                            </p>
-                                                        </div>
+                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                                    <div>
+                                                        <div className="heading6">Envíos y límites del mapa</div>
+                                                        <p className="text-secondary text-sm mt-1">El radio gratis de 5 km, la tarifa fuera de radio y el control de consultas del mapa ahora se administran desde la pestaña de envíos.</p>
                                                     </div>
                                                     <button
+                                                        type="button"
                                                         className="button-main py-2 px-6"
-                                                        onClick={handleSaveShipping}
-                                                        disabled={shippingLoading || shippingSaving}
+                                                        onClick={() => navigateToPanelTab('shipments')}
                                                     >
-                                                        {shippingSaving ? 'Guardando...' : 'Guardar Envío'}
+                                                        Abrir Envíos y mapa
                                                     </button>
                                                 </div>
                                             </div>
@@ -7516,25 +7612,33 @@ const MyAccount = () => {
                                     )}
 
                                     {activeTab === 'shipments' && (
-                                        <ShipmentsPanel
-                                            shippingProviders={shippingProviders}
-                                            shippingPickups={shippingPickups}
-                                            pickupReadyOrders={pickupReadyOrders}
-                                            shippingRates={shippingRates}
-                                            onConfigureTaxes={() => navigateToPanelTab('taxes')}
-                                            onViewDeliveryOrders={() => {
-                                                startPanelNavigationTransition(() => {
-                                                    setActiveOrders('delivery')
-                                                    setActiveTab('admin-orders')
-                                                    setSelectedDeepDive(null)
-                                                })
-                                            }}
-                                            onViewOrder={handleViewOrder}
-                                            formatMoney={formatMoney}
-                                            formatDate={formatDateEcuador}
-                                            formatDateTime={formatDateTimeEcuador}
-                                            getStatusBadge={getStatusBadge}
-                                        />
+                                        <div className="space-y-6">
+                                            <ShipmentsPanel
+                                                shippingProviders={shippingProviders}
+                                                shippingPickups={shippingPickups}
+                                                pickupReadyOrders={pickupReadyOrders}
+                                                shippingRates={shippingRates}
+                                                onViewDeliveryOrders={() => {
+                                                    startPanelNavigationTransition(() => {
+                                                        setActiveOrders('delivery')
+                                                        setActiveTab('admin-orders')
+                                                        setSelectedDeepDive(null)
+                                                    })
+                                                }}
+                                                onViewOrder={handleViewOrder}
+                                                formatMoney={formatMoney}
+                                                formatDate={formatDateEcuador}
+                                                formatDateTime={formatDateTimeEcuador}
+                                                getStatusBadge={getStatusBadge}
+                                            />
+                                            <AdminShippingSettingsPanel
+                                                shippingRates={shippingRates}
+                                                shippingLoading={shippingLoading}
+                                                shippingSaving={shippingSaving}
+                                                onChange={setShippingRates}
+                                                onSave={handleSaveShipping}
+                                            />
+                                        </div>
                                     )}
 
                                     {activeTab === 'billing-rides' && (
@@ -7728,7 +7832,7 @@ const MyAccount = () => {
                                                                 onClick={() => setCurrentAddrIndex(index)}
                                                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${currentAddrIndex === index ? 'bg-black text-white' : 'bg-surface border border-line text-secondary hover:bg-line'}`}
                                                             >
-                                                                {addr.title}
+                                                                {addr.title}{index === 0 ? ' · Principal' : ''}
                                                             </button>
                                                         ))}
                                                         {(savedAddresses.length < 3) && (
@@ -7742,13 +7846,24 @@ const MyAccount = () => {
                                                         )}
                                                     </div>
                                                     {savedAddresses.length > 1 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeAddress(currentAddrIndex)}
-                                                            className="text-red hover:underline text-sm font-bold flex items-center gap-1"
-                                                        >
-                                                            <Icon.Trash size={16} /> Eliminar actual
-                                                        </button>
+                                                        <div className="flex items-center gap-4">
+                                                            {currentAddrIndex > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => makePrimaryAddress(currentAddrIndex)}
+                                                                    className="text-success hover:underline text-sm font-bold"
+                                                                >
+                                                                    Marcar como principal
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeAddress(currentAddrIndex)}
+                                                                className="text-red hover:underline text-sm font-bold flex items-center gap-1"
+                                                            >
+                                                                <Icon.Trash size={16} /> Eliminar actual
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
 
@@ -7776,7 +7891,7 @@ const MyAccount = () => {
                                                         </div>
                                                         <div className="country">
                                                             <label htmlFor="shippingCountry" className='caption1 capitalize'>País / Región <span className='text-red'>*</span></label>
-                                                            <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingCountry" type="text" value={currentAddress.shipping.country} onChange={handleShippingChange} required />
+                                                            <input className="border-line mt-2 px-4 py-3 w-full rounded-lg bg-surface" id="shippingCountry" type="text" value={currentAddress.shipping.country || 'Ecuador'} onChange={handleShippingChange} required readOnly />
                                                         </div>
                                                         <div className="street">
                                                             <label htmlFor="shippingStreet" className='caption1 capitalize'>Dirección <span className='text-red'>*</span></label>
@@ -7801,6 +7916,25 @@ const MyAccount = () => {
                                                         <div className="email">
                                                             <label htmlFor="shippingEmail" className='caption1 capitalize'>Correo electrónico <span className='text-red'>*</span></label>
                                                             <input className="border-line mt-2 px-4 py-3 w-full rounded-lg" id="shippingEmail" type="email" value={currentAddress.shipping.email} onChange={handleShippingChange} required />
+                                                        </div>
+                                                        <div className="sm:col-span-2">
+                                                            <CheckoutLocationPicker
+                                                                address={currentAddress.shipping}
+                                                                storeLocation={{
+                                                                    address: shippingRates.storeAddress,
+                                                                    latitude: shippingRates.storeLatitude,
+                                                                    longitude: shippingRates.storeLongitude,
+                                                                    freeShippingRadiusKm: shippingRates.freeShippingRadiusKm,
+                                                                }}
+                                                                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                                                                usageConfig={{
+                                                                    minSearchLength: shippingRates.mapMinSearchChars,
+                                                                    lookupCooldownSeconds: shippingRates.mapLookupCooldownSeconds,
+                                                                    maxLookupsPerSession: shippingRates.mapSessionLookupLimit,
+                                                                }}
+                                                                sessionStorageNamespace={`my-account-address-${currentAddress.id}`}
+                                                                onAddressChange={(partial) => updateAddressPartial('shipping', partial)}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -7843,7 +7977,7 @@ const MyAccount = () => {
                                                         </div>
                                                         <div className="country">
                                                             <label htmlFor="billingCountry" className='caption1 capitalize'>País / Región <span className='text-red'>*</span></label>
-                                                            <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingCountry" type="text" value={currentAddress.billing.country} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} />
+                                                            <input className="border-line mt-2 px-4 py-3 w-full rounded-lg disabled:bg-surface disabled:text-secondary" id="billingCountry" type="text" value={currentAddress.billing.country || 'Ecuador'} onChange={handleBillingChange} disabled={currentAddress.isSame} required={!currentAddress.isSame} readOnly />
                                                         </div>
                                                         <div className="street">
                                                             <label htmlFor="billingStreet" className='caption1 capitalize'>Dirección <span className='text-red'>*</span></label>

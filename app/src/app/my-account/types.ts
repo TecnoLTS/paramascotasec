@@ -764,6 +764,20 @@ export type AddressData = {
     zip?: string;
     phone?: string;
     email?: string;
+    documentType?: string;
+    documentNumber?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    formattedAddress?: string;
+    placeId?: string;
+    distanceKm?: number | null;
+    shippingZone?: 'free_radius' | 'standard_delivery' | string;
+    shippingRule?: 'free_radius' | 'standard_delivery' | string;
+    isFreeShipping?: boolean;
+    storeAddress?: string;
+    storeLatitude?: number | null;
+    storeLongitude?: number | null;
+    freeShippingRadiusKm?: number | null;
 }
 
 export type SalesRankingRow = {
@@ -837,6 +851,10 @@ export type LocalSaleQuote = {
     discount_total?: number;
     discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>;
     discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>;
+    distance_km?: number | null;
+    shipping_rule?: 'free_radius' | 'standard_delivery' | string;
+    is_free_shipping?: boolean;
+    store_address?: string;
     total: number;
     items?: Array<{ product_id: string; quantity: number; price: number; total: number }>;
 }

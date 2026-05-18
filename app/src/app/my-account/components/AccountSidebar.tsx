@@ -294,7 +294,7 @@ export default function AccountSidebar({
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'shipments'} onClick={() => onNavigateToPanelTab('shipments')}>
                                         <Truck size={18} />
-                                        <strong className="heading6">Envíos</strong>
+                                        <strong className="heading6">Envíos y mapa</strong>
                                     </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'billing-rides'} onClick={() => onNavigateToPanelTab('billing-rides')}>
                                         <Receipt size={18} />

@@ -5,6 +5,11 @@ export interface CheckoutDraftAddress {
     state: string
     city: string
     zip: string
+    street: string
+    latitude: number | null
+    longitude: number | null
+    formattedAddress: string
+    placeId: string
 }
 
 export interface CheckoutDraftData {
@@ -23,6 +28,11 @@ const defaultCheckoutDraft: CheckoutDraftData = {
         state: '',
         city: '',
         zip: '',
+        street: '',
+        latitude: null,
+        longitude: null,
+        formattedAddress: '',
+        placeId: '',
     },
 }
 
@@ -54,6 +64,11 @@ export const loadCheckoutDraft = (): CheckoutDraftData => {
                 state: String(parsed.shipping?.state || ''),
                 city: String(parsed.shipping?.city || ''),
                 zip: String(parsed.shipping?.zip || ''),
+                street: String(parsed.shipping?.street || ''),
+                latitude: typeof parsed.shipping?.latitude === 'number' ? parsed.shipping.latitude : null,
+                longitude: typeof parsed.shipping?.longitude === 'number' ? parsed.shipping.longitude : null,
+                formattedAddress: String(parsed.shipping?.formattedAddress || ''),
+                placeId: String(parsed.shipping?.placeId || ''),
             },
         }
     } catch {
@@ -73,6 +88,11 @@ export const saveCheckoutDraft = (partial: Partial<CheckoutDraftData>) => {
             state: partial.shipping?.state ?? current.shipping.state,
             city: partial.shipping?.city ?? current.shipping.city,
             zip: partial.shipping?.zip ?? current.shipping.zip,
+            street: partial.shipping?.street ?? current.shipping.street,
+            latitude: partial.shipping?.latitude ?? current.shipping.latitude,
+            longitude: partial.shipping?.longitude ?? current.shipping.longitude,
+            formattedAddress: partial.shipping?.formattedAddress ?? current.shipping.formattedAddress,
+            placeId: partial.shipping?.placeId ?? current.shipping.placeId,
         },
     }
 

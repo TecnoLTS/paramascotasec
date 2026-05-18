@@ -4,8 +4,8 @@ import { apiEndpoints } from './endpoints';
 export interface CreateOrderData {
     id?: string;
     status?: string;
-    shipping_address?: any;
-    billing_address?: any;
+    shipping_address?: Record<string, unknown>;
+    billing_address?: Record<string, unknown>;
     items: Array<{
         product_id: string;
         quantity: number;
@@ -31,7 +31,13 @@ export const createOrder = async (data: CreateOrderData) => {
     });
 };
 
-export const getQuote = async (data: { items: any[], delivery_method: string, coupon_code?: string | null, discount_code?: string | null }) => {
+export const getQuote = async (data: {
+    items: any[],
+    delivery_method: string,
+    coupon_code?: string | null,
+    discount_code?: string | null,
+    shipping_address?: Record<string, unknown> | null,
+}) => {
     const res = await fetch('/quote', {
         method: 'POST',
         cache: 'no-store',

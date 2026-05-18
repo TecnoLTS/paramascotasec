@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from '@/components/Common/AppImage'
+import CheckoutLocationPicker from '@/components/Checkout/CheckoutLocationPicker'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
 import { Package, Truck, Building2, Banknote } from 'lucide-react'
@@ -32,6 +33,18 @@ interface AddressData {
     zip: string;
     phone: string;
     email: string;
+    latitude: number | null;
+    longitude: number | null;
+    formattedAddress: string;
+    placeId: string;
+    distanceKm: number | null;
+    shippingZone: string;
+    shippingRule: string;
+    isFreeShipping: boolean;
+    storeAddress: string;
+    storeLatitude: number | null;
+    storeLongitude: number | null;
+    freeShippingRadiusKm: number | null;
 }
 
 interface SavedAddress {
@@ -69,6 +82,18 @@ const emptyAddress: AddressData = {
     zip: '',
     phone: '',
     email: '',
+    latitude: null,
+    longitude: null,
+    formattedAddress: '',
+    placeId: '',
+    distanceKm: null,
+    shippingZone: '',
+    shippingRule: '',
+    isFreeShipping: false,
+    storeAddress: '',
+    storeLatitude: null,
+    storeLongitude: null,
+    freeShippingRadiusKm: null,
 };
 
 const ensureEcuadorAddress = (address: AddressData): AddressData => ({
@@ -101,6 +126,42 @@ const isAddressComplete = (address: AddressData) =>
     && !!address.city.trim()
     && !!address.zip.trim()
     && !!address.street.trim()
+
+const normalizeCoordinate = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined || value === '') return null
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+}
+
+const hasGeoCoordinates = (address: Pick<AddressData, 'latitude' | 'longitude'>) =>
+    normalizeCoordinate(address.latitude) !== null
+    && normalizeCoordinate(address.longitude) !== null
+
+const normalizeAddressComparable = (value: string | null | undefined) =>
+    String(value || '').trim().toLowerCase()
+
+const normalizeCoordinateComparable = (value: number | null | undefined) =>
+    Number.isFinite(value) ? Number(value).toFixed(6) : ''
+
+const hasSameSavedShippingLocation = (left?: Partial<AddressData> | null, right?: Partial<AddressData> | null) => {
+    if (!left || !right) return false
+
+    const sameCoordinates =
+        normalizeCoordinateComparable(left.latitude) === normalizeCoordinateComparable(right.latitude)
+        && normalizeCoordinateComparable(left.longitude) === normalizeCoordinateComparable(right.longitude)
+
+    const samePlace =
+        normalizeAddressComparable(left.placeId) === normalizeAddressComparable(right.placeId)
+        && normalizeAddressComparable(left.formattedAddress) === normalizeAddressComparable(right.formattedAddress)
+
+    const sameAddressText =
+        normalizeAddressComparable(left.street) === normalizeAddressComparable(right.street)
+        && normalizeAddressComparable(left.city) === normalizeAddressComparable(right.city)
+        && normalizeAddressComparable(left.state) === normalizeAddressComparable(right.state)
+        && normalizeAddressComparable(left.zip) === normalizeAddressComparable(right.zip)
+
+    return sameCoordinates && samePlace && sameAddressText
+}
 
 const fallbackItems = [
     {
@@ -161,7 +222,33 @@ const CheckoutSummaryImage = ({ src, alt }: CheckoutSummaryImageProps) => {
 }
 
 const Checkout = () => {
-    const [shippingRates, setShippingRates] = useState<{ delivery: number; pickup: number; taxRate: number }>({ delivery: 0, pickup: 0, taxRate: 0 })
+    const [shippingRates, setShippingRates] = useState<{
+        delivery: number
+        pickup: number
+        taxRate: number
+        storeAddress: string
+        storeLatitude: number | null
+        storeLongitude: number | null
+        freeShippingRadiusKm: number
+        shippingKmFlatRateLimit: number
+        shippingPerKmRate: number
+        mapMinSearchChars: number
+        mapLookupCooldownSeconds: number
+        mapSessionLookupLimit: number
+    }>({
+        delivery: 0,
+        pickup: 0,
+        taxRate: 0,
+        storeAddress: 'Av. de la Prensa y Juan Paz y Miño, 170104 Quito',
+        storeLatitude: -0.148306,
+        storeLongitude: -78.490870,
+        freeShippingRadiusKm: 5,
+        shippingKmFlatRateLimit: 7,
+        shippingPerKmRate: 1,
+        mapMinSearchChars: 6,
+        mapLookupCooldownSeconds: 3,
+        mapSessionLookupLimit: 12,
+    })
     const [shippingRatesLoaded, setShippingRatesLoaded] = useState(false)
 
     const [showLogin, setShowLogin] = useState(false)
@@ -213,6 +300,23 @@ const Checkout = () => {
     const [otpSendError, setOtpSendError] = useState<string | null>(null)
     const [orderCompletionInProgress, setOrderCompletionInProgress] = useState(false)
     const keepOneTimeSelectionRef = useRef(false)
+    const [quote, setQuote] = useState<{
+        subtotal: number
+        shipping: number
+        total: number
+        vat_rate?: number
+        vat_subtotal?: number
+        vat_amount?: number
+        discount_total?: number
+        discount_code?: string | null
+        discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>
+        discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>
+        mixed_vat_rates?: boolean
+        distance_km?: number | null
+        shipping_rule?: 'free_radius' | 'standard_delivery' | 'pickup' | string
+        is_free_shipping?: boolean
+        store_address?: string
+    } | null>(null)
 
     const mergeAddressFields = (current: AddressData, incoming?: Partial<AddressData>) => {
         if (!incoming) return current
@@ -231,18 +335,50 @@ const Checkout = () => {
         setOrderNotes(draft.note)
         setCouponDraft(String(draft.couponCode || ''))
         setAppliedCouponCode(String(draft.couponCode || '').trim().toUpperCase() || null)
-        setTempAddress((prev) => mergeAddressFields(prev, draft.shipping))
+        setTempAddress((prev) => mergeAddressFields(prev, {
+            ...draft.shipping,
+            distanceKm: prev.distanceKm,
+            shippingZone: prev.shippingZone,
+            shippingRule: prev.shippingRule,
+            isFreeShipping: prev.isFreeShipping,
+            storeAddress: prev.storeAddress,
+            storeLatitude: prev.storeLatitude,
+            storeLongitude: prev.storeLongitude,
+            freeShippingRadiusKm: prev.freeShippingRadiusKm,
+        }))
         setBillingAddress((prev) => mergeAddressFields(prev, { country: 'Ecuador' }))
     }, [])
 
     useEffect(() => {
-        fetchJson<{ delivery: number; pickup: number; tax_rate?: number }>('/api/settings/shipping')
+        fetchJson<{
+            delivery: number
+            pickup: number
+            tax_rate?: number
+            store_address?: string
+            store_latitude?: number
+            store_longitude?: number
+            free_shipping_radius_km?: number
+            shipping_km_flat_rate_limit?: number
+            shipping_per_km_rate?: number
+            map_min_search_chars?: number
+            map_lookup_cooldown_seconds?: number
+            map_session_lookup_limit?: number
+        }>('/api/settings/shipping')
             .then((data) => {
                 if (data && typeof data.delivery === 'number' && typeof data.pickup === 'number') {
                     setShippingRates({
                         delivery: data.delivery,
                         pickup: data.pickup,
-                        taxRate: typeof data.tax_rate === 'number' ? data.tax_rate : 0
+                        taxRate: typeof data.tax_rate === 'number' ? data.tax_rate : 0,
+                        storeAddress: String(data.store_address || 'Av. de la Prensa y Juan Paz y Miño, 170104 Quito'),
+                        storeLatitude: typeof data.store_latitude === 'number' ? data.store_latitude : -0.148306,
+                        storeLongitude: typeof data.store_longitude === 'number' ? data.store_longitude : -78.490870,
+                        freeShippingRadiusKm: typeof data.free_shipping_radius_km === 'number' ? data.free_shipping_radius_km : 5,
+                        shippingKmFlatRateLimit: typeof data.shipping_km_flat_rate_limit === 'number' ? data.shipping_km_flat_rate_limit : 7,
+                        shippingPerKmRate: typeof data.shipping_per_km_rate === 'number' ? data.shipping_per_km_rate : 1,
+                        mapMinSearchChars: typeof data.map_min_search_chars === 'number' ? data.map_min_search_chars : 6,
+                        mapLookupCooldownSeconds: typeof data.map_lookup_cooldown_seconds === 'number' ? data.map_lookup_cooldown_seconds : 3,
+                        mapSessionLookupLimit: typeof data.map_session_lookup_limit === 'number' ? data.map_session_lookup_limit : 12,
                     })
                 }
             })
@@ -426,6 +562,11 @@ const Checkout = () => {
             || draft.shipping.city !== tempAddress.city
             || draft.shipping.zip !== tempAddress.zip
             || draft.shipping.country !== normalizeCountryToEcuador(tempAddress.country)
+            || draft.shipping.street !== tempAddress.street
+            || draft.shipping.latitude !== tempAddress.latitude
+            || draft.shipping.longitude !== tempAddress.longitude
+            || draft.shipping.formattedAddress !== tempAddress.formattedAddress
+            || draft.shipping.placeId !== tempAddress.placeId
         const noteChanged = draft.note !== orderNotes
         const couponChanged = draft.couponCode !== couponDraft
 
@@ -439,9 +580,14 @@ const Checkout = () => {
                 state: tempAddress.state,
                 city: tempAddress.city,
                 zip: tempAddress.zip,
+                street: tempAddress.street,
+                latitude: tempAddress.latitude,
+                longitude: tempAddress.longitude,
+                formattedAddress: tempAddress.formattedAddress,
+                placeId: tempAddress.placeId,
             },
         })
-    }, [orderNotes, couponDraft, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country])
+    }, [orderNotes, couponDraft, tempAddress.state, tempAddress.city, tempAddress.zip, tempAddress.country, tempAddress.street, tempAddress.latitude, tempAddress.longitude, tempAddress.formattedAddress, tempAddress.placeId])
 
     const refreshAvailableProducts = useCallback(async () => {
         const snapshot = await fetchLiveCatalogSnapshot()
@@ -507,6 +653,54 @@ const Checkout = () => {
         })
     }
 
+    const handleLocationAddressChange = useCallback((partial: Partial<AddressData>) => {
+        setTempAddress((prev) => {
+            const coordinatesChanged =
+                partial.latitude !== undefined
+                || partial.longitude !== undefined
+                || partial.placeId !== undefined
+                || partial.formattedAddress !== undefined
+            const updated = ensureEcuadorAddress({
+                ...prev,
+                ...(coordinatesChanged
+                    ? {
+                        distanceKm: null,
+                        shippingZone: '',
+                        shippingRule: '',
+                        isFreeShipping: false,
+                    }
+                    : {}),
+                ...partial,
+            })
+            if (useBillingSame) {
+                const addressFields = {
+                    firstName: updated.firstName,
+                    lastName: updated.lastName,
+                    country: 'Ecuador',
+                    street: updated.street,
+                    city: updated.city,
+                    state: updated.state,
+                    zip: updated.zip,
+                    phone: updated.phone,
+                    email: updated.email,
+                }
+                setBillingAddress((current) => ({
+                    ...current,
+                    ...addressFields,
+                }))
+            }
+            return updated
+        })
+        if (
+            partial.latitude !== undefined
+            || partial.longitude !== undefined
+            || partial.placeId !== undefined
+            || partial.formattedAddress !== undefined
+        ) {
+            setQuote(null)
+        }
+    }, [useBillingSame])
+
     const handleBillingAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const target = e.target
         const field = target.name || target.id
@@ -551,12 +745,8 @@ const Checkout = () => {
 
     const validateShippingAddress = () => {
         if (deliveryMethod !== 'delivery') return true
-        if (!tempAddress.country.trim() || !tempAddress.city.trim() || !tempAddress.zip.trim() || !tempAddress.street.trim()) {
-            setMessage({ text: 'Completa país, ciudad, código postal y dirección para el envío.', type: 'error' })
-            return false
-        }
-        if (!isCountryEcuador(tempAddress.country)) {
-            setMessage({ text: 'Solo realizamos envíos dentro de Ecuador.', type: 'error' })
+        if (!tempAddress.formattedAddress || !hasGeoCoordinates(tempAddress)) {
+            setMessage({ text: 'Selecciona tu ubicación exacta en el mapa o usa "Mi ubicación actual" para calcular el envío.', type: 'error' })
             return false
         }
         return true
@@ -784,20 +974,6 @@ const Checkout = () => {
         setCurrentStep(2)
     }
 
-    const [quote, setQuote] = useState<{
-        subtotal: number
-        shipping: number
-        total: number
-        vat_rate?: number
-        vat_subtotal?: number
-        vat_amount?: number
-        discount_total?: number
-        discount_code?: string | null
-        discounts_applied?: Array<{ code?: string; amount?: number; type?: string; value?: number }>
-        discount_rejections?: Array<{ code?: string; reason?: string; message?: string }>
-        mixed_vat_rates?: boolean
-    } | null>(null)
-
     const normalizedCart = useMemo(
         () =>
             cartState.cartArray.map((item) => ({
@@ -861,9 +1037,54 @@ const Checkout = () => {
         return { changed: removedItems.length > 0 || adjustedItems.length > 0, removedItems, adjustedItems }
     }, [normalizedCart, removeFromCart, setMessage, updateCart])
 
+    const quoteShippingAddress = useMemo(() => {
+        if (deliveryMethod !== 'delivery' || !hasGeoCoordinates(tempAddress)) {
+            return null
+        }
+
+        return {
+            country: tempAddress.country,
+            latitude: tempAddress.latitude,
+            longitude: tempAddress.longitude,
+            formattedAddress: tempAddress.formattedAddress,
+            placeId: tempAddress.placeId,
+        }
+    }, [
+        deliveryMethod,
+        tempAddress.country,
+        tempAddress.latitude,
+        tempAddress.longitude,
+        tempAddress.formattedAddress,
+        tempAddress.placeId,
+    ])
+
+    const selectedSavedAddress = useMemo(
+        () => savedAddresses.find((address) => address.id === selectedAddressId) || null,
+        [savedAddresses, selectedAddressId],
+    )
+
+    const hasSelectedShippingLocation = useMemo(
+        () => deliveryMethod === 'delivery' && hasGeoCoordinates(tempAddress),
+        [deliveryMethod, tempAddress.latitude, tempAddress.longitude],
+    )
+
+    const hasSavedAddressOverride = useMemo(() => {
+        if (!selectedSavedAddress || selectedAddressId === 'one-time') return false
+        return !hasSameSavedShippingLocation(selectedSavedAddress.shipping, tempAddress)
+    }, [selectedAddressId, selectedSavedAddress, tempAddress])
+
+    useEffect(() => {
+        if (hasSavedAddressOverride) return
+        setOverwriteOriginal(false)
+    }, [hasSavedAddressOverride])
+
     useEffect(() => {
         const updateQuote = async () => {
             if (normalizedCart.length === 0) return;
+            if (deliveryMethod === 'delivery' && !quoteShippingAddress) {
+                setQuote(null)
+                return
+            }
             if (availableProductsMap) {
                 const syncResult = syncCartWithLiveAvailability(availableProductsMap)
                 if (syncResult.changed) {
@@ -874,7 +1095,8 @@ const Checkout = () => {
                 const res = await getQuote({
                     items: normalizedCart.map(i => ({ product_id: i.id, quantity: i.quantity })),
                     delivery_method: deliveryMethod,
-                    coupon_code: appliedCouponCode
+                    coupon_code: appliedCouponCode,
+                    shipping_address: quoteShippingAddress,
                 });
                 if (res?.storeDisabled) {
                     setQuote(null)
@@ -922,19 +1144,26 @@ const Checkout = () => {
             }
         };
         updateQuote();
-    }, [normalizedCart, deliveryMethod, appliedCouponCode, availableProductsMap, syncCartWithLiveAvailability]);
+    }, [normalizedCart, deliveryMethod, appliedCouponCode, availableProductsMap, syncCartWithLiveAvailability, quoteShippingAddress]);
 
     const items = normalizedCart
     const subtotal = quote?.subtotal || 0
     const shipping = quote?.shipping || 0
     const fallbackDeliveryFee = shippingRatesLoaded ? shippingRates.delivery : 0
     const fallbackPickupFee = shippingRatesLoaded ? shippingRates.pickup : 0
-    const deliveryFeeLabel = deliveryMethod === 'delivery' ? (shipping || fallbackDeliveryFee) : fallbackPickupFee
+    const deliveryFeeLabel = deliveryMethod === 'delivery'
+        ? (quote ? shipping : fallbackDeliveryFee)
+        : fallbackPickupFee
     const total = quote?.total || 0
     const vatRateValue = Number(quote?.vat_rate ?? 0)
     const vatNetSubtotal = Number(quote?.vat_subtotal ?? 0)
     const vatAmount = Number(quote?.vat_amount ?? 0)
     const discountTotal = Number(quote?.discount_total ?? 0)
+    const shippingDistanceKm = Number(quote?.distance_km ?? tempAddress.distanceKm ?? 0)
+    const isFreeShipping = Boolean(quote?.is_free_shipping ?? tempAddress.isFreeShipping)
+    const shippingRule = String(quote?.shipping_rule ?? tempAddress.shippingRule ?? '')
+    const checkoutStoreAddress = String(quote?.store_address ?? shippingRates.storeAddress ?? '').trim()
+    const productsTotal = Math.max(0, vatNetSubtotal + vatAmount - discountTotal)
     const couponRejection = quote?.discount_rejections?.[0] || null
     const couponAppliedLabel = String(
         quote?.discount_code
@@ -946,6 +1175,23 @@ const Checkout = () => {
     const vatLabel = mixedVatRates
         ? 'IVA aplicado'
         : `IVA (${vatRateValue.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`
+
+    useEffect(() => {
+        if (deliveryMethod !== 'delivery' || !quote) return
+
+        const knownRules = ['free_radius', 'standard_delivery', 'km_flat_rate', 'km_per_km_rate']
+        setTempAddress((prev) => ({
+            ...prev,
+            distanceKm: quote.distance_km ?? prev.distanceKm,
+            shippingZone: knownRules.includes(quote.shipping_rule) ? quote.shipping_rule : prev.shippingZone,
+            shippingRule: knownRules.includes(quote.shipping_rule) ? quote.shipping_rule : prev.shippingRule,
+            isFreeShipping: Boolean(quote.is_free_shipping ?? prev.isFreeShipping),
+            storeAddress: quote.store_address ?? prev.storeAddress,
+            storeLatitude: shippingRates.storeLatitude,
+            storeLongitude: shippingRates.storeLongitude,
+            freeShippingRadiusKm: shippingRates.freeShippingRadiusKm,
+        }))
+    }, [deliveryMethod, quote, shippingRates.storeLatitude, shippingRates.storeLongitude, shippingRates.freeShippingRadiusKm])
 
     useEffect(() => {
         if (orderCompletionInProgress) return
@@ -1287,13 +1533,31 @@ const Checkout = () => {
                                     )}
 
                                     <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
-                                        <h2 className="text-xl font-semibold text-[#111827] mb-4">Información de contacto</h2>
+                                        <h2 className="text-xl font-semibold text-[#111827] mb-4">Información personal</h2>
                                         {isLoggedIn ? (
                                             <div className="text-sm text-[#6b7280]">
                                                 <p className="text-[#111827] font-medium">{contactInfo.firstName} {contactInfo.lastName}</p>
                                                 <p>{contactInfo.email || 'Sin correo registrado'}</p>
                                                 <p>{contactInfo.phone || 'Sin teléfono registrado'}</p>
-                                                <p className="mt-3 text-xs">Usaremos la información de tu cuenta para el pedido.</p>
+                                                <div className="mt-3 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-xs font-semibold text-[#111827]">Identificación fiscal</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => router.push('/my-account')}
+                                                            className="text-xs font-medium text-[#2e4d4d] hover:underline"
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                    </div>
+                                                    <div className="mt-1.5 space-y-0.5 text-xs text-[#374151]">
+                                                        <p>{billingAddress.documentType || '—'}: {billingAddress.documentNumber || '—'}</p>
+                                                        {billingAddress.company && <p>{billingAddress.company}</p>}
+                                                    </div>
+                                                    {(!billingAddress.documentType || !billingAddress.documentNumber) && (
+                                                        <p className="mt-1.5 text-[10px] text-[#b45309]">Requerido para la factura.</p>
+                                                    )}
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="grid sm:grid-cols-2 gap-4">
@@ -1396,28 +1660,6 @@ const Checkout = () => {
                                                 </button>
                                             </div>
                                         )}
-                                        {isLoggedIn && (
-                                            <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm font-semibold text-[#111827]">Datos de facturación</p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => router.push('/my-account')}
-                                                        className="text-xs font-medium text-[#2e4d4d] hover:underline"
-                                                    >
-                                                        Editar en mi cuenta
-                                                    </button>
-                                                </div>
-                                                <div className="mt-2 text-sm text-[#374151] space-y-1">
-                                                    <p>Tipo de identificación: {billingAddress.documentType || '—'}</p>
-                                                    <p>Número de identificación: {billingAddress.documentNumber || '—'}</p>
-                                                    {billingAddress.company && <p>Razón social: {billingAddress.company}</p>}
-                                                </div>
-                                                {(!billingAddress.documentType || !billingAddress.documentNumber) && (
-                                                    <p className="mt-2 text-xs text-[#b45309]">Necesitamos estos datos para emitir la factura.</p>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
 
                                     <div className="bg-white rounded-2xl shadow-[0_10px_30px_rgba(31,59,59,0.12)] p-6 border border-[#e5e7eb]">
@@ -1432,7 +1674,13 @@ const Checkout = () => {
                                             >
                                                 <Truck className={`w-8 h-8 mb-2 ${deliveryMethod === 'delivery' ? 'text-[#2e4d4d]' : 'text-[#94a3b8]'}`} />
                                                 <span className="font-medium text-[#111827]">Envío a domicilio</span>
-                                                <span className="text-sm text-[#6b7280] mt-1">${deliveryFeeLabel.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                <span className="mt-1 text-sm text-[#6b7280]">
+                                                    {deliveryMethod === 'delivery' && !hasSelectedShippingLocation
+                                                        ? 'Selecciona tu ubicación'
+                                                        : deliveryMethod === 'delivery' && quoteShippingAddress && !quote
+                                                            ? 'Calculando envío...'
+                                                        : `$${deliveryFeeLabel.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                </span>
                                             </button>
                                             <button
                                                 onClick={() => setDeliveryMethod('pickup')}
@@ -1468,10 +1716,12 @@ const Checkout = () => {
                                                                         setBillingAddress((prev) => mergeAddressFields(prev, addr.billing));
                                                                         setUseBillingSame(!!addr.isSame);
                                                                     }
+                                                                    setQuote(null)
                                                                     setOverwriteOriginal(false);
                                                                 } else {
                                                                     keepOneTimeSelectionRef.current = true
                                                                     setTempAddress(emptyAddress);
+                                                                    setQuote(null)
                                                                 }
                                                             }}
                                                         >
@@ -1483,61 +1733,39 @@ const Checkout = () => {
                                                     )}
                                                 </div>
 
-                                                {selectedAddressId !== 'one-time'
-                                                    && isLoggedIn
-                                                    && savedAddresses.length > 0
-                                                    && isAddressComplete(tempAddress)
-                                                    ? (
-                                                    <div className="text-sm text-[#6b7280] space-y-1">
-                                                        <p className="text-[#111827] font-medium">{tempAddress.firstName} {tempAddress.lastName}</p>
-                                                        <p>{tempAddress.street}</p>
-                                                        <p>{tempAddress.city}{tempAddress.state ? `, ${tempAddress.state}` : ''} {tempAddress.zip}</p>
-                                                        <p>{tempAddress.country}</p>
-                                                        {tempAddress.phone && <p>{tempAddress.phone}</p>}
-                                                        <p className="mt-2 text-xs">Dirección registrada en tu cuenta.</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="grid sm:grid-cols-2 gap-4">
-                                                        {selectedAddressId !== 'one-time' && savedAddresses.length > 0 && (
-                                                            <div className="sm:col-span-2 text-sm text-[#6b7280]">
-                                                                Completa los datos faltantes de tu dirección guardada para poder continuar.
-                                                            </div>
-                                                        )}
-                                                        <select
-                                                            id="country"
-                                                            value={tempAddress.country}
-                                                            onChange={handleAddressChange}
-                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2 bg-white"
-                                                        >
-                                                            <option value="Ecuador">Ecuador</option>
-                                                        </select>
-                                                        <input
-                                                            type="text"
-                                                            id="city"
-                                                            placeholder="Ciudad *"
-                                                            value={tempAddress.city}
-                                                            onChange={handleAddressChange}
-                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            id="zip"
-                                                            placeholder="Código Postal *"
-                                                            value={tempAddress.zip}
-                                                            onChange={handleAddressChange}
-                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            id="street"
-                                                            placeholder="Calle y número *"
-                                                            value={tempAddress.street}
-                                                            onChange={handleAddressChange}
-                                                            className="border border-[#e5e7eb] placeholder:text-[#9ca3af] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#2e4d4d]/60 focus:border-transparent sm:col-span-2"
-                                                        />
+                                                {isLoggedIn ? (
+                                                    <>
+                                                        <div className="text-sm text-[#6b7280] space-y-1">
+                                                            {tempAddress.formattedAddress ? (
+                                                                <>
+                                                                    <p className="text-[#111827] font-medium">
+                                                                        {tempAddress.firstName ? `${tempAddress.firstName} ${tempAddress.lastName}` : 'Dirección de envío'}
+                                                                    </p>
+                                                                    <p>{tempAddress.formattedAddress}</p>
+                                                                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#64748b]">
+                                                                        {tempAddress.city && <span>{tempAddress.city}</span>}
+                                                                        {tempAddress.state && <span>{tempAddress.state}</span>}
+                                                                        {tempAddress.zip && <span>CP {tempAddress.zip}</span>}
+                                                                    </div>
+                                                                    {tempAddress.distanceKm != null && (
+                                                                        <p className="text-xs text-[#64748b]">
+                                                                            A {tempAddress.distanceKm.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km del local
+                                                                        </p>
+                                                                    )}
+                                                                </>
+                                                            ) : hasSelectedShippingLocation ? (
+                                                                <p className="text-[#6b7280]">
+                                                                    Se está usando la ubicación registrada de esta dirección para calcular el envío.
+                                                                </p>
+                                                            ) : (
+                                                                <p className="text-[#6b7280]">
+                                                                    Usa el mapa debajo para seleccionar tu ubicación de envío.
+                                                                </p>
+                                                            )}
+                                                        </div>
 
-                                                        {isLoggedIn && savedAddresses.length > 0 && selectedAddressId !== 'one-time' && (
-                                                            <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
+                                                        {savedAddresses.length > 0 && selectedAddressId !== 'one-time' && tempAddress.formattedAddress && (
+                                                            <div className="flex items-center gap-2 p-3 bg-[#f9fafb] rounded-lg border border-[#e5e7eb]">
                                                                 <input
                                                                     type="checkbox"
                                                                     id="overwrite"
@@ -1549,6 +1777,99 @@ const Checkout = () => {
                                                             </div>
                                                         )}
 
+                                                        <CheckoutLocationPicker
+                                                            address={tempAddress}
+                                                            storeLocation={{
+                                                                address: shippingRates.storeAddress,
+                                                                latitude: shippingRates.storeLatitude,
+                                                                longitude: shippingRates.storeLongitude,
+                                                                freeShippingRadiusKm: shippingRates.freeShippingRadiusKm,
+                                                            }}
+                                                            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                                                            usageConfig={{
+                                                                minSearchLength: shippingRates.mapMinSearchChars,
+                                                                lookupCooldownSeconds: shippingRates.mapLookupCooldownSeconds,
+                                                                maxLookupsPerSession: shippingRates.mapSessionLookupLimit,
+                                                            }}
+                                                            sessionStorageNamespace="checkout"
+                                                            onAddressChange={handleLocationAddressChange}
+                                                        />
+
+                                                        {selectedSavedAddress && selectedAddressId !== 'one-time' && hasSavedAddressOverride && (
+                                                            <div className="rounded-lg border border-[#dbe4ea] bg-white p-4 text-sm">
+                                                                <p className="font-medium text-[#111827]">Ubicación temporal para este pedido</p>
+                                                                <p className="mt-1 text-[#6b7280]">
+                                                                    Cambiaste la ubicación del mapa respecto a la dirección guardada. Puedes usar esta nueva ubicación solo para este pedido o actualizar la dirección registrada.
+                                                                </p>
+                                                                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setTempAddress(mergeAddressFields(ensureEcuadorAddress(emptyAddress), selectedSavedAddress.shipping))
+                                                                            setOverwriteOriginal(false)
+                                                                            setQuote(null)
+                                                                        }}
+                                                                        className="rounded-lg border border-[#d1d5db] px-4 py-2 text-sm font-medium text-[#111827] transition-colors hover:bg-[#f8fafc]"
+                                                                    >
+                                                                        Mantener ubicación registrada
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setOverwriteOriginal(true)}
+                                                                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                                                                            overwriteOriginal
+                                                                                ? 'bg-[#1f3b3b] text-white'
+                                                                                : 'border border-[#1f3b3b] text-[#1f3b3b] hover:bg-[#1f3b3b] hover:text-white'
+                                                                        }`}
+                                                                    >
+                                                                        {overwriteOriginal ? 'Se actualizará la dirección guardada' : 'Actualizar dirección guardada'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="rounded-lg border border-[#dbe4ea] bg-white p-4 text-sm">
+                                                            <p className="font-medium text-[#111827]">Estado del envío</p>
+                                                            {!hasSelectedShippingLocation && (
+                                                                <p className="mt-2 text-[#6b7280]">
+                                                                    Selecciona tu punto exacto en el mapa para calcular el costo de envío y validar si aplica la cobertura gratis.
+                                                                </p>
+                                                            )}
+                                                            {hasSelectedShippingLocation && quote && (
+                                                                <div className="mt-2 space-y-1 text-[#475569]">
+                                                                    <p>
+                                                                        Distancia al local: <span className="font-medium text-[#111827]">
+                                                                            {shippingDistanceKm.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km
+                                                                        </span>
+                                                                    </p>
+                                                                    <p>
+                                                                        {isFreeShipping
+                                                                            ? `Tu dirección está dentro del radio gratis de ${shippingRates.freeShippingRadiusKm.toLocaleString('es-EC', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} km.`
+                                                                            : shippingRule === 'km_flat_rate'
+                                                                                ? `Tarifa plana de $${shippingRates.delivery.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} hasta ${shippingRates.shippingKmFlatRateLimit.toLocaleString('es-EC', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} km.`
+                                                                                : shippingRule === 'km_per_km_rate'
+                                                                                    ? `Tarifa plana + $${shippingRates.shippingPerKmRate.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por km adicional.`
+                                                                                    : 'Tu dirección está fuera del radio gratis; se aplica la tarifa normal de envío.'}
+                                                                    </p>
+                                                                    {checkoutStoreAddress && (
+                                                                        <p className="text-xs text-[#64748b]">Base operativa: {checkoutStoreAddress}</p>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {hasSelectedShippingLocation && !quote && (
+                                                                <p className="mt-2 text-[#6b7280]">
+                                                                    {selectedAddressId !== 'one-time' && !hasSavedAddressOverride
+                                                                        ? 'Calculando tarifa con base en tu ubicación registrada...'
+                                                                        : 'Calculando tarifa con base en tu ubicación seleccionada...'}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="rounded-lg border border-[#dbe4ea] bg-white p-4 text-sm">
+                                                        <p className="text-[#6b7280]">
+                                                            <a onClick={() => setShowLogin(true)} className="text-[#2e4d4d] font-medium underline cursor-pointer hover:text-[#1a302f]">Inicia sesión</a> para seleccionar tu ubicación exacta y calcular el costo de envío.
+                                                        </p>
                                                     </div>
                                                 )}
                                             </div>
@@ -1558,7 +1879,7 @@ const Checkout = () => {
                                             <div className="mt-6 p-4 bg-[#2e4d4d1a] rounded-lg border border-[#2e4d4d]/30">
                                                 <p className="text-sm text-[#374151]">
                                                     <strong>Retiro en tienda:</strong><br />
-                                                    Av de La Prensa y Juan Paz y Miño. El horario de retiro se coordinará por nuestros canales oficiales al confirmar el pedido.
+                                                    {checkoutStoreAddress || 'Av. de la Prensa y Juan Paz y Miño, 170104 Quito'}. El horario de retiro se coordinará por nuestros canales oficiales al confirmar el pedido.
                                                 </p>
                                             </div>
                                         )}
@@ -1812,9 +2133,10 @@ const Checkout = () => {
                                                 <p className="text-sm text-[#374151]">Retiro en tienda (Gratis)</p>
                                             ) : (
                                                 <>
-                                                    <p className="text-[#111827] font-medium">{tempAddress.street}</p>
-                                                    <p className="text-sm text-[#6b7280]">{tempAddress.city}, {tempAddress.zip}</p>
-                                                    <p className="text-sm text-[#6b7280]">{tempAddress.country}</p>
+                                                    <p className="text-sm text-[#6b7280]">{tempAddress.formattedAddress || `${tempAddress.street}, ${tempAddress.city}, ${tempAddress.zip}`}</p>
+                                                    {tempAddress.distanceKm != null && (
+                                                        <p className="text-xs text-[#64748b] mt-1">{tempAddress.distanceKm.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km del local</p>
+                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -1969,16 +2291,43 @@ const Checkout = () => {
                                             <span className="text-green-600 text-right tabular-nums">-${discountTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     )}
-                                    <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
-                                        <span className="text-[#6b7280]">Envío</span>
-                                        <span className="text-[#111827] text-right tabular-nums">
-                                            {shipping === 0 ? 'Gratis' : `$${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                    <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-[#eef2f7] pt-2 mt-2">
+                                        <span className="text-sm font-medium text-[#111827]">Total productos + IVA</span>
+                                        <span className="text-base font-semibold text-[#111827] text-right tabular-nums">
+                                            ${productsTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </div>
-                                    <div className="border-t border-[#e5e7eb] pt-2 mt-2">
+                                    <div className="border-t border-[#e5e7eb] pt-3 mt-3 space-y-2">
+                                        <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
+                                        <span className="text-[#6b7280]">Envío</span>
+                                        <span className="text-[#111827] text-right tabular-nums">
+                                            {deliveryMethod === 'delivery' && !quoteShippingAddress
+                                                ? 'Selecciona ubicación'
+                                                : (shipping === 0 ? 'Gratis' : `$${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+                                        </span>
+                                        </div>
+                                        {deliveryMethod === 'delivery' && quoteShippingAddress && quote && (
+                                            <div className="grid grid-cols-[1fr_auto] items-center gap-4 text-xs">
+                                                <span className="text-[#6b7280]">
+                                                    {shippingRule === 'free_radius' ? 'Radio gratis aplicado' :
+                                                     shippingRule === 'km_flat_rate' ? 'Tarifa plana por distancia' :
+                                                     shippingRule === 'km_per_km_rate' ? 'Tarifa por km adicional' :
+                                                     'Tarifa normal por distancia'}
+                                                </span>
+                                                <span className="text-[#111827] text-right tabular-nums">
+                                                    {shippingDistanceKm.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="border-t border-[#e5e7eb] pt-3 mt-3">
                                         <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-                                            <span className="text-lg font-semibold text-[#111827]">Total</span>
-                                            <span className="text-lg font-semibold text-[#111827] text-right tabular-nums">${total.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-lg font-semibold text-[#111827]">Total + envío</span>
+                                            <span className="text-lg font-semibold text-[#111827] text-right tabular-nums">
+                                                {deliveryMethod === 'delivery' && !quoteShippingAddress
+                                                    ? 'Pendiente'
+                                                    : `$${total.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

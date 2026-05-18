@@ -16,6 +16,20 @@ export type SavedAddressFields = {
   zip: string
   phone: string
   email: string
+  documentType?: string
+  documentNumber?: string
+  latitude?: number | null
+  longitude?: number | null
+  formattedAddress?: string
+  placeId?: string
+  distanceKm?: number | null
+  shippingZone?: 'free_radius' | 'standard_delivery' | string
+  shippingRule?: 'free_radius' | 'standard_delivery' | string
+  isFreeShipping?: boolean
+  storeAddress?: string
+  storeLatitude?: number | null
+  storeLongitude?: number | null
+  freeShippingRadiusKm?: number | null
 }
 
 export type SavedAddressEntry = {
@@ -30,17 +44,41 @@ export const EMPTY_SAVED_ADDRESS_FIELDS: SavedAddressFields = {
   firstName: '',
   lastName: '',
   company: '',
-  country: '',
+  country: 'Ecuador',
   street: '',
   city: '',
   state: '',
   zip: '',
   phone: '',
   email: '',
+  documentType: '',
+  documentNumber: '',
+  latitude: null,
+  longitude: null,
+  formattedAddress: '',
+  placeId: '',
+  distanceKm: null,
+  shippingZone: '',
+  shippingRule: '',
+  isFreeShipping: false,
+  storeAddress: '',
+  storeLatitude: null,
+  storeLongitude: null,
+  freeShippingRadiusKm: null,
 }
 
 const hasAddressData = (address: SavedAddressFields) => {
-  return Object.values(address).some((value) => String(value || '').trim() !== '')
+  return Object.values(address).some((value) => {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') return Number.isFinite(value)
+    return String(value || '').trim() !== ''
+  })
+}
+
+const normalizeNumberOrNull = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export const normalizeSavedAddressFields = (
@@ -60,6 +98,22 @@ export const normalizeSavedAddressFields = (
     zip: String(candidate.zip ?? fallback.zip ?? '').trim(),
     phone: String(candidate.phone ?? fallback.phone ?? '').trim(),
     email: String(candidate.email ?? fallback.email ?? '').trim(),
+    documentType: String(candidate.documentType ?? fallback.documentType ?? '').trim(),
+    documentNumber: String(candidate.documentNumber ?? fallback.documentNumber ?? '').trim(),
+    latitude: normalizeNumberOrNull(candidate.latitude ?? fallback.latitude),
+    longitude: normalizeNumberOrNull(candidate.longitude ?? fallback.longitude),
+    formattedAddress: String(candidate.formattedAddress ?? fallback.formattedAddress ?? '').trim(),
+    placeId: String(candidate.placeId ?? fallback.placeId ?? '').trim(),
+    distanceKm: normalizeNumberOrNull(candidate.distanceKm ?? fallback.distanceKm),
+    shippingZone: String(candidate.shippingZone ?? fallback.shippingZone ?? '').trim(),
+    shippingRule: String(candidate.shippingRule ?? fallback.shippingRule ?? '').trim(),
+    isFreeShipping: typeof candidate.isFreeShipping === 'boolean'
+      ? candidate.isFreeShipping
+      : Boolean(fallback.isFreeShipping),
+    storeAddress: String(candidate.storeAddress ?? fallback.storeAddress ?? '').trim(),
+    storeLatitude: normalizeNumberOrNull(candidate.storeLatitude ?? fallback.storeLatitude),
+    storeLongitude: normalizeNumberOrNull(candidate.storeLongitude ?? fallback.storeLongitude),
+    freeShippingRadiusKm: normalizeNumberOrNull(candidate.freeShippingRadiusKm ?? fallback.freeShippingRadiusKm),
   }
 }
 
@@ -171,8 +225,41 @@ export const normalizeAddressCandidate = (value: unknown): AddressData | null =>
   const country = String(source.country ?? '').trim()
   const phone = String(source.phone ?? source.mobile ?? '').trim()
   const email = String(source.email ?? '').trim()
+  const documentType = String(source.documentType ?? source.document_type ?? '').trim()
+  const documentNumber = String(source.documentNumber ?? source.document_number ?? '').trim()
+  const latitude = normalizeNumberOrNull(source.latitude ?? source.lat)
+  const longitude = normalizeNumberOrNull(source.longitude ?? source.lng)
+  const formattedAddress = String(source.formattedAddress ?? source.formatted_address ?? '').trim()
+  const placeId = String(source.placeId ?? source.place_id ?? '').trim()
+  const distanceKm = normalizeNumberOrNull(source.distanceKm ?? source.distance_km)
+  const shippingZone = String(source.shippingZone ?? source.shipping_zone ?? '').trim()
+  const shippingRule = String(source.shippingRule ?? source.shipping_rule ?? '').trim()
+  const isFreeShipping = typeof source.isFreeShipping === 'boolean'
+    ? source.isFreeShipping
+    : (typeof source.is_free_shipping === 'boolean' ? source.is_free_shipping : false)
+  const storeAddress = String(source.storeAddress ?? source.store_address ?? '').trim()
+  const storeLatitude = normalizeNumberOrNull(source.storeLatitude ?? source.store_latitude)
+  const storeLongitude = normalizeNumberOrNull(source.storeLongitude ?? source.store_longitude)
+  const freeShippingRadiusKm = normalizeNumberOrNull(source.freeShippingRadiusKm ?? source.free_shipping_radius_km)
 
-  const hasData = [firstName, lastName, company, street, city, state, zip, country, phone, email].some(Boolean)
+  const hasData = [
+    firstName,
+    lastName,
+    company,
+    street,
+    city,
+    state,
+    zip,
+    country,
+    phone,
+    email,
+    documentType,
+    documentNumber,
+    formattedAddress,
+    placeId,
+    latitude,
+    longitude,
+  ].some((value) => value !== null && value !== undefined && String(value).trim() !== '')
   if (!hasData) return null
 
   return {
@@ -186,6 +273,20 @@ export const normalizeAddressCandidate = (value: unknown): AddressData | null =>
     country,
     phone,
     email,
+    documentType,
+    documentNumber,
+    latitude,
+    longitude,
+    formattedAddress,
+    placeId,
+    distanceKm,
+    shippingZone,
+    shippingRule,
+    isFreeShipping,
+    storeAddress,
+    storeLatitude,
+    storeLongitude,
+    freeShippingRadiusKm,
   }
 }
 

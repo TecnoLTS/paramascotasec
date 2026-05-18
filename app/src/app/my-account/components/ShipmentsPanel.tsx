@@ -9,7 +9,6 @@ type ShipmentsPanelProps = {
     shippingPickups: ShippingPickup[];
     pickupReadyOrders: Order[];
     shippingRates: { delivery: number; pickup: number; taxRate: number };
-    onConfigureTaxes: () => void;
     onViewDeliveryOrders: () => void;
     onViewOrder: (orderId: string) => void;
     formatMoney: (value: number) => string;
@@ -23,7 +22,6 @@ export default React.memo(function ShipmentsPanel({
     shippingPickups,
     pickupReadyOrders,
     shippingRates,
-    onConfigureTaxes,
     onViewDeliveryOrders,
     onViewOrder,
     formatMoney,
@@ -68,14 +66,10 @@ export default React.memo(function ShipmentsPanel({
                             <span className="font-semibold">{shippingRates.taxRate.toFixed(1)}%</span>
                         </div>
                     </div>
+                    <p className="text-xs text-secondary mb-4">
+                        La configuración completa de costos, radio gratis y límites del mapa aparece debajo en esta misma pestaña.
+                    </p>
                     <div className="flex flex-col gap-2">
-                        <button
-                            type="button"
-                            className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
-                            onClick={onConfigureTaxes}
-                        >
-                            Configurar costos e IVA
-                        </button>
                         <button
                             type="button"
                             className="px-4 py-2 rounded-lg border border-line text-sm font-semibold hover:bg-white transition-colors text-left"
