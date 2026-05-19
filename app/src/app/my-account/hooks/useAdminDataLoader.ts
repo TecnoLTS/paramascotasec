@@ -32,6 +32,8 @@ type AccountUser = {
 type UseAdminDataLoaderParams = {
   activeTab?: string
   salesRankingMonth: string
+  salesRankingDate: string
+  salesRankingView?: 'month' | 'historical' | 'daily'
   user: AccountUser | null
   adminReloadNonce: number
   passiveRefreshNonce?: number
@@ -197,6 +199,18 @@ export const useAdminDataLoader = ({
     const setCached = (key: string, value: unknown) => {
       resourceCacheRef.current[key] = value
     }
+    const withoutReport = (stats: DashboardStats): DashboardStats => {
+      if (!stats?.businessMetrics || !('report' in stats.businessMetrics)) {
+        return stats
+      }
+
+      const businessMetrics = { ...(stats.businessMetrics as Record<string, unknown>) }
+      delete businessMetrics.report
+      return {
+        ...stats,
+        businessMetrics,
+      } as DashboardStats
+    }
 
     const handleError = (error: any) => {
       console.error(error)
@@ -230,22 +244,20 @@ export const useAdminDataLoader = ({
       const tasks: Array<Promise<any>> = []
 
       if (ADMIN_TABS_WITH_STATS.has(activeTab)) {
-        const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
-          ? `?period=${encodeURIComponent(salesRankingMonth)}`
-          : ''
         const statsCacheKey = `stats:${salesRankingMonth}`
         const cachedStats = getCached<DashboardStats>(statsCacheKey)
 
-        if (cachedStats && !isPassive) {
+        if (cachedStats) {
           if (!cancelled) current.setDashboardStats(cachedStats)
-        } else {
-          tasks.push(
-            withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${monthQuery}`, { headers })).then((res) => {
-              setCached(statsCacheKey, res.body)
-              if (!cancelled) current.setDashboardStats(res.body)
-            }),
-          )
         }
+        const dateQuery = `?period=${encodeURIComponent(salesRankingMonth)}`
+        tasks.push(
+          withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${dateQuery}`, { headers })).then((res) => {
+            const stats = withoutReport(res.body)
+            setCached(statsCacheKey, stats)
+            if (!cancelled) current.setDashboardStats(stats)
+          }),
+        )
       }
 
       if (!isPassive && ADMIN_TABS_WITH_VAT_SETTINGS.has(activeTab)) {

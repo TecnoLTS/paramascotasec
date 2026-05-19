@@ -114,7 +114,9 @@ export const summarizeInventoryRows = (inventoryManagementRows: Array<{
   stock: number
   inventoryCost: number
   inventoryMarket: number
-  stockStatus: 'available' | 'low' | 'out' | 'expiring' | 'expired'
+  stockStatus: 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired'
+  reorderPoint?: number
+  criticalPoint?: number
 }>) => {
   return inventoryManagementRows.reduce((acc, row) => {
     acc.totalSkus += 1
@@ -122,11 +124,12 @@ export const summarizeInventoryRows = (inventoryManagementRows: Array<{
     acc.totalCost += row.inventoryCost
     acc.totalMarket += row.inventoryMarket
     if (row.stockStatus === 'out') acc.out += 1
+    if (row.stockStatus === 'critical') acc.critical += 1
     if (row.stockStatus === 'low') acc.low += 1
     if (row.stockStatus === 'expiring') acc.expiring += 1
     if (row.stockStatus === 'expired') acc.expired += 1
     return acc
-  }, { totalSkus: 0, totalUnits: 0, totalCost: 0, totalMarket: 0, out: 0, low: 0, expiring: 0, expired: 0 })
+  }, { totalSkus: 0, totalUnits: 0, totalCost: 0, totalMarket: 0, out: 0, critical: 0, low: 0, expiring: 0, expired: 0 })
 }
 
 export const summarizePurchaseInvoices = (recentPurchaseInvoices: PurchaseInvoiceSummary[]) => {

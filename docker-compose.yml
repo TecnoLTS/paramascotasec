@@ -10,7 +10,7 @@ services:
     hostname: paramascotasec-app
     restart: unless-stopped
     environment:
-      TZ: America/Bogota
+      TZ: America/Guayaquil
       NODE_ENV: production
       APP_ENV: production
       NEXT_TELEMETRY_DISABLED: 1
@@ -54,7 +54,7 @@ services:
     hostname: paramascotasec-app-dev
     restart: unless-stopped
     environment:
-      TZ: America/Bogota
+      TZ: America/Guayaquil
       NODE_ENV: development
       APP_ENV: development
       NEXT_PUBLIC_APP_ENV: development

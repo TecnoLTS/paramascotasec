@@ -39,7 +39,7 @@ type ExportContext = {
   currentDateLabel: string
   selectedRankingMonth: string
   selectedRankingMonthLabel: string
-  salesRankingView: 'month' | 'historical' | 'range'
+  salesRankingView: 'month' | 'historical' | 'range' | 'daily'
   dashboardStats: DashboardStats | null
   financialScopeLabel: string
   financialSummary: ReportFinancialSummary
@@ -302,7 +302,7 @@ const buildCoverSheet = (context: ExportContext): WorksheetDefinition => {
       metricRow('Estados de venta incluidos', textCell((periodReport?.realized_statuses ?? ['completed', 'delivered']).join(', '))),
       ...(context.section === 'sales'
         ? [
-            metricRow('Vista de ventas', textCell(context.salesRankingView === 'month' ? 'Mensual' : context.salesRankingView === 'range' ? 'Últimos 30 días' : 'Histórica')),
+            metricRow('Vista de ventas', textCell(context.salesRankingView === 'month' ? 'Mensual' : (context.salesRankingView === 'range' || context.salesRankingView === 'daily') ? 'Diaria' : 'Histórica')),
             metricRow('Mes seleccionado', textCell(context.salesRankingView === 'month' ? context.selectedRankingMonthLabel : 'No aplica')),
             metricRow('Clave mes', textCell(context.salesRankingView === 'month' ? context.selectedRankingMonth : 'No aplica')),
           ]
@@ -414,7 +414,8 @@ const buildGeneralWorksheets = (context: ExportContext): WorksheetDefinition[] =
 const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => {
   const { dashboardStats, salesRankingRows, selectedRankingMonth, selectedRankingMonthLabel, salesRankingView } = context
   const periodReport = dashboardStats?.businessMetrics?.report
-  const financial = salesRankingView === 'month' && periodReport
+  const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
+  const financial = resolvedView === 'month' && periodReport
     ? {
         orders_count: periodReport.sales.orders_count,
         gross: periodReport.sales.total,
@@ -425,9 +426,9 @@ const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => 
         profit: periodReport.profit.gross_profit,
         margin: periodReport.profit.gross_margin,
       }
-    : salesRankingView === 'range'
+    : resolvedView === 'range'
       ? dashboardStats?.businessMetrics?.productSalesRanking?.rangeFinancial
-      : salesRankingView === 'month'
+      : resolvedView === 'month'
         ? dashboardStats?.businessMetrics?.productSalesRanking?.monthlyFinancial
         : dashboardStats?.businessMetrics?.productSalesRanking?.historicalFinancial
   const deepDive = dashboardStats?.businessMetrics?.salesDeepDive
@@ -441,7 +442,7 @@ const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => 
         subtitleRow('Indicadores del período comercial seleccionado.', 3),
         blankRow(),
         headerRow(['Indicador', 'Valor']),
-        metricRow('Vista activa', textCell(salesRankingView === 'month' ? 'Mensual' : salesRankingView === 'range' ? 'Últimos 30 días' : 'Histórica')),
+        metricRow('Vista activa', textCell(salesRankingView === 'month' ? 'Mensual' : (salesRankingView === 'range' || salesRankingView === 'daily') ? 'Diaria' : 'Histórica')),
         metricRow('Mes seleccionado', textCell(salesRankingView === 'month' ? selectedRankingMonthLabel : 'No aplica')),
         metricRow('Clave del mes', textCell(salesRankingView === 'month' ? selectedRankingMonth : 'No aplica')),
         metricRow('Pedidos', numberCell(financial?.orders_count, 'integer')),

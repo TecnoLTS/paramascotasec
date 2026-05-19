@@ -9,6 +9,7 @@ type InventorySummary = {
     totalCost: number;
     totalMarket: number;
     out: number;
+    critical: number;
     low: number;
     expiring: number;
     expired: number;
@@ -25,7 +26,7 @@ type InventoryManagementPanelProps = {
     summary: InventorySummary;
     rows: any[];
     searchQuery: string;
-    statusFilter: 'all' | 'available' | 'low' | 'out' | 'expiring' | 'expired';
+    statusFilter: 'all' | 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired';
     typeFilter: 'all' | 'perishable' | 'nonperishable';
     purchaseInvoicesSummary: PurchaseInvoicesSummary;
     recentPurchaseInvoices: any[];
@@ -33,7 +34,7 @@ type InventoryManagementPanelProps = {
     hasPerishableProducts: boolean;
     lowStockThreshold: number;
     onSearchChange: (value: string) => void;
-    onStatusFilterChange: (value: 'all' | 'available' | 'low' | 'out' | 'expiring' | 'expired') => void;
+    onStatusFilterChange: (value: 'all' | 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired') => void;
     onTypeFilterChange: (value: 'all' | 'perishable' | 'nonperishable') => void;
     onClearFilters: () => void;
     onNavigateToProducts: () => void;
@@ -43,6 +44,11 @@ type InventoryManagementPanelProps = {
     onOpenProductBalance: (product: any) => void;
     onEditProduct: (product: any) => void;
     onRestockProduct: (product: any) => void;
+    onOpenLowStockDetail: () => void;
+    onOpenCriticalStockDetail: () => void;
+    onOpenOutOfStockDetail: () => void;
+    onOpenExpiringDetail: () => void;
+    onOpenExpiredDetail: () => void;
     formatMoney: (value: number | string | null | undefined) => string;
     formatIsoDate: (value?: string | null) => string;
     formatDateEcuador: (value: string | number | Date, options?: Intl.DateTimeFormatOptions) => string;
@@ -53,6 +59,7 @@ const INVENTORY_STATUS_OPTIONS: Array<{ key: InventoryManagementPanelProps['stat
     { key: 'all', label: 'Todos los estados' },
     { key: 'available', label: 'Disponible' },
     { key: 'low', label: 'Bajo stock' },
+    { key: 'critical', label: 'Crítico' },
     { key: 'out', label: 'Sin stock' },
     { key: 'expiring', label: 'Por vencer' },
     { key: 'expired', label: 'Vencidos' },
@@ -63,6 +70,174 @@ const INVENTORY_TYPE_OPTIONS: Array<{ key: InventoryManagementPanelProps['typeFi
     { key: 'perishable', label: 'Solo perecederos' },
     { key: 'nonperishable', label: 'Solo no perecederos' },
 ]
+
+function renderSummaryCardButton({
+    label,
+    count,
+    caption,
+    isActive,
+    activeClass,
+    hoverClass,
+    icon,
+    onClick,
+    onDetail,
+}: {
+    label: string;
+    count: string | number;
+    caption: string;
+    isActive: boolean;
+    activeClass: string;
+    hoverClass: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    onDetail?: () => void;
+}) {
+    return (
+        <div
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative group ${isActive ? activeClass : `border-line bg-white ${hoverClass}`}`}
+        >
+            <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0" onClick={onClick}>
+                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">{label}</div>
+                    <div className="text-2xl font-bold">{count}</div>
+                    <div className="text-xs text-secondary mt-1">{caption}</div>
+                </div>
+                <div className="shrink-0 ml-2 mt-1">
+                    {icon}
+                </div>
+            </div>
+            {onDetail && (
+                <button
+                    type="button"
+                    className="mt-2 w-full text-xs font-semibold text-secondary hover:text-black transition-all rounded-lg border border-line px-2 py-1.5 hover:bg-surface/50"
+                    onClick={(e) => { e.stopPropagation(); onDetail() }}
+                >
+                    <Icon.ArrowSquareOut size={14} className="inline-block -mt-0.5 mr-1" />
+                    Ver detalle
+                </button>
+            )}
+        </div>
+    )
+}
+
+function InventoryCategoryOverview({ rows }: { rows: any[] }) {
+    const categoryMap = React.useMemo(() => {
+        const map = new Map<string, { skus: number; units: number; cost: number; low: number; expiring: number }>()
+        for (const row of rows) {
+            const cat = row.category || 'Sin categoría'
+            const entry = map.get(cat) || { skus: 0, units: 0, cost: 0, low: 0, expiring: 0 }
+            entry.skus += 1
+            entry.units += row.stock ?? 0
+            entry.cost += row.inventoryCost ?? 0
+            if (row.stockStatus === 'low' || row.stockStatus === 'critical') entry.low += 1
+            if (row.stockStatus === 'expiring') entry.expiring += 1
+            map.set(cat, entry)
+        }
+        return Array.from(map.entries())
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => b.cost - a.cost)
+    }, [rows])
+
+    if (categoryMap.length === 0) return null
+
+    const maxCost = categoryMap[0]?.cost || 1
+
+    return (
+        <div className="p-5 rounded-2xl border border-line bg-white">
+            <div className="heading6 mb-4">Panorama por categoría</div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="border-b border-line">
+                        <tr className="text-[11px] uppercase font-bold text-secondary">
+                            <th className="pb-2 pr-4">Categoría</th>
+                            <th className="pb-2 pr-4 text-right">SKUs</th>
+                            <th className="pb-2 pr-4 text-right">Unidades</th>
+                            <th className="pb-2 pr-4 text-right">Capital</th>
+                            <th className="pb-2 pr-4 text-center" title="Bajo stock / Crítico">⚠️</th>
+                            <th className="pb-2 pr-4 text-center" title="Por vencer">📅</th>
+                            <th className="pb-2 w-full hidden md:block" />
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                        {categoryMap.slice(0, 8).map((cat) => (
+                            <tr key={cat.name} className="text-sm hover:bg-surface/40">
+                                <td className="py-2.5 pr-4 font-medium break-words max-w-[180px]">{cat.name}</td>
+                                <td className="py-2.5 pr-4 text-right text-secondary">{cat.skus}</td>
+                                <td className="py-2.5 pr-4 text-right text-secondary">{cat.units.toLocaleString('es-EC')}</td>
+                                <td className="py-2.5 pr-4 text-right font-semibold">{(cat.cost).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td className="py-2.5 pr-4 text-center">
+                                    {cat.low > 0 ? <span className="text-amber-700 font-bold text-xs">{cat.low}</span> : <span className="text-secondary text-xs">—</span>}
+                                </td>
+                                <td className="py-2.5 pr-4 text-center">
+                                    {cat.expiring > 0 ? <span className="text-amber-700 font-bold text-xs">{cat.expiring}</span> : <span className="text-secondary text-xs">—</span>}
+                                </td>
+                                <td className="py-2.5 hidden md:table-cell">
+                                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden max-w-[120px]">
+                                        <div className="h-full rounded-full bg-black/20" style={{ width: `${Math.max(2, (cat.cost / maxCost) * 100)}%` }} />
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
+function RestockSuggestionsPanel({ rows, formatMoney, onRestockProduct }: {
+    rows: any[];
+    formatMoney: (value: any) => string;
+    onRestockProduct: (product: any) => void;
+}) {
+    const needsRestock = React.useMemo(() =>
+        rows.filter((r: any) => r.stockStatus === 'critical' || r.stockStatus === 'low' || r.stockStatus === 'out')
+            .sort((a: any, b: any) => {
+                const order: Record<string, number> = { out: 0, critical: 1, low: 2 }
+                return (order[a.stockStatus] ?? 99) - (order[b.stockStatus] ?? 99)
+            })
+            .slice(0, 5),
+        [rows]
+    )
+
+    if (needsRestock.length === 0) return null
+
+    return (
+        <div className="p-5 rounded-2xl border border-line bg-white">
+            <div className="heading6 mb-1">Alertas de reabastecimiento</div>
+            <p className="text-sm text-secondary mb-4">Productos prioritarios para reposición urgente</p>
+            <div className="space-y-2">
+                {needsRestock.map((row: any) => {
+                    const suggestedQty = row.stockStatus === 'out'
+                        ? Math.max(row.reorderPoint * 2, 10)
+                        : Math.max(row.reorderPoint - row.stock + Math.ceil(row.reorderPoint * 0.5), 1)
+                    return (
+                        <div key={row.internalId} className="flex items-center gap-3 p-3 rounded-xl border border-line hover:bg-surface/40 transition-all">
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold truncate">{row.name}</div>
+                                <div className="text-xs text-secondary">
+                                    Stock: <span className={`font-semibold ${row.stock <= 0 ? 'text-red' : 'text-amber-700'}`}>{row.stock.toLocaleString('es-EC')}</span>
+                                    {' · '}Reorder: {row.reorderPoint.toLocaleString('es-EC')}
+                                    {' · '}Sugerido: <span className="text-emerald-700 font-semibold">+{suggestedQty} uds</span>
+                                </div>
+                            </div>
+                            <div className="text-xs text-right shrink-0">
+                                <div className="font-semibold">{formatMoney(suggestedQty * row.weightedUnitCost)}</div>
+                                <button
+                                    type="button"
+                                    className="mt-1 px-2.5 py-1 rounded-lg border border-black bg-black text-white text-[10px] font-semibold hover:bg-primary transition-all"
+                                    onClick={() => onRestockProduct(row.source)}
+                                >
+                                    Comprar
+                                </button>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
 
 export default React.memo(function InventoryManagementPanel({
     summary,
@@ -86,6 +261,11 @@ export default React.memo(function InventoryManagementPanel({
     onOpenProductBalance,
     onEditProduct,
     onRestockProduct,
+    onOpenLowStockDetail,
+    onOpenCriticalStockDetail,
+    onOpenOutOfStockDetail,
+    onOpenExpiringDetail,
+    onOpenExpiredDetail,
     formatMoney,
     formatIsoDate,
     formatDateEcuador,
@@ -115,73 +295,95 @@ export default React.memo(function InventoryManagementPanel({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('all')}
-                    className={`p-4 rounded-xl border text-left transition-all ${statusFilter === 'all' ? 'border-black bg-surface' : 'border-line bg-white hover:border-black'}`}
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">SKUs en inventario</div>
-                    <div className="text-2xl font-bold">{summary.totalSkus}</div>
-                    <div className="text-xs text-secondary mt-1">{summary.totalUnits.toLocaleString('es-EC')} unidades</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('out')}
-                    className={`p-4 rounded-xl border text-left transition-all ${statusFilter === 'out' ? 'border-red-500 bg-red-50' : 'border-line bg-white hover:border-red-500'}`}
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Sin stock</div>
-                    <div className="text-2xl font-bold text-red">{summary.out}</div>
-                    <div className="text-xs text-secondary mt-1">Reposicion inmediata</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('low')}
-                    className={`p-4 rounded-xl border text-left transition-all ${statusFilter === 'low' ? 'border-amber-500 bg-amber-50' : 'border-line bg-white hover:border-amber-500'}`}
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
-                    <div className="text-2xl font-bold text-amber-700">{summary.low}</div>
-                    <div className="text-xs text-secondary mt-1">Umbral operativo: {lowStockThreshold} uds o menos</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('expiring')}
-                    className={`p-4 rounded-xl border text-left transition-all ${statusFilter === 'expiring' ? 'border-amber-500 bg-amber-50' : 'border-line bg-white hover:border-amber-500'}`}
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Por vencer</div>
-                    <div className="text-2xl font-bold text-amber-700">{summary.expiring}</div>
-                    <div className="text-xs text-secondary mt-1">Solo productos perecederos</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('expired')}
-                    className={`p-4 rounded-xl border text-left transition-all ${statusFilter === 'expired' ? 'border-red-500 bg-red-50' : 'border-line bg-white hover:border-red-500'}`}
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Vencidos</div>
-                    <div className="text-2xl font-bold text-red">{summary.expired}</div>
-                    <div className="text-xs text-secondary mt-1">Bloqueados para venta</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('all')}
-                    className="p-4 rounded-xl border border-line bg-white hover:border-black transition-all text-left"
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Capital al costo</div>
-                    <div className="text-2xl font-bold">{formatMoney(summary.totalCost)}</div>
-                    <div className="text-xs text-secondary mt-1">Suma del costo de compra de todo el stock</div>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onStatusFilterChange('all')}
-                    className="p-4 rounded-xl border border-line bg-white hover:border-black transition-all text-left"
-                >
-                    <div className="text-[10px] uppercase font-bold text-secondary mb-1">Valor de venta</div>
-                    <div className="text-2xl font-bold">{formatMoney(summary.totalMarket)}</div>
-                    <div className="text-xs text-secondary mt-1">Precio de venta total si se liquida todo el stock</div>
-                </button>
+                {renderSummaryCardButton({
+                    label: 'SKUs en inventario',
+                    count: summary.totalSkus,
+                    caption: `${summary.totalUnits.toLocaleString('es-EC')} unidades`,
+                    isActive: statusFilter === 'all',
+                    activeClass: 'border-black bg-surface',
+                    hoverClass: 'hover:border-black',
+                    icon: <Icon.Package size={20} className="text-secondary" />,
+                    onClick: () => onStatusFilterChange('all'),
+                })}
+                {renderSummaryCardButton({
+                    label: 'Sin stock',
+                    count: summary.out,
+                    caption: 'Reposición inmediata',
+                    isActive: statusFilter === 'out',
+                    activeClass: 'border-red-500 bg-red-50',
+                    hoverClass: 'hover:border-red-500',
+                    icon: <Icon.WarningCircle size={20} className="text-red" />,
+                    onClick: () => onStatusFilterChange('out'),
+                    onDetail: onOpenOutOfStockDetail,
+                })}
+                {renderSummaryCardButton({
+                    label: 'Crítico',
+                    count: summary.critical,
+                    caption: `Stock por debajo del punto crítico`,
+                    isActive: statusFilter === 'critical',
+                    activeClass: 'border-red-400 bg-red-50',
+                    hoverClass: 'hover:border-red-400',
+                    icon: <Icon.WarningCircle size={20} className="text-red" />,
+                    onClick: () => onStatusFilterChange('critical'),
+                    onDetail: onOpenCriticalStockDetail,
+                })}
+                {renderSummaryCardButton({
+                    label: 'Bajo stock',
+                    count: summary.low,
+                    caption: `Umbral operativo: ${lowStockThreshold} uds o menos`,
+                    isActive: statusFilter === 'low',
+                    activeClass: 'border-amber-500 bg-amber-50',
+                    hoverClass: 'hover:border-amber-500',
+                    icon: <Icon.TrendDown size={20} className="text-amber-700" />,
+                    onClick: () => onStatusFilterChange('low'),
+                    onDetail: onOpenLowStockDetail,
+                })}
+                {renderSummaryCardButton({
+                    label: 'Por vencer',
+                    count: summary.expiring,
+                    caption: 'Solo productos perecederos',
+                    isActive: statusFilter === 'expiring',
+                    activeClass: 'border-amber-500 bg-amber-50',
+                    hoverClass: 'hover:border-amber-500',
+                    icon: <Icon.Clock size={20} className="text-amber-700" />,
+                    onClick: () => onStatusFilterChange('expiring'),
+                    onDetail: onOpenExpiringDetail,
+                })}
+                {renderSummaryCardButton({
+                    label: 'Vencidos',
+                    count: summary.expired,
+                    caption: 'Bloqueados para venta',
+                    isActive: statusFilter === 'expired',
+                    activeClass: 'border-red-500 bg-red-50',
+                    hoverClass: 'hover:border-red-500',
+                    icon: <Icon.Prohibit size={20} className="text-red" />,
+                    onClick: () => onStatusFilterChange('expired'),
+                    onDetail: onOpenExpiredDetail,
+                })}
+                {renderSummaryCardButton({
+                    label: 'Capital al costo',
+                    count: formatMoney(summary.totalCost),
+                    caption: 'Suma del costo de compra de todo el stock',
+                    isActive: statusFilter === 'all',
+                    activeClass: 'border-black bg-surface',
+                    hoverClass: 'hover:border-black',
+                    icon: <Icon.Coin size={20} className="text-secondary" />,
+                    onClick: () => onStatusFilterChange('all'),
+                })}
+                {renderSummaryCardButton({
+                    label: 'Valor de venta',
+                    count: formatMoney(summary.totalMarket),
+                    caption: 'Precio de venta total si se liquida todo el stock',
+                    isActive: statusFilter === 'all',
+                    activeClass: 'border-black bg-surface',
+                    hoverClass: 'hover:border-black',
+                    icon: <Icon.ShoppingCart size={20} className="text-secondary" />,
+                    onClick: () => onStatusFilterChange('all'),
+                })}
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
-                <div className="xl:col-span-2 p-5 rounded-2xl border border-line bg-white">
+                <div className="xl:col-span-2 p-5 rounded-2xl border border-line bg-white" role="region" aria-label="Últimas facturas de compra">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div>
                             <div className="heading6">Ultimas facturas de compra</div>
@@ -283,6 +485,19 @@ export default React.memo(function InventoryManagementPanel({
                 </div>
             </div>
 
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+                <div className="xl:col-span-2">
+                    <InventoryCategoryOverview rows={rows} />
+                </div>
+                <div>
+                    <RestockSuggestionsPanel
+                        rows={rows}
+                        formatMoney={formatMoney}
+                        onRestockProduct={onRestockProduct}
+                    />
+                </div>
+            </div>
+
             <div className="p-4 rounded-2xl border border-line bg-white mb-4">
                 <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
                     <div className="relative flex-1">
@@ -364,9 +579,11 @@ export default React.memo(function InventoryManagementPanel({
                                     ? { label: 'Por vencer', className: 'bg-amber-100 text-amber-700' }
                                     : row.stockStatus === 'out'
                                         ? { label: 'Sin stock', className: 'bg-red-100 text-red-700' }
-                                        : row.stockStatus === 'low'
-                                            ? { label: 'Bajo stock', className: 'bg-amber-100 text-amber-700' }
-                                            : { label: 'Disponible', className: 'bg-emerald-100 text-emerald-700' }
+                                        : row.stockStatus === 'critical'
+                                            ? { label: 'Crítico', className: 'bg-red-100 text-red-700' }
+                                            : row.stockStatus === 'low'
+                                                ? { label: 'Bajo stock', className: 'bg-amber-100 text-amber-700' }
+                                                : { label: 'Disponible', className: 'bg-emerald-100 text-emerald-700' }
 
                             return (
                                 <tr key={row.internalId} className="align-top hover:bg-surface/40">
@@ -390,6 +607,11 @@ export default React.memo(function InventoryManagementPanel({
                                             <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${stockBadge.className}`}>
                                                 {stockBadge.label}
                                             </span>
+                                            {(row.stockStatus === 'low' || row.stockStatus === 'critical') && (
+                                                <div className="text-xs text-secondary pt-1">
+                                                    Reorder: {row.reorderPoint} · Crítico: {row.criticalPoint}
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     {hasPerishableProducts && (
@@ -456,6 +678,9 @@ export default React.memo(function InventoryManagementPanel({
                                                 <div>Margen última compra: <span className={`font-semibold ${row.lastPurchaseMargin < 0 ? 'text-red' : 'text-black'}`}>{Number(row.lastPurchaseMargin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div>
                                             )}
                                             <div>Capital al costo: <span className="font-semibold">{formatMoney(row.inventoryCost)}</span></div>
+                                            {row.coverageDays != null && (
+                                                <div>Cobertura: <span className={`font-semibold ${row.coverageDays < 15 ? 'text-red' : 'text-black'}`}>{row.coverageDays.toLocaleString('es-EC')} días</span></div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">

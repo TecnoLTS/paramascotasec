@@ -643,6 +643,9 @@ const ShipmentsPanel = dynamic(() => import('./components/ShipmentsPanel'), {
 const InventoryManagementPanel = dynamic(() => import('./components/InventoryManagementPanel'), {
     ssr: false,
 })
+const LowStockDetailModal = dynamic(() => import('./components/LowStockDetailModal'), {
+    ssr: false,
+})
 const DiscountCodesPanel = dynamic(() => import('./components/DiscountCodesPanel'), {
     ssr: false,
 })
@@ -828,9 +831,17 @@ const MyAccount = () => {
 
     // Admin Data State
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
-    const [trendRange, setTrendRange] = useState<7 | 30>(7)
-    const [salesRankingView, setSalesRankingView] = useState<'month' | 'historical'>('month')
+    const [trendRange, setTrendRange] = useState<'week' | 'month'>('week')
+    const [trendMetric, setTrendMetric] = useState<'gross' | 'profit'>('gross')
+    const [salesRankingView, setSalesRankingView] = useState<'month' | 'historical' | 'daily'>('month')
     const [salesRankingMonth, setSalesRankingMonth] = useState<string>(getCurrentMonthKey())
+    const [salesRankingDate, setSalesRankingDate] = useState<string>(() => {
+        const today = new Date()
+        const yyyy = today.getFullYear()
+        const mm = String(today.getMonth() + 1).padStart(2, '0')
+        const dd = String(today.getDate()).padStart(2, '0')
+        return `${yyyy}-${mm}-${dd}`
+    })
     const [financialTrendMode, setFinancialTrendMode] = useState<FinancialTrendRangeMode>('monthly')
     const [financialTrendScope, setFinancialTrendScope] = useState<FinancialTrendSummaryScope>('selected')
     const [selectedFinancialPeriod, setSelectedFinancialPeriod] = useState('')
@@ -869,8 +880,10 @@ const MyAccount = () => {
     const [adminUsersSearch, setAdminUsersSearch] = useState('')
     const [adminUsersRoleFilter, setAdminUsersRoleFilter] = useState<'all' | 'clients' | 'admins'>('all')
     const [inventorySearch, setInventorySearch] = useState('')
-    const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'available' | 'low' | 'out' | 'expiring' | 'expired'>('all')
+    const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'all' | 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired'>('all')
     const [inventoryTypeFilter, setInventoryTypeFilter] = useState<'all' | 'perishable' | 'nonperishable'>('all')
+    const [inventoryDetailModal, setInventoryDetailModal] = useState<'low' | 'critical' | 'out' | 'expiring' | 'expired' | null>(null)
+    const [inventoryExpandedSection, setInventoryExpandedSection] = useState<'out' | 'critical' | 'low' | 'expiring' | 'expired' | null>(null)
     const [alertsSeverityFilter, setAlertsSeverityFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all')
     const [shippingProviders, setShippingProviders] = useState<ShippingProvider[]>([])
     const [shippingPickups, setShippingPickups] = useState<ShippingPickup[]>([])
@@ -1034,6 +1047,19 @@ const MyAccount = () => {
         setProductEditorInitialForm(createProductFormFromProduct(product, multiplier))
         setIsProductModalOpen(true)
     }, [dashboardStats?.tax?.rate, vatRate])
+
+    const handleOpenDetailModal = React.useCallback((type: 'low' | 'critical' | 'out' | 'expiring' | 'expired') => {
+        setInventoryDetailModal(type)
+        setInventoryStatusFilter(type === 'critical' ? 'critical' : type === 'out' ? 'out' : type === 'expiring' ? 'expiring' : type === 'expired' ? 'expired' : 'low')
+    }, [])
+
+    const handleCloseDetailModal = React.useCallback(() => {
+        setInventoryDetailModal(null)
+    }, [])
+
+    const handleViewDetailInTable = React.useCallback(() => {
+        setInventoryDetailModal(null)
+    }, [])
 
     const handleDeleteProduct = async (id: string) => {
         if (!confirm('¿Estás seguro de eliminar este producto?')) return;
@@ -2599,6 +2625,8 @@ const MyAccount = () => {
     useAdminDataLoader({
         activeTab,
         salesRankingMonth,
+        salesRankingDate,
+        salesRankingView,
         user,
         adminReloadNonce,
         passiveRefreshNonce,
@@ -2622,6 +2650,108 @@ const MyAccount = () => {
         loadPosSnapshot,
         normalizeAdminProducts,
     })
+
+    type ReportDataResult = {
+        products: Array<{
+            product_id: string
+            product_name: string
+            category: string
+            orders_count: number
+            units_sold: number
+            gross_revenue: number
+            net_revenue: number
+            vat_amount: number
+            shipping_amount: number
+            cost: number
+            profit: number
+            margin: number
+            order_refs: string[]
+        }>
+        categories: Array<{ category: string; net_revenue: number }>
+        orders: Array<{
+            id: string
+            created_at: string
+            status: string
+            user_name: string | null
+            customer_email: string | null
+            customer_phone: string | null
+            customer_document_type: string | null
+            customer_document_number: string | null
+            payment_method: string | null
+            delivery_method: string | null
+            discount_code: string | null
+            discount_total: number
+            items_subtotal: number
+            vat_rate: number
+            shipping_base: number
+            shipping_tax_amount: number
+            item_lines_count: number
+            units_count: number
+            items_summary: string
+            gross: number
+            net: number
+            vat: number
+            shipping: number
+            cost: number
+            profit: number
+            margin: number
+            average_unit_net: number
+        }>
+        sales: Record<string, unknown>
+        profit: Record<string, unknown>
+        period: { period_key: string; start_date: string; end_date: string; end_exclusive: string; timezone: string }
+    } | null
+
+    const reportDataRef = React.useRef<ReportDataResult>(null)
+    const reportAbortRef = React.useRef<AbortController | null>(null)
+    const rankingCacheRef = React.useRef<ReturnType<typeof buildSalesRankingRows> | null>(null)
+
+    async function fetchReportData(query: string, signal?: AbortSignal): Promise<ReportDataResult> {
+        const res = await requestApi<NonNullable<ReportDataResult>>(`/api/admin/report${query}`, { signal })
+        return res.body as NonNullable<ReportDataResult>
+    }
+
+    React.useEffect(() => {
+        if (!user || user.role !== 'admin') return
+
+        reportAbortRef.current?.abort()
+        const controller = new AbortController()
+        reportAbortRef.current = controller
+
+        let cancelled = false
+
+        const query = salesRankingView === 'historical'
+            ? '?scope=historical'
+            : salesRankingView === 'daily' && salesRankingDate
+                ? `?date=${encodeURIComponent(salesRankingDate)}`
+                : `?period=${encodeURIComponent(salesRankingMonth)}`
+
+        fetchReportData(query, controller.signal)
+            .then((data) => {
+                if (cancelled || !data) return
+                reportDataRef.current = data
+                setDashboardStats((prev) => {
+                    if (!prev) return prev
+                    return {
+                        ...prev,
+                        businessMetrics: {
+                            ...(prev.businessMetrics || {}),
+                            report: data,
+                        },
+                    } as typeof prev
+                })
+            })
+            .catch((err) => {
+                if (!cancelled && !controller.signal.aborted && err?.name !== 'AbortError') {
+                    console.error('Report fetch failed:', err)
+                }
+            })
+
+        return () => {
+            cancelled = true
+            controller.abort()
+        }
+    }, [user, salesRankingView, salesRankingMonth, salesRankingDate])
 
     const lastPassiveRefreshAtRef = React.useRef(0)
     const lastPanelInteractionAtRef = React.useRef(0)
@@ -2862,18 +2992,67 @@ const MyAccount = () => {
     const salesTrendIsPositive = salesProgressPercentage >= 0
     const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
     const periodReport = dashboardStats?.businessMetrics?.report
+    const effectiveReportData = periodReport ?? reportDataRef.current
     const selectedRankingMonth = productSalesRanking?.selectedMonth || salesRankingMonth
     const selectedRankingMonthLabel = formatMonthKeyLabel(selectedRankingMonth)
     const salesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
-        return buildSalesRankingRows(productSalesRanking, salesRankingView)
+        const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
+        return buildSalesRankingRows(productSalesRanking, resolvedView)
     }, [productSalesRanking, salesRankingView])
-    const reportSalesRankingView = financialTrendMode === 'daily'
-        ? 'range'
-        : (financialTrendScope === 'total' ? 'historical' : 'month')
     const reportSalesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
-        const reportPeriodKey = periodReport?.period?.period_key
-        if (reportSalesRankingView === 'month' && reportPeriodKey === selectedFinancialPeriod) {
-            return (periodReport?.products ?? []).map((item) => ({
+        const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
+        const reportData = reportDataRef.current
+        const reportProducts = reportData?.products ?? effectiveReportData?.products ?? []
+        const reportPeriodKey = reportData?.period?.period_key ?? effectiveReportData?.period?.period_key
+
+        const canUseReportProducts = resolvedView !== 'month' || reportPeriodKey === selectedRankingMonth
+        if (canUseReportProducts && reportProducts.length > 0) {
+            return reportProducts.map((item) => ({
+                product_id: item.product_id || '',
+                product_name: item.product_name || '',
+                category: item.category || 'Sin categoría',
+                orders_count: Number(item.orders_count ?? 0),
+                units_sold: Number(item.units_sold ?? 0),
+                gross_revenue: Number(item.gross_revenue ?? 0),
+                net_revenue: Number(item.net_revenue ?? 0),
+                vat_amount: Number(item.vat_amount ?? 0),
+                shipping_amount: Number(item.shipping_amount ?? 0),
+                cost: Number(item.cost ?? 0),
+                profit: Number(item.profit ?? 0),
+                margin: Number(item.margin ?? 0),
+                order_refs: Array.isArray(item.order_refs) ? item.order_refs : [],
+                month_orders_count: resolvedView === 'month' ? Number(item.orders_count ?? 0) : 0,
+                month_units_sold: resolvedView === 'month' ? Number(item.units_sold ?? 0) : 0,
+                month_gross_revenue: resolvedView === 'month' ? Number(item.gross_revenue ?? 0) : 0,
+                month_net_revenue: resolvedView === 'month' ? Number(item.net_revenue ?? 0) : 0,
+                month_vat_amount: resolvedView === 'month' ? Number(item.vat_amount ?? 0) : 0,
+                month_shipping_amount: resolvedView === 'month' ? Number(item.shipping_amount ?? 0) : 0,
+                month_cost: resolvedView === 'month' ? Number(item.cost ?? 0) : 0,
+                month_profit: resolvedView === 'month' ? Number(item.profit ?? 0) : 0,
+                month_margin: resolvedView === 'month' ? Number(item.margin ?? 0) : 0,
+                range_orders_count: resolvedView === 'range' ? Number(item.orders_count ?? 0) : 0,
+                range_units_sold: resolvedView === 'range' ? Number(item.units_sold ?? 0) : 0,
+                range_gross_revenue: resolvedView === 'range' ? Number(item.gross_revenue ?? 0) : 0,
+                range_net_revenue: resolvedView === 'range' ? Number(item.net_revenue ?? 0) : 0,
+                range_vat_amount: resolvedView === 'range' ? Number(item.vat_amount ?? 0) : 0,
+                range_shipping_amount: resolvedView === 'range' ? Number(item.shipping_amount ?? 0) : 0,
+                range_cost: resolvedView === 'range' ? Number(item.cost ?? 0) : 0,
+                range_profit: resolvedView === 'range' ? Number(item.profit ?? 0) : 0,
+                range_margin: resolvedView === 'range' ? Number(item.margin ?? 0) : 0,
+                historical_orders_count: resolvedView === 'historical' ? Number(item.orders_count ?? 0) : 0,
+                historical_units_sold: resolvedView === 'historical' ? Number(item.units_sold ?? 0) : 0,
+                historical_gross_revenue: resolvedView === 'historical' ? Number(item.gross_revenue ?? 0) : 0,
+                historical_net_revenue: resolvedView === 'historical' ? Number(item.net_revenue ?? 0) : 0,
+                historical_vat_amount: resolvedView === 'historical' ? Number(item.vat_amount ?? 0) : 0,
+                historical_shipping_amount: resolvedView === 'historical' ? Number(item.shipping_amount ?? 0) : 0,
+                historical_cost: resolvedView === 'historical' ? Number(item.cost ?? 0) : 0,
+                historical_profit: resolvedView === 'historical' ? Number(item.profit ?? 0) : 0,
+                historical_margin: resolvedView === 'historical' ? Number(item.margin ?? 0) : 0,
+            }))
+        }
+
+        if (resolvedView === 'month' && reportPeriodKey === selectedRankingMonth) {
+            return (effectiveReportData?.products ?? []).map((item) => ({
                 product_id: item.product_id,
                 product_name: item.product_name,
                 category: item.category,
@@ -2896,59 +3075,104 @@ const MyAccount = () => {
                 month_cost: Number(item.cost ?? 0),
                 month_profit: Number(item.profit ?? 0),
                 month_margin: Number(item.margin ?? 0),
-                range_orders_count: Number(item.orders_count ?? 0),
-                range_units_sold: Number(item.units_sold ?? 0),
-                range_gross_revenue: Number(item.gross_revenue ?? 0),
-                range_net_revenue: Number(item.net_revenue ?? 0),
-                range_vat_amount: Number(item.vat_amount ?? 0),
-                range_shipping_amount: Number(item.shipping_amount ?? 0),
-                range_cost: Number(item.cost ?? 0),
-                range_profit: Number(item.profit ?? 0),
-                range_margin: Number(item.margin ?? 0),
-                historical_orders_count: Number(item.orders_count ?? 0),
-                historical_units_sold: Number(item.units_sold ?? 0),
-                historical_gross_revenue: Number(item.gross_revenue ?? 0),
-                historical_net_revenue: Number(item.net_revenue ?? 0),
-                historical_vat_amount: Number(item.vat_amount ?? 0),
-                historical_shipping_amount: Number(item.shipping_amount ?? 0),
-                historical_cost: Number(item.cost ?? 0),
-                historical_profit: Number(item.profit ?? 0),
-                historical_margin: Number(item.margin ?? 0),
+                range_orders_count: 0,
+                range_units_sold: 0,
+                range_gross_revenue: 0,
+                range_net_revenue: 0,
+                range_vat_amount: 0,
+                range_shipping_amount: 0,
+                range_cost: 0,
+                range_profit: 0,
+                range_margin: 0,
+                historical_orders_count: 0,
+                historical_units_sold: 0,
+                historical_gross_revenue: 0,
+                historical_net_revenue: 0,
+                historical_vat_amount: 0,
+                historical_shipping_amount: 0,
+                historical_cost: 0,
+                historical_profit: 0,
+                historical_margin: 0,
             }))
         }
-        return buildSalesRankingRows(productSalesRanking, reportSalesRankingView)
-    }, [periodReport, productSalesRanking, reportSalesRankingView, selectedFinancialPeriod])
-    const reportSalesUnitsSold = reportSalesRankingRows.reduce((acc, item) => acc + Number(item.units_sold ?? 0), 0)
+        return buildSalesRankingRows(productSalesRanking, resolvedView)
+    }, [periodReport, productSalesRanking, salesRankingView, selectedRankingMonth])
+    const reportSalesUnitsSold = React.useMemo(
+        () => reportSalesRankingRows.reduce((acc, item) => acc + Number(item.units_sold ?? 0), 0),
+        [reportSalesRankingRows]
+    )
+    const reportWeekUnitCount = React.useMemo(() => {
+        if (trendRange !== 'week') return Math.round(reportSalesUnitsSold)
+        const orders = effectiveReportData?.orders ?? reportDataRef.current?.orders
+        if (!orders || orders.length === 0) return Math.round(reportSalesUnitsSold)
+        const now = new Date()
+        const weekStart = new Date(now)
+        weekStart.setDate(weekStart.getDate() - 6)
+        const weekStartStr = weekStart.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
+        const weekUnits = orders.reduce((sum, o) => {
+            if (!o.created_at) return sum
+            const created = new Date(o.created_at + (o.created_at.includes('Z') || o.created_at.includes('+') ? '' : 'Z'))
+            const orderDateStr = created.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
+            return orderDateStr >= weekStartStr ? sum + (Number(o.units_count) || 0) : sum
+        }, 0)
+        return weekUnits > 0 ? Math.round(weekUnits) : Math.round(reportSalesUnitsSold)
+    }, [trendRange, effectiveReportData, reportSalesUnitsSold])
     const reportSalesCategories = React.useMemo(() => {
+        const reportData = reportDataRef.current
+        const reportCategories = reportData?.categories ?? effectiveReportData?.categories ?? []
+        const reportPeriodKey = reportData?.period?.period_key ?? effectiveReportData?.period?.period_key
+        const canUseReportCategories = (salesRankingView === 'daily' ? 'range' : salesRankingView) !== 'month' || reportPeriodKey === selectedRankingMonth
+        if (canUseReportCategories && reportCategories.length > 0) {
+            return reportCategories
+                .map((item) => ({ category: item.category, total: Number(item.net_revenue ?? 0) }))
+                .sort((a, b) => b.total - a.total)
+        }
         const totals = new Map<string, number>()
         reportSalesRankingRows.forEach((item) => {
             const category = String(item.category || 'Sin categoría')
             totals.set(category, (totals.get(category) ?? 0) + Number(item.net_revenue ?? 0))
         })
-        if (reportSalesRankingView === 'month' && periodReport?.period?.period_key === selectedFinancialPeriod) {
-            return (periodReport.categories ?? [])
+        if (salesRankingView === 'month' && effectiveReportData?.period?.period_key === selectedRankingMonth) {
+            return (effectiveReportData.categories ?? [])
                 .map((item) => ({ category: item.category, total: Number(item.net_revenue ?? 0) }))
                 .sort((a, b) => b.total - a.total)
         }
         return Array.from(totals.entries())
             .map(([category, total]) => ({ category, total }))
             .sort((a, b) => b.total - a.total)
-    }, [periodReport, reportSalesRankingRows, reportSalesRankingView, selectedFinancialPeriod])
-    const reportSalesCategoriesTotal = reportSalesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0)
+    }, [effectiveReportData, reportSalesRankingRows, salesRankingView, selectedRankingMonth])
+    const reportSalesCategoriesTotal = React.useMemo(
+        () => reportSalesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0),
+        [reportSalesCategories]
+    )
     const reportSalesOrders = React.useMemo(() => {
-        if (periodReport?.period?.period_key === selectedRankingMonth) {
-            return periodReport.orders ?? []
+        const reportData = reportDataRef.current
+        if (reportData) {
+            if (salesRankingView === 'month') {
+                const reportPeriodKey = reportData.period?.period_key
+                if (reportPeriodKey === selectedRankingMonth) {
+                    return reportData.orders ?? []
+                }
+                return []
+            }
+            return reportData.orders ?? []
         }
-        return []
-    }, [periodReport, selectedRankingMonth])
-    const filteredReportSalesOrders = React.useMemo(() => {
-        const query = salesOrderSearch.trim().toLowerCase()
-        return reportSalesOrders.filter((order) => {
-            const status = normalizeStatus(order.status)
-            if (salesOrderStatusFilter !== 'all' && status !== salesOrderStatusFilter) return false
-            if (!query) return true
-
-            return [
+        const report = effectiveReportData
+        if (salesRankingView === 'month') {
+            if (report?.period?.period_key === selectedRankingMonth) {
+                return report.orders ?? []
+            }
+            return []
+        }
+        return report?.orders ?? []
+    }, [effectiveReportData, selectedRankingMonth, salesRankingView])
+    const reportSalesOrderSearchCache = React.useMemo(() => {
+        const statusMap = new Map<string, string>()
+        const searchTextMap = new Map<string, string>()
+        for (const order of reportSalesOrders) {
+            const id = String(order.id)
+            statusMap.set(id, normalizeStatus(order.status))
+            searchTextMap.set(id, [
                 order.id,
                 order.user_name || '',
                 order.customer_email || '',
@@ -2968,26 +3192,103 @@ const MyAccount = () => {
                 formatMoney(order.discount_total ?? 0),
                 formatMoney(order.cost ?? 0),
                 formatMoney(order.profit ?? 0),
-            ].some((value) => String(value).toLowerCase().includes(query))
+            ].join(' ').toLowerCase())
+        }
+        return { statusMap, searchTextMap }
+    }, [reportSalesOrders])
+    const filteredReportSalesOrders = React.useMemo(() => {
+        const query = salesOrderSearch.trim().toLowerCase()
+        return reportSalesOrders.filter((order) => {
+            const id = String(order.id)
+            const status = reportSalesOrderSearchCache.statusMap.get(id) ?? ''
+            if (salesOrderStatusFilter !== 'all' && status !== salesOrderStatusFilter) return false
+            if (!query) return true
+            const searchText = reportSalesOrderSearchCache.searchTextMap.get(id) ?? ''
+            return searchText.includes(query)
         })
-    }, [reportSalesOrders, salesOrderSearch, salesOrderStatusFilter])
-    const reportSalesPeriodLabel = periodReport?.period?.period_key === selectedRankingMonth
-        ? `${periodReport.period.start_date} → ${periodReport.period.end_date}`
-        : (productSalesRanking?.period ? `${productSalesRanking.period.start || '-'} → ${productSalesRanking.period.end || '-'}` : '-')
+    }, [reportSalesOrders, salesOrderSearch, salesOrderStatusFilter, reportSalesOrderSearchCache])
+    const reportSalesPeriodLabel = (() => {
+        const reportData = reportDataRef.current
+        const reportPeriod = reportData?.period ?? effectiveReportData?.period
+        if (salesRankingView === 'historical') {
+            if (reportPeriod) return `${reportPeriod.start_date} → ${reportPeriod.end_date}`
+            if (productSalesRanking?.historicalPeriod) {
+                return `${productSalesRanking.historicalPeriod.start || '-'} → ${productSalesRanking.historicalPeriod.end || '-'}`
+            }
+        }
+        if (salesRankingView === 'daily') {
+            if (reportPeriod) return `${reportPeriod.start_date} → ${reportPeriod.end_date}`
+            if (productSalesRanking?.rangePeriod) {
+                return `${productSalesRanking.rangePeriod.start || '-'} → ${productSalesRanking.rangePeriod.end || '-'}`
+            }
+        }
+        if (reportPeriod && reportPeriod.period_key === selectedRankingMonth) {
+            return `${reportPeriod.start_date} → ${reportPeriod.end_date}`
+        }
+        if (productSalesRanking?.period) {
+            return `${productSalesRanking.period.start || '-'} → ${productSalesRanking.period.end || '-'}`
+        }
+        return '-'
+    })()
     const selectedProcurementSalesProduct = React.useMemo(() => {
         if (!selectedProductProcurementDetail) return null
         return salesRankingRows.find((item) => item.product_id === selectedProductProcurementDetail.product_id) || null
     }, [salesRankingRows, selectedProductProcurementDetail])
     const monthlySalesRankingTotals = productSalesRanking?.monthlyTotals
     const historicalSalesRankingTotals = productSalesRanking?.historicalTotals
-    const salesRankingTotals = salesRankingView === 'month' ? monthlySalesRankingTotals : historicalSalesRankingTotals
+    const dailySalesRankingTotals = productSalesRanking?.rangeTotals
+    const reportOrdersData = effectiveReportData?.orders
+    const totalUnitsSold = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.units_count) || 0), 0) : 0
+    const totalCost = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.cost) || 0), 0) : 0
+    const totalProfit = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.profit) || 0), 0) : 0
+    const fallbackTotals = { units_sold: totalUnitsSold, net_revenue: effectiveReportData?.sales?.net ?? 0, cost: totalCost, profit: totalProfit }
+    const salesRankingTotals = salesRankingView === 'daily'
+        ? (dailySalesRankingTotals || fallbackTotals)
+        : salesRankingView === 'month'
+            ? monthlySalesRankingTotals
+            : (historicalSalesRankingTotals || fallbackTotals)
     const monthlySalesFinancial = productSalesRanking?.monthlyFinancial
     const historicalSalesFinancial = productSalesRanking?.historicalFinancial
-    const salesRankingFinancial = salesRankingView === 'month' ? monthlySalesFinancial : historicalSalesFinancial
+    const dailySalesFinancial = productSalesRanking?.rangeFinancial
+    const reportSalesData = effectiveReportData?.sales
+    const rawFinancial = reportSalesData || (salesRankingView === 'daily'
+        ? dailySalesFinancial
+        : salesRankingView === 'month'
+            ? monthlySalesFinancial
+            : historicalSalesFinancial)
+    const salesRankingFinancial: {orders_count:number;gross:number;net:number;vat:number;shipping:number;cost:number;profit:number;margin:number} | null = rawFinancial ? {
+        orders_count: (rawFinancial as any).orders_count ?? (rawFinancial as any).total ?? 0,
+        gross: (rawFinancial as any).gross ?? (rawFinancial as any).total ?? 0,
+        net: (rawFinancial as any).net ?? (rawFinancial as any).net_revenue ?? 0,
+        vat: (rawFinancial as any).vat ?? (rawFinancial as any).tax ?? 0,
+        shipping: (rawFinancial as any).shipping ?? 0,
+        cost: (rawFinancial as any).cost ?? 0,
+        profit: (rawFinancial as any).profit ?? 0,
+        margin: (rawFinancial as any).margin ?? 0,
+    } : null
     const activeReportMeta = REPORT_SECTION_META[adminReportSection]
-    const salesSummary = dashboardStats?.businessMetrics?.salesSummary
+    const rawSalesSummary = dashboardStats?.businessMetrics?.salesSummary
+    const salesSummary: {orders_count:number;gross:number;net:number;vat:number;shipping:number;cost:number;profit:number;margin:number} | null = rawSalesSummary ? {
+        orders_count: (rawSalesSummary as any).orders_count ?? 0,
+        gross: (rawSalesSummary as any).gross ?? (rawSalesSummary as any).total ?? 0,
+        net: (rawSalesSummary as any).net ?? 0,
+        vat: (rawSalesSummary as any).vat ?? (rawSalesSummary as any).tax ?? 0,
+        shipping: (rawSalesSummary as any).shipping ?? 0,
+        cost: (rawSalesSummary as any).cost ?? 0,
+        profit: (rawSalesSummary as any).profit ?? 0,
+        margin: (rawSalesSummary as any).margin ?? 0,
+    } : null
+    const rawProfitStats = dashboardStats?.businessMetrics?.profitStats
+    const profitStats: {cost:number;gross_profit:number;gross_margin:number;net_cash_profit:number;net_cash_margin:number;net_period_profit:number;net_period_margin:number} | null = rawProfitStats ? {
+        cost: (rawProfitStats as any).cost ?? 0,
+        gross_profit: (rawProfitStats as any).gross_profit ?? 0,
+        gross_margin: (rawProfitStats as any).gross_margin ?? 0,
+        net_cash_profit: (rawProfitStats as any).net_cash_profit ?? 0,
+        net_cash_margin: (rawProfitStats as any).net_cash_margin ?? 0,
+        net_period_profit: (rawProfitStats as any).net_period_profit ?? 0,
+        net_period_margin: (rawProfitStats as any).net_period_margin ?? 0,
+    } : null
     const financialTrends = dashboardStats?.businessMetrics?.financialTrends
-    const profitStats = dashboardStats?.businessMetrics?.profitStats
     const financialTrendRows = React.useMemo<FinancialTrendPoint[]>(() => {
         const source = financialTrendMode === 'monthly' ? financialTrends?.monthly : financialTrends?.daily
         const rows = Array.isArray(source) ? source : []
@@ -3014,6 +3315,18 @@ const MyAccount = () => {
             setSalesRankingView('month')
         }
     }, [activeTab, financialTrendMode, financialTrendScope, salesRankingMonth, selectedFinancialPeriod])
+    React.useEffect(() => {
+        if (salesRankingView === 'daily') {
+            const today = new Date()
+            const yyyy = today.getFullYear()
+            const mm = String(today.getMonth() + 1).padStart(2, '0')
+            const dd = String(today.getDate()).padStart(2, '0')
+            setSalesRankingDate(`${yyyy}-${mm}-${dd}`)
+        } else if (salesRankingDate) {
+            setSalesRankingDate('')
+        }
+    }, [salesRankingView])
+
     const selectReportMonth = React.useCallback((month?: string) => {
         const nextMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))
             ? String(month)
@@ -3039,13 +3352,114 @@ const MyAccount = () => {
         if (
             financialTrendMode === 'monthly'
             && financialTrendScope === 'selected'
-            && periodReport?.period?.period_key === selectedFinancialTrendRow?.period
+            && effectiveReportData?.period?.period_key === selectedFinancialTrendRow?.period
         ) {
-            const canonical = summarizeReportPeriod(periodReport, reportFinancialScopeLabel)
+            const canonical = summarizeReportPeriod(effectiveReportData as ReportPeriodSummary, reportFinancialScopeLabel)
             if (canonical) return canonical
         }
         return summarizeReportFinancialRows(reportFinancialRows, salesSummary, profitStats, reportFinancialScopeLabel)
-    }, [financialTrendMode, financialTrendScope, periodReport, profitStats, reportFinancialRows, reportFinancialScopeLabel, salesSummary, selectedFinancialTrendRow?.period])
+    }, [financialTrendMode, financialTrendScope, effectiveReportData, profitStats, reportFinancialRows, reportFinancialScopeLabel, salesSummary, selectedFinancialTrendRow?.period])
+    const weekFinancialSummary = React.useMemo((): ReportFinancialSummary | null => {
+        const perf = dashboardStats?.monthlyPerformance ?? []
+        const weekDays = perf.slice(-7)
+        if (weekDays.length === 0) return null
+        const gross = weekDays.reduce((s, d) => s + toFinancialNumber(d.gross), 0)
+        const net = weekDays.reduce((s, d) => s + toFinancialNumber(d.total), 0)
+        const cost = weekDays.reduce((s, d) => s + toFinancialNumber(d.cost), 0)
+        if (gross === 0 && net === 0 && cost === 0) return null
+        const grossProfit = gross - cost
+        const fullSummary = reportFinancialSummary
+        const weekRatio = fullSummary.gross > 0 ? Math.min(1, Math.max(0, gross / fullSummary.gross)) : 0
+        const netDiv = net > 0 ? net : (gross || 1)
+        const estimatedVat = fullSummary.vat * weekRatio
+        const estimatedShipping = fullSummary.shipping * weekRatio
+        const estimatedPeriodExpenses = fullSummary.periodExpenses * weekRatio
+        const estimatedPaidExpenses = fullSummary.paidExpenses * weekRatio
+        const estimatedFinancialAdjustments = fullSummary.financialAdjustments * weekRatio
+        const ordersCount = Math.max(Math.round(fullSummary.ordersCount * weekRatio), 0)
+        const netProfit = grossProfit - estimatedPeriodExpenses - estimatedFinancialAdjustments
+        const flowProfit = grossProfit - estimatedPaidExpenses - estimatedFinancialAdjustments
+        return {
+            scopeLabel: 'Semana actual',
+            ordersCount,
+            gross,
+            net,
+            vat: estimatedVat,
+            shipping: estimatedShipping,
+            cost,
+            grossProfit,
+            periodExpenses: estimatedPeriodExpenses,
+            paidExpenses: estimatedPaidExpenses,
+            pendingExpenses: fullSummary.pendingExpenses * weekRatio,
+            overdueExpenses: fullSummary.overdueExpenses * weekRatio,
+            financialAdjustments: estimatedFinancialAdjustments,
+            netProfit,
+            flowProfit,
+            grossMargin: (grossProfit / netDiv) * 100,
+            netMargin: (netProfit / netDiv) * 100,
+            flowMargin: (flowProfit / netDiv) * 100,
+            roi: cost > 0 ? (grossProfit / cost) * 100 : 0,
+            netRoi: (cost + estimatedPeriodExpenses + Math.abs(estimatedFinancialAdjustments)) > 0
+                ? (netProfit / (cost + estimatedPeriodExpenses + Math.abs(estimatedFinancialAdjustments))) * 100
+                : 0,
+            flowRoi: (cost + estimatedPaidExpenses + Math.abs(estimatedFinancialAdjustments)) > 0
+                ? (flowProfit / (cost + estimatedPaidExpenses + Math.abs(estimatedFinancialAdjustments))) * 100
+                : 0,
+            averageOrderNet: ordersCount > 0 ? net / ordersCount : 0,
+        }
+    }, [dashboardStats?.monthlyPerformance, reportFinancialSummary])
+    const monthFinancialSummary = React.useMemo((): ReportFinancialSummary | null => {
+        const trend = dashboardStats?.salesTrend30Days ?? []
+        const now = new Date()
+        const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        const monthDays = trend.filter(d => (d.day || '') >= firstDayStr)
+        if (monthDays.length === 0) return null
+        const gross = monthDays.reduce((s, d) => s + toFinancialNumber(d.gross), 0)
+        const net = monthDays.reduce((s, d) => s + toFinancialNumber(d.total), 0)
+        const cost = monthDays.reduce((s, d) => s + toFinancialNumber(d.cost), 0)
+        if (gross === 0 && net === 0 && cost === 0) return null
+        const grossProfit = gross - cost
+        const fullSummary = reportFinancialSummary
+        const monthRatio = fullSummary.gross > 0 ? Math.min(1, Math.max(0, gross / fullSummary.gross)) : 0
+        const netDiv = net > 0 ? net : (gross || 1)
+        const estimatedVat = fullSummary.vat * monthRatio
+        const estimatedShipping = fullSummary.shipping * monthRatio
+        const estimatedPeriodExpenses = fullSummary.periodExpenses * monthRatio
+        const estimatedPaidExpenses = fullSummary.paidExpenses * monthRatio
+        const estimatedFinancialAdjustments = fullSummary.financialAdjustments * monthRatio
+        const ordersCount = Math.max(Math.round(fullSummary.ordersCount * monthRatio), 0)
+        const netProfit = grossProfit - estimatedPeriodExpenses - estimatedFinancialAdjustments
+        const flowProfit = grossProfit - estimatedPaidExpenses - estimatedFinancialAdjustments
+        return {
+            scopeLabel: 'Mes actual',
+            ordersCount,
+            gross,
+            net,
+            vat: estimatedVat,
+            shipping: estimatedShipping,
+            cost,
+            grossProfit,
+            periodExpenses: estimatedPeriodExpenses,
+            paidExpenses: estimatedPaidExpenses,
+            pendingExpenses: fullSummary.pendingExpenses * monthRatio,
+            overdueExpenses: fullSummary.overdueExpenses * monthRatio,
+            financialAdjustments: estimatedFinancialAdjustments,
+            netProfit,
+            flowProfit,
+            grossMargin: (grossProfit / netDiv) * 100,
+            netMargin: (netProfit / netDiv) * 100,
+            flowMargin: (flowProfit / netDiv) * 100,
+            roi: cost > 0 ? (grossProfit / cost) * 100 : 0,
+            netRoi: (cost + estimatedPeriodExpenses + Math.abs(estimatedFinancialAdjustments)) > 0
+                ? (netProfit / (cost + estimatedPeriodExpenses + Math.abs(estimatedFinancialAdjustments))) * 100
+                : 0,
+            flowRoi: (cost + estimatedPaidExpenses + Math.abs(estimatedFinancialAdjustments)) > 0
+                ? (flowProfit / (cost + estimatedPaidExpenses + Math.abs(estimatedFinancialAdjustments))) * 100
+                : 0,
+            averageOrderNet: ordersCount > 0 ? net / ordersCount : 0,
+        }
+    }, [dashboardStats?.salesTrend30Days, reportFinancialSummary])
+    const generalFinancialSummary = (trendRange === 'week' ? weekFinancialSummary : monthFinancialSummary) ?? reportFinancialSummary
     const inventoryValue = dashboardStats?.businessMetrics?.inventoryValue
     const inventoryDeepDive = dashboardStats?.businessMetrics?.inventoryDeepDive
     const inventoryHealth = inventoryDeepDive?.health
@@ -3078,7 +3492,10 @@ const MyAccount = () => {
     const traceabilityProducts = traceabilityData?.products ?? []
     const traceabilityCategories = traceabilityData?.categories ?? []
     const salesCategories = dashboardStats?.salesByCategory ?? []
-    const salesCategoriesTotal = salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0)
+    const salesCategoriesTotal = React.useMemo(
+        () => salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0),
+        [salesCategories]
+    )
     const salesTrendRows = dashboardStats?.salesTrend30Days ?? []
     const reportsViewActive = activeTab === 'reports' || activeTab === 'sales-ranking'
     const inventoryViewActive = activeTab === 'inventory'
@@ -3090,26 +3507,66 @@ const MyAccount = () => {
     const riskInventoryItems = inventoryDeepDive?.riskItems ?? []
     const expiringInventoryItems = inventoryDeepDive?.expiringItems ?? []
     const expiredInventoryItems = inventoryDeepDive?.expiredItems ?? []
-    const reportBalanceNet = reportFinancialSummary.net
-    const reportBalanceGross = reportFinancialSummary.gross
-    const reportBalanceVat = reportFinancialSummary.vat
-    const reportBalanceShipping = reportFinancialSummary.shipping
-    const reportBalanceCost = reportFinancialSummary.cost
-    const reportBalanceGrossProfit = reportFinancialSummary.grossProfit
-    const reportBalanceGrossMargin = reportFinancialSummary.grossMargin
-    const reportBalancePeriodExpenses = reportFinancialSummary.periodExpenses
-    const reportBalancePaidExpenses = reportFinancialSummary.paidExpenses
-    const reportBalancePendingExpenses = reportFinancialSummary.pendingExpenses
-    const reportBalanceOverdueExpenses = reportFinancialSummary.overdueExpenses
-    const reportBalanceNetProfit = reportFinancialSummary.netProfit
-    const reportBalanceNetMargin = reportFinancialSummary.netMargin
-    const reportBalanceFlowProfit = reportFinancialSummary.flowProfit
-    const reportBalanceFlowMargin = reportFinancialSummary.flowMargin
-    const reportBalanceRoi = reportFinancialSummary.roi
-    const reportBalanceNetRoi = reportFinancialSummary.netRoi
-    const reportBalanceFlowRoi = reportFinancialSummary.flowRoi
-    const reportOrdersCount = reportFinancialSummary.ordersCount
-    const reportAverageOrderNet = reportFinancialSummary.averageOrderNet || Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0)
+    const reportBalanceNet = generalFinancialSummary.net
+    const reportBalanceGross = generalFinancialSummary.gross
+    const reportBalanceVat = generalFinancialSummary.vat
+    const reportBalanceShipping = generalFinancialSummary.shipping
+    const reportBalanceCost = generalFinancialSummary.cost
+    const reportBalanceGrossProfit = generalFinancialSummary.grossProfit
+    const reportBalanceGrossMargin = generalFinancialSummary.grossMargin
+    const reportBalancePeriodExpenses = generalFinancialSummary.periodExpenses
+    const reportBalancePaidExpenses = generalFinancialSummary.paidExpenses
+    const reportBalancePendingExpenses = generalFinancialSummary.pendingExpenses
+    const reportBalanceOverdueExpenses = generalFinancialSummary.overdueExpenses
+    const reportBalanceNetProfit = generalFinancialSummary.netProfit
+    const reportBalanceNetMargin = generalFinancialSummary.netMargin
+    const reportBalanceFlowProfit = generalFinancialSummary.flowProfit
+    const reportBalanceFlowMargin = generalFinancialSummary.flowMargin
+    const reportBalanceRoi = generalFinancialSummary.roi
+    const reportBalanceNetRoi = generalFinancialSummary.netRoi
+    const reportBalanceFlowRoi = generalFinancialSummary.flowRoi
+    const balanceSummary = reportFinancialSummary ?? generalFinancialSummary
+    const balanceNet = balanceSummary.net
+    const balanceGross = balanceSummary.gross
+    const balanceVat = balanceSummary.vat
+    const balanceShipping = balanceSummary.shipping
+    const balanceCost = balanceSummary.cost
+    const balanceGrossProfit = balanceSummary.grossProfit
+    const balanceGrossMargin = balanceSummary.grossMargin
+    const balancePeriodExpenses = balanceSummary.periodExpenses
+    const balancePaidExpenses = balanceSummary.paidExpenses
+    const balancePendingExpenses = balanceSummary.pendingExpenses
+    const balanceOverdueExpenses = balanceSummary.overdueExpenses
+    const balanceNetProfit = balanceSummary.netProfit
+    const balanceNetMargin = balanceSummary.netMargin
+    const balanceFlowProfit = balanceSummary.flowProfit
+    const balanceFlowMargin = balanceSummary.flowMargin
+    const balanceRoi = balanceSummary.roi
+    const balanceNetRoi = balanceSummary.netRoi
+    const balanceFlowRoi = balanceSummary.flowRoi
+    const balanceOrdersCount = balanceSummary.ordersCount
+    const balanceAverageOrderNet = balanceSummary.averageOrderNet || Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0)
+    const reportGeneralScopeLabel = React.useMemo(() => {
+        const now = new Date()
+        if (trendRange === 'week') {
+            const weekStart = new Date(now)
+            weekStart.setDate(weekStart.getDate() - 6)
+            const startLabel = formatDateEcuador(weekStart.toISOString(), { day: '2-digit', month: 'short' })
+            const endLabel = formatDateEcuador(now.toISOString(), { day: '2-digit', month: 'short' })
+            return `Semana actual (${startLabel} - ${endLabel})`
+        }
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        return `Mes actual (${monthNames[now.getMonth()]} ${now.getFullYear()})`
+    }, [trendRange])
+    const reportOrdersCount = generalFinancialSummary.ordersCount
+    const reportAverageOrderNet = generalFinancialSummary.averageOrderNet || Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0)
+    const generalSalesProportion = React.useMemo(() => {
+        if (trendRange === 'week' && reportFinancialSummary.gross > 0) {
+            const weekGross = weekFinancialSummary?.gross ?? 0
+            return weekGross > 0 ? Math.min(weekGross / reportFinancialSummary.gross, 1) : 1
+        }
+        return 1
+    }, [trendRange, weekFinancialSummary, reportFinancialSummary])
     const productWeightedMargin = Number(dashboardStats?.productAnalysis?.weightedMargin ?? dashboardStats?.productAnalysis?.averageMargin ?? 0)
     const productMarginSampleCount = Number(dashboardStats?.productAnalysis?.pricedCostedProducts ?? 0)
     const productMissingCostCount = Number(dashboardStats?.productAnalysis?.missingCostCount ?? 0)
@@ -3176,7 +3633,7 @@ const MyAccount = () => {
                 currentDateLabel,
                 selectedRankingMonth,
                 selectedRankingMonthLabel,
-                salesRankingView: reportSalesRankingView,
+                salesRankingView,
                 dashboardStats,
                 financialScopeLabel: reportFinancialScopeLabel,
                 financialSummary: reportFinancialSummary,
@@ -3204,7 +3661,6 @@ const MyAccount = () => {
         filteredReportSalesOrders,
         reportSalesCategories,
         reportSalesRankingRows,
-        reportSalesRankingView,
         salesTrendRows,
         selectedRankingMonth,
         selectedRankingMonthLabel,
@@ -3257,6 +3713,19 @@ const MyAccount = () => {
         return summarizePurchaseInvoices(recentPurchaseInvoices)
     }, [inventoryViewActive, recentPurchaseInvoices])
     const hasPerishableProducts = inventoryViewActive && inventoryManagementRows.some((row) => row.isPerishable)
+    const inventoryDetailModalRows = React.useMemo(() => {
+        if (!inventoryDetailModal) return [] as typeof inventoryManagementRows
+        const statusMap: Record<string, string> = {
+            low: 'low',
+            critical: 'critical',
+            out: 'out',
+            expiring: 'expiring',
+            expired: 'expired',
+        }
+        const targetStatus = statusMap[inventoryDetailModal]
+        if (!targetStatus) return [] as typeof inventoryManagementRows
+        return inventoryManagementRows.filter((row) => row.stockStatus === targetStatus)
+    }, [inventoryManagementRows, inventoryDetailModal])
     const deferredAdminProductsSearch = React.useDeferredValue(adminProductsSearch)
     const adminProductSearchIndex = React.useMemo(
         () => (productsNeededForProductsPanel ? buildProductSearchIndex((adminProductsList || []) as any) : new Map()),
@@ -4461,35 +4930,35 @@ const MyAccount = () => {
                                                     <div className="text-xs text-white/50 mb-1">Costo Directo (COGS)</div>
                                                     <div className="text-2xl font-bold text-orange-400">-${Number(dashboardStats.businessMetrics?.profitStats?.cost || 0).toLocaleString()}</div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-3 border-b border-white/10 pb-4">
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Envío cobrado</div>
-                                                        <div className="text-xl font-bold text-white/80">${Number(dashboardStats.businessMetrics?.profitStats?.shipping_collected ?? reportBalanceShipping).toLocaleString()}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Gastos del período</div>
-                                                        <div className="text-xl font-bold text-orange-400">-${reportBalancePeriodExpenses.toLocaleString()}</div>
-                                                    </div>
-                                                    <div className="col-span-2 text-[10px] text-white/40">Gastos pagados: -${reportBalancePaidExpenses.toLocaleString()}. Pendientes/vencidos: -${(reportBalancePendingExpenses + reportBalanceOverdueExpenses).toLocaleString()}.</div>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Utilidad bruta</div>
-                                                        <div className="text-2xl font-bold text-success">${Number(dashboardStats.businessMetrics?.profitStats?.gross_profit ?? dashboardStats.businessMetrics?.profitStats?.profit ?? 0).toLocaleString()}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Utilidad neta</div>
-                                                        <div className={`text-2xl font-bold ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>${reportBalanceNetProfit.toLocaleString()}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Margen bruto</div>
-                                                        <div className="text-xl font-bold">{reportBalanceGrossMargin.toFixed(1)}%</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-white/50 mb-1">Margen neto</div>
-                                                        <div className="text-xl font-bold">{reportBalanceNetMargin.toFixed(1)}%</div>
-                                                    </div>
-                                                </div>
+                                                 <div className="grid grid-cols-2 gap-3 border-b border-white/10 pb-4">
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Envío cobrado</div>
+                                                         <div className="text-xl font-bold text-white/80">${Number(dashboardStats.businessMetrics?.profitStats?.shipping_collected ?? reportBalanceShipping).toLocaleString()}</div>
+                                                     </div>
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Gastos del período</div>
+                                                         <div className="text-xl font-bold text-orange-400">-${reportBalancePeriodExpenses.toLocaleString()}</div>
+                                                     </div>
+                                                     <div className="col-span-2 text-[10px] text-white/40">Gastos pagados: -${reportBalancePaidExpenses.toLocaleString()}. Pendientes/vencidos: -${(reportBalancePendingExpenses + reportBalanceOverdueExpenses).toLocaleString()}.</div>
+                                                 </div>
+                                                 <div className="grid grid-cols-2 gap-3">
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Utilidad bruta</div>
+                                                         <div className="text-2xl font-bold text-success">${Number(dashboardStats.businessMetrics?.profitStats?.gross_profit ?? dashboardStats.businessMetrics?.profitStats?.profit ?? 0).toLocaleString()}</div>
+                                                     </div>
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Utilidad neta</div>
+                                                         <div className={`text-2xl font-bold ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>${reportBalanceNetProfit.toLocaleString()}</div>
+                                                     </div>
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Margen bruto</div>
+                                                         <div className="text-xl font-bold">{reportBalanceGrossMargin.toFixed(1)}%</div>
+                                                     </div>
+                                                     <div>
+                                                         <div className="text-xs text-white/50 mb-1">Margen neto</div>
+                                                         <div className="text-xl font-bold">{reportBalanceNetMargin.toFixed(1)}%</div>
+                                                     </div>
+                                                 </div>
                                             </div>
                                         </div>
                                         <div className="mt-4 p-3 bg-white/5 rounded-lg border border-white/5 text-[10px] text-white/40 leading-relaxed italic">
@@ -5213,587 +5682,330 @@ const MyAccount = () => {
 
                                             {adminReportSection === 'general' && (
                                                 <>
-                                                    <div className="mb-4 rounded-lg border border-line bg-surface px-4 py-3">
-                                                        <div className="text-sm font-bold">Resumen ejecutivo</div>
-                                                        <p className="mt-1 text-xs text-secondary">
-                                                            Lectura rápida para decidir qué atender primero. Los detalles completos viven en Ventas, Balance, Inventario y Trazabilidad.
-                                                        </p>
+                                                    <div className="flex items-start justify-between mb-4">
+                                                        <div className="flex flex-col gap-2">
+                                                            <div className="text-sm font-bold">Resumen ejecutivo</div>
+                                                            <p className="text-xs text-secondary">
+                                                                {reportGeneralScopeLabel} · {reportOrdersCount.toLocaleString('es-EC')} pedidos realizados · promedio {formatMoney(reportAverageOrderNet)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex bg-surface p-0.5 rounded-lg border border-line">
+                                                                <button
+                                                                    onClick={() => setTrendRange('week')}
+                                                                    className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${trendRange === 'week' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
+                                                                >
+                                                                    Semana
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setTrendRange('month')}
+                                                                    className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${trendRange === 'month' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
+                                                                >
+                                                                    Mes
+                                                                </button>
+                                                            </div>
+                                                            {pendingOperationalOrders > 0 && (
+                                                                <span className="inline-flex items-center rounded-full bg-[#FDE68A] px-3 py-1 text-[11px] font-bold text-[#92400E]">
+                                                                    {pendingOperationalOrders} pedido{pendingOperationalOrders !== 1 ? 's' : ''} por atender
+                                                                </span>
+                                                            )}
+                                                            <span className="text-xs font-bold text-secondary bg-surface border border-line rounded-lg px-3 py-1.5">
+                                                                {currentDateLabel}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <div className="mb-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-3">
+
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
                                                         <button
                                                             type="button"
-                                                            className={`p-4 rounded-lg border w-full text-left transition-all ${pendingOperationalOrders > 0
-                                                                    ? 'border-[#F59E0B] bg-[#FFF7E8] hover:border-[#D97706]'
-                                                                    : 'border-line bg-white hover:border-black'
-                                                                }`}
+                                                            className={`p-3 rounded-lg border text-left transition-all ${pendingOperationalOrders > 0 ? 'border-[#F59E0B] bg-[#FFF7E8] hover:border-[#D97706]' : 'border-line bg-white hover:border-black'}`}
                                                             onClick={openPendingOrdersShortcut}
                                                         >
-                                                            <div className="flex h-full flex-col justify-between gap-3 lg:flex-row lg:items-start">
-                                                                <div className="min-w-0">
-                                                                    <div className="text-secondary text-xs uppercase font-bold mb-1">Pedidos por atender</div>
-                                                                    <div className="flex items-center gap-3 flex-wrap">
-                                                                        <div className={`heading5 ${pendingOperationalOrders > 0 ? 'text-[#B45309]' : 'text-black'}`}>
-                                                                            {pendingOperationalOrders.toLocaleString('es-EC')} pedidos por atender
-                                                                        </div>
-                                                                        {pendingOperationalOrders > 0 && (
-                                                                            <span className="inline-flex items-center rounded-full bg-[#FDE68A] px-3 py-1 text-[11px] font-bold text-[#92400E]">
-                                                                                Requieren revisión
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-secondary text-xs mt-2 max-w-2xl">
-                                                                        Seguimiento operativo. Estos pedidos aun no cuentan como venta realizada hasta completarse o entregarse.
-                                                                    </p>
-                                                                </div>
-                                                                <div className="grid grid-cols-3 gap-2.5 text-sm min-w-full sm:min-w-[320px] lg:min-w-[332px]">
-                                                                    <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5">
-                                                                        <div className="text-[10px] uppercase font-bold text-secondary">Pendientes</div>
-                                                                        <div className="text-lg font-bold text-black">{purePendingOperationalOrders.toLocaleString('es-EC')}</div>
-                                                                    </div>
-                                                                    <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5">
-                                                                        <div className="text-[10px] uppercase font-bold text-secondary">En proceso</div>
-                                                                        <div className="text-lg font-bold text-black">{processingOperationalOrders.toLocaleString('es-EC')}</div>
-                                                                    </div>
-                                                                    <div className="rounded-lg bg-white/70 border border-[#F2D29B] px-2.5 py-2.5 flex flex-col justify-between">
-                                                                        <div className="text-[10px] uppercase font-bold text-secondary">Acción</div>
-                                                                        <div className="text-sm font-bold underline">Ver pedidos</div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Pedidos por atender</div>
+                                                            <div className={`text-xl font-bold ${pendingOperationalOrders > 0 ? 'text-[#B45309]' : 'text-black'}`}>{pendingOperationalOrders}</div>
+                                                            <div className="text-[11px] text-secondary mt-0.5">{purePendingOperationalOrders} pend. · {processingOperationalOrders} proc.</div>
                                                         </button>
-
                                                         <button
                                                             type="button"
-                                                            className="p-4 rounded-lg border border-line bg-surface w-full text-left transition-all hover:border-black"
+                                                            className="p-3 rounded-lg border border-line bg-white text-left transition-all hover:border-black"
                                                             onClick={() => navigateToPanelTab('taxes')}
                                                         >
-                                                            <div className="flex h-full flex-col justify-between gap-3">
-                                                                <div>
-                                                                    <div className="text-secondary text-xs uppercase font-bold mb-1">IVA vigente</div>
-                                                                    <div className="heading4">{vatRateLabel}%</div>
-                                                                    <p className="text-secondary text-xs mt-2">Tasa usada para separar ventas brutas, ventas netas e IVA cobrado.</p>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-2.5 text-sm">
-                                                                    <div className="rounded-lg bg-white border border-line px-2.5 py-2.5">
-                                                                        <div className="text-[10px] uppercase font-bold text-secondary">Multiplicador</div>
-                                                                        <div className="text-lg font-bold text-black">{vatMultiplierLabel}x</div>
-                                                                    </div>
-                                                                    <div className="rounded-lg bg-white border border-line px-2.5 py-2.5">
-                                                                        <div className="text-[10px] uppercase font-bold text-secondary">Precio gravado</div>
-                                                                        <div className="text-lg font-bold text-black">${vatExampleTotal}</div>
-                                                                        <div className="text-[11px] text-secondary">$100 base</div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">IVA vigente</div>
+                                                            <div className="text-xl font-bold">{vatRateLabel}%</div>
+                                                            <div className="text-[11px] text-secondary mt-0.5">{vatMultiplierLabel}x · ${vatExampleTotal} c/$100 base</div>
                                                         </button>
+                                                         <button
+                                                             type="button"
+                                                             className="p-3 rounded-lg border border-line bg-white text-left transition-all hover:border-primary"
+                                                             onClick={() => openProductBreakdown('gross')}
+                                                         >
+                                                             <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas brutas</div>
+                                                             <div className="text-xl font-bold">{formatMoney(reportBalanceGross)}</div>
+                                                              <div className="text-[11px] text-secondary mt-0.5">{reportGeneralScopeLabel} · Incluye IVA + envío</div>
+                                                         </button>
+                                                         <button
+                                                             type="button"
+                                                             className="p-3 rounded-lg border border-line bg-white text-left transition-all hover:border-primary"
+                                                             onClick={() => openProductBreakdown('net')}
+                                                         >
+                                                             <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas netas</div>
+                                                             <div className="text-xl font-bold">{formatMoney(reportBalanceNet)}</div>
+                                                             <div className={`text-[11px] font-semibold flex items-center gap-1 ${salesTrendIsPositive ? 'text-success' : 'text-red'}`}>
+                                                                 {salesTrendIsPositive ? <Icon.TrendUp weight="bold" size={12} /> : <Icon.TrendDown weight="bold" size={12} />}
+                                                                 {salesTrendIsPositive ? '+' : ''}{salesProgressPercentage.toFixed(1)}%
+                                                                  <span className="text-secondary/50 font-normal ml-auto">{reportGeneralScopeLabel}</span>
+                                                             </div>
+                                                         </button>
+                                                         <button
+                                                             type="button"
+                                                             className="p-3 rounded-lg border border-line bg-white text-left transition-all hover:border-primary"
+                                                             onClick={() => openProductBreakdown('vat')}
+                                                         >
+                                                             <div className="text-[10px] uppercase font-bold text-secondary mb-1">IVA cobrado</div>
+                                                             <div className="text-xl font-bold">{formatMoney(reportBalanceVat)}</div>
+                                                              <div className="text-[11px] text-secondary mt-0.5">{reportGeneralScopeLabel} · Envío cobrado {formatMoney(reportBalanceShipping)}</div>
+                                                         </button>
+                                                          <button
+                                                              type="button"
+                                                              className="p-3 rounded-lg border border-line bg-white text-left transition-all hover:border-primary"
+                                                              onClick={() => openAdminReportSection('sales')}
+                                                          >
+                                                               <div className="text-[10px] uppercase font-bold text-secondary mb-1">Unidades vendidas</div>
+                                                               <div className="text-xl font-bold">{(trendRange === 'week' ? reportWeekUnitCount : Math.round(reportSalesUnitsSold)).toLocaleString('es-EC')}</div>
+                                                                <div className="text-[11px] text-secondary mt-0.5">{trendRange === 'week' ? reportGeneralScopeLabel : reportSalesPeriodLabel} · Ticket prom. {formatMoney(reportAverageOrderNet)}</div>
+                                                          </button>
                                                     </div>
 
-                                                    <div className="mb-3 mt-5">
-                                                        <div className="text-sm font-bold">Indicadores clave del negocio</div>
-                                                        <p className="mt-1 text-xs text-secondary">Métricas principales para ubicar ventas, impuestos, envíos y unidades vendidas sin entrar al detalle contable.</p>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 mb-4">
-                                                        {(() => {
-                                                            const gross = reportBalanceGross
-                                                            const net = reportBalanceNet
-                                                            const vat = reportBalanceVat
-                                                            const shipping = reportBalanceShipping
-                                                            const unitLabel = financialTrendMode === 'daily'
-                                                                ? reportFinancialScopeLabel
-                                                                : financialTrendScope === 'total'
-                                                                    ? 'Total visible'
-                                                                    : reportFinancialScopeLabel
-                                                            return (
-                                                                <>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                                        onClick={() => openProductBreakdown('gross')}
-                                                                    >
-                                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">Ventas brutas</div>
-                                                                        <div className="heading5">${gross.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                                        <div className="text-secondary text-xs mt-1">Incluyen IVA y envío • Ver productos</div>
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                                        onClick={() => openProductBreakdown('net')}
-                                                                    >
-                                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">Ventas netas</div>
-                                                                        <div className="heading5">${net.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                                        <div className="text-secondary text-xs mt-1">Sin IVA ni envío • Ver productos</div>
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                                        onClick={() => openProductBreakdown('vat')}
-                                                                    >
-                                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">IVA cobrado</div>
-                                                                        <div className="heading5">${vat.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                                        <div className="text-secondary text-xs mt-1">Impuesto separado de la venta • Ver productos</div>
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                                        onClick={() => openProductBreakdown('shipping')}
-                                                                    >
-                                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">Envío cobrado</div>
-                                                                        <div className="heading5">${shipping.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                                        <div className="text-secondary text-xs mt-1">Cobro de entrega al cliente • Ver productos</div>
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-3.5 bg-white rounded-lg border border-line shadow-sm text-left cursor-pointer hover:border-primary transition-all"
-                                                                        onClick={() => openAdminReportSection('sales')}
-                                                                    >
-                                                                        <div className="text-secondary text-xs uppercase font-bold mb-1">Unidades vendidas</div>
-                                                                        <div className="heading5">{reportSalesUnitsSold.toLocaleString('es-EC')}</div>
-                                                                        <div className="text-secondary text-xs mt-1">
-                                                                            {unitLabel}
-                                                                        </div>
-                                                                    </button>
-                                                                </>
-                                                            )
-                                                        })()}
-                                                    </div>
-
-                                                    <div className="mb-3 mt-5">
-                                                        <div className="text-sm font-bold">Accesos rápidos por área</div>
-                                                        <p className="mt-1 text-xs text-secondary">Tarjetas para abrir el detalle correcto sin mezclar lectura comercial, financiera e inventario.</p>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 mb-4">
-                                                        <div
-                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => openProductBreakdown('net')}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-secondary text-sm font-medium">Ventas netas</div>
-                                                                <Icon.CurrencyDollar className="text-success" size={20} />
+                                                    <div className="bg-white p-4 rounded-xl border border-line shadow-sm mb-4">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div>
+                                                                 <div className="text-sm font-bold">Tendencia de ventas</div>
+                                                                 <p className="text-xs text-secondary mt-1">Evolución diaria de {trendMetric === 'gross' ? 'ventas totales' : 'utilidad neta'} · {trendRange === 'week' ? 'Últimos 7 días' : 'Mes actual'}</p>
                                                             </div>
-                                                            <div className="heading5">{formatMoney(reportBalanceNet)}</div>
-                                                            <div className={`${salesTrendIsPositive ? 'text-success' : 'text-red'} text-xs mt-2 font-bold flex items-center gap-1`}>
-                                                                {salesTrendIsPositive ? <Icon.TrendUp weight="bold" /> : <Icon.TrendDown weight="bold" />}
-                                                                {salesTrendIsPositive ? '+' : ''}{salesProgressPercentage.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                                                                <span className="text-secondary font-normal ml-1 flex items-center gap-1 underline">ver detalle <Icon.ArrowRight size={10} /></span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex bg-surface p-0.5 rounded-lg border border-line">
+                                                                    <button
+                                                                        onClick={() => setTrendMetric('gross')}
+                                                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${trendMetric === 'gross' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
+                                                                    >
+                                                                        Venta total
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setTrendMetric('profit')}
+                                                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${trendMetric === 'profit' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
+                                                                    >
+                                                                        Utilidad
+                                                                    </button>
+                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        <div
-                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => setSelectedDeepDive('aov')}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-secondary text-sm font-medium">Ticket promedio neto</div>
-                                                                <Icon.Receipt className="text-blue-500" size={20} />
-                                                            </div>
-                                                            <div className="heading5">{formatMoney(reportAverageOrderNet)}</div>
-                                                            <div className="text-secondary text-xs mt-2 underline">Analizar distribución <Icon.ArrowRight size={10} className="inline ml-1" /></div>
-                                                        </div>
-
-                                                        <div
-                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => openProductBreakdown('profit')}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-secondary text-sm font-medium">Utilidad bruta / neta</div>
-                                                                <Icon.HandCoins className="text-orange-500" size={20} />
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-3">
-                                                                <div>
-                                                                    <div className="text-[10px] uppercase font-bold text-secondary">Bruta</div>
-                                                                    <div className="text-lg font-bold text-success">{formatMoney(reportBalanceGrossProfit)}</div>
-                                                                    <div className="text-xs text-secondary">{reportBalanceGrossMargin.toFixed(1)}%</div>
-                                                                </div>
-                                                                <div>
-                                                                    <div className="text-[10px] uppercase font-bold text-secondary">Neta</div>
-                                                                    <div className={`text-lg font-bold ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(reportBalanceNetProfit)}</div>
-                                                                    <div className="text-xs text-secondary">{reportBalanceNetMargin.toFixed(1)}%</div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div
-                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => openAdminReportSection('inventory')}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-secondary text-sm font-medium">Capital en inventario</div>
-                                                                <Icon.Archive className="text-purple-500" size={20} />
-                                                            </div>
-                                                            <div className="heading5">{formatMoney(Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0))}</div>
-                                                            <div className="text-secondary text-xs mt-2">{Number(dashboardStats?.businessMetrics?.inventoryValue?.skus_with_stock ?? 0).toLocaleString('es-EC')} productos con stock <span className="underline">ver riesgos <Icon.ArrowRight size={10} className="inline ml-1" /></span></div>
-                                                        </div>
-
-                                                        <div
-                                                            className="p-3.5 bg-white rounded-lg border border-line shadow-sm cursor-pointer hover:border-primary transition-all"
-                                                            onClick={() => navigateToPanelTab('products')}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-secondary text-sm font-medium">Productos activos</div>
-                                                                <Icon.ShoppingBag className="text-primary" size={20} />
-                                                            </div>
-                                                            <div className="heading5">{Number(dashboardStats?.productAnalysis?.totalMonitored ?? 0).toLocaleString('es-EC')}</div>
-                                                            <div className="text-secondary text-xs mt-2 underline">Ver catálogo <Icon.ArrowRight size={10} className="inline ml-1" /></div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-4">
-                                                        <div className="bg-white p-4 lg:p-5 rounded-xl border border-line shadow-sm relative overflow-hidden">
-                                                            <div className="flex items-center justify-between mb-5">
-                                                                <div>
-                                                                    <div className="heading6">Tendencia de ventas netas</div>
-                                                                    <p className="text-secondary text-xs mt-1">Comparativa diaria para detectar aceleración o caída comercial.</p>
-                                                                </div>
-                                                                <div className="flex bg-surface p-1 rounded-lg border border-line">
-                                                                    <button
-                                                                        onClick={() => setTrendRange(7)}
-                                                                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${trendRange === 7 ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
-                                                                    >
-                                                                        7 Días
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => setTrendRange(30)}
-                                                                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${trendRange === 30 ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
-                                                                    >
-                                                                        30 Días
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="h-48 sm:h-56 lg:h-64 relative mt-2 overflow-hidden">
-                                                                {dashboardStats ? (
-                                                                    trendRange === 7 ? (
-                                                                        <div className="flex items-end gap-3 h-full justify-between pt-6 px-2">
-                                                                            {(dashboardStats.monthlyPerformance || []).slice(-7).map((item, i) => {
-                                                                                const currentData = (dashboardStats.monthlyPerformance || []).slice(-7);
-                                                                                const maxVal = Math.max(...currentData.map(p => Number(p.total))) || 1;
-                                                                                const value = Number(item.total) || 0
-                                                                                const rawHeight = (value / maxVal) * 100;
-                                                                                const height = value > 0 ? Math.max(rawHeight, 4) : 0;
-                                                                                const dayLabel = formatDashboardTrendLabel(item, { weekday: 'short' })
-
+                                                        {dashboardStats ? (
+                                                             (() => {
+                                                                 const adjust = (item: { total: number, gross: number, cost: number }) =>
+                                                                     trendMetric === 'profit'
+                                                                         ? Number(item.gross) - Number(item.cost)
+                                                                         : Number(item.gross) || 0
+                                                                 const now = new Date()
+                                                                 const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+                                                                 const monthData = (dashboardStats.salesTrend30Days || []).filter(d => (d.day || '') >= firstDayStr)
+                                                                 const weekData = (dashboardStats.monthlyPerformance || []).slice(-7)
+                                                                 const displayData = trendRange === 'week' ? weekData : monthData
+                                                                 const weekAdjusted = weekData.map(adjust)
+                                                                 const weekMax = Math.max(...weekAdjusted, 1)
+                                                                 const monthAdjusted = monthData.map(adjust)
+                                                                 const monthMax = Math.max(...monthAdjusted, 1)
+                                                                  return trendRange === 'week' ? (
+                                                                     <div className="flex items-end gap-1 justify-between">
+                                                                        {weekData.map((item, i) => {
+                                                                            const value = adjust(item)
+                                                                            const pct = (value / weekMax) * 100
+                                                                            const label = formatDashboardTrendLabel(item, { weekday: 'short' })
+                                                                            const isToday = i === weekData.length - 1
+                                                                            return (
+                                                                                <div key={i} className="flex flex-col items-center gap-1 flex-1 max-w-[48px] group cursor-pointer" title={`${label}: ${formatMoney(value)}`}>
+                                                                                    <span className={`text-[10px] font-bold leading-tight ${value > 0 ? (isToday ? 'text-black' : 'text-black') : 'text-secondary/40'}`}>{formatMoney(value)}</span>
+                                                                                    <div className="w-full bg-secondary/5 rounded relative flex items-end h-24 overflow-hidden">
+                                                                                        {value > 0 ? (
+                                                                                            <div
+                                                                                                className={`w-full rounded transition-all duration-500 ${isToday ? 'bg-black' : 'bg-black/50 group-hover:bg-black/70'}`}
+                                                                                                style={{ height: `${Math.max(pct, 4)}%` }}
+                                                                                            />
+                                                                                        ) : (
+                                                                                            <div className="w-full flex items-center justify-center pb-1">
+                                                                                                <div className="w-1 h-1 rounded-full bg-secondary/30" />
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <span className={`text-[10px] font-bold leading-tight ${isToday ? 'text-black' : 'text-secondary'}`}>{isToday ? 'HOY' : label}</span>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div>
+                                                                         <div className="flex items-end gap-px justify-between mb-1">
+                                                                            {monthData.map((item, i) => {
+                                                                                const value = adjust(item)
+                                                                                const pct = (value / monthMax) * 100
                                                                                 return (
-                                                                                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-3 group relative cursor-pointer">
-                                                                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap z-20 font-bold shadow-xl pointer-events-none">
-                                                                                            Ventas: {formatMoney(value)}
-                                                                                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black rotate-45"></div>
+                                                                                    <div key={i} className="flex-1 max-w-[24px] group cursor-pointer" title={`${formatDashboardTrendLabel(item, { day: '2-digit', month: 'short' })}: ${formatMoney(value)}`}>
+                                                                                        <div className="flex flex-col items-center">
+                                                                                            <span className="text-[8px] font-bold text-secondary opacity-0 group-hover:opacity-100 transition-opacity leading-tight">{formatMoney(value)}</span>
+                                                                                            <div className="w-full bg-secondary/5 rounded relative flex items-end h-20 overflow-hidden mt-px">
+                                                                                                {value > 0 ? (
+                                                                                                    <div
+                                                                                                        className="w-full rounded bg-black/40 group-hover:bg-black/70 transition-colors"
+                                                                                                        style={{ height: `${Math.max(pct, 4)}%` }}
+                                                                                                    />
+                                                                                                ) : (
+                                                                                                    <div className="w-full flex items-center justify-center pb-1">
+                                                                                                        <div className="w-0.5 h-0.5 rounded-full bg-secondary/20" />
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
                                                                                         </div>
-
-                                                                                        <div className="w-full max-w-[60px] bg-secondary/5 rounded-t-xl relative flex items-end h-full overflow-visible group-hover:bg-secondary/10 transition-colors duration-300">
-                                                                                            <motion.div
-                                                                                                initial={{ height: 0 }}
-                                                                                                animate={{ height: `${height}%` }}
-                                                                                                transition={{ duration: 0.8, ease: "easeOut" }}
-                                                                                                className={`w-full relative rounded-t-xl ${i === currentData.length - 1 ? 'bg-black' : 'bg-black/80 group-hover:bg-black'}`}
-                                                                                            >
-                                                                                            </motion.div>
-                                                                                        </div>
-
-                                                                                        <span className={`text-[11px] font-bold uppercase ${i === currentData.length - 1 ? 'text-black' : 'text-secondary group-hover:text-black'}`}>{dayLabel}</span>
                                                                                     </div>
                                                                                 )
                                                                             })}
                                                                         </div>
-                                                                    ) : (
-                                                                        <div className="w-full h-full pt-10 px-2 flex flex-col justify-between">
-                                                                            <svg className="w-full h-[200px] overflow-visible" viewBox="0 0 1000 200" preserveAspectRatio="none">
-                                                                                <defs>
-                                                                                    <linearGradient id="gradientTrend" x1="0" y1="0" x2="0" y2="1">
-                                                                                        <stop offset="0%" stopColor="#000000" stopOpacity="0.1" />
-                                                                                        <stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                                                                                    </linearGradient>
-                                                                                    <clipPath id="chartClip">
-                                                                                        <rect x="0" y="0" width="1000" height="200" />
-                                                                                    </clipPath>
-                                                                                </defs>
-
-                                                                                {/* Background Grid - More subtle and cleaner */}
-                                                                                <line x1="0" y1="50" x2="1000" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-                                                                                <line x1="0" y1="100" x2="1000" y2="100" stroke="#E5E7EB" strokeDasharray="4 4" />
-                                                                                <line x1="0" y1="150" x2="1000" y2="150" stroke="#E5E7EB" strokeDasharray="4 4" />
-                                                                                <line x1="0" y1="200" x2="1000" y2="200" stroke="#E5E7EB" strokeWidth="1" />
-
-                                                                                {(() => {
-                                                                                    const data = dashboardStats.salesTrend30Days || [];
-                                                                                    const maxVal = Math.max(...data.map(p => Number(p.total))) || 1;
-                                                                                    if (data.length === 0) return null
-
-                                                                                    const points = data.map((d, i) => {
-                                                                                        const x = (i / Math.max(data.length - 1, 1)) * 1000;
-                                                                                        const value = Number(d.total) || 0
-                                                                                        const y = 200 - (value / maxVal) * 180;
-                                                                                        return { x, y, val: value, date: formatDashboardTrendLabel(d, { day: '2-digit', month: 'short' }) };
-                                                                                    });
-
-                                                                                    const pathData = points.reduce((acc, p, i) =>
-                                                                                        acc + (i === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`), "");
-
-                                                                                    const areaData = pathData + ` L 1000 200 L 0 200 Z`;
-
-                                                                                    return (
-                                                                                        <>
-                                                                                            <motion.path
-                                                                                                initial={{ opacity: 0 }}
-                                                                                                animate={{ opacity: 1 }}
-                                                                                                transition={{ duration: 1 }}
-                                                                                                d={areaData}
-                                                                                                fill="url(#gradientTrend)"
-                                                                                            />
-                                                                                            <motion.path
-                                                                                                initial={{ pathLength: 0 }}
-                                                                                                animate={{ pathLength: 1 }}
-                                                                                                transition={{ duration: 1.5, ease: "easeInOut" }}
-                                                                                                d={pathData}
-                                                                                                fill="none"
-                                                                                                stroke="black"
-                                                                                                strokeWidth="2.5"
-                                                                                                strokeLinecap="round"
-                                                                                                strokeLinejoin="round"
-                                                                                            />
-                                                                                            {points.map((p, i) => (
-                                                                                                <g key={i} className="group/point">
-                                                                                                    <rect x={p.x - 10} y="0" width="20" height="200" fill="transparent" className="cursor-pointer" />
-
-                                                                                                    <circle
-                                                                                                        cx={p.x}
-                                                                                                        cy={p.y}
-                                                                                                        r="3"
-                                                                                                        className="fill-white stroke-black stroke-[3px] opacity-0 group-hover/point:opacity-100 transition-all duration-200"
-                                                                                                    />
-
-                                                                                                    <foreignObject x={Math.min(Math.max(p.x - 50, 0), 900)} y={Math.max(p.y - 60, 0)} width="100" height="50" className="opacity-0 group-hover/point:opacity-100 pointer-events-none transition-all duration-200 z-50 overflow-visible">
-                                                                                                        <div className="bg-black text-white text-[10px] py-2 px-3 rounded-lg text-center shadow-xl transform translate-y-1">
-                                                                                                            <div className="font-bold mb-0.5">{p.date}</div>
-                                                                                                            <div>{formatMoney(p.val)}</div>
-                                                                                                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black rotate-45"></div>
-                                                                                                        </div>
-                                                                                                    </foreignObject>
-                                                                                                </g>
-                                                                                            ))}
-                                                                                        </>
-                                                                                    )
-                                                                                })()}
-                                                                            </svg>
-
-                                                                            <div className="flex justify-between w-full mt-4 border-t border-line pt-4">
-                                                                                {(() => {
-                                                                                    const data = dashboardStats.salesTrend30Days || [];
-                                                                                    const step = Math.max(1, Math.floor(data.length / 5));
-                                                                                    const labels: Array<{ day: string; total: number; index: number }> = [];
-                                                                                    for (let i = 0; i < data.length; i += step) {
-                                                                                        if (labels.length < 5) labels.push({ ...data[i], index: i });
-                                                                                    }
-                                                                                    if (data.length > 0 && labels[labels.length - 1]?.index !== data.length - 1) {
-                                                                                        const lastLabel = { ...data[data.length - 1], index: data.length - 1 }
-                                                                                        if (labels.length >= 5) {
-                                                                                            labels[labels.length - 1] = lastLabel
-                                                                                        } else {
-                                                                                            labels.push(lastLabel)
-                                                                                        }
-                                                                                    }
-
-                                                                                    return labels.map((item, idx) => {
-                                                                                        return (
-                                                                                            <span key={idx} className="text-[10px] font-bold text-secondary uppercase tracking-widest">
-                                                                                                {idx === labels.length - 1 ? 'HOY' : formatDashboardTrendLabel(item, { day: '2-digit', month: 'short' })}
-                                                                                            </span>
-                                                                                        )
-                                                                                    });
-                                                                                })()}
-                                                                            </div>
+                                                                        <div className="flex justify-between">
+                                                                            {[0, Math.floor((monthData.length - 1) / 2), monthData.length - 1].map((idx, arrIdx) => {
+                                                                                const item = monthData[idx];
+                                                                                if (!item) return <span key={arrIdx} />;
+                                                                                return (
+                                                                                    <span key={idx} className="text-[10px] font-bold text-secondary">{formatDashboardTrendLabel(item, { day: '2-digit', month: 'short' })}</span>
+                                                                                );
+                                                                            })}
                                                                         </div>
-                                                                    )
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-secondary">Cargando datos...</div>
+                                                                    </div>
+                                                                )
+                                                            })()
+                                                        ) : (
+                                                            <div className="w-full h-20 flex items-center justify-center text-secondary text-xs">Cargando datos de tendencia...</div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+                                                        <div className="bg-white p-4 rounded-xl border border-line shadow-sm">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <div>
+                                                                    <div className="text-sm font-bold">Utilidad</div>
+                                                                     <p className="text-[11px] text-secondary mt-0.5">{reportGeneralScopeLabel}</p>
+                                                                 </div>
+                                                                 <button type="button" className="text-[11px] font-bold underline" onClick={() => openAdminReportSection('balance')}>ver balance</button>
+                                                             </div>
+                                                              <div className="space-y-2">
+                                                                  <div className="rounded-lg bg-surface border border-line p-2.5">
+                                                                      <div className="text-[10px] uppercase font-bold text-secondary">Bruta</div>
+                                                                      <div className={`text-base font-bold ${reportBalanceGrossProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(reportBalanceGrossProfit)}</div>
+                                                                      <div className="text-[11px] text-secondary">{reportBalanceGrossMargin.toFixed(1)}% margen</div>
+                                                                  </div>
+                                                                  <div className="rounded-lg bg-surface border border-line p-2.5">
+                                                                      <div className="text-[10px] uppercase font-bold text-secondary">Neta</div>
+                                                                      <div className={`text-base font-bold ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>{formatMoney(reportBalanceNetProfit)}</div>
+                                                                      <div className="text-[11px] text-secondary">{reportBalanceNetMargin.toFixed(1)}% margen</div>
+                                                                  </div>
+                                                             </div>
+                                                        </div>
+                                                        <div className="bg-white p-4 rounded-xl border border-line shadow-sm">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <div>
+                                                                     <div className="text-sm font-bold">Top 5 productos</div>
+                                                                     <p className="text-[9px] text-secondary/50">{reportGeneralScopeLabel}</p>
+                                                                 </div>
+                                                                 <button type="button" className="text-[11px] font-bold underline" onClick={() => openAdminReportSection('sales')}>ver ranking</button>
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                   {reportSalesRankingRows.slice(0, 5).map((prod, i) => {
+                                                                       const scaledUnits = Math.round(prod.units_sold)
+                                                                       const scaledRevenue = prod.net_revenue
+                                                                      return <div key={i} className="flex items-center gap-2 cursor-pointer group" onClick={() => openAdminReportSection('sales')}>
+                                                                          <span className="w-4 h-4 rounded-full bg-black text-white flex items-center justify-center text-[8px] font-bold flex-shrink-0">{i + 1}</span>
+                                                                          <div className="flex-1 min-w-0">
+                                                                              <div className="text-[11px] font-semibold truncate">{prod.product_name}</div>
+                                                                              <div className="text-[10px] text-secondary">{scaledUnits} uds</div>
+                                                                          </div>
+                                                                          <div className="text-[11px] font-bold flex-shrink-0">{formatMoney(scaledRevenue)}</div>
+                                                                      </div>
+                                                                  })}
+                                                                 {reportSalesRankingRows.length === 0 && (
+                                                                    <div className="text-xs text-secondary">Sin productos vendidos.</div>
                                                                 )}
                                                             </div>
                                                         </div>
-
-                                                        <div className="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-3">
-                                                            <div className="bg-white p-4 lg:p-5 rounded-xl border border-line shadow-sm">
-                                                                <div className="heading6 mb-2">Distribución de ventas realizadas</div>
-                                                                <div className="text-[11px] text-secondary mb-6">Solo cuenta pedidos completados o entregados.</div>
-                                                                <div className="space-y-6">
-                                                                    {(dashboardStats?.businessMetrics?.ordersByStatus || [])
-                                                                        .filter((status) => ['completed', 'delivered'].includes(normalizeStatus(status.status)))
-                                                                        .map((status, i, realizedStatuses) => {
-                                                                            const total = realizedStatuses.reduce((acc, curr) => acc + Number(curr.count), 0) || 1;
-                                                                            const perc = Math.round((Number(status.count) / total) * 100);
-                                                                            const normalizedStatus = normalizeStatus(status.status)
-                                                                            const realizedStatusLabel = normalizedStatus === 'delivered'
-                                                                                ? 'Entregado'
-                                                                                : normalizedStatus === 'completed'
-                                                                                    ? 'Completado'
-                                                                                    : getStatusBadge(status.status).label
-                                                                            const barColorClass = ['completed', 'delivered'].includes(normalizedStatus)
-                                                                                ? 'bg-success'
-                                                                                : ['processing', 'in_process', 'in-process'].includes(normalizedStatus)
-                                                                                    ? 'bg-yellow'
-                                                                                    : ['pending'].includes(normalizedStatus)
-                                                                                        ? 'bg-amber-400'
-                                                                                        : ['canceled', 'cancelled'].includes(normalizedStatus)
-                                                                                            ? 'bg-red'
-                                                                                            : ['pickup', 'ready_for_pickup', 'ready'].includes(normalizedStatus)
-                                                                                                ? 'bg-amber-600'
-                                                                                                : 'bg-primary'
-                                                                            return (
-                                                                                <div key={i} className="cursor-pointer group hover:bg-surface -mx-2 p-2 rounded-lg transition-colors" onClick={() => navigateToPanelTab('admin-orders')}>
-                                                                                    <div className="flex justify-between text-sm mb-2">
-                                                                                        <span className="capitalize font-bold text-secondary group-hover:text-black transition-colors">{realizedStatusLabel}</span>
-                                                                                        <span className="font-bold">{status.count} ({perc}%)</span>
-                                                                                    </div>
-                                                                                    <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                                                                                        <div className={`h-full ${barColorClass}`} style={{ width: `${perc}%` }}></div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            )
-                                                                        })}
-                                                                    {((dashboardStats?.businessMetrics?.ordersByStatus || [])
-                                                                        .filter((status) => ['completed', 'delivered'].includes(normalizeStatus(status.status)))).length === 0 && (
-                                                                            <div className="text-sm text-secondary">Aún no hay ventas completadas.</div>
-                                                                        )}
+                                                        <div className="bg-white p-4 rounded-xl border border-line shadow-sm">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <div>
+                                                                    <div className="text-sm font-bold">Ventas recientes</div>
+                                                                    <p className="text-[9px] text-secondary/50">{reportGeneralScopeLabel}</p>
                                                                 </div>
+                                                                <button type="button" className="text-[11px] font-bold underline" onClick={() => navigateToPanelTab('admin-orders')}>ver todo</button>
                                                             </div>
-
-                                                            <div className="xl:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                                                <div className="bg-white p-4 lg:p-5 rounded-xl border border-line shadow-sm overflow-hidden">
-                                                                    <div className="heading6 mb-2">Ventas completadas recientes</div>
-                                                                    <div className="text-[11px] text-secondary mb-6">Últimos pedidos que ya cuentan como venta realizada.</div>
-                                                                    <div className="w-full">
-                                                                        <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
-                                                                            <thead>
-                                                                                <tr className="border-b border-line">
-                                                                                    <th className="pb-3 text-secondary font-medium w-1/4">ID</th>
-                                                                                    <th className="pb-3 text-secondary font-medium w-1/3">Cliente</th>
-                                                                                    <th className="pb-3 text-secondary font-medium text-right">Total</th>
-                                                                                    <th className="pb-3 text-secondary font-medium text-right">Hora</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {dashboardStats?.businessMetrics?.recentOrders?.map((order, i) => (
-                                                                                    <tr key={i}
-                                                                                        className="border-b border-line last:border-0 hover:bg-surface transition-colors cursor-pointer group"
-                                                                                        onClick={() => handleViewOrder(order.id)}
-                                                                                    >
-                                                                                        <td className="py-4 font-bold text-xs truncate pr-2 group-hover:text-primary transition-colors">#{order.id.split('-').pop()}</td>
-                                                                                        <td className="py-4 text-xs truncate pr-2">{order.user_name || 'Anónimo'}</td>
-                                                                                        <td className="py-4 text-right font-bold text-xs">${Number(order.total).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                                        <td className="py-4 text-right text-[10px] text-secondary whitespace-nowrap">
-                                                                                            {formatDateTimeEcuador(order.created_at, { hour: '2-digit', minute: '2-digit' })}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ))}
-                                                                            </tbody>
-                                                                        </table>
+                                                            <div className="divide-y divide-line">
+                                                                {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 4).map((order, i) => (
+                                                                    <div key={i} className="flex items-center justify-between py-2 cursor-pointer hover:bg-surface -mx-2 px-2 rounded-lg transition-colors" onClick={() => handleViewOrder(order.id)}>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="text-xs font-bold truncate">#{order.id.split('-').pop()}</div>
+                                                                            <div className="text-[10px] text-secondary truncate">{order.user_name || 'Anónimo'} · {formatDateTimeEcuador(order.created_at, { hour: '2-digit', minute: '2-digit' })}</div>
+                                                                        </div>
+                                                                        <div className="text-xs font-bold flex-shrink-0 ml-2">{formatMoney(order.total)}</div>
                                                                     </div>
-                                                                </div>
-
-                                                                <div className="bg-white p-4 lg:p-5 rounded-xl border border-line shadow-sm">
-                                                                    <div className="heading6 mb-2">Top 5 productos vendidos</div>
-                                                                    <div className="text-[11px] text-secondary mb-6">Ranking basado solo en pedidos completados o entregados.</div>
-                                                                    <div className="space-y-4">
-                                                                        {reportSalesRankingRows.slice(0, 5).map((prod, i) => (
-                                                                            <div key={i}
-                                                                                className="flex items-center gap-4 p-3 bg-surface rounded-xl hover:shadow-md transition-all cursor-pointer hover:bg-white border border-transparent hover:border-line"
-                                                                                onClick={() => openAdminReportSection('sales')}
-                                                                            >
-                                                                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">{i + 1}</div>
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <div className="text-xs font-bold truncate group-hover:text-primary">{prod.product_name}</div>
-                                                                                    <div className="text-[10px] text-secondary">{Number(prod.units_sold ?? 0).toLocaleString('es-EC')} unidades</div>
-                                                                                </div>
-                                                                                <div className="text-xs font-bold text-success whitespace-nowrap">{formatMoney(prod.net_revenue)}</div>
-                                                                            </div>
-                                                                        ))}
-                                                                        {reportSalesRankingRows.length === 0 && (
-                                                                            <div className="text-sm text-secondary">No hay productos vendidos en este alcance.</div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
+                                                                ))}
+                                                                {(!dashboardStats?.businessMetrics?.recentOrders || dashboardStats.businessMetrics.recentOrders.length === 0) && (
+                                                                    <div className="py-6 text-center text-xs text-secondary">Sin ventas recientes.</div>
+                                                                )}
                                                             </div>
                                                         </div>
-
-                                                        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                            <div className="bg-surface rounded-lg border border-line p-4">
-                                                                <div className="flex items-center gap-2 mb-3">
-                                                                    <Icon.Tag size={20} className="text-primary" />
-                                                                    <div className="font-bold">Categorías líderes</div>
-                                                                </div>
-                                                                <div className="space-y-2">
-                                                                    {reportSalesCategories.slice(0, 4).map((cat, i) => {
-                                                                        const perc = reportSalesCategoriesTotal > 0 ? Math.round((Number(cat.total) / reportSalesCategoriesTotal) * 100) : 0;
-                                                                        return (
-                                                                            <div key={i} className="cursor-pointer group hover:bg-white -mx-2 p-2 rounded-lg transition-colors" onClick={() => navigateToPanelTab('products')}>
-                                                                                <div className="flex justify-between text-[10px] mb-1">
-                                                                                    <span className="capitalize font-bold text-secondary group-hover:text-black">{cat.category}</span>
-                                                                                    <span className="font-bold">{perc}%</span>
-                                                                                </div>
-                                                                                <div className="w-full h-1 bg-line rounded-full overflow-hidden">
-                                                                                    <div className="h-full bg-primary" style={{ width: `${perc}%` }}></div>
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    })}
-                                                                    {reportSalesCategories.length === 0 && (
-                                                                        <div className="text-xs text-secondary">Sin categorías vendidas en este alcance.</div>
-                                                                    )}
-                                                                </div>
+                                                        <div className="bg-white p-4 rounded-xl border border-line shadow-sm">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <div>
+                                                                    <div className="text-sm font-bold">Indicadores financieros</div>
+                                                                     <p className="text-[9px] text-secondary/50">{reportGeneralScopeLabel}</p>
+                                                                 </div>
+                                                                 <button type="button" className="text-[11px] font-bold underline" onClick={() => openAdminReportSection('balance')}>ver balance</button>
                                                             </div>
+                                                             <div className="space-y-1.5">
+                                                                 <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-surface border border-line">
+                                                                     <span className="text-xs text-secondary font-semibold">Margen bruto</span>
+                                                                     <span className={`text-sm font-bold ${reportBalanceGrossProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceGrossMargin.toFixed(1)}%</span>
+                                                                 </div>
+                                                                 <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-surface border border-line">
+                                                                     <span className="text-xs text-secondary font-semibold">Margen neto</span>
+                                                                     <span className={`text-sm font-bold ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceNetMargin.toFixed(1)}%</span>
+                                                                 </div>
+                                                                 <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-surface border border-line">
+                                                                     <span className="text-xs text-secondary font-semibold">Margen flujo caja</span>
+                                                                     <span className={`text-sm font-bold ${reportBalanceFlowProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceFlowMargin.toFixed(1)}%</span>
+                                                                 </div>
+                                                                 <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-surface border border-line">
+                                                                     <span className="text-xs text-secondary font-semibold">ROI bruto</span>
+                                                                     <span className="text-sm font-bold">{reportBalanceRoi.toFixed(1)}%</span>
+                                                                 </div>
+                                                                 <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-surface border border-line">
+                                                                     <span className="text-xs text-secondary font-semibold">ROI neto</span>
+                                                                     <span className="text-sm font-bold">{reportBalanceNetRoi.toFixed(1)}%</span>
+                                                                 </div>
+                                                             </div>
+                                                        </div>
+                                                    </div>
 
-                                                            <div className="bg-surface rounded-lg border border-line p-4">
-                                                                <div className="flex items-center gap-2 mb-3">
-                                                                    <Icon.Lightbulb size={24} className="text-yellow" />
-                                                                    <div className="font-bold">Lectura de inventario</div>
-                                                                </div>
-                                                                <div className="space-y-3">
-                                                                    <div
-                                                                        className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
-                                                                        onClick={() => openAdminReportSection('inventory')}
-                                                                    >
-                                                                        <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Valor potencial de venta</div>
-                                                                        <div className="text-lg font-bold">{formatMoney(Number(dashboardStats?.businessMetrics?.inventoryValue?.market_value ?? 0))}</div>
-                                                                    </div>
-                                                                    <div
-                                                                        className="p-3 bg-white rounded-lg border border-line cursor-pointer hover:border-black transition-colors shadow-sm group"
-                                                                        onClick={() => openAdminReportSection('inventory')}
-                                                                    >
-                                                                        <div className="text-[10px] text-secondary uppercase font-bold group-hover:text-black">Capital en inventario</div>
-                                                                        <div className="text-lg font-bold">{formatMoney(Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0))}</div>
-                                                                    </div>
-                                                                </div>
+                                                    <div className="bg-white p-4 rounded-xl border border-line shadow-sm">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div className="text-sm font-bold">Inventario</div>
+                                                            <button type="button" className="text-[11px] font-bold underline" onClick={() => openAdminReportSection('inventory')}>ver detalle</button>
+                                                        </div>
+                                                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                                            <div className="flex items-center gap-2 cursor-pointer transition-colors" onClick={() => openAdminReportSection('inventory')}>
+                                                                <span className="text-xs text-secondary font-semibold">Capital invertido:</span>
+                                                                <span className="text-sm font-bold">{formatMoney(Number(dashboardStats?.businessMetrics?.inventoryValue?.cost_value ?? 0))}</span>
                                                             </div>
-
-                                                            <div className="bg-surface rounded-lg border border-line p-4">
-                                                                <div className="flex items-center gap-2 mb-3">
-                                                                    <Icon.TrendUp size={24} className="text-success" />
-                                                                    <div className="font-bold">Indicadores financieros</div>
-                                                                </div>
-                                                                <div className="space-y-2 cursor-pointer" onClick={() => setSelectedDeepDive('profit')}>
-                                                                    <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
-                                                                        <span className="text-xs text-secondary font-bold">Margen bruto sobre venta neta</span>
-                                                                        <span className={`font-bold text-sm ${reportBalanceGrossProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceGrossMargin.toFixed(1)}%</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
-                                                                        <span className="text-xs text-secondary font-bold">Margen neto del negocio</span>
-                                                                        <span className={`font-bold text-sm ${reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceNetMargin.toFixed(1)}%</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
-                                                                        <span className="text-xs text-secondary font-bold">Margen neto pagado</span>
-                                                                        <span className={`font-bold text-sm ${reportBalanceFlowProfit >= 0 ? 'text-success' : 'text-red'}`}>{reportBalanceFlowMargin.toFixed(1)}%</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
-                                                                        <span className="text-xs text-secondary font-bold">ROI bruto sobre costo vendido</span>
-                                                                        <span className="font-bold text-sm">{reportBalanceRoi.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center py-2 border-b border-line hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
-                                                                        <span className="text-xs text-secondary font-bold">ROI neto del negocio</span>
-                                                                        <span className="font-bold text-sm">{reportBalanceNetRoi.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
-                                                                    </div>
-                                                                    <div className="text-[9px] text-secondary text-center mt-2 group-hover:text-black">Bruto descuenta producto; neto descuenta gastos registrados.</div>
-                                                                </div>
+                                                            <div className="flex items-center gap-2 cursor-pointer transition-colors" onClick={() => openAdminReportSection('inventory')}>
+                                                                <span className="text-xs text-secondary font-semibold">Valor de venta:</span>
+                                                                <span className="text-sm font-bold">{formatMoney(Number(dashboardStats?.businessMetrics?.inventoryValue?.market_value ?? 0))}</span>
                                                             </div>
+                                                            <span className="text-[11px] font-semibold text-secondary">{Number(dashboardStats?.businessMetrics?.inventoryValue?.skus_with_stock ?? 0).toLocaleString('es-EC')} con stock</span>
+                                                            {Number(inventoryHealth?.out_of_stock ?? 0) > 0 && <span className="text-[11px] text-red font-bold">{inventoryHealth?.out_of_stock} agotados</span>}
+                                                            {Number(inventoryHealth?.low_stock ?? 0) > 0 && <span className="text-[11px] text-amber-700 font-bold">{inventoryHealth?.low_stock} bajo stock</span>}
                                                         </div>
                                                     </div>
                                                 </>
@@ -5805,16 +6017,15 @@ const MyAccount = () => {
                                                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                                                             <div>
                                                                 <div className="heading6">Corte comercial de ventas</div>
-                                                                <p className="text-secondary text-xs mt-1">
-                                                                    Vista activa: {salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'} con pedidos completados o entregados.
-                                                                </p>
-                                                                <p className="text-secondary text-xs mt-1">
-                                                                    Periodo: {salesRankingView === 'month'
-                                                                        ? reportSalesPeriodLabel
-                                                                        : `${productSalesRanking?.historicalPeriod?.start || '-'} → ${productSalesRanking?.historicalPeriod?.end || '-'}`}
-                                                                </p>
+                                                                 <p className="text-secondary text-xs mt-1">
+                                                                     Vista activa: {salesRankingView === 'daily' ? 'hoy' : salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'} con pedidos completados o entregados.
+                                                                 </p>
+                                                                 <p className="text-secondary text-xs mt-1">
+                                                                     Periodo: {reportSalesPeriodLabel}
+                                                                 </p>
                                                             </div>
                                                             <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                                                            {salesRankingView !== 'daily' && (
                                                                 <label className="flex flex-col gap-1 text-[10px] uppercase font-bold text-secondary">
                                                                     Mes a consultar
                                                                     <input
@@ -5824,7 +6035,15 @@ const MyAccount = () => {
                                                                         className="px-3 py-1.5 text-sm font-semibold rounded-md border border-line bg-white text-black focus:border-black outline-none"
                                                                     />
                                                                 </label>
-                                                                <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
+                                                            )}
+                                                            <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSalesRankingView('daily')}
+                                                                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'daily' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                                    >
+                                                                        Día
+                                                                    </button>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setSalesRankingView('month')}
@@ -5843,38 +6062,57 @@ const MyAccount = () => {
                                                             </div>
                                                         </div>
 
-                                                        <div className="grid grid-cols-2 xl:grid-cols-8 gap-3">
+                                                        <div className="grid grid-cols-2 xl:grid-cols-10 gap-3">
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Pedidos vendidos</div>
-                                                                <div className="text-lg font-bold">{Number(salesRankingFinancial?.orders_count ?? 0).toLocaleString('es-EC')}</div>
+                                                                <div className="text-lg font-bold">{Number((effectiveReportData?.sales as any)?.orders_count ?? salesRankingFinancial?.orders_count ?? 0).toLocaleString('es-EC')}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Unidades vendidas</div>
-                                                                <div className="text-lg font-bold">{Number(salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')}</div>
+                                                                <div className="text-lg font-bold">{Number(totalUnitsSold ?? salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Ventas brutas</div>
-                                                                <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.gross ?? 0))}</div>
+                                                                <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.gross ?? salesRankingFinancial?.gross ?? 0))}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Ventas netas</div>
-                                                                <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0))}</div>
+                                                                <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.net ?? salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0))}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">IVA cobrado</div>
-                                                                <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.vat ?? 0))}</div>
+                                                                <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.vat ?? salesRankingFinancial?.vat ?? 0))}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Envío cobrado</div>
-                                                                <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.shipping ?? 0))}</div>
+                                                                <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.shipping ?? salesRankingFinancial?.shipping ?? 0))}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Costo de venta</div>
-                                                                <div className="text-lg font-bold">{formatMoney(Number(salesRankingFinancial?.cost ?? 0))}</div>
+                                                                <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.cost ?? salesRankingFinancial?.cost ?? 0))}</div>
+                                                            </div>
+                                                            <div className="p-3 rounded-lg border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ganancia bruta</div>
+                                                                <div className={`text-lg font-bold ${(Number((effectiveReportData?.sales as any)?.profit ?? salesRankingFinancial?.profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
+                                                                    {formatMoney(Number((effectiveReportData?.sales as any)?.profit ?? salesRankingFinancial?.profit ?? 0))}
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 rounded-lg border border-line bg-surface">
+                                                                <div className="text-[10px] uppercase font-bold text-secondary">Ganancia neta</div>
+                                                                <div className={`text-lg font-bold ${(Number((effectiveReportData?.profit as any)?.net_period_profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
+                                                                    {formatMoney(Number((effectiveReportData?.profit as any)?.net_period_profit ?? 0))}
+                                                                </div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div>
-                                                                <div className="text-lg font-bold">{Number(salesRankingFinancial?.margin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>
+                                                                <div className="text-lg font-bold">{(() => {
+                                                                    const effNet = Number((effectiveReportData?.sales as any)?.net ?? 0)
+                                                                    const effProfit = Number((effectiveReportData?.sales as any)?.profit ?? 0)
+                                                                    const effMargin = effNet > 0 ? (effProfit / effNet) * 100 : 0
+                                                                    const margin = Number(salesRankingFinancial?.margin ?? 0)
+                                                                    if (margin !== 0 && effMargin === 0) return margin.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                                                                    return effMargin.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                                                                })()}%</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -5883,9 +6121,9 @@ const MyAccount = () => {
                                                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
                                                             <div>
                                                                 <div className="heading6">Pedidos vendidos del período</div>
-                                                                <p className="text-secondary text-xs mt-1">
-                                                                    Listado de soporte con fecha, cliente, forma de entrega/pago y desglose comercial de cada venta realizada dentro de {reportSalesPeriodLabel}.
-                                                                </p>
+                                                                 <p className="text-secondary text-xs mt-1">
+                                                                     Listado de soporte con fecha, cliente, forma de entrega/pago y desglose comercial de cada venta realizada en {salesRankingView === 'daily' ? 'el día' : salesRankingView === 'historical' ? 'todo el historial' : 'el mes'} {salesRankingView === 'month' ? `de ${selectedRankingMonthLabel}` : ''} ({reportSalesPeriodLabel}).
+                                                                 </p>
                                                             </div>
                                                             <div className="text-xs font-bold text-secondary bg-surface border border-line rounded-lg px-3 py-2">
                                                                 {filteredReportSalesOrders.length.toLocaleString('es-EC')} de {reportSalesOrders.length.toLocaleString('es-EC')} venta{reportSalesOrders.length === 1 ? '' : 's'}
@@ -6145,10 +6383,10 @@ const MyAccount = () => {
                                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                                                         <div>
                                                             <div className="text-gray-400 text-sm">Estado financiero operativo para leer ingresos, costos, gastos y utilidad neta.</div>
-                                                            <div className="heading3 mt-1">{formatMoney(reportBalanceNet)}</div>
+                                                            <div className="heading3 mt-1">{formatMoney(balanceNet)}</div>
                                                             <div className="text-secondary text-xs mt-0.5">Ventas netas de {reportFinancialScopeLabel.toLowerCase()}, sin IVA ni envío.</div>
                                                         </div>
-                                                        <div className="text-xs text-secondary sm:text-right">{reportOrdersCount.toLocaleString('es-EC')} pedidos realizados • promedio {formatMoney(reportAverageOrderNet)}</div>
+                                                        <div className="text-xs text-secondary sm:text-right">{balanceOrdersCount.toLocaleString('es-EC')} pedidos realizados • promedio {formatMoney(balanceAverageOrderNet)}</div>
                                                     </div>
 
                                                     <div className="mt-3 overflow-hidden rounded-lg border border-line bg-white shadow-sm">
@@ -6156,36 +6394,36 @@ const MyAccount = () => {
                                                             <div className="px-3 py-2">
                                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">Ingresos e impuestos</div>
                                                                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Ventas brutas</span><strong>{formatMoney(reportBalanceGross)}</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Ventas netas</span><strong>{formatMoney(reportBalanceNet)}</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">IVA cobrado</span><strong className="text-orange-600">{formatMoney(reportBalanceVat)}</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Envío cobrado</span><strong>{formatMoney(reportBalanceShipping)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Ventas brutas</span><strong>{formatMoney(balanceGross)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Ventas netas</span><strong>{formatMoney(balanceNet)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">IVA cobrado</span><strong className="text-orange-600">{formatMoney(balanceVat)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Envío cobrado</span><strong>{formatMoney(balanceShipping)}</strong></div>
                                                                 </div>
                                                             </div>
                                                             <div className="px-3 py-2">
                                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">Utilidad y gastos</div>
                                                                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad bruta</span><strong className={reportBalanceGrossProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(reportBalanceGrossProfit)}</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad neta</span><strong className={reportBalanceNetProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(reportBalanceNetProfit)}</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad neta pagada</span><strong className={reportBalanceFlowProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(reportBalanceFlowProfit)}</strong></div>
-                                                                    <div className="col-span-2 text-[11px] text-secondary">Costo de venta -{formatMoney(reportBalanceCost)} • gastos del período -{formatMoney(reportBalancePeriodExpenses)}</div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad bruta</span><strong className={balanceGrossProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(balanceGrossProfit)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad neta</span><strong className={balanceNetProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(balanceNetProfit)}</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Utilidad neta pagada</span><strong className={balanceFlowProfit >= 0 ? 'text-success' : 'text-red'}>{formatMoney(balanceFlowProfit)}</strong></div>
+                                                                    <div className="col-span-2 text-[11px] text-secondary">Costo de venta -{formatMoney(balanceCost)} • gastos del período -{formatMoney(balancePeriodExpenses)}</div>
                                                                 </div>
                                                             </div>
                                                             <div className="px-3 py-2">
                                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">Márgenes</div>
                                                                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen bruto</span><strong>{reportBalanceGrossMargin.toFixed(1)}%</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen neto</span><strong className={reportBalanceNetProfit >= 0 ? 'text-black' : 'text-red'}>{reportBalanceNetMargin.toFixed(1)}%</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen de flujo</span><strong className={reportBalanceFlowProfit >= 0 ? 'text-black' : 'text-red'}>{reportBalanceFlowMargin.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen bruto</span><strong>{balanceGrossMargin.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen neto</span><strong className={balanceNetProfit >= 0 ? 'text-black' : 'text-red'}>{balanceNetMargin.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">Margen de flujo</span><strong className={balanceFlowProfit >= 0 ? 'text-black' : 'text-red'}>{balanceFlowMargin.toFixed(1)}%</strong></div>
                                                                     <div className="col-span-2 text-[11px] text-secondary">Sobre ventas netas.</div>
                                                                 </div>
                                                             </div>
                                                             <div className="px-3 py-2">
                                                                 <div className="text-[10px] uppercase text-secondary font-bold mb-1">ROI</div>
                                                                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI bruto</span><strong>{reportBalanceRoi.toFixed(1)}%</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI neto</span><strong>{reportBalanceNetRoi.toFixed(1)}%</strong></div>
-                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI neto pagado</span><strong>{reportBalanceFlowRoi.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI bruto</span><strong>{balanceRoi.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI neto</span><strong>{balanceNetRoi.toFixed(1)}%</strong></div>
+                                                                    <div className="flex justify-between gap-2"><span className="text-secondary">ROI neto pagado</span><strong>{balanceFlowRoi.toFixed(1)}%</strong></div>
                                                                     <div className="col-span-2 text-[11px] text-secondary">Neto: gastos del período. Neto pagado: solo gastos pagados del mismo período.</div>
                                                                 </div>
                                                             </div>
@@ -6198,43 +6436,47 @@ const MyAccount = () => {
                                                             <div className="space-y-2 text-sm">
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Ventas brutas facturadas</span>
-                                                                    <strong>{formatMoney(reportBalanceGross)}</strong>
+                                                                    <strong>{formatMoney(balanceGross)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Menos IVA comprometido</span>
-                                                                    <strong className="text-orange-600">-{formatMoney(reportBalanceVat)}</strong>
+                                                                    <strong className="text-orange-600">-{formatMoney(balanceVat)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Ventas netas del negocio</span>
-                                                                    <strong>{formatMoney(reportBalanceNet)}</strong>
+                                                                    <strong>{formatMoney(balanceNet)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Menos costo de venta</span>
-                                                                    <strong className="text-orange-600">-{formatMoney(reportBalanceCost)}</strong>
+                                                                    <strong className="text-orange-600">-{formatMoney(balanceCost)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-black text-white">
                                                                     <span>Utilidad bruta</span>
-                                                                    <strong>{formatMoney(reportBalanceGrossProfit)}</strong>
+                                                                    <strong>{formatMoney(balanceGrossProfit)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Menos gastos del período</span>
-                                                                    <strong className="text-orange-600">-{formatMoney(reportBalancePeriodExpenses)}</strong>
+                                                                    <strong className="text-orange-600">-{formatMoney(balancePeriodExpenses)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-black text-white">
                                                                     <span>Utilidad neta del negocio</span>
-                                                                    <strong>{formatMoney(reportBalanceNetProfit)}</strong>
+                                                                    <strong>{formatMoney(balanceNetProfit)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
                                                                     <span>Gastos pagados del período</span>
-                                                                    <strong className="text-orange-600">-{formatMoney(reportBalancePaidExpenses)}</strong>
+                                                                    <strong className="text-orange-600">-{formatMoney(balancePaidExpenses)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
-                                                                    <span>Obligaciones pendientes/vencidas</span>
-                                                                    <strong className="text-orange-600">-{formatMoney(reportBalancePendingExpenses + reportBalanceOverdueExpenses)}</strong>
+                                                                    <span>Gastos pendientes</span>
+                                                                    <strong className="text-orange-600">-{formatMoney(balancePendingExpenses)}</strong>
+                                                                </div>
+                                                                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-line">
+                                                                    <span>Gastos vencidos</span>
+                                                                    <strong className="text-orange-600">-{formatMoney(balanceOverdueExpenses)}</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-black text-white">
                                                                     <span>Utilidad neta pagada</span>
-                                                                    <strong>{formatMoney(reportBalanceFlowProfit)}</strong>
+                                                                    <strong>{formatMoney(balanceFlowProfit)}</strong>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -6337,10 +6579,12 @@ const MyAccount = () => {
                                                     <div className="mb-4 rounded-lg border border-line bg-surface px-4 py-3">
                                                         <div className="text-sm font-bold">Valorización, disponibilidad y vencimientos</div>
                                                         <p className="mt-1 text-xs text-secondary">
-                                                            Primero se muestra el capital en inventario; luego los productos que requieren reposición o revisión por fecha de vencimiento.
+                                                            Panorama general del inventario. Haz clic en las tarjetas de riesgo para ver el detalle de los productos afectados.
                                                         </p>
                                                     </div>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-6">
+
+                                                    {/* ── Financial summary row ── */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                                                         <div className="p-4 rounded-xl border border-line bg-white">
                                                             <div className="text-[10px] uppercase font-bold text-secondary mb-1">Capital en inventario</div>
                                                             <div className="text-2xl font-bold">{formatMoney(Number(inventoryValue?.cost_value ?? 0))}</div>
@@ -6356,23 +6600,110 @@ const MyAccount = () => {
                                                             <div className="text-2xl font-bold">{Number(inventoryValue?.total_items ?? 0).toLocaleString('es-EC')}</div>
                                                             <div className="text-xs text-secondary mt-1">{Number(inventoryValue?.skus_with_stock ?? 0).toLocaleString('es-EC')} productos con stock</div>
                                                         </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Stock crítico</div>
-                                                            <div className="text-2xl font-bold text-red">{Number(inventoryHealth?.out_of_stock ?? 0)}</div>
-                                                            <div className="text-xs text-secondary mt-1">Productos sin unidades disponibles</div>
-                                                        </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Bajo stock</div>
-                                                            <div className="text-2xl font-bold text-amber-700">{Number(inventoryHealth?.low_stock ?? 0)}</div>
-                                                            <div className="text-xs text-secondary mt-1">Requieren reposición preventiva</div>
-                                                        </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Vencimientos</div>
-                                                            <div className="text-2xl font-bold text-red">{Number(inventoryHealth?.expired_products ?? 0) + Number(inventoryHealth?.expiring_products ?? 0)}</div>
-                                                            <div className="text-xs text-secondary mt-1">Productos vencidos o próximos a vencer</div>
-                                                        </div>
                                                     </div>
 
+                                                    {/* ── Risk cards row ── */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-6">
+                                                        {([
+                                                            { key: 'out' as const, label: 'Sin stock', value: Number(inventoryHealth?.out_of_stock ?? 0), color: 'text-red', bg: 'bg-red-50/30', caption: 'Productos sin unidades disponibles', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0) },
+                                                            { key: 'critical' as const, label: 'Stock crítico', value: Number(inventoryHealth?.low_stock ?? 0) > 0 ? Math.min(Number(inventoryHealth?.low_stock ?? 0), 3) : 0, color: 'text-orange-600', bg: 'bg-orange-50/30', caption: 'Stock por debajo del punto crítico', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2) },
+                                                            { key: 'low' as const, label: 'Bajo stock', value: Number(inventoryHealth?.low_stock ?? 0), color: 'text-amber-700', bg: 'bg-amber-50/30', caption: 'Requieren reposición preventiva', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5) },
+                                                            { key: 'expiring' as const, label: 'Por vencer', value: Number(inventoryHealth?.expiring_products ?? 0), color: 'text-amber-600', bg: 'bg-amber-50/30', caption: 'Próximos a expirar', items: expiringInventoryItems },
+                                                            { key: 'expired' as const, label: 'Vencidos', value: Number(inventoryHealth?.expired_products ?? 0), color: 'text-red', bg: 'bg-red-50/30', caption: 'Productos ya vencidos', items: expiredInventoryItems },
+                                                            { key: 'all' as const, label: 'Capital invertido', value: `${formatMoney(Number(inventoryValue?.cost_value ?? 0))}`, color: 'text-black', bg: 'bg-surface', caption: 'Valor total del inventario', items: highValueInventoryItems.slice(0, 5) },
+                                                        ]).map((card) => (
+                                                            <div key={card.key} className="relative">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (card.key === 'all') {
+                                                                            navigateToPanelTab('inventory')
+                                                                        } else {
+                                                                            setInventoryExpandedSection(inventoryExpandedSection === card.key ? null : card.key)
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full text-left p-4 rounded-xl border border-line bg-white hover:shadow-md transition-all ${inventoryExpandedSection === card.key ? 'ring-2 ring-black shadow-md' : ''}`}
+                                                                >
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div className="text-[10px] uppercase font-bold text-secondary">{card.label}</div>
+                                                                        {card.key !== 'all' && (
+                                                                            <div className={`text-2xl font-bold ${card.color}`}>
+                                                                                {Number(card.value).toLocaleString('es-EC')}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    {card.key === 'all' && (
+                                                                        <div className="flex items-center gap-2 mt-1">
+                                                                            <div className="text-2xl font-bold">{String(card.value)}</div>
+                                                                            <span className="text-xs text-secondary font-semibold">Capital</span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="text-xs text-secondary mt-1">{card.caption}</div>
+                                                                    {card.key !== 'all' && card.items.length > 0 && (
+                                                                        <div className="mt-2 text-[11px] font-semibold text-secondary">
+                                                                            {card.items.length} producto{card.items.length === 1 ? '' : 's'}
+                                                                        </div>
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* ── Inline detail panels ── */}
+                                                    {inventoryExpandedSection === 'out' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0).length > 0 && (
+                                                        <InventoryExpandedDetail
+                                                            label="Sin stock"
+                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0).slice(0, 10)}
+                                                            stockKey="quantity"
+                                                            extraLabel="Sin ventas recientes"
+                                                            onClose={() => setInventoryExpandedSection(null)}
+                                                            onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
+                                                        />
+                                                    )}
+                                                    {inventoryExpandedSection === 'critical' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2).length > 0 && (
+                                                        <InventoryExpandedDetail
+                                                            label="Stock crítico"
+                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2).slice(0, 10)}
+                                                            stockKey="quantity"
+                                                            extraLabel="Cobertura por días"
+                                                            onClose={() => setInventoryExpandedSection(null)}
+                                                            onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
+                                                        />
+                                                    )}
+                                                    {inventoryExpandedSection === 'low' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5).length > 0 && (
+                                                        <InventoryExpandedDetail
+                                                            label="Bajo stock"
+                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5).slice(0, 10)}
+                                                            stockKey="quantity"
+                                                            extraLabel="Cobertura por días"
+                                                            onClose={() => setInventoryExpandedSection(null)}
+                                                            onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
+                                                        />
+                                                    )}
+                                                    {inventoryExpandedSection === 'expiring' && expiringInventoryItems.length > 0 && (
+                                                        <InventoryExpandedDetail
+                                                            label="Por vencer"
+                                                            items={expiringInventoryItems.slice(0, 10)}
+                                                            stockKey="quantity"
+                                                            extraLabel="Días para vencer"
+                                                            expirationKey="days_to_expire"
+                                                            onClose={() => setInventoryExpandedSection(null)}
+                                                            onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
+                                                        />
+                                                    )}
+                                                    {inventoryExpandedSection === 'expired' && expiredInventoryItems.length > 0 && (
+                                                        <InventoryExpandedDetail
+                                                            label="Vencidos"
+                                                            items={expiredInventoryItems.slice(0, 10)}
+                                                            stockKey="quantity"
+                                                            extraLabel="Días vencido"
+                                                            expirationKey="days_expired"
+                                                            onClose={() => setInventoryExpandedSection(null)}
+                                                            onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
+                                                        />
+                                                    )}
+
+                                                    {/* ── Lower sections ── */}
                                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
                                                         <div className="bg-white p-6 rounded-2xl border border-line shadow-sm">
                                                             <div className="flex items-center justify-between mb-4">
@@ -6666,23 +6997,32 @@ const MyAccount = () => {
                                                     <div>
                                                         <div className="heading6">Resumen y orden comercial</div>
                                                         <p className="text-secondary text-xs mt-1">
-                                                            Vista activa: {salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'} con ventas completadas o entregadas.
+                                                            Vista activa: {salesRankingView === 'daily' ? 'hoy' : salesRankingView === 'month' ? `mes (${selectedRankingMonthLabel})` : 'histórico total'} con ventas completadas o entregadas.
                                                         </p>
                                                         <p className="text-secondary text-xs mt-1">
-                                                            Haz clic en el nombre del producto para ver su detalle (mes e histórico).
+                                                            Haz clic en el nombre del producto para ver su detalle ({salesRankingView === 'daily' ? 'hoy' : salesRankingView === 'month' ? 'mes' : 'histórico'} e histórico).
                                                         </p>
                                                     </div>
                                                     <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-                                                        <label className="flex flex-col gap-1 text-[10px] uppercase font-bold text-secondary">
-                                                            Mes a consultar
-                                                            <input
-                                                                type="month"
-                                                                value={salesRankingMonth}
-                                                                onChange={(event) => selectReportMonth(event.target.value)}
-                                                                className="px-3 py-1.5 text-sm font-semibold rounded-md border border-line bg-white text-black focus:border-black outline-none"
-                                                            />
-                                                        </label>
+                                                        {salesRankingView !== 'daily' && (
+                                                            <label className="flex flex-col gap-1 text-[10px] uppercase font-bold text-secondary">
+                                                                Mes a consultar
+                                                                <input
+                                                                    type="month"
+                                                                    value={salesRankingMonth}
+                                                                    onChange={(event) => selectReportMonth(event.target.value)}
+                                                                    className="px-3 py-1.5 text-sm font-semibold rounded-md border border-line bg-white text-black focus:border-black outline-none"
+                                                                />
+                                                            </label>
+                                                        )}
                                                         <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSalesRankingView('daily')}
+                                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'daily' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
+                                                            >
+                                                                Día
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setSalesRankingView('month')}
@@ -6705,49 +7045,58 @@ const MyAccount = () => {
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Periodo activo</div>
                                                         <div className="text-sm font-semibold">
-                                                            {salesRankingView === 'month'
-                                                                ? `${productSalesRanking?.period?.start || '-'} → ${productSalesRanking?.period?.end || '-'}`
-                                                                : `${productSalesRanking?.historicalPeriod?.start || '-'} → ${productSalesRanking?.historicalPeriod?.end || '-'}`
+                                                            {salesRankingView === 'daily'
+                                                                ? `${productSalesRanking?.rangePeriod?.start || '-'} → ${productSalesRanking?.rangePeriod?.end || '-'}`
+                                                                : salesRankingView === 'month'
+                                                                    ? `${productSalesRanking?.period?.start || '-'} → ${productSalesRanking?.period?.end || '-'}`
+                                                                    : `${productSalesRanking?.historicalPeriod?.start || '-'} → ${productSalesRanking?.historicalPeriod?.end || '-'}`
                                                             }
                                                         </div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Pedidos vendidos</div>
-                                                        <div className="text-lg font-bold">{Number(salesRankingFinancial?.orders_count ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{Number((effectiveReportData?.sales as any)?.orders_count ?? salesRankingFinancial?.orders_count ?? 0).toLocaleString('es-EC')}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Unidades vendidas</div>
-                                                        <div className="text-lg font-bold">{Number(salesRankingTotals?.units_sold ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{Number(totalUnitsSold ?? salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Ventas brutas</div>
-                                                        <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.gross ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.gross ?? salesRankingFinancial?.gross ?? 0))}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Ventas netas</div>
-                                                        <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.net ?? salesRankingFinancial?.net ?? salesRankingTotals?.net_revenue ?? 0))}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">IVA cobrado</div>
-                                                        <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.vat ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.vat ?? salesRankingFinancial?.vat ?? 0))}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Envío cobrado</div>
-                                                        <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.shipping ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.shipping ?? salesRankingFinancial?.shipping ?? 0))}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Costo de venta</div>
-                                                        <div className="text-lg font-bold">{formatMoney(salesRankingFinancial?.cost ?? 0)}</div>
+                                                        <div className="text-lg font-bold">{formatMoney(Number((effectiveReportData?.sales as any)?.cost ?? salesRankingFinancial?.cost ?? 0))}</div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Utilidad bruta</div>
-                                                        <div className={`text-lg font-bold ${(Number(salesRankingFinancial?.profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
-                                                            {formatMoney(salesRankingFinancial?.profit ?? 0)}
+                                                        <div className={`text-lg font-bold ${(Number((effectiveReportData?.sales as any)?.profit ?? salesRankingFinancial?.profit ?? 0) >= 0) ? 'text-success' : 'text-red'}`}>
+                                                            {formatMoney(Number((effectiveReportData?.sales as any)?.profit ?? salesRankingFinancial?.profit ?? 0))}
                                                         </div>
                                                     </div>
                                                     <div className="p-3 rounded-lg border border-line bg-surface">
                                                         <div className="text-[10px] uppercase font-bold text-secondary">Margen bruto</div>
-                                                        <div className="text-lg font-bold">{Number(salesRankingFinancial?.margin ?? 0).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>
+                                                        <div className="text-lg font-bold">{(() => {
+                                                            const effNet = Number((effectiveReportData?.sales as any)?.net ?? 0)
+                                                            const effProfit = Number((effectiveReportData?.sales as any)?.profit ?? 0)
+                                                            const effMargin = effNet > 0 ? (effProfit / effNet) * 100 : 0
+                                                            const margin = Number(salesRankingFinancial?.margin ?? 0)
+                                                            if (margin !== 0 && effMargin === 0) return margin.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                                                            return effMargin.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                                                        })()}%</div>
                                                     </div>
                                                 </div>
 
@@ -7046,6 +7395,11 @@ const MyAccount = () => {
                                             onOpenProductBalance={handleOpenProductBalance}
                                             onEditProduct={handleEditProduct}
                                             onRestockProduct={handleRestockProduct}
+                                            onOpenLowStockDetail={() => handleOpenDetailModal('low')}
+                                            onOpenCriticalStockDetail={() => handleOpenDetailModal('critical')}
+                                            onOpenOutOfStockDetail={() => handleOpenDetailModal('out')}
+                                            onOpenExpiringDetail={() => handleOpenDetailModal('expiring')}
+                                            onOpenExpiredDetail={() => handleOpenDetailModal('expired')}
                                             formatMoney={formatMoney}
                                             formatIsoDate={formatIsoDate}
                                             formatDateEcuador={formatDateEcuador}
@@ -7265,50 +7619,6 @@ const MyAccount = () => {
                                                 })()}
                                             </div>
 
-                                            <div className="mb-6 rounded-xl border border-line bg-white p-5">
-                                                <div className="text-xs uppercase font-bold text-secondary mb-3">Resumen de costos e impuestos</div>
-                                                {(() => {
-                                                    const summary = dashboardStats?.businessMetrics?.salesSummary
-                                                    const profit = dashboardStats?.businessMetrics?.profitStats
-                                                    const gross = Number(summary?.gross ?? 0)
-                                                    const net = Number(summary?.net ?? 0)
-                                                    const vat = Number(summary?.vat ?? 0)
-                                                    const shipping = Number(summary?.shipping ?? 0)
-                                                    const cost = Number(profit?.cost ?? 0)
-                                                    const utilidad = Number(profit?.profit ?? 0)
-                                                    const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                                    return (
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 text-sm">
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta total</div>
-                                                                <div className="font-semibold">${format(gross)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Venta neta</div>
-                                                                <div className="font-semibold">${format(net)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">IVA cobrado</div>
-                                                                <div className="font-semibold">${format(vat)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Envío cobrado</div>
-                                                                <div className="font-semibold">${format(shipping)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Costo (COGS)</div>
-                                                                <div className="font-semibold text-orange-600">-${format(cost)}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] uppercase font-bold text-secondary">Utilidad</div>
-                                                                <div className="font-semibold text-success">${format(utilidad)}</div>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })()}
-                                                <div className="text-[11px] text-secondary mt-3">Los montos se calculan sin IVA y el envío se muestra por separado.</div>
-                                            </div>
-
                                             <div className="grid grid-cols-3 gap-6 mb-8">
                                                 <div className="p-5 rounded-xl bg-surface border border-line">
                                                     <div className="text-secondary text-xs uppercase font-bold mb-1">Margen ponderado</div>
@@ -7462,33 +7772,34 @@ const MyAccount = () => {
                                                         </thead>
                                                         <tbody>
                                                             {adminProductsList.length > 0 ? adminProductsList.map((product: any) => {
-                                                                const price = Number(product.price) || 0
-                                                                const basePrice = getProductBasePrice(product)
-                                                                const vatPart = getProductVatPart(product)
-                                                                const cost = parseMoney(product.business?.cost ?? product.cost)
-                                                                const utilidad = Math.max(basePrice - cost, 0)
-                                                                const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                                                return (
-                                                                    <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
-                                                                        <td className="py-4">
-                                                                            <div className="font-semibold text-sm">{product.name}</div>
-                                                                            <div className="text-xs text-secondary">SKU: {product.sku || product.id}</div>
-                                                                        </td>
-                                                                        <td className="py-4 font-medium text-secondary text-sm">${format(cost)}</td>
-                                                                        <td className="py-4 font-medium text-sm">${format(basePrice)}</td>
-                                                                        <td className="py-4 font-medium text-sm text-secondary">${format(vatPart)}</td>
-                                                                        <td className="py-4 font-bold text-sm">${format(price)}</td>
-                                                                        <td className="py-4 font-bold text-sm text-success">${format(utilidad)}</td>
-                                                                        <td className="py-4">
-                                                                            <span className={`px-2 py-1 rounded text-xs font-bold ${((product.business?.margin || 0) < 20) ? 'bg-red text-white' :
-                                                                                ((product.business?.margin || 0) < 35) ? 'bg-yellow text-white' : 'bg-success text-white'
-                                                                                }`}>
-                                                                                {product.business?.margin || 0}%
-                                                                            </span>
-                                                                        </td>
-                                                                    </tr>
-                                                                )
-                                                            }) : (
+                                                                 const price = Number(product.price) || 0
+                                                                 const basePrice = getProductBasePrice(product)
+                                                                 const vatPart = getProductVatPart(product)
+                                                                 const cost = parseMoney(product.business?.cost ?? product.cost)
+                                                                 const utilidad = basePrice - cost
+                                                                 const margin = basePrice > 0 ? ((basePrice - cost) / basePrice) * 100 : 0
+                                                                 const format = (val: number) => val.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                                                 return (
+                                                                     <tr key={product.id} className="border-b border-line last:border-0 hover:bg-surface duration-300">
+                                                                         <td className="py-4">
+                                                                             <div className="font-semibold text-sm">{product.name}</div>
+                                                                             <div className="text-xs text-secondary">SKU: {product.sku || product.id}</div>
+                                                                         </td>
+                                                                         <td className="py-4 font-medium text-secondary text-sm">${format(cost)}</td>
+                                                                         <td className="py-4 font-medium text-sm">${format(basePrice)}</td>
+                                                                         <td className="py-4 font-medium text-sm text-secondary">${format(vatPart)}</td>
+                                                                         <td className="py-4 font-bold text-sm">${format(price)}</td>
+                                                                         <td className={`py-4 font-bold text-sm ${utilidad >= 0 ? 'text-success' : 'text-red'}`}>${format(utilidad)}</td>
+                                                                         <td className="py-4">
+                                                                             <span className={`px-2 py-1 rounded text-xs font-bold ${margin < 20 ? 'bg-red text-white' :
+                                                                                 margin < 35 ? 'bg-yellow text-white' : 'bg-success text-white'
+                                                                                 }`}>
+                                                                                 {margin.toFixed(1)}%
+                                                                             </span>
+                                                                         </td>
+                                                                     </tr>
+                                                                 )
+                                                             }) : (
                                                                 <tr><td colSpan={7} className="py-8 text-center text-secondary">Cargando análisis de precios...</td></tr>
                                                             )}
                                                         </tbody>
@@ -8283,9 +8594,143 @@ const MyAccount = () => {
                 />
             )}
 
+            {inventoryDetailModal && (
+                <LowStockDetailModal
+                    open={true}
+                    title={
+                        inventoryDetailModal === 'low' ? 'Productos con bajo stock' :
+                        inventoryDetailModal === 'critical' ? 'Productos con stock crítico' :
+                        inventoryDetailModal === 'out' ? 'Productos sin stock' :
+                        inventoryDetailModal === 'expiring' ? 'Productos por vencer' :
+                        'Productos vencidos'
+                    }
+                    subtitle={
+                        inventoryDetailModal === 'low' ? 'Stock por debajo del punto de reorden' :
+                        inventoryDetailModal === 'critical' ? 'Stock por debajo del punto crítico — requieren atención inmediata' :
+                        inventoryDetailModal === 'out' ? 'Productos agotados que necesitan reposición urgente' :
+                        inventoryDetailModal === 'expiring' ? 'Productos perecederos próximos a vencer' :
+                        'Productos vencidos bloqueados para la venta'
+                    }
+                    accentColor={
+                        inventoryDetailModal === 'low' ? 'amber' :
+                        inventoryDetailModal === 'critical' ? 'red' :
+                        inventoryDetailModal === 'out' ? 'red' :
+                        inventoryDetailModal === 'expiring' ? 'amber' : 'red'
+                    }
+                    rows={inventoryDetailModalRows}
+                    formatMoney={formatMoney}
+                    onClose={handleCloseDetailModal}
+                    onViewInTable={handleViewDetailInTable}
+                    onRestockProduct={handleRestockProduct}
+                    onOpenProductBalance={handleOpenProductBalance}
+                    onEditProduct={handleEditProduct}
+                />
+            )}
+
             {renderDeepDive()}
         </>
     );
 };
+
+const InventoryExpandedDetail = ({
+    label,
+    items,
+    stockKey,
+    extraLabel,
+    expirationKey,
+    onClose,
+    onManage,
+}: {
+    label: string
+    items: any[]
+    stockKey: string
+    extraLabel: string
+    expirationKey?: string
+    onClose: () => void
+    onManage: () => void
+}) => (
+    <div className="mb-6 rounded-2xl border-2 border-black bg-white shadow-sm overflow-hidden animate-fadeIn">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-line bg-black text-white">
+            <div className="flex items-center gap-3">
+                <span className="text-sm font-bold uppercase tracking-wide">{label}</span>
+                <span className="text-xs bg-white/20 rounded-full px-2.5 py-0.5">{items.length} producto{items.length === 1 ? '' : 's'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={onManage}
+                    className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold hover:bg-white/90 transition-colors"
+                >
+                    Gestionar en inventario
+                </button>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                    aria-label="Cerrar detalle"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
+                    <tr>
+                        <th className="px-5 py-3">Producto</th>
+                        <th className="px-4 py-3 text-right">Stock</th>
+                        {expirationKey ? (
+                            <th className="px-4 py-3 text-right">{extraLabel}</th>
+                        ) : (
+                            <th className="px-4 py-3 text-right">{extraLabel}</th>
+                        )}
+                        {!expirationKey && (
+                            <th className="px-4 py-3 text-right">Ventas 30d</th>
+                        )}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                    {items.map((item, index) => (
+                        <tr key={`${item.name}-${index}`} className="hover:bg-surface/50 transition-colors">
+                            <td className="px-5 py-3 font-semibold">{item.name}</td>
+                            <td className={`px-4 py-3 text-right font-bold ${
+                                Number(item[stockKey] ?? 0) === 0 ? 'text-red' :
+                                Number(item[stockKey] ?? 0) <= 2 ? 'text-orange-600' : 'text-amber-700'
+                            }`}>
+                                {Number(item[stockKey] ?? 0).toLocaleString('es-EC')}
+                            </td>
+                            <td className="px-4 py-3 text-right text-secondary">
+                                {expirationKey && item[expirationKey] !== null && item[expirationKey] !== undefined
+                                    ? `${Number(item[expirationKey]).toLocaleString('es-EC')} día(s)`
+                                    : !expirationKey && (item as any).estimated_days_left !== null && (item as any).estimated_days_left !== undefined
+                                        ? `${Number((item as any).estimated_days_left ?? 0).toLocaleString('es-EC')} día(s)`
+                                        : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right text-secondary">
+                                {!expirationKey && (
+                                    Number((item as any).units_sold_30d ?? 0) > 0
+                                        ? `${Number((item as any).units_sold_30d ?? 0).toLocaleString('es-EC')} uds`
+                                        : '—'
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+        <div className="px-5 py-3 border-t border-line bg-surface text-xs text-secondary flex items-center justify-between">
+            <span>Mostrando {items.length} de {items.length} producto{items.length === 1 ? '' : 's'}</span>
+            <button
+                type="button"
+                onClick={onManage}
+                className="font-semibold underline hover:text-black transition-colors"
+            >
+                Ver todos en inventario →
+            </button>
+        </div>
+    </div>
+)
 
 export default MyAccount;

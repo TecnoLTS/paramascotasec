@@ -2,6 +2,8 @@ import { getAdminProductEntityId, isProductEligibleForPublication } from './prod
 import { getProductExpirationMeta } from './statusDisplay'
 
 export const INVENTORY_LOW_STOCK_THRESHOLD = 5
+export const INVENTORY_DEFAULT_REORDER_POINT = 5
+export const INVENTORY_DEFAULT_CRITICAL_MULTIPLIER = 0.5
 
 export type LocalSaleCatalogItem = {
   internalId: string
@@ -19,6 +21,8 @@ export type LocalSaleCatalogItem = {
   searchText: string
 }
 
+export type StockStatus = 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired'
+
 export type InventoryManagementRow = {
   internalId: string
   legacyId: string
@@ -28,7 +32,11 @@ export type InventoryManagementRow = {
   isPerishable: boolean
   sku: string
   stock: number
-  stockStatus: 'available' | 'low' | 'out' | 'expiring' | 'expired'
+  stockStatus: StockStatus
+  reorderPoint: number
+  criticalPoint: number
+  coverageDays: number | null
+  avgMonthlySales: number
   unitPrice: number
   unitCost: number
   inventoryCost: number
@@ -118,12 +126,13 @@ export const buildInventoryManagementRows = (
   adminProductsList: any[],
   parseMoney: (value: any) => number,
 ): InventoryManagementRow[] => {
-  const statusOrder: Record<InventoryManagementRow['stockStatus'], number> = {
+  const statusOrder: Record<StockStatus, number> = {
     expired: 0,
     expiring: 1,
     out: 2,
-    low: 3,
-    available: 4,
+    critical: 3,
+    low: 4,
+    available: 5,
   }
 
   return (adminProductsList || [])
@@ -161,15 +170,26 @@ export const buildInventoryManagementRows = (
       const openLotsCount = Math.max(0, Number(procurement.openLotsCount ?? 0))
       const remainingUnitsTotal = Math.max(0, Number(procurement.remainingUnitsTotal ?? stock))
       const isPerishable = expirationMeta.isFood
-      const stockStatus: InventoryManagementRow['stockStatus'] = stock <= 0
-        ? 'out'
-        : (isPerishable && expirationMeta.isExpired)
-          ? 'expired'
-          : (isPerishable && expirationMeta.expirationStatus === 'expiring')
-            ? 'expiring'
-            : stock <= INVENTORY_LOW_STOCK_THRESHOLD
-              ? 'low'
-              : 'available'
+
+      const reorderPoint = Math.max(1, Number(product.inventory?.reorderPoint ?? INVENTORY_DEFAULT_REORDER_POINT))
+      const criticalPoint = Math.max(1, Math.floor(reorderPoint * INVENTORY_DEFAULT_CRITICAL_MULTIPLIER))
+      const coverageDays = product.inventory?.coverage?.days != null ? Number(product.inventory.coverage.days) : null
+      const avgMonthlySales = Number(product.inventory?.coverage?.avgMonthlySales ?? 0)
+
+      let stockStatus: StockStatus
+      if (stock <= 0) {
+        stockStatus = 'out'
+      } else if (isPerishable && expirationMeta.isExpired) {
+        stockStatus = 'expired'
+      } else if (isPerishable && expirationMeta.expirationStatus === 'expiring') {
+        stockStatus = 'expiring'
+      } else if (stock <= criticalPoint) {
+        stockStatus = 'critical'
+      } else if (stock <= reorderPoint) {
+        stockStatus = 'low'
+      } else {
+        stockStatus = 'available'
+      }
 
       return {
         internalId,
@@ -181,6 +201,10 @@ export const buildInventoryManagementRows = (
         sku,
         stock,
         stockStatus,
+        reorderPoint,
+        criticalPoint,
+        coverageDays,
+        avgMonthlySales,
         unitPrice,
         unitCost,
         inventoryCost,

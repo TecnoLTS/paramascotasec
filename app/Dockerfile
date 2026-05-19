@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1.7
 FROM node:22-alpine
 
+ENV TZ=America/Guayaquil
+RUN apk add --no-cache tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 WORKDIR /app
 
 # Control de ambiente (development | production)

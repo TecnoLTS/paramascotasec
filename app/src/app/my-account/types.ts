@@ -110,8 +110,8 @@ export interface DashboardStats {
         count: number;
         progress: { percentage: number; current: number; previous: number };
     };
-    monthlyPerformance: Array<{ day: string, date?: string, total: number }>;
-    salesTrend30Days?: Array<{ day: string, date?: string, total: number }>;
+    monthlyPerformance: Array<{ day: string, date?: string, total: number, gross: number, cost: number }>;
+    salesTrend30Days?: Array<{ day: string, date?: string, total: number, gross: number, cost: number }>;
     topProducts?: Array<{ name: string, sold: number, revenue: number }>;
     salesByCategory?: Array<{ category: string, total: number }>;
     productAnalysis?: {
