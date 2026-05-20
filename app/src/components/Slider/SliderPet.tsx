@@ -327,8 +327,8 @@ const SliderPet = () => {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-1 z-10 flex items-center justify-center px-4 sm:bottom-8 md:bottom-10 md:px-6">
-          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 shadow-[0_6px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm sm:gap-2 sm:px-3 sm:py-2 xl:gap-3">
+        <div className="pointer-events-none absolute inset-x-0 bottom-1.5 z-10 flex items-center justify-center px-3 sm:bottom-5 md:bottom-6 md:px-4">
+          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 shadow-[0_4px_14px_rgba(0,0,0,0.14)] backdrop-blur-sm sm:gap-1.5 sm:px-2.5 sm:py-1 md:px-3 xl:gap-2">
             {slides.map((slide, index) => (
               <button
                 key={slide.id}
@@ -336,12 +336,12 @@ const SliderPet = () => {
                 aria-label={`Ir al slide ${index + 1}`}
                 aria-pressed={selectedIndex === index}
                 onClick={() => goToSlide(index)}
-                className="flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]"
+                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)] sm:h-9 sm:w-9 md:h-10 md:w-10"
               >
                 <span
-                  className={`block h-2.5 w-2.5 rounded-full border transition-all duration-300 sm:h-3 sm:w-3 ${
+                  className={`block h-2 w-2 rounded-full border transition-all duration-300 sm:h-2.5 sm:w-2.5 ${
                   selectedIndex === index
-                    ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_3px_rgba(10,123,143,0.18)] sm:shadow-[0_0_0_4px_rgba(10,123,143,0.18)]'
+                    ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_2px_rgba(10,123,143,0.18)] sm:shadow-[0_0_0_3px_rgba(10,123,143,0.18)]'
                     : 'border-[var(--blue)]/45 bg-white hover:bg-[var(--blue)]/12'
                   }`}
                 />

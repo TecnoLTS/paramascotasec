@@ -16,10 +16,10 @@ const RouteLoading = dynamic(() => import('@/components/Other/RouteLoading'), { 
 
 type ClientModalsProps = {
   serverTimeLeft: CountdownTimeType
-  initialSuggestions: Array<Partial<ProductType>>
+  initialSuggestions?: Array<Partial<ProductType>>
 }
 
-const ClientModals = ({ serverTimeLeft, initialSuggestions }: ClientModalsProps) => {
+const ClientModals = ({ serverTimeLeft, initialSuggestions = [] }: ClientModalsProps) => {
   const [mounted, setMounted] = useState(false)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const [hasOpenedCart, setHasOpenedCart] = useState(false)

@@ -250,14 +250,16 @@ export const useAdminDataLoader = ({
         if (cachedStats) {
           if (!cancelled) current.setDashboardStats(cachedStats)
         }
-        const dateQuery = `?period=${encodeURIComponent(salesRankingMonth)}`
-        tasks.push(
-          withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${dateQuery}`, { headers })).then((res) => {
-            const stats = withoutReport(res.body)
-            setCached(statsCacheKey, stats)
-            if (!cancelled) current.setDashboardStats(stats)
-          }),
-        )
+        if (!cachedStats || isPassive || adminNonceChanged) {
+          const dateQuery = `?period=${encodeURIComponent(salesRankingMonth)}&include_report=0`
+          tasks.push(
+            withTransientRetry(() => requestApi<DashboardStats>(`/api/admin/dashboard/stats${dateQuery}`, { headers })).then((res) => {
+              const stats = withoutReport(res.body)
+              setCached(statsCacheKey, stats)
+              if (!cancelled) current.setDashboardStats(stats)
+            }),
+          )
+        }
       }
 
       if (!isPassive && ADMIN_TABS_WITH_VAT_SETTINGS.has(activeTab)) {

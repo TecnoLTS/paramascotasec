@@ -6,6 +6,7 @@ import ParamascotasecHome from '@/tenants/paramascotasec.com/Home'
 import { orderProductsFoodFirst } from '@/lib/shopProductOrdering'
 import { toCanonicalUrl } from '@/lib/publicUrl'
 import { getPublicBrandLogos, getPublicProductCategoryReferences } from '@/lib/api/settings'
+import HomeHeroPreloads from '@/components/Slider/HomeHeroPreloads'
 
 export async function generateMetadata(): Promise<Metadata> {
     const site = getSiteConfig()
@@ -63,5 +64,10 @@ export default async function HomePet() {
         console.error('No se pudieron cargar categorias publicas en HomePet:', categoriesResult.reason)
     }
 
-    return <ParamascotasecHome products={products} brandLogos={brandLogos} publicCategories={publicCategories} />
+    return (
+        <>
+            <HomeHeroPreloads />
+            <ParamascotasecHome products={products} brandLogos={brandLogos} publicCategories={publicCategories} />
+        </>
+    )
 }

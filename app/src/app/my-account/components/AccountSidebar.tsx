@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
 import Image from '@/components/Common/AppImage'
 import {
     ArrowsClockwise,
@@ -99,6 +99,9 @@ export default function AccountSidebar({
     strategicAlertsCount,
     strategicCriticalCount,
 }: AccountSidebarProps) {
+    const [mobileNavOpen, setMobileNavOpen] = useState(false)
+    const isAdmin = user.role === 'admin'
+
     return (
         <div className="user-infor bg-surface lg:px-7 px-4 lg:py-10 py-5 md:rounded-[20px] rounded-xl">
             <div className="heading flex flex-col items-center justify-center">
@@ -116,8 +119,22 @@ export default function AccountSidebar({
                 <div className="name heading6 mt-4 text-center">{user.name}</div>
                 <div className="mail heading6 font-normal normal-case text-secondary text-center mt-1 break-all">{user.email}</div>
             </div>
-            <div className="menu-tab w-full max-w-none lg:mt-10 mt-6">
-                {user.role === 'admin' ? (
+            {isAdmin && (
+                <button
+                    type="button"
+                    className="mt-4 flex w-full items-center justify-between rounded-xl border border-line bg-white px-4 py-3 text-left text-sm font-bold text-black lg:hidden"
+                    onClick={() => setMobileNavOpen((open) => !open)}
+                    aria-expanded={mobileNavOpen}
+                >
+                    <span className="flex items-center gap-2">
+                        <ListChecks size={18} />
+                        Menú del panel
+                    </span>
+                    <CaretDown size={16} className={`duration-300 ${mobileNavOpen ? 'rotate-180' : ''}`} />
+                </button>
+            )}
+            <div className={`menu-tab w-full max-w-none lg:mt-10 mt-4 ${isAdmin && !mobileNavOpen ? 'hidden lg:block' : ''}`}>
+                {isAdmin ? (
                     <div className="space-y-3">
 
                         <div className="rounded-xl border border-line overflow-hidden bg-white">

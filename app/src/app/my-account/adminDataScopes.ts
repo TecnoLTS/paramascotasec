@@ -5,13 +5,6 @@ export const ADMIN_TABS_WITH_STATS = new Set([
   'sales-ranking',
   'inventory',
   'prices',
-  'taxes',
-  'margins',
-  'calculations',
-  'pricing-rules',
-  'discount-codes',
-  'expenses',
-  'product-page',
   'balances',
 ])
 

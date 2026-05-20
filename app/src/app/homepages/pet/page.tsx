@@ -2,6 +2,7 @@ import React from 'react'
 import TopNavOne from '@/components/Header/TopNav/TopNavOne'
 import MenuPet from '@/components/Header/Menu/MenuPet'
 import SliderPet from '@/components/Slider/SliderPet'
+import HomeHeroPreloads from '@/components/Slider/HomeHeroPreloads'
 import Banner from '@/components/Pet/Banner'
 import Collection from '@/components/Pet/Collection'
 import TabFeatures from '@/components/Pet/TabFeatures'
@@ -22,6 +23,7 @@ export default async function HomePet() {
 
     return (
         <>
+            <HomeHeroPreloads />
             <TopNavOne props="style-one bg-black" slogan='New customers save 10% with the code GET102222' />
             <div id="header" className='relative w-full style-pet'>
                 <MenuPet searchProducts={products} />

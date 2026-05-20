@@ -21,6 +21,7 @@ import {
     Plus,
     Receipt,
     ReceiptX,
+    SignOut,
     ShoppingBag,
     Tag,
     Target,
@@ -49,6 +50,7 @@ const Icon = {
     Plus,
     Receipt,
     ReceiptX,
+    SignOut,
     ShoppingBag,
     Tag,
     Target,
@@ -228,6 +230,49 @@ const ReportCompactMetric = ({ label, value, tone = 'text-black' }: ReportCompac
         <div className="text-[10px] uppercase font-bold leading-tight text-secondary">{label}</div>
         <div className={`mt-1 text-sm font-bold leading-tight tabular-nums break-words ${tone}`}>{value}</div>
     </div>
+)
+
+const AccountPanelHeader = ({
+    user,
+    onLogout,
+}: {
+    user: { name?: string; email?: string; role?: 'customer' | 'admin' }
+    onLogout: () => void
+}) => (
+    <header className="sticky top-0 z-[90] border-b border-line bg-white/95 backdrop-blur">
+        <div className="flex min-h-[58px] w-full items-center justify-between gap-3 px-3 sm:px-4 lg:px-6 2xl:px-8">
+            <Link href="/" className="flex items-center gap-3 min-w-0" aria-label="Ir al inicio">
+                <Image
+                    src="/images/brand/LogoVerde150.svg"
+                    width={150}
+                    height={64}
+                    alt="ParaMascotasEC"
+                    priority
+                    className="h-10 w-auto shrink-0"
+                />
+                <div className="hidden min-w-0 border-l border-line pl-3 sm:block">
+                    <div className="text-[10px] font-bold uppercase leading-tight text-secondary">Panel privado</div>
+                    <div className="truncate text-sm font-bold leading-tight text-black">
+                        {user.role === 'admin' ? 'Administración' : 'Mi cuenta'}
+                    </div>
+                </div>
+            </Link>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+                <div className="hidden min-w-0 text-right md:block">
+                    <div className="truncate text-sm font-bold leading-tight text-black">{user.name || 'Usuario'}</div>
+                    <div className="truncate text-xs leading-tight text-secondary">{user.email || ''}</div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onLogout}
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-xs font-bold text-black transition-colors hover:border-black hover:bg-white"
+                >
+                    <Icon.SignOut size={16} />
+                    <span className="hidden sm:inline">Salir</span>
+                </button>
+            </div>
+        </div>
+    </header>
 )
 
 const escapeHtml = (value: unknown) =>
@@ -1405,7 +1450,7 @@ const MyAccount = () => {
             await Promise.allSettled([
                 reloadBusinessExpensesPanel(true),
                 requestApi<Order[]>('/api/orders').then((res) => setAdminOrdersList(res.body)),
-                requestApi<DashboardStats>(`/api/admin/dashboard/stats${/^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth) ? `?period=${encodeURIComponent(salesRankingMonth)}` : ''}`).then((res) => setDashboardStats(res.body)),
+                requestApi<DashboardStats>(`/api/admin/dashboard/stats${/^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth) ? `?period=${encodeURIComponent(salesRankingMonth)}&include_report=0` : '?include_report=0'}`).then((res) => setDashboardStats(res.body)),
             ])
             invalidateAdminPanelData()
         } catch (error) {
@@ -2703,8 +2748,10 @@ const MyAccount = () => {
     } | null
 
     const reportDataRef = React.useRef<ReportDataResult>(null)
+    const reportCacheRef = React.useRef<Record<string, NonNullable<ReportDataResult>>>({})
+    const reportCacheNonceRef = React.useRef(adminReloadNonce)
     const reportAbortRef = React.useRef<AbortController | null>(null)
-    const rankingCacheRef = React.useRef<ReturnType<typeof buildSalesRankingRows> | null>(null)
+    const rankingCacheRef = React.useRef<Record<string, SalesRankingRow[]>>({})
 
     async function fetchReportData(query: string, signal?: AbortSignal): Promise<ReportDataResult> {
         const res = await requestApi<NonNullable<ReportDataResult>>(`/api/admin/report${query}`, { signal })
@@ -2712,7 +2759,16 @@ const MyAccount = () => {
     }
 
     React.useEffect(() => {
+        if (reportCacheNonceRef.current !== adminReloadNonce) {
+            reportCacheRef.current = {}
+            reportDataRef.current = null
+            reportCacheNonceRef.current = adminReloadNonce
+        }
+    }, [adminReloadNonce])
+
+    React.useEffect(() => {
         if (!user || user.role !== 'admin') return
+        if (activeTab !== 'reports' && activeTab !== 'sales-ranking') return
 
         reportAbortRef.current?.abort()
         const controller = new AbortController()
@@ -2720,26 +2776,44 @@ const MyAccount = () => {
 
         let cancelled = false
 
+        const cacheKey = salesRankingView === 'historical'
+            ? 'historical'
+            : salesRankingView === 'daily' && salesRankingDate
+                ? `daily:${salesRankingDate}`
+                : `month:${salesRankingMonth}`
         const query = salesRankingView === 'historical'
             ? '?scope=historical'
             : salesRankingView === 'daily' && salesRankingDate
                 ? `?date=${encodeURIComponent(salesRankingDate)}`
                 : `?period=${encodeURIComponent(salesRankingMonth)}`
+        const mergeReportData = (data: NonNullable<ReportDataResult>) => {
+            reportDataRef.current = data
+            setDashboardStats((prev) => {
+                if (!prev) return prev
+                return {
+                    ...prev,
+                    businessMetrics: {
+                        ...(prev.businessMetrics || {}),
+                        report: data,
+                    },
+                } as typeof prev
+            })
+        }
+
+        const cached = reportCacheRef.current[cacheKey]
+        if (cached) {
+            mergeReportData(cached)
+            return () => {
+                cancelled = true
+                controller.abort()
+            }
+        }
 
         fetchReportData(query, controller.signal)
             .then((data) => {
                 if (cancelled || !data) return
-                reportDataRef.current = data
-                setDashboardStats((prev) => {
-                    if (!prev) return prev
-                    return {
-                        ...prev,
-                        businessMetrics: {
-                            ...(prev.businessMetrics || {}),
-                            report: data,
-                        },
-                    } as typeof prev
-                })
+                reportCacheRef.current[cacheKey] = data
+                mergeReportData(data)
             })
             .catch((err) => {
                 if (!cancelled && !controller.signal.aborted && err?.name !== 'AbortError') {
@@ -2751,7 +2825,7 @@ const MyAccount = () => {
             cancelled = true
             controller.abort()
         }
-    }, [user, salesRankingView, salesRankingMonth, salesRankingDate])
+    }, [activeTab, user, salesRankingView, salesRankingMonth, salesRankingDate, adminReloadNonce])
 
     const lastPassiveRefreshAtRef = React.useRef(0)
     const lastPanelInteractionAtRef = React.useRef(0)
@@ -2991,14 +3065,22 @@ const MyAccount = () => {
     const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
     const salesTrendIsPositive = salesProgressPercentage >= 0
     const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
+    React.useEffect(() => {
+        rankingCacheRef.current = {}
+    }, [productSalesRanking])
     const periodReport = dashboardStats?.businessMetrics?.report
     const effectiveReportData = periodReport ?? reportDataRef.current
     const selectedRankingMonth = productSalesRanking?.selectedMonth || salesRankingMonth
     const selectedRankingMonthLabel = formatMonthKeyLabel(selectedRankingMonth)
     const salesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
         const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
-        return buildSalesRankingRows(productSalesRanking, resolvedView)
-    }, [productSalesRanking, salesRankingView])
+        const cacheKey = `${selectedRankingMonth}:${resolvedView}`
+        const cached = rankingCacheRef.current[cacheKey]
+        if (cached) return cached
+        const rows = buildSalesRankingRows(productSalesRanking, resolvedView)
+        rankingCacheRef.current[cacheKey] = rows
+        return rows
+    }, [productSalesRanking, salesRankingView, selectedRankingMonth])
     const reportSalesRankingRows = React.useMemo<SalesRankingRow[]>(() => {
         const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
         const reportData = reportDataRef.current
@@ -4454,8 +4536,8 @@ const MyAccount = () => {
             setLocalSaleQuoteHistory((prev) => prev.map((item) => item.id === updatedQuotation.id ? updatedQuotation : item))
             showNotification(createdOrderId ? `Venta creada desde cotización: ${createdOrderId}` : 'Cotización convertida a venta.')
             const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
-                ? `?period=${encodeURIComponent(salesRankingMonth)}`
-                : ''
+                ? `?period=${encodeURIComponent(salesRankingMonth)}&include_report=0`
+                : '?include_report=0'
             const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
                 requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT),
                 requestApi<Order[]>('/api/orders'),
@@ -4615,8 +4697,8 @@ const MyAccount = () => {
             // El XML del SRI se genera automáticamente en el backend
             // No es necesario hacer una llamada adicional
             const monthQuery = /^\d{4}-(0[1-9]|1[0-2])$/.test(salesRankingMonth)
-                ? `?period=${encodeURIComponent(salesRankingMonth)}`
-                : ''
+                ? `?period=${encodeURIComponent(salesRankingMonth)}&include_report=0`
+                : '?include_report=0'
             const [productsResult, ordersResult, statsResult] = await Promise.allSettled([
                 requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT),
                 requestApi<Order[]>('/api/orders'),
@@ -5396,7 +5478,7 @@ const MyAccount = () => {
                 <div id="header" className='relative w-full'>
                     <MenuOne props="bg-transparent" />
                 </div>
-                <div className="profile-block admin-account-shell bg-[#f7f8f6] py-4 sm:py-5 lg:py-6">
+                <div className="profile-block bg-[#f7f8f6] py-4 sm:py-5 lg:py-6">
                     <div className="w-full max-w-[1200px] mx-auto px-6 md:px-10">
                         <div className="bg-surface rounded-[20px] p-8 md:p-10 text-center">
                             <div className="heading5 text-title">
@@ -5421,9 +5503,13 @@ const MyAccount = () => {
 
     return (
         <>
-            <div id="header" className='relative w-full'>
-                <MenuOne props="bg-transparent" />
-            </div>
+            {user.role === 'admin' ? (
+                <AccountPanelHeader user={user} onLogout={handleLogout} />
+            ) : (
+                <div id="header" className='relative w-full'>
+                    <MenuOne props="bg-transparent" />
+                </div>
+            )}
 
             {message && (
                 <motion.div
@@ -5531,9 +5617,35 @@ const MyAccount = () => {
                     max-width: 100%;
                 }
 
+                .admin-account-shell .right > .tab,
+                .admin-account-shell .right .tab_address {
+                    min-width: 0;
+                }
+
+                @media (min-width: 1024px) {
+                    .admin-account-shell .left {
+                        position: sticky;
+                        top: 72px;
+                        align-self: start;
+                        max-height: calc(100vh - 84px);
+                        overflow-y: auto;
+                        scrollbar-width: thin;
+                    }
+
+                    .admin-account-shell .menu-tab {
+                        padding-bottom: 8px;
+                    }
+                }
+
                 @media (max-width: 1023px) {
                     .admin-account-shell {
                         padding-top: 12px !important;
+                    }
+
+                    .admin-account-shell .left {
+                        position: sticky;
+                        top: 58px;
+                        z-index: 30;
                     }
 
                     .admin-account-shell .user-infor {
@@ -5560,7 +5672,10 @@ const MyAccount = () => {
                     }
 
                     .admin-account-shell .menu-tab {
-                        margin-top: 14px !important;
+                        margin-top: 12px !important;
+                        max-height: min(52vh, 460px);
+                        overflow-y: auto;
+                        padding-right: 2px;
                     }
 
                     .admin-account-shell .right .heading5 {
@@ -5583,9 +5698,9 @@ const MyAccount = () => {
                 }
             `}</style>
 
-            <div className="profile-block admin-account-shell bg-[#f7f8f6] py-4 sm:py-5 lg:py-6">
-                <div className="w-full max-w-none mx-auto px-3 sm:px-4 lg:px-6 2xl:px-8">
-                    <div className="content-main grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)] gap-4 lg:gap-5 w-full min-w-0">
+            <div className={`profile-block bg-[#f7f8f6] ${user.role === 'admin' ? 'admin-account-shell py-2 sm:py-3 lg:py-4' : 'py-4 sm:py-5 lg:py-6'}`}>
+                <div className={user.role === 'admin' ? 'w-full max-w-none mx-auto px-3 sm:px-4 lg:px-6 2xl:px-8' : 'w-full max-w-[1200px] mx-auto px-6 md:px-10'}>
+                    <div className={user.role === 'admin' ? 'content-main grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)] gap-4 lg:gap-5 w-full min-w-0' : 'content-main grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-8 lg:gap-10 w-full min-w-0'}>
                         <div className="left w-full min-w-0">
                             <AccountSidebar
                                 user={user}
@@ -8531,7 +8646,7 @@ const MyAccount = () => {
                     </div>
                 </div>
             </div>
-            <Footer />
+            {user.role !== 'admin' && <Footer />}
             {(isProductModalOpen || isPurchaseInvoiceModalOpen || isProductProcurementModalOpen || isSalesProductModalOpen || isOrderModalOpen) && (
                 <PanelModals
                     isProductModalOpen={isProductModalOpen}
