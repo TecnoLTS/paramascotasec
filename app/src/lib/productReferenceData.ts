@@ -50,6 +50,8 @@ export type ProductCategoryImageReference = {
   name: string
   topImageUrl: string
   featuredImages: ProductCategoryFeaturedImages
+  showInTopSection: boolean
+  showInFeaturedSection: boolean
   showInImageSection: boolean
 }
 
@@ -309,17 +311,27 @@ export const normalizeProductCategoryImageRecord = (input: unknown): ProductCate
     || normalizeAssetUrl(source.imageUrl)
     || normalizeAssetUrl(source.image)
 
+  const legacyVisible = source.showInImageSection !== false
+  const showInTopSection = typeof source.showInTopSection === 'boolean'
+    ? source.showInTopSection
+    : legacyVisible
+  const showInFeaturedSection = typeof source.showInFeaturedSection === 'boolean'
+    ? source.showInFeaturedSection
+    : legacyVisible
+
   return {
-  name,
-  topImageUrl,
-  featuredImages: {
-    mobilePrimary: normalizeAssetUrl(featuredSource.mobilePrimary),
-    mobileSecondary: normalizeAssetUrl(featuredSource.mobileSecondary),
-    desktopPrimary: normalizeAssetUrl(featuredSource.desktopPrimary),
-    desktopSecondary: normalizeAssetUrl(featuredSource.desktopSecondary),
-  },
-  showInImageSection: source.showInImageSection !== false,
-}
+    name,
+    topImageUrl,
+    featuredImages: {
+      mobilePrimary: normalizeAssetUrl(featuredSource.mobilePrimary),
+      mobileSecondary: normalizeAssetUrl(featuredSource.mobileSecondary),
+      desktopPrimary: normalizeAssetUrl(featuredSource.desktopPrimary),
+      desktopSecondary: normalizeAssetUrl(featuredSource.desktopSecondary),
+    },
+    showInTopSection,
+    showInFeaturedSection,
+    showInImageSection: showInTopSection || showInFeaturedSection,
+  }
 }
 
 export const normalizeProductCategoryImageRecords = (input: unknown): ProductCategoryImageReference[] => {

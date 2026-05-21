@@ -268,7 +268,9 @@ export default React.memo(function BrandReferenceSectionCard({
                                 </div>
                                 <div className="min-w-0">
                                     <div className="text-sm font-semibold">{formState.logoUrl ? 'Logo cargado' : 'Sin logo seleccionado'}</div>
-                                    <p className="text-secondary text-xs mt-1">JPEG, PNG o WebP hasta 8MB.</p>
+                                    <p className="text-secondary text-xs mt-1">
+                                        Preferible PNG/WebP transparente de al menos 1200 x 480 px. Se guarda sin pérdida para evitar pixelado.
+                                    </p>
                                 </div>
                             </div>
                             <input

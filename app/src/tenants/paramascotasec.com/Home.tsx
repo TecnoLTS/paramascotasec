@@ -15,6 +15,17 @@ const DeferredAllProducts = dynamic(() => import('@/components/Product/DeferredA
 const Benefit = dynamic(() => import('@/components/Pet/Benefit'))
 const Brand = dynamic(() => import('@/components/Pet/Brand'))
 
+const normalizeHomeCategoryId = (value: string) => {
+  const normalized = value.trim().toLocaleLowerCase('es-EC')
+  if (normalized === 'ofertas') return 'descuentos'
+  if (normalized === 'todas') return 'todos'
+  if (['cuidado', 'cuidados', 'higiene'].includes(normalized)) return 'salud'
+  return normalized
+}
+
+const buildReferenceCategoryIdSet = (categories: ProductCategoryImageReference[]) =>
+  new Set(categories.map((category) => normalizeHomeCategoryId(category.name)).filter(Boolean))
+
 const ParamascotasecHome = ({
   products,
   brandLogos = [],
@@ -24,27 +35,42 @@ const ParamascotasecHome = ({
   brandLogos?: ProductBrandReference[]
   publicCategories?: ProductCategoryImageReference[]
 }) => {
-const imageSectionCategories = publicCategories.filter(
-  (category) => category.showInImageSection !== false
-)
+  const topSectionCategories = publicCategories.filter(
+    (category) => category.showInTopSection !== false
+  )
 
-const categoryCards = buildCatalogCategoryCards(products, undefined, {
-  referenceCategories: imageSectionCategories,
-})
+  const featuredSectionCategories = publicCategories.filter(
+    (category) => category.showInFeaturedSection !== false
+  )
+  const hasPublicCategoryControls = publicCategories.length > 0
+  const topSectionCategoryIds = buildReferenceCategoryIdSet(topSectionCategories)
+  const featuredSectionCategoryIds = buildReferenceCategoryIdSet(featuredSectionCategories)
 
-const allCategoryCards = buildCatalogCategoryCards(products, undefined, {
-  referenceCategories: publicCategories,
-})
+  const topCategoryCards = buildCatalogCategoryCards(products, undefined, {
+    referenceCategories: topSectionCategories,
+  })
 
-const availableCategoryIds = allCategoryCards.map((category) => category.id)
+  const featuredCategoryCards = buildCatalogCategoryCards(products, undefined, {
+    referenceCategories: featuredSectionCategories,
+  })
+
+  const allCategoryCards = buildCatalogCategoryCards(products, undefined, {
+    referenceCategories: publicCategories,
+  })
+
+  const availableCategoryIds = allCategoryCards.map((category) => category.id)
   const availableCategoryIdSet = new Set(availableCategoryIds.map((categoryId) => categoryId.toLowerCase()))
-  //const homeCategories = categoryCards.filter((category) => availableCategoryIdSet.has(category.id.toLowerCase()))
-  const homeCategories = categoryCards.filter((category) => {
-  const categoryId = category.id.toLowerCase()
-  return categoryId !== 'todos' && availableCategoryIdSet.has(categoryId)
-})
-  const homeFeaturedCategories = categoryCards
-    .filter((category) => !['todos', 'descuentos'].includes(category.id.toLowerCase()))
+  const homeCategories = topCategoryCards.filter((category) => {
+    const categoryId = category.id.toLowerCase()
+    return categoryId !== 'todos'
+      && availableCategoryIdSet.has(categoryId)
+      && (!hasPublicCategoryControls || topSectionCategoryIds.has(normalizeHomeCategoryId(category.id)))
+  })
+  const homeFeaturedCategories = featuredCategoryCards
+    .filter((category) => (
+      !['todos', 'descuentos'].includes(category.id.toLowerCase())
+      && (!hasPublicCategoryControls || featuredSectionCategoryIds.has(normalizeHomeCategoryId(category.id)))
+    ))
     .slice(0, 3)
   const footerCategoryIds = availableCategoryIds
 

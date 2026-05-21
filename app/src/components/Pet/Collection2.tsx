@@ -60,7 +60,7 @@ const Collection = ({ categories = getHomeSecondaryCategoryCards() }: Collection
                         quality={90}
                         loading="lazy"
                         sizes={options?.sizes ?? '(min-width: 1280px) 360px, (min-width: 640px) 44vw, 92vw'}
-                        className='category-card-image h-full w-full object-contain'
+                        className='category-card-image h-full w-full object-cover'
                         style={{ transform: 'none' }}
                     />
                 </div>

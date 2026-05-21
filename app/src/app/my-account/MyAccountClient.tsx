@@ -232,6 +232,21 @@ const ReportCompactMetric = ({ label, value, tone = 'text-black' }: ReportCompac
     </div>
 )
 
+type BusinessControlMetricProps = {
+    label: string
+    value: React.ReactNode
+    caption: React.ReactNode
+    tone?: string
+}
+
+const BusinessControlMetric = ({ label, value, caption, tone = 'text-black' }: BusinessControlMetricProps) => (
+    <div className="rounded-lg border border-line bg-white p-3">
+        <div className="text-[10px] uppercase font-bold leading-tight text-secondary">{label}</div>
+        <div className={`mt-1 text-lg font-bold leading-tight tabular-nums break-words ${tone}`}>{value}</div>
+        <div className="mt-1 text-[11px] leading-snug text-secondary">{caption}</div>
+    </div>
+)
+
 const AccountPanelHeader = ({
     user,
     onLogout,
@@ -941,6 +956,8 @@ const MyAccount = () => {
     const [productProcurementDetailLoading, setProductProcurementDetailLoading] = useState(false)
     const [isProductProcurementModalOpen, setIsProductProcurementModalOpen] = useState(false)
     const [vatRate, setVatRate] = useState<number>(0)
+    const [vatCreditCurrentRate, setVatCreditCurrentRate] = useState<number>(60)
+    const [vatCreditCarryforwardRate, setVatCreditCarryforwardRate] = useState<number>(40)
     const [vatLoading, setVatLoading] = useState(false)
     const [vatSaving, setVatSaving] = useState(false)
     const [shippingRates, setShippingRates] = useState<{
@@ -1902,8 +1919,10 @@ const MyAccount = () => {
         if (!user || user.role !== 'admin') return
         setVatLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<{ rate: number }>('/api/admin/settings/tax'))
+            const res = await withTransientRetry(() => requestApi<{ rate: number; credit_current_rate?: number; credit_carryforward_rate?: number }>('/api/admin/settings/tax'))
             setVatRate(Number(res.body.rate ?? 0))
+            setVatCreditCurrentRate(Number(res.body.credit_current_rate ?? 60))
+            setVatCreditCarryforwardRate(Number(res.body.credit_carryforward_rate ?? 40))
         } catch (error) {
             console.error(error)
             if (error instanceof Error && error.message.includes('401')) {
@@ -2105,7 +2124,7 @@ const MyAccount = () => {
         if (!user || user.role !== 'admin') return
         setPurchaseInvoicesLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=15'))
+            const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=200'))
             const rows = Array.isArray(res.body) ? res.body.map(normalizePurchaseInvoiceSummary) : []
             setRecentPurchaseInvoices(rows)
         } catch (error) {
@@ -2293,18 +2312,24 @@ const MyAccount = () => {
     const handleSaveVat = async () => {
         setVatSaving(true)
         try {
-            const res = await requestApi<{ rate: number }>('/api/admin/settings/tax', {
+            const res = await requestApi<{ rate: number; credit_current_rate?: number; credit_carryforward_rate?: number }>('/api/admin/settings/tax', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ rate: vatRate })
+                body: JSON.stringify({
+                    rate: vatRate,
+                    credit_current_rate: vatCreditCurrentRate,
+                    credit_carryforward_rate: vatCreditCarryforwardRate,
+                })
             })
             setVatRate(Number(res.body.rate ?? 0))
-            showNotification('IVA actualizado correctamente.')
+            setVatCreditCurrentRate(Number(res.body.credit_current_rate ?? vatCreditCurrentRate))
+            setVatCreditCarryforwardRate(Number(res.body.credit_carryforward_rate ?? vatCreditCarryforwardRate))
+            showNotification('Configuración tributaria actualizada correctamente.')
         } catch (error) {
             console.error(error)
-            showNotification('No se pudo guardar el IVA.', 'error')
+            showNotification('No se pudo guardar la configuración tributaria.', 'error')
         } finally {
             setVatSaving(false)
         }
@@ -3062,6 +3087,8 @@ const MyAccount = () => {
     const vatExampleTotal = (100 * vatDisplayMultiplier).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const vatRateValue = Number(dashboardStats?.tax?.rate ?? vatRate ?? 0)
     const vatMultiplier = 1 + vatRateValue / 100
+    const vatCreditCurrentDisplayRate = Number(dashboardStats?.tax?.credit_current_rate ?? vatCreditCurrentRate ?? 60)
+    const vatCreditCarryforwardDisplayRate = Number(dashboardStats?.tax?.credit_carryforward_rate ?? vatCreditCarryforwardRate ?? 40)
     const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
     const salesTrendIsPositive = salesProgressPercentage >= 0
     const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
@@ -3543,6 +3570,97 @@ const MyAccount = () => {
     }, [dashboardStats?.salesTrend30Days, reportFinancialSummary])
     const generalFinancialSummary = (trendRange === 'week' ? weekFinancialSummary : monthFinancialSummary) ?? reportFinancialSummary
     const inventoryValue = dashboardStats?.businessMetrics?.inventoryValue
+    const reportPurchaseInvoicesSummary = React.useMemo(() => {
+        const periodPurchases = (effectiveReportData as ReportPeriodSummary | null | undefined)?.purchase_invoices
+        if (periodPurchases) {
+            return {
+                invoicesCount: toFinancialNumber(periodPurchases.invoices_count),
+                subtotal: toFinancialNumber(periodPurchases.subtotal),
+                taxTotal: toFinancialNumber(periodPurchases.tax_total),
+                total: toFinancialNumber(periodPurchases.total),
+                unitsTotal: toFinancialNumber(periodPurchases.units_total),
+                productsCount: toFinancialNumber(periodPurchases.products_count),
+                suppliersCount: toFinancialNumber(periodPurchases.suppliers_count),
+                sourceLabel: reportFinancialScopeLabel,
+            }
+        }
+
+        const fallback = recentPurchaseInvoices.reduce((acc, invoice) => {
+            acc.invoicesCount += 1
+            acc.subtotal += toFinancialNumber(invoice.subtotal)
+            acc.taxTotal += toFinancialNumber(invoice.tax_total)
+            acc.total += toFinancialNumber(invoice.total)
+            acc.unitsTotal += toFinancialNumber(invoice.units_total)
+            acc.productsCount += toFinancialNumber(invoice.products_count)
+            if (invoice.supplier_name) {
+                acc.suppliers.add(String(invoice.supplier_name).trim().toUpperCase())
+            }
+            return acc
+        }, {
+            invoicesCount: 0,
+            subtotal: 0,
+            taxTotal: 0,
+            total: 0,
+            unitsTotal: 0,
+            productsCount: 0,
+            suppliers: new Set<string>(),
+        })
+
+        return {
+            invoicesCount: fallback.invoicesCount,
+            subtotal: fallback.subtotal,
+            taxTotal: fallback.taxTotal,
+            total: fallback.total,
+            unitsTotal: fallback.unitsTotal,
+            productsCount: fallback.productsCount,
+            suppliersCount: fallback.suppliers.size,
+            sourceLabel: 'Ultimas facturas cargadas',
+        }
+    }, [effectiveReportData, recentPurchaseInvoices, reportFinancialScopeLabel])
+    const businessControlSummary = React.useMemo(() => {
+        const inventoryCost = toFinancialNumber(inventoryValue?.cost_value)
+        const inventoryMarket = toFinancialNumber(inventoryValue?.market_value)
+        const inventoryPotentialProfit = inventoryMarket - inventoryCost
+        const vatCollected = reportFinancialSummary.vat
+        const purchaseVatCredit = reportPurchaseInvoicesSummary.taxTotal
+        const currentCreditRate = Math.max(0, Math.min(100, vatCreditCurrentDisplayRate))
+        const carryforwardCreditRate = Math.max(0, Math.min(100, vatCreditCarryforwardDisplayRate))
+        const currentUsableVatCredit = purchaseVatCredit * (currentCreditRate / 100)
+        const deferredVatCredit = purchaseVatCredit * (carryforwardCreditRate / 100)
+        const estimatedVatPayable = Math.max(vatCollected - currentUsableVatCredit, 0)
+        const estimatedVatCreditBalance = Math.max(currentUsableVatCredit - vatCollected, 0) + deferredVatCredit
+        const controlledCapitalMass = inventoryCost + reportFinancialSummary.cost + Math.max(reportFinancialSummary.pendingExpenses, 0)
+        const reinvestableCash = Math.max(reportFinancialSummary.flowProfit - estimatedVatPayable - Math.max(reportFinancialSummary.overdueExpenses, 0), 0)
+        const breakEvenGap = reportFinancialSummary.netProfit < 0 ? Math.abs(reportFinancialSummary.netProfit) : 0
+
+        return {
+            scopeLabel: reportFinancialSummary.scopeLabel,
+            purchaseSourceLabel: reportPurchaseInvoicesSummary.sourceLabel,
+            vatCollected,
+            purchaseVatCredit,
+            currentCreditRate,
+            carryforwardCreditRate,
+            currentUsableVatCredit,
+            deferredVatCredit,
+            estimatedVatPayable,
+            estimatedVatCreditBalance,
+            inventoryCost,
+            inventoryMarket,
+            inventoryPotentialProfit,
+            controlledCapitalMass,
+            recoveredCapital: reportFinancialSummary.cost,
+            netProfit: reportFinancialSummary.netProfit,
+            flowProfit: reportFinancialSummary.flowProfit,
+            reinvestableCash,
+            breakEvenGap,
+            pendingExpenses: reportFinancialSummary.pendingExpenses,
+            overdueExpenses: reportFinancialSummary.overdueExpenses,
+            purchaseInvoicesCount: reportPurchaseInvoicesSummary.invoicesCount,
+            purchaseInvoicesTotal: reportPurchaseInvoicesSummary.total,
+            purchaseUnitsTotal: reportPurchaseInvoicesSummary.unitsTotal,
+            purchaseSuppliersCount: reportPurchaseInvoicesSummary.suppliersCount,
+        }
+    }, [inventoryValue, reportFinancialSummary, reportPurchaseInvoicesSummary, vatCreditCarryforwardDisplayRate, vatCreditCurrentDisplayRate])
     const inventoryDeepDive = dashboardStats?.businessMetrics?.inventoryDeepDive
     const inventoryHealth = inventoryDeepDive?.health
     const traceabilityData = dashboardStats?.businessMetrics?.traceability
@@ -3652,6 +3770,46 @@ const MyAccount = () => {
     const productWeightedMargin = Number(dashboardStats?.productAnalysis?.weightedMargin ?? dashboardStats?.productAnalysis?.averageMargin ?? 0)
     const productMarginSampleCount = Number(dashboardStats?.productAnalysis?.pricedCostedProducts ?? 0)
     const productMissingCostCount = Number(dashboardStats?.productAnalysis?.missingCostCount ?? 0)
+    const businessControlAlerts = React.useMemo(() => {
+        const alerts: Array<{ title: string; detail: string; tone: string }> = []
+        if (businessControlSummary.overdueExpenses > 0) {
+            alerts.push({
+                title: 'Gastos vencidos',
+                detail: `${formatMoney(businessControlSummary.overdueExpenses)} vencidos afectan caja y utilidad real.`,
+                tone: 'border-red/30 bg-red/5 text-red',
+            })
+        }
+        if (businessControlSummary.breakEvenGap > 0) {
+            alerts.push({
+                title: 'Perdida del periodo',
+                detail: `Faltan ${formatMoney(businessControlSummary.breakEvenGap)} para cubrir costos y gastos.`,
+                tone: 'border-red/30 bg-red/5 text-red',
+            })
+        }
+        if (productMissingCostCount > 0) {
+            alerts.push({
+                title: 'Costos incompletos',
+                detail: `${productMissingCostCount.toLocaleString('es-EC')} producto${productMissingCostCount === 1 ? '' : 's'} sin costo confiable distorsionan utilidad e impuestos.`,
+                tone: 'border-[#F59E0B]/40 bg-[#FFF7E8] text-[#92400E]',
+            })
+        }
+        const stockRiskCount = Number(inventoryHealth?.out_of_stock ?? 0) + Number(inventoryHealth?.low_stock ?? 0)
+        if (stockRiskCount > 0) {
+            alerts.push({
+                title: 'Riesgo de reposicion',
+                detail: `${stockRiskCount.toLocaleString('es-EC')} SKU con agotado o bajo stock requieren decision de reinversion.`,
+                tone: 'border-[#F59E0B]/40 bg-[#FFF7E8] text-[#92400E]',
+            })
+        }
+        if (businessControlSummary.estimatedVatPayable > 0) {
+            alerts.push({
+                title: 'IVA por provisionar',
+                detail: `${formatMoney(businessControlSummary.estimatedVatPayable)} estimado despues de credito por compras.`,
+                tone: 'border-orange-300 bg-orange-50 text-orange-700',
+            })
+        }
+        return alerts.slice(0, 4)
+    }, [businessControlSummary, formatMoney, inventoryHealth, productMissingCostCount])
     const openSalesProductDetail = (item: SalesRankingRow) => {
         setSelectedSalesProduct(item)
         setIsSalesProductModalOpen(true)
@@ -3719,6 +3877,10 @@ const MyAccount = () => {
                 dashboardStats,
                 financialScopeLabel: reportFinancialScopeLabel,
                 financialSummary: reportFinancialSummary,
+                taxPolicy: {
+                    creditCurrentRate: vatCreditCurrentDisplayRate,
+                    creditCarryforwardRate: vatCreditCarryforwardDisplayRate,
+                },
                 salesOrders: filteredReportSalesOrders,
                 salesRankingRows: reportSalesRankingRows,
                 salesCategories: reportSalesCategories,
@@ -3747,6 +3909,8 @@ const MyAccount = () => {
         selectedRankingMonth,
         selectedRankingMonthLabel,
         showNotification,
+        vatCreditCarryforwardDisplayRate,
+        vatCreditCurrentDisplayRate,
     ])
     const filteredInventoryRows = React.useMemo(() => {
         if (!inventoryViewActive) {
@@ -5796,6 +5960,24 @@ const MyAccount = () => {
                                             </div>
 
                                             {adminReportSection === 'general' && (
+                                                <div className="mb-5 flex flex-col gap-2 rounded-lg border border-line bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div>
+                                                        <div className="text-sm font-bold">Control financiero completo</div>
+                                                        <p className="mt-0.5 text-xs text-secondary">
+                                                            Disponible en Balance con IVA utilizable {businessControlSummary.currentCreditRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}% y diferido {businessControlSummary.carryforwardCreditRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}%.
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="w-fit rounded-lg border border-black bg-black px-3 py-1.5 text-xs font-bold text-white hover:bg-white hover:text-black"
+                                                        onClick={() => openAdminReportSection('balance')}
+                                                    >
+                                                        Abrir balance
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {adminReportSection === 'general' && (
                                                 <>
                                                     <div className="flex items-start justify-between mb-4">
                                                         <div className="flex flex-col gap-2">
@@ -6639,6 +6821,93 @@ const MyAccount = () => {
                                                                 </button>
                                                             </div>
                                                         </div>
+                                                    </div>
+
+                                                    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+                                                        <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                                                            <div>
+                                                                <div className="text-sm font-bold">Control financiero del negocio</div>
+                                                                <p className="mt-1 text-xs text-secondary">
+                                                                    {businessControlSummary.scopeLabel} · compras: {businessControlSummary.purchaseSourceLabel} · {businessControlSummary.purchaseInvoicesCount.toLocaleString('es-EC')} factura{businessControlSummary.purchaseInvoicesCount === 1 ? '' : 's'} de compra
+                                                                </p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                className="w-fit rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold hover:bg-surface"
+                                                                onClick={() => navigateToPanelTab('expenses')}
+                                                            >
+                                                                Registrar gastos y compras
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                                            <BusinessControlMetric
+                                                                label="IVA cobrado"
+                                                                value={formatMoney(businessControlSummary.vatCollected)}
+                                                                caption="Impuesto generado por ventas realizadas."
+                                                                tone="text-orange-700"
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Credito IVA utilizable"
+                                                                value={formatMoney(businessControlSummary.currentUsableVatCredit)}
+                                                                caption={`${businessControlSummary.currentCreditRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}% de ${formatMoney(businessControlSummary.purchaseVatCredit)} en compras.`}
+                                                                tone="text-success"
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="IVA neto estimado"
+                                                                value={businessControlSummary.estimatedVatPayable > 0 ? formatMoney(businessControlSummary.estimatedVatPayable) : formatMoney(0)}
+                                                                caption={businessControlSummary.estimatedVatCreditBalance > 0 ? `Credito/diferido a favor ${formatMoney(businessControlSummary.estimatedVatCreditBalance)}` : 'IVA cobrado menos credito utilizable.'}
+                                                                tone={businessControlSummary.estimatedVatPayable > 0 ? 'text-orange-700' : 'text-success'}
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Credito diferido"
+                                                                value={formatMoney(businessControlSummary.deferredVatCredit)}
+                                                                caption={`${businessControlSummary.carryforwardCreditRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}% parametrizado para el mes siguiente.`}
+                                                                tone="text-secondary"
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Masa invertida controlada"
+                                                                value={formatMoney(businessControlSummary.controlledCapitalMass)}
+                                                                caption="Inventario a costo + costo vendido + obligaciones pendientes."
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Capital en inventario"
+                                                                value={formatMoney(businessControlSummary.inventoryCost)}
+                                                                caption={`Valor de venta potencial ${formatMoney(businessControlSummary.inventoryMarket)}.`}
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Ganancia potencial stock"
+                                                                value={formatMoney(businessControlSummary.inventoryPotentialProfit)}
+                                                                caption="Diferencia entre valor de venta y costo del inventario actual."
+                                                                tone={businessControlSummary.inventoryPotentialProfit >= 0 ? 'text-success' : 'text-red'}
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Capital recuperado"
+                                                                value={formatMoney(businessControlSummary.recoveredCapital)}
+                                                                caption="Costo FIFO de productos ya vendido en el periodo."
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Utilidad neta"
+                                                                value={formatMoney(businessControlSummary.netProfit)}
+                                                                caption={`Flujo neto pagado ${formatMoney(businessControlSummary.flowProfit)}.`}
+                                                                tone={businessControlSummary.netProfit >= 0 ? 'text-success' : 'text-red'}
+                                                            />
+                                                            <BusinessControlMetric
+                                                                label="Caja reinvertible"
+                                                                value={formatMoney(businessControlSummary.reinvestableCash)}
+                                                                caption="Flujo neto descontando IVA estimado y gastos vencidos."
+                                                                tone={businessControlSummary.reinvestableCash > 0 ? 'text-success' : 'text-secondary'}
+                                                            />
+                                                        </div>
+                                                        {businessControlAlerts.length > 0 && (
+                                                            <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                                                {businessControlAlerts.map((alert) => (
+                                                                    <div key={alert.title} className={`rounded-lg border px-3 py-2 ${alert.tone}`}>
+                                                                        <div className="text-xs font-bold">{alert.title}</div>
+                                                                        <div className="mt-0.5 text-[11px] leading-snug">{alert.detail}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     <div className="heading6 mb-4 mt-10">Movimientos recientes del balance</div>
@@ -7610,10 +7879,10 @@ const MyAccount = () => {
                                     {activeTab === 'taxes' && (
                                         <div className="tab text-content w-full">
                                             <div className="heading5 pb-4">Impuestos y cargos</div>
-                                            <p className="text-secondary mb-6">Configura IVA general de la tienda. La operación de envíos y mapa está en la pestaña <span className="font-semibold text-black">Envíos y mapa</span>.</p>
+                                            <p className="text-secondary mb-6">Configura IVA general y comportamiento tributario SRI usado por el balance. La operación de envíos y mapa está en la pestaña <span className="font-semibold text-black">Envíos y mapa</span>.</p>
                                             <div className="mb-8 p-6 rounded-xl border border-line bg-surface">
-                                                <div className="flex flex-col md:flex-row md:items-end gap-4">
-                                                    <div className="flex-1 group">
+                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr,1fr,1fr,auto] lg:items-end">
+                                                    <div className="group">
                                                         <label
                                                             htmlFor="vatRate"
                                                             className="text-secondary text-xs uppercase font-bold mb-2 block"
@@ -7636,13 +7905,50 @@ const MyAccount = () => {
                                                             Subir el IVA aumenta el total pagado por el cliente, pero no cambia la utilidad del producto.
                                                         </p>
                                                     </div>
+                                                    <div>
+                                                        <label htmlFor="vatCreditCurrentRate" className="text-secondary text-xs uppercase font-bold mb-2 block">
+                                                            Credito utilizable (%)
+                                                        </label>
+                                                        <input
+                                                            id="vatCreditCurrentRate"
+                                                            type="number"
+                                                            step="1"
+                                                            min="0"
+                                                            max="100"
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={vatCreditCurrentRate}
+                                                            onChange={(e) => setVatCreditCurrentRate(Number(e.target.value))}
+                                                            disabled={vatLoading || vatSaving}
+                                                        />
+                                                        <p className="text-secondary text-xs mt-2">Porcentaje del IVA de compras aplicable al período actual.</p>
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="vatCreditCarryforwardRate" className="text-secondary text-xs uppercase font-bold mb-2 block">
+                                                            Credito diferido (%)
+                                                        </label>
+                                                        <input
+                                                            id="vatCreditCarryforwardRate"
+                                                            type="number"
+                                                            step="1"
+                                                            min="0"
+                                                            max="100"
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={vatCreditCarryforwardRate}
+                                                            onChange={(e) => setVatCreditCarryforwardRate(Number(e.target.value))}
+                                                            disabled={vatLoading || vatSaving}
+                                                        />
+                                                        <p className="text-secondary text-xs mt-2">Porcentaje que se reserva como crédito para el siguiente mes.</p>
+                                                    </div>
                                                     <button
                                                         className="button-main py-2 px-6"
                                                         onClick={handleSaveVat}
                                                         disabled={vatLoading || vatSaving}
                                                     >
-                                                        {vatSaving ? 'Guardando...' : 'Guardar IVA'}
+                                                        {vatSaving ? 'Guardando...' : 'Guardar impuestos'}
                                                     </button>
+                                                </div>
+                                                <div className="mt-4 rounded-lg border border-line bg-white px-4 py-3 text-xs text-secondary">
+                                                    Parametros actuales del balance: IVA compras utilizable {vatCreditCurrentDisplayRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}% · diferido {vatCreditCarryforwardDisplayRate.toLocaleString('es-EC', { maximumFractionDigits: 1 })}%. Si el SRI cambia la regla, ajusta estos porcentajes aqui.
                                                 </div>
                                             </div>
                                             <div className="mb-8 p-6 rounded-xl border border-line bg-surface">

@@ -38,6 +38,15 @@ export type ReportPeriodSummary = {
         overdue_count: number;
     };
     adjustments?: { total?: number; count?: number };
+    purchase_invoices?: {
+        invoices_count: number;
+        subtotal: number;
+        tax_total: number;
+        total: number;
+        units_total: number;
+        products_count: number;
+        suppliers_count: number;
+    };
     orders: Array<{
         id: string;
         created_at: string;
@@ -123,7 +132,7 @@ export interface DashboardStats {
         totalMonitored: number;
         pricedCostedProducts?: number;
     };
-    tax?: { rate: number; multiplier: number };
+    tax?: { rate: number; multiplier: number; credit_current_rate?: number; credit_carryforward_rate?: number };
     businessMetrics?: {
         averageOrderValue: number;
         salesSummary?: {

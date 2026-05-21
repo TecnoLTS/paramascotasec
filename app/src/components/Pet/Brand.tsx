@@ -50,6 +50,7 @@ const Brand = ({ products = [], brandReferences = [] }: BrandProps) => {
                             spaceBetween={12}
                             slidesPerView={2}
                             loop={enableLoop}
+                            roundLengths
                             modules={[Autoplay]}
                             autoplay={{
                                 delay: 4000,
@@ -79,8 +80,10 @@ const Brand = ({ products = [], brandReferences = [] }: BrandProps) => {
                                         <img
                                             src={brand.logoUrl}
                                             alt={`Logo ${brand.name}`}
-                                            className="max-h-[52px] max-w-[140px] object-contain"
+                                            className="block h-auto max-h-[52px] w-auto max-w-[140px] object-contain"
                                             loading="lazy"
+                                            decoding="async"
+                                            draggable={false}
                                         />
                                     </div>
                                 </SwiperSlide>

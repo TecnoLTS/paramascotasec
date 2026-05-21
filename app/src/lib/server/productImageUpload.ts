@@ -273,8 +273,8 @@ export const handleProductImageUpload = async (req: Request) => {
       const image = sharp(buffer, { failOn: 'warning' }).rotate()
       if (kindValue === 'brandLogo') {
         webpBuffer = await image
-          .resize({ width: 600, height: 240, fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 90, effort: 5 })
+          .resize({ width: 1200, height: 480, fit: 'inside', withoutEnlargement: true })
+          .webp({ lossless: true, effort: 6 })
           .toBuffer()
       } else if (isCategoryImageKind(kindValue)) {
         const spec = categoryImageSpecs[kindValue]

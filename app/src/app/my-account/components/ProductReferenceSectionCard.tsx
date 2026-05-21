@@ -11,18 +11,23 @@ import type {
 type CategoryImageRequirement = {
     key: 'topImageUrl' | 'mobilePrimary' | 'mobileSecondary' | 'desktopPrimary' | 'desktopSecondary';
     kind: 'categoryTop' | 'categoryFeaturedMobilePrimary' | 'categoryFeaturedMobileSecondary' | 'categoryFeaturedDesktopPrimary' | 'categoryFeaturedDesktopSecondary';
+    section: 'top' | 'featured';
     label: string;
     dimensions: string;
+    previewAspectClass: string;
     helper: string;
 }
 
 const categoryImageRequirements: CategoryImageRequirement[] = [
-    { key: 'topImageUrl', kind: 'categoryTop', label: 'Tarjeta superior', dimensions: '1200 x 1500 px', helper: 'Proporción 4:5 para el carril principal de categorías.' },
-    { key: 'mobilePrimary', kind: 'categoryFeaturedMobilePrimary', label: 'Banner2 móvil principal', dimensions: '1176 x 736 px', helper: 'Proporción 16:10 para el primer bloque móvil.' },
-    { key: 'mobileSecondary', kind: 'categoryFeaturedMobileSecondary', label: 'Banner2 móvil secundaria', dimensions: '588 x 588 px', helper: 'Proporción 1:1 para bloques secundarios móviles.' },
-    { key: 'desktopPrimary', kind: 'categoryFeaturedDesktopPrimary', label: 'Banner2 desktop principal', dimensions: '1260 x 1240 px', helper: 'Proporción 630:620 para la tarjeta grande desktop.' },
-    { key: 'desktopSecondary', kind: 'categoryFeaturedDesktopSecondary', label: 'Banner2 desktop secundaria', dimensions: '1260 x 590 px', helper: 'Proporción 630:295 para tarjetas horizontales desktop.' },
+    { key: 'topImageUrl', kind: 'categoryTop', section: 'top', label: 'Superior 4:5', dimensions: '1200 x 1500 px', previewAspectClass: 'aspect-[4/5]', helper: 'Genera o recorta en vertical 4:5. Mantén el producto centrado y deja margen superior e inferior.' },
+    { key: 'mobilePrimary', kind: 'categoryFeaturedMobilePrimary', section: 'featured', label: 'Inferior móvil grande', dimensions: '1176 x 736 px', previewAspectClass: 'aspect-[16/10]', helper: 'Genera o recorta en horizontal 16:10 para el slot destacado 1 en móvil.' },
+    { key: 'mobileSecondary', kind: 'categoryFeaturedMobileSecondary', section: 'featured', label: 'Inferior móvil pequeña', dimensions: '588 x 588 px', previewAspectClass: 'aspect-square', helper: 'Genera o recorta en cuadrado 1:1 para los slots destacados 2 y 3 en móvil.' },
+    { key: 'desktopPrimary', kind: 'categoryFeaturedDesktopPrimary', section: 'featured', label: 'Inferior desktop grande', dimensions: '1260 x 1240 px', previewAspectClass: 'aspect-[630/620]', helper: 'Genera o recorta casi cuadrada para el slot grande izquierdo. Deja aire alrededor del sujeto principal.' },
+    { key: 'desktopSecondary', kind: 'categoryFeaturedDesktopSecondary', section: 'featured', label: 'Inferior desktop horizontal', dimensions: '1260 x 590 px', previewAspectClass: 'aspect-[630/295]', helper: 'Genera una imagen horizontal nueva. No reutilices una vertical o cuadrada: se recortará. Mantén cara, cuerpo/producto y texto visual dentro del 70% central.' },
 ]
+
+const topCategoryImageRequirements = categoryImageRequirements.filter((requirement) => requirement.section === 'top')
+const featuredCategoryImageRequirements = categoryImageRequirements.filter((requirement) => requirement.section === 'featured')
 
 type CategoryImageFiles = Partial<Record<CategoryImageRequirement['key'], File>>
 type CategoryImageUrlMap = Record<CategoryImageRequirement['key'], string>
@@ -215,9 +220,65 @@ export default React.memo(function ProductReferenceSectionCard({
         return categoryImages.find((item) => aliases.includes(normalizeComparable(item.name)))
     }, [categoryImages])
 
+    const getCategoryTopVisibility = React.useCallback((categoryName: string) => {
+        const reference = getCategoryImageReference(categoryName)
+        return reference?.showInTopSection ?? reference?.showInImageSection ?? true
+    }, [getCategoryImageReference])
+
+    const getCategoryFeaturedVisibility = React.useCallback((categoryName: string) => {
+        const reference = getCategoryImageReference(categoryName)
+        return reference?.showInFeaturedSection ?? reference?.showInImageSection ?? true
+    }, [getCategoryImageReference])
+
+    const updateCategoryVisibility = React.useCallback((
+        categoryName: string,
+        key: 'showInTopSection' | 'showInFeaturedSection',
+        checked: boolean,
+    ) => {
+        const existingReference = getCategoryImageReference(categoryName)
+        const currentTop = existingReference?.showInTopSection ?? existingReference?.showInImageSection ?? true
+        const currentFeatured = existingReference?.showInFeaturedSection ?? existingReference?.showInImageSection ?? true
+        const nextTop = key === 'showInTopSection' ? checked : currentTop
+        const nextFeatured = key === 'showInFeaturedSection' ? checked : currentFeatured
+
+        const nextReference = {
+            name: existingReference?.name ?? categoryName,
+            topImageUrl: existingReference?.topImageUrl ?? '',
+            featuredImages: {
+                mobilePrimary: existingReference?.featuredImages?.mobilePrimary ?? '',
+                mobileSecondary: existingReference?.featuredImages?.mobileSecondary ?? '',
+                desktopPrimary: existingReference?.featuredImages?.desktopPrimary ?? '',
+                desktopSecondary: existingReference?.featuredImages?.desktopSecondary ?? '',
+            },
+            showInTopSection: nextTop,
+            showInFeaturedSection: nextFeatured,
+            showInImageSection: nextTop || nextFeatured,
+        }
+
+        const nextImages = existingReference
+            ? categoryImages.map((item) => (
+                normalizeComparable(item.name) === normalizeComparable(existingReference.name)
+                    ? nextReference
+                    : item
+            ))
+            : [...categoryImages, nextReference]
+
+        emitCategoryChange(values, nextImages)
+    }, [categoryImages, emitCategoryChange, getCategoryImageReference, values])
+
     const selectedCategoryImageReference = React.useMemo(
         () => selectedImageCategory ? getCategoryImageReference(selectedImageCategory) : undefined,
         [getCategoryImageReference, selectedImageCategory]
+    )
+
+    const topVisibleCategoryCount = React.useMemo(
+        () => visibleValues.filter((value) => getCategoryTopVisibility(value)).length,
+        [getCategoryTopVisibility, visibleValues]
+    )
+
+    const featuredVisibleCategories = React.useMemo(
+        () => visibleValues.filter((value) => getCategoryFeaturedVisibility(value)),
+        [getCategoryFeaturedVisibility, visibleValues]
     )
 
     const selectedCategoryCompleteCount = React.useMemo(() => {
@@ -258,7 +319,17 @@ export default React.memo(function ProductReferenceSectionCard({
                     desktopPrimary: images.desktopPrimary,
                     desktopSecondary: images.desktopSecondary,
                 },
-                showInImageSection: currentReference?.showInImageSection !== false,
+                showInTopSection: currentReference?.showInTopSection ?? currentReference?.showInImageSection ?? true,
+                showInFeaturedSection: currentReference?.showInFeaturedSection ?? currentReference?.showInImageSection ?? true,
+                showInImageSection: (
+                    currentReference?.showInTopSection
+                    ?? currentReference?.showInImageSection
+                    ?? true
+                ) || (
+                    currentReference?.showInFeaturedSection
+                    ?? currentReference?.showInImageSection
+                    ?? true
+                ),
             },
         ]
 
@@ -351,6 +422,8 @@ export default React.memo(function ProductReferenceSectionCard({
                             desktopPrimary: uploaded.desktopPrimary,
                             desktopSecondary: uploaded.desktopSecondary,
                         },
+                        showInTopSection: true,
+                        showInFeaturedSection: true,
                         showInImageSection: true,
                     },
                 ]
@@ -613,6 +686,59 @@ export default React.memo(function ProductReferenceSectionCard({
                 </div>
             </div>
 
+            {isCategorySection && (
+                <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold">Control de categorías en portada</div>
+                            <p className="mt-1 max-w-3xl text-xs text-secondary">
+                                La sección superior muestra todas las categorías marcadas como “Home superior”. El bloque destacado muestra solo las primeras 3 marcadas como “Destacada”, siguiendo el orden de esta lista.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+                            <div className="rounded-xl border border-line bg-white px-3 py-2">
+                                <div className="text-[10px] uppercase font-bold text-secondary">Home superior</div>
+                                <div className="mt-1 text-lg font-bold">{topVisibleCategoryCount}</div>
+                            </div>
+                            <div className="rounded-xl border border-line bg-white px-3 py-2">
+                                <div className="text-[10px] uppercase font-bold text-secondary">Destacadas</div>
+                                <div className="mt-1 text-lg font-bold">{Math.min(featuredVisibleCategories.length, 3)}/3</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                        {featuredVisibleCategories.slice(0, 3).map((category, index) => (
+                            <div key={`featured-slot-${category}`} className="rounded-xl border border-line bg-white p-3">
+                                <div className="text-[10px] uppercase font-bold text-secondary">
+                                    Slot {index + 1}
+                                </div>
+                                <div className="mt-1 text-sm font-semibold">{category}</div>
+                                <div className="mt-1 text-xs text-secondary">
+                                    {index === 0 ? 'Tarjeta grande izquierda' : `Tarjeta derecha ${index}`}
+                                </div>
+                            </div>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - featuredVisibleCategories.length) }).map((_, index) => (
+                            <div key={`featured-empty-slot-${index}`} className="rounded-xl border border-dashed border-orange-300 bg-white/70 p-3">
+                                <div className="text-[10px] uppercase font-bold text-orange-700">
+                                    Slot pendiente
+                                </div>
+                                <div className="mt-1 text-xs text-secondary">
+                                    Marca una categoría como destacada para completar el bloque inferior.
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {featuredVisibleCategories.length > 3 && (
+                        <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+                            Hay {featuredVisibleCategories.length} categorías marcadas como destacadas; la portada usa solo las primeras 3. Usa las flechas para ordenar o desmarca las que no deben aparecer en el bloque inferior.
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="mt-5 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5">
                 <div>
                     <div className="rounded-2xl border border-line bg-surface/50 p-4">
@@ -640,13 +766,15 @@ export default React.memo(function ProductReferenceSectionCard({
                         </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl border border-line overflow-hidden">
+                    <div className="mt-4 rounded-2xl border border-line overflow-x-auto">
                         <div className={`grid ${isCategorySection
-                            ? 'grid-cols-[minmax(0,1fr)_108px_118px] sm:grid-cols-[minmax(0,1fr)_130px_145px]'
+                            ? 'min-w-[680px] grid-cols-[minmax(0,1fr)_104px_104px_110px_118px]'
                             : 'grid-cols-[minmax(0,1fr)_110px] sm:grid-cols-[minmax(0,1fr)_132px]'
                             } bg-surface/70 px-4 py-3 text-[11px] uppercase font-bold text-secondary tracking-wide`}>
                             <div>{section.title}</div>
-                            {isCategorySection && <div className="text-center">Imagen</div>}
+                            {isCategorySection && <div className="text-center">Home superior</div>}
+                            {isCategorySection && <div className="text-center">Destacada</div>}
+                            {isCategorySection && <div className="text-center">Imágenes</div>}
                             <div className="text-right">Acciones</div>
                         </div>
 
@@ -655,6 +783,8 @@ export default React.memo(function ProductReferenceSectionCard({
                                 const isEditing = editingValue === value
                                 const imageReference = isCategorySection ? getCategoryImageReference(value) : undefined
                                 const topImageUrl = imageReference?.topImageUrl || ''
+                                const showInTopSection = isCategorySection ? getCategoryTopVisibility(value) : false
+                                const showInFeaturedSection = isCategorySection ? getCategoryFeaturedVisibility(value) : false
                                 const completeImageCount = isCategorySection
                                     ? categoryImageRequirements.filter((requirement) => getCategoryReferenceImage(imageReference, requirement)).length
                                     : 0
@@ -663,12 +793,12 @@ export default React.memo(function ProductReferenceSectionCard({
                                     <div
                                         key={`${section.key}-${value}`}
                                         className={`grid ${isCategorySection
-                                            ? 'grid-cols-[minmax(0,1fr)_108px_118px] sm:grid-cols-[minmax(0,1fr)_130px_145px]'
+                                            ? 'min-w-[680px] grid-cols-[minmax(0,1fr)_104px_104px_110px_118px]'
                                             : 'grid-cols-[minmax(0,1fr)_110px] sm:grid-cols-[minmax(0,1fr)_132px]'
                                             } items-center gap-3 px-4 py-3 bg-white`}
                                     >
                                         {isEditing ? (
-                                            <div className={`${isCategorySection ? 'col-span-3' : 'col-span-2'} flex flex-col lg:flex-row gap-2`}>
+                                            <div className={`${isCategorySection ? 'col-span-5' : 'col-span-2'} flex flex-col lg:flex-row gap-2`}>
                                                 <input
                                                     className="border border-line rounded-xl px-3 py-2.5 w-full outline-none transition-all focus:border-black"
                                                     value={editingDraft}
@@ -704,46 +834,33 @@ export default React.memo(function ProductReferenceSectionCard({
                                             <>
                                                 <div className="min-w-0">
                                                     <div className="font-semibold text-sm break-words">{value}</div>
-
-                                                    {isCategorySection && (
-                                                        <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-secondary cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="accent-black"
-                                                                checked={imageReference?.showInImageSection !== false}
-                                                                onChange={(event) => {
-                                                                    const checked = event.target.checked
-                                                                    const existingReference = getCategoryImageReference(value)
-
-                                                                    const nextImages = existingReference
-                                                                        ? categoryImages.map((item) => (
-                                                                            normalizeComparable(item.name) === normalizeComparable(existingReference.name)
-                                                                                ? { ...item, showInImageSection: checked }
-                                                                                : item
-                                                                        ))
-                                                                        : [
-                                                                            ...categoryImages,
-                                                                            {
-                                                                                name: value,
-                                                                                topImageUrl: '',
-                                                                                featuredImages: {
-                                                                                    mobilePrimary: '',
-                                                                                    mobileSecondary: '',
-                                                                                    desktopPrimary: '',
-                                                                                    desktopSecondary: '',
-                                                                                },
-                                                                                showInImageSection: checked,
-                                                                            },
-                                                                        ]
-
-                                                                    emitCategoryChange(values, nextImages)
-                                                                }}
-                                                                disabled={saving || uploadingCategoryImages}
-                                                            />
-                                                            Mostrar en sección de imágenes
-                                                        </label>
-                                                    )}
                                                 </div>
+
+                                                {isCategorySection && (
+                                                    <label className="flex items-center justify-center gap-2 text-[11px] font-semibold text-secondary cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="accent-black"
+                                                            checked={showInTopSection}
+                                                            onChange={(event) => updateCategoryVisibility(value, 'showInTopSection', event.target.checked)}
+                                                            disabled={saving || uploadingCategoryImages}
+                                                        />
+                                                        Ver
+                                                    </label>
+                                                )}
+
+                                                {isCategorySection && (
+                                                    <label className="flex items-center justify-center gap-2 text-[11px] font-semibold text-secondary cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="accent-black"
+                                                            checked={showInFeaturedSection}
+                                                            onChange={(event) => updateCategoryVisibility(value, 'showInFeaturedSection', event.target.checked)}
+                                                            disabled={saving || uploadingCategoryImages}
+                                                        />
+                                                        Ver
+                                                    </label>
+                                                )}
 
                                                 {isCategorySection && (
                                                     <button
@@ -873,7 +990,7 @@ export default React.memo(function ProductReferenceSectionCard({
                         <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3">
                             <div className="flex items-center justify-between gap-3">
                                 <div className="text-xs font-bold uppercase text-primary">
-                                    Imágenes requeridas
+                                    Cargas de portada
                                 </div>
 
                                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${newCategoryCompleteCount === categoryImageRequirements.length
@@ -885,68 +1002,90 @@ export default React.memo(function ProductReferenceSectionCard({
                             </div>
 
                             <p className="mt-2 text-xs text-secondary">
-                                Carga las 5 imágenes antes de agregar la categoría. Se mostrarán previews para revisar cada archivo.
+                                Carga la imagen superior y las variantes del bloque inferior. Cada preview usa la proporción real donde se verá en la home.
                             </p>
 
-                            <div className="mt-3 space-y-3">
-                                {categoryImageRequirements.map((requirement) => {
-                                    const selectedFile = categoryImageFiles[requirement.key]
-                                    const hasImage = Boolean(selectedFile)
+                            <div className="mt-3 space-y-4">
+                                {[
+                                    {
+                                        title: 'Categoría superior',
+                                        description: 'Una imagen vertical para el carril de categorías bajo el banner principal.',
+                                        requirements: topCategoryImageRequirements,
+                                    },
+                                    {
+                                        title: 'Categoría inferior destacada',
+                                        description: 'Cuatro variantes para el bloque grande de 3 categorías. Las tarjetas derechas de desktop necesitan una imagen horizontal real; si partes de una foto vertical, genera una versión nueva con fondo extendido.',
+                                        requirements: featuredCategoryImageRequirements,
+                                    },
+                                ].map((group) => (
+                                    <div key={group.title} className="rounded-xl border border-line bg-white p-3">
+                                        <div className="mb-3">
+                                            <div className="text-[11px] font-bold uppercase text-black">{group.title}</div>
+                                            <div className="mt-1 text-[11px] leading-relaxed text-secondary">{group.description}</div>
+                                        </div>
 
-                                    return (
-                                        <label
-                                            key={`${fileInputResetKey}-${requirement.kind}`}
-                                            className={`block rounded-xl border p-3 bg-white transition-all cursor-pointer ${hasImage ? 'border-green-100' : 'border-line'
-                                                }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div>
-                                                    <span className="block text-[11px] font-bold uppercase text-black">
-                                                        {requirement.label}
-                                                    </span>
-                                                    <span className="mt-1 block text-[11px] text-secondary">
-                                                        {requirement.dimensions}. {requirement.helper}
-                                                    </span>
-                                                </div>
+                                        <div className="space-y-3">
+                                            {group.requirements.map((requirement) => {
+                                                const selectedFile = categoryImageFiles[requirement.key]
+                                                const hasImage = Boolean(selectedFile)
 
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold shrink-0 ${hasImage ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
-                                                    }`}>
-                                                    {hasImage ? 'Lista' : 'Falta'}
-                                                </span>
-                                            </div>
+                                                return (
+                                                    <label
+                                                        key={`${fileInputResetKey}-${requirement.kind}`}
+                                                        className={`block rounded-xl border p-3 transition-all cursor-pointer ${hasImage ? 'border-green-100 bg-green-50/30' : 'border-line bg-surface/40'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div>
+                                                                <span className="block text-[11px] font-bold uppercase text-black">
+                                                                    {requirement.label}
+                                                                </span>
+                                                                <span className="mt-1 block text-[11px] text-secondary">
+                                                                    {requirement.dimensions}. {requirement.helper}
+                                                                </span>
+                                                            </div>
 
-                                            {selectedFile && (
-                                                <FilePreviewImage
-                                                    file={selectedFile}
-                                                    alt={`Preview ${requirement.label}`}
-                                                    className="mt-3 h-24 w-full rounded-lg object-cover border border-line bg-white"
-                                                />
-                                            )}
+                                                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold shrink-0 ${hasImage ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+                                                                }`}>
+                                                                {hasImage ? 'Lista' : 'Falta'}
+                                                            </span>
+                                                        </div>
 
-                                            <input
-                                                type="file"
-                                                accept="image/jpeg,image/png,image/webp"
-                                                className="mt-3 block w-full text-xs text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-black file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                                                onChange={(event) => {
-                                                    const file = event.target.files?.[0]
+                                                        {selectedFile && (
+                                                            <FilePreviewImage
+                                                                file={selectedFile}
+                                                                alt={`Preview ${requirement.label}`}
+                                                                className={`mt-3 w-full rounded-lg object-cover border border-line bg-white ${requirement.previewAspectClass}`}
+                                                            />
+                                                        )}
 
-                                                    setCategoryImageFiles((prev) => {
-                                                        const next = { ...prev }
+                                                        <input
+                                                            type="file"
+                                                            accept="image/jpeg,image/png,image/webp"
+                                                            className="mt-3 block w-full text-xs text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-black file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                                                            onChange={(event) => {
+                                                                const file = event.target.files?.[0]
 
-                                                        if (file) {
-                                                            next[requirement.key] = file
-                                                        } else {
-                                                            delete next[requirement.key]
-                                                        }
+                                                                setCategoryImageFiles((prev) => {
+                                                                    const next = { ...prev }
 
-                                                        return next
-                                                    })
-                                                }}
-                                                disabled={saving || uploadingCategoryImages}
-                                            />
-                                        </label>
-                                    )
-                                })}
+                                                                    if (file) {
+                                                                        next[requirement.key] = file
+                                                                    } else {
+                                                                        delete next[requirement.key]
+                                                                    }
+
+                                                                    return next
+                                                                })
+                                                            }}
+                                                            disabled={saving || uploadingCategoryImages}
+                                                        />
+                                                    </label>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -1031,96 +1170,123 @@ export default React.memo(function ProductReferenceSectionCard({
                             </div>
                         </div>
 
-                        <div className="overflow-y-auto p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                {categoryImageRequirements.map((requirement) => {
-                                    const currentUrl = getCategoryReferenceImage(selectedCategoryImageReference, requirement)
-                                    const selectedFile = replacementImageFiles[requirement.key]
-                                    const hasImage = Boolean(selectedFile || currentUrl)
+                        <div className="overflow-y-auto p-6 space-y-6">
+                            {[
+                                {
+                                    title: 'Categoría superior',
+                                    description: 'Esta imagen aparece en el carril superior de categorías. La preview es vertical 4:5.',
+                                    requirements: topCategoryImageRequirements,
+                                    gridClass: 'grid-cols-1 md:grid-cols-[minmax(0,360px)]',
+                                },
+                                {
+                                    title: 'Categorías inferiores destacadas',
+                                    description: 'Estas imágenes aparecen en el bloque inferior de 3 categorías. Para la imagen horizontal de desktop, usa un lienzo 1260 x 590 con el sujeto completo dentro del centro; una foto vertical se recorta.',
+                                    requirements: featuredCategoryImageRequirements,
+                                    gridClass: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4',
+                                },
+                            ].map((group) => (
+                                <section key={group.title} className="rounded-2xl border border-line bg-surface/40 p-4">
+                                    <div className="mb-4">
+                                        <div className="text-sm font-semibold">{group.title}</div>
+                                        <p className="mt-1 text-xs text-secondary">{group.description}</p>
+                                    </div>
 
-                                    return (
-                                        <label
-                                            key={`${replacementInputResetKey}-${selectedImageCategory}-${requirement.kind}`}
-                                            className={`rounded-2xl border p-4 bg-white transition-all cursor-pointer ${hasImage
-                                                ? 'border-line hover:border-black'
-                                                : 'border-dashed border-orange-300 bg-orange-50/40'
-                                                }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-3 mb-3">
-                                                <div>
-                                                    <div className="text-[11px] font-bold uppercase text-black">
-                                                        {requirement.label}
-                                                    </div>
+                                    <div className={`grid gap-4 ${group.gridClass}`}>
+                                        {group.requirements.map((requirement) => {
+                                            const currentUrl = getCategoryReferenceImage(selectedCategoryImageReference, requirement)
+                                            const selectedFile = replacementImageFiles[requirement.key]
+                                            const hasImage = Boolean(selectedFile || currentUrl)
 
-                                                    <div className="text-xs text-secondary mt-1">
-                                                        {requirement.dimensions}
-                                                    </div>
-                                                </div>
+                                            return (
+                                                <label
+                                                    key={`${replacementInputResetKey}-${selectedImageCategory}-${requirement.kind}`}
+                                                    className={`rounded-2xl border p-4 bg-white transition-all cursor-pointer ${hasImage
+                                                        ? 'border-line hover:border-black'
+                                                        : 'border-dashed border-orange-300 bg-orange-50/40'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                                        <div>
+                                                            <div className="text-[11px] font-bold uppercase text-black">
+                                                                {requirement.label}
+                                                            </div>
 
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${hasImage
-                                                    ? 'bg-green-50 text-green-700'
-                                                    : 'bg-orange-100 text-orange-700'
-                                                    }`}>
-                                                    {hasImage ? 'Lista' : 'Falta'}
-                                                </span>
-                                            </div>
-
-                                            <div className="rounded-xl border border-line bg-surface overflow-hidden">
-                                                {hasImage ? (
-                                                    <FilePreviewImage
-                                                        file={selectedFile}
-                                                        fallbackUrl={currentUrl}
-                                                        alt={`Preview ${requirement.label}`}
-                                                        className="w-full h-48 object-cover bg-white"
-                                                    />
-                                                ) : (
-                                                    <div className="h-48 flex flex-col items-center justify-center text-center px-4">
-                                                        <Icon.ImageSquare size={34} className="text-orange-700" />
-                                                        <div className="mt-2 text-xs font-semibold text-orange-800">
-                                                            Sin imagen cargada
+                                                            <div className="text-xs text-secondary mt-1">
+                                                                {requirement.dimensions}
+                                                            </div>
+                                                            {requirement.key === 'desktopSecondary' && (
+                                                                <div className="mt-2 rounded-lg bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-relaxed text-orange-800">
+                                                                    Para evitar recortes, genera esta imagen directamente en horizontal 1260 x 590.
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="mt-1 text-[11px] text-secondary">
-                                                            {requirement.helper}
-                                                        </div>
+
+                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${hasImage
+                                                            ? 'bg-green-50 text-green-700'
+                                                            : 'bg-orange-100 text-orange-700'
+                                                            }`}>
+                                                            {hasImage ? 'Lista' : 'Falta'}
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
 
-                                            <div className="mt-3">
-                                                <div className="text-[11px] text-secondary leading-relaxed min-h-[34px]">
-                                                    {selectedFile
-                                                        ? `Archivo seleccionado: ${selectedFile.name}`
-                                                        : currentUrl
-                                                            ? 'Imagen actual cargada. Puedes reemplazarla si deseas.'
-                                                            : requirement.helper}
-                                                </div>
+                                                    <div className={`rounded-xl border border-line bg-surface overflow-hidden ${requirement.previewAspectClass}`}>
+                                                        {hasImage ? (
+                                                            <FilePreviewImage
+                                                                file={selectedFile}
+                                                                fallbackUrl={currentUrl}
+                                                                alt={`Preview ${requirement.label}`}
+                                                                className="h-full w-full object-cover bg-white"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-full min-h-[9rem] flex-col items-center justify-center text-center px-4">
+                                                                <Icon.ImageSquare size={34} className="text-orange-700" />
+                                                                <div className="mt-2 text-xs font-semibold text-orange-800">
+                                                                    Sin imagen cargada
+                                                                </div>
+                                                                <div className="mt-1 text-[11px] text-secondary">
+                                                                    {requirement.helper}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
-                                                <input
-                                                    type="file"
-                                                    accept="image/jpeg,image/png,image/webp"
-                                                    className="mt-3 block w-full text-xs text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-black file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                                                    onChange={(event) => {
-                                                        const file = event.target.files?.[0]
+                                                    <div className="mt-3">
+                                                        <div className="text-[11px] text-secondary leading-relaxed min-h-[34px]">
+                                                            {selectedFile
+                                                                ? `Archivo seleccionado: ${selectedFile.name}`
+                                                                : currentUrl
+                                                                    ? 'Imagen actual cargada. Puedes reemplazarla si deseas.'
+                                                                    : requirement.helper}
+                                                        </div>
 
-                                                        setReplacementImageFiles((prev) => {
-                                                            const next = { ...prev }
+                                                        <input
+                                                            type="file"
+                                                            accept="image/jpeg,image/png,image/webp"
+                                                            className="mt-3 block w-full text-xs text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-black file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                                                            onChange={(event) => {
+                                                                const file = event.target.files?.[0]
 
-                                                            if (file) {
-                                                                next[requirement.key] = file
-                                                            } else {
-                                                                delete next[requirement.key]
-                                                            }
+                                                                setReplacementImageFiles((prev) => {
+                                                                    const next = { ...prev }
 
-                                                            return next
-                                                        })
-                                                    }}
-                                                    disabled={saving || uploadingCategoryImages}
-                                                />
-                                            </div>
-                                        </label>
-                                    )
-                                })}
-                            </div>
+                                                                    if (file) {
+                                                                        next[requirement.key] = file
+                                                                    } else {
+                                                                        delete next[requirement.key]
+                                                                    }
+
+                                                                    return next
+                                                                })
+                                                            }}
+                                                            disabled={saving || uploadingCategoryImages}
+                                                        />
+                                                    </div>
+                                                </label>
+                                            )
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
                         </div>
 
                         <div className="px-6 py-5 border-t border-line bg-surface flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

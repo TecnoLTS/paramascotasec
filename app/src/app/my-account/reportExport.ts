@@ -43,6 +43,10 @@ type ExportContext = {
   dashboardStats: DashboardStats | null
   financialScopeLabel: string
   financialSummary: ReportFinancialSummary
+  taxPolicy: {
+    creditCurrentRate: number
+    creditCarryforwardRate: number
+  }
   salesOrders: Array<{
     id: string
     created_at: string
@@ -281,6 +285,70 @@ const getOrdersByStatusMap = (dashboardStats: DashboardStats | null) => new Map(
   ]),
 )
 
+const buildBusinessControlSummary = (context: ExportContext) => {
+  const financial = context.financialSummary
+  const inventory = context.dashboardStats?.businessMetrics?.inventoryValue
+  const periodPurchases = context.dashboardStats?.businessMetrics?.report?.purchase_invoices
+  const fallbackPurchases = context.recentPurchaseInvoices.reduce((acc, invoice) => {
+    acc.invoicesCount += 1
+    acc.taxTotal += toPlainNumber(invoice.tax_total)
+    acc.total += toPlainNumber(invoice.total)
+    acc.unitsTotal += toPlainNumber(invoice.units_total)
+    if (invoice.supplier_name) acc.suppliers.add(String(invoice.supplier_name).trim().toUpperCase())
+    return acc
+  }, {
+    invoicesCount: 0,
+    taxTotal: 0,
+    total: 0,
+    unitsTotal: 0,
+    suppliers: new Set<string>(),
+  })
+  const purchaseVatCredit = periodPurchases
+    ? toPlainNumber(periodPurchases.tax_total)
+    : fallbackPurchases.taxTotal
+  const creditCurrentRate = Math.max(0, Math.min(100, toPlainNumber(context.taxPolicy.creditCurrentRate)))
+  const creditCarryforwardRate = Math.max(0, Math.min(100, toPlainNumber(context.taxPolicy.creditCarryforwardRate)))
+  const currentUsableVatCredit = purchaseVatCredit * (creditCurrentRate / 100)
+  const deferredVatCredit = purchaseVatCredit * (creditCarryforwardRate / 100)
+  const purchaseInvoicesTotal = periodPurchases
+    ? toPlainNumber(periodPurchases.total)
+    : fallbackPurchases.total
+  const purchaseInvoicesCount = periodPurchases
+    ? toPlainNumber(periodPurchases.invoices_count)
+    : fallbackPurchases.invoicesCount
+  const purchaseUnitsTotal = periodPurchases
+    ? toPlainNumber(periodPurchases.units_total)
+    : fallbackPurchases.unitsTotal
+  const purchaseSuppliersCount = periodPurchases
+    ? toPlainNumber(periodPurchases.suppliers_count)
+    : fallbackPurchases.suppliers.size
+  const inventoryCost = toPlainNumber(inventory?.cost_value)
+  const inventoryMarket = toPlainNumber(inventory?.market_value)
+  const estimatedVatPayable = Math.max(financial.vat - currentUsableVatCredit, 0)
+  const estimatedVatCreditBalance = Math.max(currentUsableVatCredit - financial.vat, 0) + deferredVatCredit
+
+  return {
+    purchaseVatCredit,
+    creditCurrentRate,
+    creditCarryforwardRate,
+    currentUsableVatCredit,
+    deferredVatCredit,
+    purchaseInvoicesTotal,
+    purchaseInvoicesCount,
+    purchaseUnitsTotal,
+    purchaseSuppliersCount,
+    inventoryCost,
+    inventoryMarket,
+    inventoryPotentialProfit: inventoryMarket - inventoryCost,
+    estimatedVatPayable,
+    estimatedVatCreditBalance,
+    controlledCapitalMass: inventoryCost + financial.cost + Math.max(financial.pendingExpenses, 0),
+    recoveredCapital: financial.cost,
+    reinvestableCash: Math.max(financial.flowProfit - estimatedVatPayable - Math.max(financial.overdueExpenses, 0), 0),
+    breakEvenGap: financial.netProfit < 0 ? Math.abs(financial.netProfit) : 0,
+  }
+}
+
 const buildCoverSheet = (context: ExportContext): WorksheetDefinition => {
   const generatedAt = formatDateTimeEcuador(context.generatedAt ?? new Date())
   const periodReport = context.dashboardStats?.businessMetrics?.report
@@ -318,6 +386,7 @@ const buildGeneralWorksheets = (context: ExportContext): WorksheetDefinition[] =
   const traceability = dashboardStats?.businessMetrics?.traceability
   const statusMap = getOrdersByStatusMap(dashboardStats)
   const financialTrendRows = dashboardStats?.businessMetrics?.financialTrends?.monthly ?? []
+  const control = buildBusinessControlSummary(context)
 
   return [
     {
@@ -347,6 +416,24 @@ const buildGeneralWorksheets = (context: ExportContext): WorksheetDefinition[] =
         metricRow('ROI bruto', percentCell(financial.roi)),
         metricRow('ROI neto', percentCell(financial.netRoi)),
         metricRow('ROI neto pagado', percentCell(financial.flowRoi)),
+        blankRow(),
+        sectionTitleRow('Control administrativo', 1),
+        metricRow('IVA credito compras total', moneyCell(control.purchaseVatCredit)),
+        metricRow('Porcentaje credito utilizable', percentCell(control.creditCurrentRate)),
+        metricRow('IVA credito utilizable', moneyCell(control.currentUsableVatCredit)),
+        metricRow('Porcentaje credito diferido', percentCell(control.creditCarryforwardRate)),
+        metricRow('IVA credito diferido', moneyCell(control.deferredVatCredit)),
+        metricRow('IVA neto estimado a pagar', moneyCell(control.estimatedVatPayable)),
+        metricRow('Credito IVA a favor/diferido', moneyCell(control.estimatedVatCreditBalance)),
+        metricRow('Facturas de compra consideradas', numberCell(control.purchaseInvoicesCount, 'integer')),
+        metricRow('Compras registradas', moneyCell(control.purchaseInvoicesTotal)),
+        metricRow('Unidades compradas', numberCell(control.purchaseUnitsTotal, 'integer')),
+        metricRow('Proveedores de compra', numberCell(control.purchaseSuppliersCount, 'integer')),
+        metricRow('Masa invertida controlada', moneyCell(control.controlledCapitalMass)),
+        metricRow('Capital recuperado por ventas', moneyCell(control.recoveredCapital)),
+        metricRow('Caja reinvertible estimada', moneyCell(control.reinvestableCash)),
+        metricRow('Brecha para punto de equilibrio', moneyCell(control.breakEvenGap)),
+        metricRow('Ganancia potencial inventario', moneyCell(control.inventoryPotentialProfit)),
         metricRow('Valor inventario al costo', moneyCell(inventory?.cost_value)),
         metricRow('Valor inventario a mercado', moneyCell(inventory?.market_value)),
         metricRow('Items en inventario', numberCell(inventory?.total_items, 'integer')),
@@ -570,6 +657,7 @@ const buildBalanceWorksheets = (context: ExportContext): WorksheetDefinition[] =
   const { dashboardStats } = context
   const financial = context.financialSummary
   const financialTrendRows = dashboardStats?.businessMetrics?.financialTrends?.monthly ?? []
+  const control = buildBusinessControlSummary(context)
 
   return [
     {
@@ -599,6 +687,23 @@ const buildBalanceWorksheets = (context: ExportContext): WorksheetDefinition[] =
         metricRow('ROI bruto', percentCell(financial.roi)),
         metricRow('ROI neto', percentCell(financial.netRoi)),
         metricRow('ROI neto pagado', percentCell(financial.flowRoi)),
+        blankRow(),
+        sectionTitleRow('Impuestos, capital y reinversion', 2),
+        metricRow('IVA credito compras total', moneyCell(control.purchaseVatCredit)),
+        metricRow('Porcentaje credito utilizable', percentCell(control.creditCurrentRate)),
+        metricRow('IVA credito utilizable', moneyCell(control.currentUsableVatCredit)),
+        metricRow('Porcentaje credito diferido', percentCell(control.creditCarryforwardRate)),
+        metricRow('IVA credito diferido', moneyCell(control.deferredVatCredit)),
+        metricRow('IVA neto estimado a pagar', moneyCell(control.estimatedVatPayable)),
+        metricRow('Credito IVA a favor/diferido', moneyCell(control.estimatedVatCreditBalance)),
+        metricRow('Compras registradas', moneyCell(control.purchaseInvoicesTotal)),
+        metricRow('Masa invertida controlada', moneyCell(control.controlledCapitalMass)),
+        metricRow('Capital en inventario', moneyCell(control.inventoryCost)),
+        metricRow('Valor potencial inventario', moneyCell(control.inventoryMarket)),
+        metricRow('Ganancia potencial inventario', moneyCell(control.inventoryPotentialProfit)),
+        metricRow('Capital recuperado por ventas', moneyCell(control.recoveredCapital)),
+        metricRow('Caja reinvertible estimada', moneyCell(control.reinvestableCash)),
+        metricRow('Brecha para punto de equilibrio', moneyCell(control.breakEvenGap)),
       ],
     },
     {
