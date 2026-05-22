@@ -29,6 +29,7 @@ import {
     getVariantColorValue,
     getVariantSizeValue,
 } from '@/lib/catalogAttributes'
+import { getProductImageAlt } from '@/lib/productImageAlt'
 
 const normalizeOptionValue = (value?: string | null) => (value ?? '').trim().toLowerCase()
 
@@ -332,7 +333,7 @@ const ModalQuickview = () => {
                                         src={image}
                                         width={1500}
                                         height={2000}
-                                        alt={selectedProduct?.name ?? 'product'}
+                                        alt={getProductImageAlt(selectedProduct, image, `producto ${index + 1}`)}
                                         priority
                                         unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
                                         className="w-full h-full object-contain bg-white"

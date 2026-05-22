@@ -20,6 +20,7 @@ import {
 } from '@/lib/seo'
 import { getCanonicalSiteUrl, toCanonicalUrl } from '@/lib/publicUrl'
 import { getPublicProductCategories } from '@/lib/api/settings'
+import { getProductReviews } from '@/lib/api/productReviews'
 
 type Params = {
   slug: string
@@ -122,6 +123,8 @@ export default async function SeoProductPage({ params, searchParams }: Props) {
     : getProductDetailRouteId(currentProduct)
   const availableCategoryIds = buildCatalogCategoryCards(productsWithSettings, undefined, { referenceCategories: publicCategories }).map((category) => category.id)
   const footerCategoryIds = availableCategoryIds
+  const reviewProduct = selectedVariant ?? currentProduct
+  const reviewData = await getProductReviews(reviewProduct.internalId || reviewProduct.id || reviewProduct.slug)
   const breadcrumbJsonLd = generateBreadcrumbJsonLd([
     { name: 'Inicio', url: baseUrl },
     { name: 'Tienda', url: `${baseUrl}/tienda` },
@@ -137,6 +140,8 @@ export default async function SeoProductPage({ params, searchParams }: Props) {
           __html: JSON.stringify(generateProductJsonLd(currentProduct, {
             baseUrl,
             brandName: 'ParaMascotasEC',
+            reviews: reviewData.reviews,
+            reviewSummary: reviewData.summary,
           })),
         }}
       />
@@ -150,7 +155,7 @@ export default async function SeoProductPage({ params, searchParams }: Props) {
       <div id="header" className="relative w-full">
         <MenuOne props="bg-white" searchProducts={productsWithSettings} availableCategoryIds={availableCategoryIds} />
       </div>
-      <Default data={productsWithSettings} productId={productId} />
+      <Default data={productsWithSettings} productId={productId} reviews={reviewData.reviews} reviewSummary={reviewData.summary} />
       <Footer categoryIds={footerCategoryIds} />
     </>
   )

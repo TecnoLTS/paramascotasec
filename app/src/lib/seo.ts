@@ -2,7 +2,6 @@ import { ProductType } from '@/type/ProductType'
 import {
     getProductCurrentPrice,
     getProductOriginalPrice,
-    getProductReviewCount,
     getProductSku,
     getProductVariantLabel,
     getProductVariants,
@@ -12,6 +11,7 @@ import { versionLocalImagePath } from '@/lib/staticAsset'
 import type { SiteConfig } from '@/config/siteConfig'
 import { getCanonicalSiteUrl } from '@/lib/publicUrl'
 import { getProductSeoPath } from '@/lib/seoUrls'
+import type { ProductReview, ProductReviewSummary } from '@/lib/api/productReviews'
 
 const toAbsoluteUrl = (baseUrl: string, path?: string | null) => {
     if (!path) return undefined
@@ -176,13 +176,18 @@ const getVariantAxes = (variants: ProductType[]) => {
 
 export function generateProductJsonLd(
     product: ProductType,
-    options?: { baseUrl?: string; brandName?: string }
+    options?: { baseUrl?: string; brandName?: string; reviews?: ProductReview[]; reviewSummary?: ProductReviewSummary }
 ) {
     const siteUrl = (options?.baseUrl ?? getCanonicalSiteUrl()).replace(/\/$/, '')
     const brandName = options?.brandName ?? 'ParaMascotasEC'
     const productPath = getProductSeoPath(product)
     const productUrl = `${siteUrl}${productPath}`
-    const reviewCount = getProductReviewCount(product)
+    const visibleReviews = options?.reviews ?? product.reviews ?? []
+    const fallbackReviewAverage = visibleReviews.length > 0
+        ? visibleReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / visibleReviews.length
+        : 0
+    const reviewCount = Number(options?.reviewSummary?.count ?? product.reviewSummary?.count ?? visibleReviews.length)
+    const reviewAverage = Number(options?.reviewSummary?.average ?? product.reviewSummary?.average ?? fallbackReviewAverage)
     const price = getProductCurrentPrice(product)
     const originalPrice = getProductOriginalPrice(product)
     const variants = getProductVariants(product)
@@ -208,11 +213,27 @@ export function generateProductJsonLd(
         product.gender ? { '@type': 'PropertyValue', name: 'Mascota', value: product.gender === 'cat' ? 'Gato' : product.gender === 'dog' ? 'Perro' : product.gender } : undefined,
         originalPrice > price && originalPrice > 0 ? { '@type': 'PropertyValue', name: 'Precio anterior', value: originalPrice.toFixed(2) } : undefined,
     ].filter(Boolean)
-    const aggregateRating = product.rate > 0 && reviewCount > 0 ? {
+    const aggregateRating = reviewAverage > 0 && reviewCount > 0 ? {
         '@type': 'AggregateRating',
-        ratingValue: product.rate,
+        ratingValue: Number(reviewAverage.toFixed(2)),
         reviewCount,
     } : undefined
+    const reviewJsonLd = visibleReviews.slice(0, 5).map((review) => ({
+        '@type': 'Review',
+        name: review.title || undefined,
+        reviewBody: review.body,
+        datePublished: review.createdAt ? String(review.createdAt).slice(0, 10) : undefined,
+        author: {
+            '@type': 'Person',
+            name: review.authorName || 'Cliente verificado',
+        },
+        reviewRating: {
+            '@type': 'Rating',
+            ratingValue: Number(review.rating || 0),
+            bestRating: 5,
+            worstRating: 1,
+        },
+    })).filter((review) => review.reviewRating.ratingValue > 0 && review.reviewBody)
     const primaryProduct = {
         '@type': 'Product',
         '@id': `${productUrl}#product`,
@@ -236,6 +257,7 @@ export function generateProductJsonLd(
             }),
         additionalProperty,
         aggregateRating,
+        review: reviewJsonLd.length > 0 ? reviewJsonLd : undefined,
     }
 
     if (variants.length > 1) {
@@ -270,6 +292,7 @@ export function generateProductJsonLd(
                     })),
                     additionalProperty,
                     aggregateRating,
+                    review: reviewJsonLd.length > 0 ? reviewJsonLd : undefined,
                 },
             ],
         }

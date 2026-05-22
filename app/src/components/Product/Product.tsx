@@ -28,6 +28,7 @@ import {
     getLiveProductAvailableStock,
     resolveLiveSelectedVariant,
 } from '@/lib/liveCatalog'
+import { getProductImageAlt } from '@/lib/productImageAlt'
 
 const Icon = {
     Eye,
@@ -137,6 +138,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                 .filter(Boolean)
             : []
     const primaryImage = thumbImages[0] || fullImages[0] || '/images/product/1.webp'
+    const primaryImageAlt = getProductImageAlt(selectedVariant as ProductType, primaryImage, 'producto')
     const isDirectUploadImage = (src: string) =>
         src.startsWith('/uploads/') ||
         src.startsWith('https://paramascotasec.com/uploads/') ||
@@ -164,7 +166,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                     src={buildUploadVariantUrl(resolvedSrc, 220)}
                     srcSet={buildUploadSrcSet(resolvedSrc)}
                     sizes="(min-width: 1024px) 176px, (min-width: 640px) 180px, 45vw"
-                    alt={data.name}
+                    alt={primaryImageAlt}
                     loading="lazy"
                     decoding="async"
                     className="w-full h-full object-contain duration-700"
@@ -182,7 +184,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                 src={resolvedSrc}
                 width={640}
                 height={800}
-                alt={data.name}
+                alt={primaryImageAlt}
                 sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 45vw"
                 quality={85}
                 unoptimized={shouldBypassOptimizer(resolvedSrc)}
@@ -433,7 +435,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                                 width={640}
                                                 height={800}
                                                 priority={true}
-                                                alt={data.name}
+                                                alt={getProductImageAlt(selectedVariant as ProductType, img, 'producto')}
                                                 className='w-full h-full object-contain duration-700'
                                             />
                                         ))}
@@ -573,7 +575,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             width={5000}
                             height={5000}
                             src={thumbImages[0] ?? ''}
-                            alt="img"
+                            alt={getProductImageAlt(selectedVariant as ProductType, thumbImages[0], 'producto')}
                         />
                         <div className="list-action flex flex-col gap-1 absolute top-0 right-0">
                             <span

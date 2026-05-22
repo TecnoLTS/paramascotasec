@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { listProducts } from '@/lib/api/products'
 import {
   getProductCurrentPrice,
+  getProductOriginalPrice,
   getProductSku,
   getProductVariants,
   groupCatalogProducts,
@@ -94,7 +95,12 @@ const getItemGroupId = (family?: ProductType) => {
 
 const renderItem = (baseUrl: string, product: ProductType, family?: ProductType) => {
   const price = getProductCurrentPrice(product)
+  const originalPrice = getProductOriginalPrice(product)
   const image = toAbsoluteUrl(baseUrl, product.thumbImage?.[0] || product.images?.[0])
+  const additionalImages = Array.from(new Set([
+    ...(product.images ?? []),
+    ...(product.thumbImage ?? []),
+  ].map((item) => toAbsoluteUrl(baseUrl, item)).filter((item) => item && item !== image))).slice(0, 10)
   const sku = getProductSku(product)
   const id = product.id || product.internalId || product.slug
   const itemGroupId = getItemGroupId(family)
@@ -105,6 +111,8 @@ const renderItem = (baseUrl: string, product: ProductType, family?: ProductType)
     ? `${product.brand} ${product.name}`
     : product.name)
   const description = cleanText(product.description) || title
+  const link = getFeedProductLink(baseUrl, product, family)
+  const canonicalLink = `${baseUrl}${getProductSeoPath(family ?? product)}`
 
   if (!id || !title || price <= 0 || !image) {
     return ''
@@ -115,11 +123,14 @@ const renderItem = (baseUrl: string, product: ProductType, family?: ProductType)
     `<g:id>${xmlEscape(id)}</g:id>`,
     `<g:title>${xmlEscape(title)}</g:title>`,
     `<g:description>${xmlEscape(description)}</g:description>`,
-    `<g:link>${xmlEscape(getFeedProductLink(baseUrl, product, family))}</g:link>`,
+    `<g:link>${xmlEscape(link)}</g:link>`,
+    `<g:canonical_link>${xmlEscape(canonicalLink)}</g:canonical_link>`,
     `<g:image_link>${xmlEscape(image)}</g:image_link>`,
+    ...additionalImages.map((additionalImage) => `<g:additional_image_link>${xmlEscape(additionalImage)}</g:additional_image_link>`),
     `<g:availability>${Number(product.quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>`,
     '<g:condition>new</g:condition>',
-    `<g:price>${xmlEscape(`${price.toFixed(2)} USD`)}</g:price>`,
+    `<g:price>${xmlEscape(`${(originalPrice > price ? originalPrice : price).toFixed(2)} USD`)}</g:price>`,
+    originalPrice > price ? `<g:sale_price>${xmlEscape(`${price.toFixed(2)} USD`)}</g:sale_price>` : '',
     `<g:brand>${xmlEscape(brand)}</g:brand>`,
     '<g:shipping>',
     '<g:country>EC</g:country>',

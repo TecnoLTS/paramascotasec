@@ -715,7 +715,7 @@ const createPurchaseInvoiceFromSourceProduct = (product: any, purchaseTaxRate = 
     }
 }
 
-export const createImageEntry = () => ({ url: '', width: '', height: '' })
+export const createImageEntry = () => ({ url: '', width: '', height: '', altText: '' })
 
 const requiredImageSizes = {
     thumb: { width: 640, height: 800 },
@@ -723,7 +723,7 @@ const requiredImageSizes = {
 }
 
 const applyDefaultSizes = (
-    entries: Array<{ url: string; width?: string | number; height?: string | number }>,
+    entries: Array<{ url: string; width?: string | number; height?: string | number; altText?: string }>,
     kind: 'thumb' | 'gallery'
 ) => {
     const required = requiredImageSizes[kind]
@@ -775,24 +775,28 @@ export const createProductFormFromProduct = (product: any, vatMultiplier: number
         ? thumbMeta.map((img: any) => ({
             url: img.url || '',
             width: img.width ? String(img.width) : '',
-            height: img.height ? String(img.height) : ''
+            height: img.height ? String(img.height) : '',
+            altText: typeof img.altText === 'string' ? img.altText : ''
         }))
         : (Array.isArray(product?.thumbImage) ? product.thumbImage : []).map((url: string) => ({
             url,
             width: '',
-            height: ''
+            height: '',
+            altText: ''
         }))
 
     const galleryImages = galleryMeta.length > 0
         ? galleryMeta.map((img: any) => ({
             url: img.url || '',
             width: img.width ? String(img.width) : '',
-            height: img.height ? String(img.height) : ''
+            height: img.height ? String(img.height) : '',
+            altText: typeof img.altText === 'string' ? img.altText : ''
         }))
         : (Array.isArray(product?.images) ? product.images : []).map((url: string) => ({
             url,
             width: '',
-            height: ''
+            height: '',
+            altText: ''
         }))
 
     const filledThumbs = applyDefaultSizes(thumbImages, 'thumb')

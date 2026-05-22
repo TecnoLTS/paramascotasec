@@ -154,6 +154,19 @@ export interface ProductType {
         width?: number;
         height?: number;
         kind?: string;
+        altText?: string | null;
+    }>,
+    reviewSummary?: {
+        count: number;
+        average: number;
+    },
+    reviews?: Array<{
+        id: string;
+        rating: number;
+        title?: string | null;
+        body: string;
+        authorName: string;
+        createdAt?: string | null;
     }>,
     description: string,
     action: string,

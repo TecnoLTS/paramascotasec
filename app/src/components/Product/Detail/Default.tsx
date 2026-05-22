@@ -36,6 +36,8 @@ import {
   getVariantColorValue,
   getVariantSizeValue,
 } from '@/lib/catalogAttributes'
+import { getProductImageAlt } from '@/lib/productImageAlt'
+import type { ProductReview, ProductReviewSummary } from '@/lib/api/productReviews'
 
 const Icon = {
   Minus,
@@ -54,9 +56,11 @@ const normalizeSpecKey = (value: string) =>
 interface Props {
   data: Array<ProductType>
   productId: string | number | null
+  reviews?: ProductReview[]
+  reviewSummary?: ProductReviewSummary
 }
 
-const Default: React.FC<Props> = ({ data, productId }) => {
+const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary }) => {
   const router = useRouter()
   const popupSwiperRef = useRef<SwiperCore | null>(null)
 
@@ -65,7 +69,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   const [photoIndex, setPhotoIndex] = useState(0)
   const [activeColor, setActiveColor] = useState('')
   const [activeSize, setActiveSize] = useState('')
-  const [activeTab, setActiveTab] = useState<'description' | 'specifications'>('description')
+  const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description')
   const [quantity, setQuantity] = useState(1)
   const [liveProducts, setLiveProducts] = useState(data)
   const [availabilityNotice, setAvailabilityNotice] = useState<string | null>(null)
@@ -134,8 +138,12 @@ const Default: React.FC<Props> = ({ data, productId }) => {
   }, [activeColor, activeSize, defaultVariant, productFamily, requestedId, showGenericVariantSelector, variantProducts])
   const defaultVariantStock = getLiveProductAvailableStock(defaultVariant)
   const availableStock = getLiveProductAvailableStock(activeVariant)
-  const showReviewSummary = productFamily ? hasRealReviews(productFamily) : false
-  const reviewCount = productFamily ? getProductReviewCount(productFamily) : 0
+  const visibleReviews = reviews
+  const verifiedReviewCount = Number(reviewSummary?.count ?? visibleReviews.length)
+  const verifiedReviewAverage = Number(reviewSummary?.average ?? 0)
+  const showReviewSummary = verifiedReviewCount > 0 || (productFamily ? hasRealReviews(productFamily) : false)
+  const reviewCount = verifiedReviewCount > 0 ? verifiedReviewCount : (productFamily ? getProductReviewCount(productFamily) : 0)
+  const reviewAverage = verifiedReviewCount > 0 ? verifiedReviewAverage : (productFamily?.rate ?? 0)
 
   useEffect(() => {
     setLiveProducts(data)
@@ -357,6 +365,10 @@ const Default: React.FC<Props> = ({ data, productId }) => {
     [familyColorValues, variantProducts],
   )
   const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.webp'
+  const getGalleryAlt = (image: string, index: number, kind = 'imagen') =>
+    activeVariant
+      ? getProductImageAlt(activeVariant, image, `${kind} ${index + 1}`)
+      : (productFamily ? getProductImageAlt(productFamily, image, `${kind} ${index + 1}`) : `Imagen de producto ${index + 1}`)
 
   const variantDisplayValues = useMemo(() => Array.from(new Set(
     variantProducts
@@ -544,7 +556,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                           src={image}
                           width={240}
                           height={300}
-                          alt={`${productFamily.name} - Miniatura ${index + 1}`}
+                          alt={getGalleryAlt(image, index, 'miniatura')}
                           sizes="72px"
                           quality={85}
                           unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
@@ -567,7 +579,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                     src={currentGalleryImage}
                     width={1200}
                     height={1400}
-                    alt={`${productFamily.name} - Vista ${photoIndex + 1}`}
+                    alt={getGalleryAlt(currentGalleryImage, photoIndex, 'vista principal')}
                     sizes="(min-width: 1024px) 500px, (min-width: 640px) calc(100vw - 180px), 100vw"
                     quality={90}
                     unoptimized={currentGalleryImage.startsWith('data:') || currentGalleryImage.startsWith('blob:')}
@@ -612,7 +624,7 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                         src={image}
                         width={1400}
                         height={1600}
-                        alt={`${productFamily.name} - Zoom ${index + 1}`}
+                        alt={getGalleryAlt(image, index, 'detalle ampliado')}
                         sizes="(min-width: 1024px) 70vw, 90vw"
                         quality={92}
                         unoptimized={image.startsWith('data:') || image.startsWith('blob:')}
@@ -639,8 +651,8 @@ const Default: React.FC<Props> = ({ data, productId }) => {
 
             {showReviewSummary && (
               <div className="flex items-center mt-3 gap-2">
-                <Rate currentRate={productFamily.rate} size={14} />
-                <span className="caption1 text-secondary">({reviewCount} resenas)</span>
+                <Rate currentRate={reviewAverage} size={14} />
+                <span className="caption1 text-secondary">({reviewCount} reseñas)</span>
               </div>
             )}
 
@@ -841,6 +853,18 @@ const Default: React.FC<Props> = ({ data, productId }) => {
               >
                 Especificaciones
               </button>
+              {visibleReviews.length > 0 && (
+                <button
+                  type="button"
+                  className={`text-button pb-1 relative ${activeTab === 'reviews'
+                    ? 'font-semibold after:content-[""] after:absolute after:left-0 after:-bottom-[2px] after:w-full after:h-[2px] after:bg-black'
+                    : 'text-secondary'
+                    }`}
+                  onClick={() => setActiveTab('reviews')}
+                >
+                  Reseñas
+                </button>
+              )}
             </div>
 
             {activeTab === 'description' ? (
@@ -877,6 +901,37 @@ const Default: React.FC<Props> = ({ data, productId }) => {
                   <Link href={categoryPath} className="button-main mt-6 inline-flex rounded-full px-6 py-3">
                     Ver productos relacionados
                   </Link>
+                </div>
+              </div>
+            ) : activeTab === 'reviews' ? (
+              <div className="mt-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="heading5">Reseñas verificadas</h2>
+                    <div className="mt-2 flex items-center gap-2 text-secondary">
+                      <Rate currentRate={reviewAverage} size={14} />
+                      <span>{reviewAverage.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} de 5 · {reviewCount} reseñas</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-6 grid gap-4">
+                  {visibleReviews.map((review) => (
+                    <article key={review.id} className="rounded-xl border border-line bg-white p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">{review.authorName || 'Cliente verificado'}</div>
+                          {review.createdAt && (
+                            <time className="caption1 text-secondary" dateTime={review.createdAt}>
+                              {new Date(review.createdAt).toLocaleDateString('es-EC', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </time>
+                          )}
+                        </div>
+                        <Rate currentRate={review.rating} size={14} />
+                      </div>
+                      {review.title && <h3 className="text-title mt-4">{review.title}</h3>}
+                      <p className="mt-3 text-secondary leading-7">{review.body}</p>
+                    </article>
+                  ))}
                 </div>
               </div>
             ) : (

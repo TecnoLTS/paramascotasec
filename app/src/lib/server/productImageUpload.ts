@@ -162,6 +162,34 @@ const buildSeoImageFileName = (
   return `${clippedBase}-${datedSuffix}-${uniqueSuffix}.${ext}`
 }
 
+const buildSeoImageAltText = (metadata: UploadImageMetadata, kind: UploadImageKind) => {
+  if (kind === 'brandLogo') {
+    const brand = String(metadata.brandName || '').trim()
+    return brand ? `Logo oficial de ${brand} en ParaMascotasEC` : 'Logo de marca en ParaMascotasEC'
+  }
+  if (isCategoryImageKind(kind)) {
+    const category = String(metadata.category || metadata.productType || '').trim()
+    return category ? `${category} para mascotas en ParaMascotasEC` : 'Categoria de productos para mascotas en ParaMascotasEC'
+  }
+
+  const parts = [
+    metadata.brandName,
+    metadata.productName,
+    metadata.variantLabel || metadata.size,
+    metadata.color,
+    metadata.material,
+    metadata.category || metadata.productType,
+    metadata.species,
+  ]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+  const uniqueParts = parts.filter((part, index) => parts.indexOf(part) === index)
+  const base = uniqueParts.join(' ')
+  return base
+    ? `${base} ${kind === 'thumb' ? 'miniatura' : 'imagen de ficha'} en ParaMascotasEC`
+    : 'Producto para mascotas en ParaMascotasEC'
+}
+
 const buildVariantFileName = (fileName: string, width: number) =>
   fileName.replace(/\.webp$/i, `-${width}.webp`)
 
@@ -319,6 +347,7 @@ export const handleProductImageUpload = async (req: Request) => {
         kind: kindValue,
         width: outputMetadata.width,
         height: outputMetadata.height,
+        altText: buildSeoImageAltText(metadata, kindValue),
       },
     })
   } catch {

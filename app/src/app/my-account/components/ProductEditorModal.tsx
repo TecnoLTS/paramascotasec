@@ -75,6 +75,7 @@ type ProductEditorModalProps = {
 
 type UploadImageMetadata = {
     platform: string
+    brandName: string
     productName: string
     category: string
     productType: string
@@ -131,7 +132,7 @@ const serializeSanitizedAdditionalCategories = (
 ) => serializeProductCategories(sanitizeAdditionalCategoryValues(values, primaryCategory, previousPrimaryCategory))
 
 const applyDefaultSizes = (
-    entries: Array<{ url: string; width?: string | number; height?: string | number }>,
+    entries: Array<{ url: string; width?: string | number; height?: string | number; altText?: string }>,
     kind: 'thumb' | 'gallery'
 ) => {
     const required = requiredImageSizes[kind]
@@ -140,6 +141,76 @@ const applyDefaultSizes = (
         width: entry.width && Number(entry.width) > 0 ? String(entry.width) : String(required.width),
         height: entry.height && Number(entry.height) > 0 ? String(entry.height) : String(required.height)
     }))
+}
+
+const seoSlugify = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-{2,}/g, '-')
+
+const cleanSeoPart = (value: unknown) => String(value || '').trim()
+
+const getSeoVariantValue = (attrs: Record<string, any>) =>
+    cleanSeoPart(attrs.variantLabel || attrs.presentation || attrs.size || attrs.weight || attrs.color || attrs.material)
+
+const buildSuggestedSeoTitle = (form: ProductFormState) => {
+    const attrs = form.attributes || {}
+    const parts = [
+        cleanSeoPart(form.name),
+        getSeoVariantValue(attrs),
+        cleanSeoPart(form.brand),
+        cleanSeoPart(form.category),
+    ].filter(Boolean)
+    const title = Array.from(new Set(parts)).join(' | ')
+    return title ? `${title} en Ecuador` : ''
+}
+
+const buildSuggestedSeoDescription = (form: ProductFormState) => {
+    const attrs = form.attributes || {}
+    const species = cleanSeoPart(attrs.species)
+    const variant = getSeoVariantValue(attrs)
+    const base = cleanSeoPart(form.description)
+    const intro = [
+        cleanSeoPart(form.name),
+        variant,
+        cleanSeoPart(form.brand),
+        cleanSeoPart(form.category),
+        species ? `para ${species}` : '',
+    ].filter(Boolean).join(' ')
+    const availability = Number(form.quantity || 0) > 0 ? 'Disponible para compra online en Ecuador.' : ''
+    const description = [intro, base, availability].filter(Boolean).join(' ')
+    return description.slice(0, 155)
+}
+
+const buildSuggestedSeoAlt = (form: ProductFormState) => {
+    const attrs = form.attributes || {}
+    const parts = [
+        cleanSeoPart(form.brand),
+        cleanSeoPart(form.name),
+        getSeoVariantValue(attrs),
+        cleanSeoPart(form.category),
+        cleanSeoPart(attrs.species),
+    ].filter(Boolean)
+    const base = Array.from(new Set(parts)).join(' ')
+    return base ? `${base} en ParaMascotasEC` : ''
+}
+
+const buildSuggestedSearchTerms = (form: ProductFormState) => {
+    const attrs = form.attributes || {}
+    return Array.from(new Set([
+        cleanSeoPart(form.name),
+        cleanSeoPart(form.brand),
+        cleanSeoPart(form.category),
+        cleanSeoPart(form.productType),
+        cleanSeoPart(attrs.species),
+        getSeoVariantValue(attrs),
+        cleanSeoPart(attrs.sku),
+        'tienda de mascotas Ecuador',
+    ].filter(Boolean))).join(', ')
 }
 
 const sanitizeDecimalInput = (value: string, maxFractionDigits = 2) => {
@@ -305,6 +376,7 @@ const resolveUploadImageMetadata = (form: ProductFormState): UploadImageMetadata
     return {
         platform,
         productName: String(form.name || ''),
+        brandName: String(form.brand || ''),
         category: String(form.category || ''),
         productType: String(form.productType || ''),
         size: String(attrs.size || attrs.presentation || attrs.weight || ''),
@@ -331,7 +403,7 @@ const uploadImage = async (file: File, kind: 'thumb' | 'gallery', metadata: Uplo
             ? `${window.location.origin}/api/uploads/images`
             : '/api/uploads/images'
 
-    const res = await requestApi<{ url: string; width?: number; height?: number; kind: string }>(url, {
+    const res = await requestApi<{ url: string; width?: number; height?: number; kind: string; altText?: string }>(url, {
         method: 'POST',
         body: formData,
         timeoutMs: 60000,
@@ -1230,7 +1302,7 @@ export default function ProductEditorModal({
         }))
     }, [])
 
-    const setImageEntry = React.useCallback((kind: 'thumb' | 'gallery', index: number, entry: { url: string; width: string; height: string }) => {
+    const setImageEntry = React.useCallback((kind: 'thumb' | 'gallery', index: number, entry: { url: string; width: string; height: string; altText?: string }) => {
         const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
         setForm((prev: any) => {
             const next = [...(prev[key] || [])]
@@ -1245,6 +1317,18 @@ export default function ProductEditorModal({
             const next = [...(prev[key] || [])]
             next.splice(index, 1)
             if (next.length === 0) next.push(createImageEntry())
+            return { ...prev, [key]: next }
+        })
+    }, [])
+
+    const setImageAltText = React.useCallback((kind: 'thumb' | 'gallery', index: number, altText: string) => {
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setForm((prev: any) => {
+            const next = [...(prev[key] || [])]
+            next[index] = {
+                ...(next[index] || createImageEntry()),
+                altText,
+            }
             return { ...prev, [key]: next }
         })
     }, [])
@@ -1269,11 +1353,12 @@ export default function ProductEditorModal({
         return {
             url: uploaded.url,
             width: String((uploaded as any).width || required.width),
-            height: String((uploaded as any).height || required.height)
+            height: String((uploaded as any).height || required.height),
+            altText: String((uploaded as any).altText || form.attributes?.seoImageAlt || buildSuggestedSeoAlt(form))
         }
     }, [form, showNotification])
 
-    const appendImageEntries = React.useCallback((kind: 'thumb' | 'gallery', entries: Array<{ url: string; width: string; height: string }>) => {
+    const appendImageEntries = React.useCallback((kind: 'thumb' | 'gallery', entries: Array<{ url: string; width: string; height: string; altText?: string }>) => {
         if (entries.length === 0) return
         const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
         setForm((prev: any) => {
@@ -1321,7 +1406,7 @@ export default function ProductEditorModal({
         const batchKey = 'gallery-batch'
         setImageUploading((prev) => ({ ...prev, [batchKey]: true }))
 
-        const uploadedEntries: Array<{ url: string; width: string; height: string }> = []
+        const uploadedEntries: Array<{ url: string; width: string; height: string; altText?: string }> = []
         const failures: string[] = []
 
         for (const file of selectedFiles) {
@@ -1636,6 +1721,34 @@ export default function ProductEditorModal({
     const productTypeLabel = PRODUCT_TYPE_OPTIONS.find((option) => option.value === form.productType)?.label || 'Sin definir'
     const summaryThumbCount = (form.thumbImages || []).filter((img: any) => img.url && img.url.trim()).length
     const summaryGalleryCount = (form.galleryImages || []).filter((img: any) => img.url && img.url.trim()).length
+    const suggestedSeoTitle = buildSuggestedSeoTitle(form)
+    const suggestedSeoDescription = buildSuggestedSeoDescription(form)
+    const suggestedSeoAlt = buildSuggestedSeoAlt(form)
+    const suggestedSearchTerms = buildSuggestedSearchTerms(form)
+    const seoSlugPreview = seoSlugify([
+        form.name,
+        form.attributes?.variantLabel || form.attributes?.presentation || form.attributes?.size,
+        form.attributes?.sku,
+    ].map(cleanSeoPart).filter(Boolean).join(' ')) || 'producto'
+    const seoCanonicalPreview = `https://paramascotasec.com/productos/${seoSlugPreview}`
+    const seoTitleValue = cleanSeoPart(form.attributes?.seoTitle) || suggestedSeoTitle
+    const seoDescriptionValue = cleanSeoPart(form.attributes?.seoDescription) || suggestedSeoDescription
+    const seoAltValue = cleanSeoPart(form.attributes?.seoImageAlt) || suggestedSeoAlt
+    const seoSearchTermsValue = cleanSeoPart(form.attributes?.seoSearchTerms) || suggestedSearchTerms
+    const seoChecks = [
+        { label: 'Marca', complete: cleanSeoPart(form.brand).length > 0 },
+        { label: 'SKU', complete: cleanSeoPart(form.attributes?.sku).length > 0 },
+        { label: 'Especie', complete: cleanSeoPart(form.attributes?.species).length > 0 },
+        { label: 'Categoría', complete: cleanSeoPart(form.category).length > 0 },
+        { label: 'Descripción útil', complete: cleanSeoPart(form.description).length >= 50 },
+        { label: 'Miniatura', complete: summaryThumbCount > 0 },
+        { label: 'Imagen de ficha', complete: summaryGalleryCount > 0 },
+        { label: 'Precio válido', complete: Number(form.price || 0) > 0 },
+        { label: 'Título SEO', complete: seoTitleValue.length >= 20 && seoTitleValue.length <= 70 },
+        { label: 'Meta descripción', complete: seoDescriptionValue.length >= 70 && seoDescriptionValue.length <= 160 },
+        { label: 'Alt base', complete: seoAltValue.length >= 20 },
+    ]
+    const seoScore = Math.round((seoChecks.filter((item) => item.complete).length / seoChecks.length) * 100)
     const summaryStockLabel = `${requestedProductQuantity.toLocaleString('es-EC')} uds`
     const summaryTaxLabel = form.taxExempt
         ? 'Exento de IVA'
@@ -1794,6 +1907,27 @@ export default function ProductEditorModal({
             ? 'Cumple precio y stock, y ya está visible en la tienda.'
             : 'Cumple precio y stock, pero sigue oculto en la web pública.')
         : 'Para publicar necesita al menos precio base mayor a 0 y stock disponible.'
+
+    const applySeoSuggestions = React.useCallback(() => {
+        setForm((prev) => {
+            const nextAttributes = { ...(prev.attributes || {}) }
+            nextAttributes.seoTitle = nextAttributes.seoTitle || buildSuggestedSeoTitle(prev)
+            nextAttributes.seoDescription = nextAttributes.seoDescription || buildSuggestedSeoDescription(prev)
+            nextAttributes.seoImageAlt = nextAttributes.seoImageAlt || buildSuggestedSeoAlt(prev)
+            nextAttributes.seoSearchTerms = nextAttributes.seoSearchTerms || buildSuggestedSearchTerms(prev)
+            const nextSeoAlt = String(nextAttributes.seoImageAlt || '').trim()
+            const applyAlt = (images: any[]) => (images || []).map((image) => ({
+                ...image,
+                altText: String(image?.altText || '').trim() || nextSeoAlt,
+            }))
+            return {
+                ...prev,
+                attributes: nextAttributes,
+                thumbImages: applyAlt(prev.thumbImages),
+                galleryImages: applyAlt(prev.galleryImages),
+            }
+        })
+    }, [])
 
     React.useEffect(() => {
         if (!publicationEligible && form.published) {
@@ -2113,6 +2247,10 @@ export default function ProductEditorModal({
             } else {
                 delete normalizedAttributes.purchaseTaxRate
             }
+            normalizedAttributes.seoTitle = cleanSeoPart(normalizedAttributes.seoTitle) || suggestedSeoTitle
+            normalizedAttributes.seoDescription = cleanSeoPart(normalizedAttributes.seoDescription) || suggestedSeoDescription
+            normalizedAttributes.seoImageAlt = cleanSeoPart(normalizedAttributes.seoImageAlt) || suggestedSeoAlt
+            normalizedAttributes.seoSearchTerms = cleanSeoPart(normalizedAttributes.seoSearchTerms) || suggestedSearchTerms
 
             const thumbEntries = applyDefaultSizes((form.thumbImages || []).filter((img: any) => img.url && img.url.trim()), 'thumb')
             const galleryEntries = applyDefaultSizes((form.galleryImages || []).filter((img: any) => img.url && img.url.trim()), 'gallery')
@@ -2161,13 +2299,15 @@ export default function ProductEditorModal({
                     url: img.url.trim(),
                     width: Number(img.width),
                     height: Number(img.height),
-                    kind: 'gallery'
+                    kind: 'gallery',
+                    altText: cleanSeoPart(img.altText) || normalizedAttributes.seoImageAlt
                 })),
                 thumbImages: thumbEntries.map((img: any) => ({
                     url: img.url.trim(),
                     width: Number(img.width),
                     height: Number(img.height),
-                    kind: 'thumb'
+                    kind: 'thumb',
+                    altText: cleanSeoPart(img.altText) || normalizedAttributes.seoImageAlt
                 }))
             }
 
@@ -2211,7 +2351,7 @@ export default function ProductEditorModal({
         } finally {
             setSaving(false)
         }
-    }, [activeTab, editingProduct, form, imageUploading, isRestockMode, onClose, onProductsUpdated, onRefreshPurchaseInvoices, onSessionExpired, publicationEligible, restockUnitsInput, saving, showNotification])
+    }, [activeTab, editingProduct, form, imageUploading, isRestockMode, onClose, onProductsUpdated, onRefreshPurchaseInvoices, onSessionExpired, publicationEligible, restockUnitsInput, saving, showNotification, suggestedSearchTerms, suggestedSeoAlt, suggestedSeoDescription, suggestedSeoTitle])
 
     if (!open) return null
 
@@ -2803,6 +2943,90 @@ export default function ProductEditorModal({
                         )}
 
                         {!isDuplicateVariantMode && !isRestockMode && (
+                            <div className="p-5 rounded-xl border border-line bg-surface">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+                                    <div>
+                                        <div className="text-xs uppercase font-bold text-secondary">SEO y búsqueda</div>
+                                        <div className="text-sm text-secondary mt-1">Score de publicación: <span className={`font-bold ${seoScore >= 85 ? 'text-emerald-700' : seoScore >= 65 ? 'text-amber-700' : 'text-red'}`}>{seoScore}%</span></div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-black px-4 py-2 text-sm font-semibold bg-white hover:bg-black hover:text-white disabled:opacity-50"
+                                        onClick={applySeoSuggestions}
+                                        disabled={saving}
+                                    >
+                                        <Icon.MagicWand size={16} />
+                                        Generar SEO
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Slug y canonical</label>
+                                        <div className="rounded-lg border border-line bg-white px-4 py-3 text-sm break-all">{seoCanonicalPreview}</div>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Título SEO</label>
+                                        <input
+                                            type="text"
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                            value={String(form.attributes?.seoTitle || '')}
+                                            placeholder={suggestedSeoTitle}
+                                            onChange={(e) => setAttribute('seoTitle', e.target.value)}
+                                            disabled={saving}
+                                            maxLength={80}
+                                        />
+                                        <p className="text-xs text-secondary mt-1">{seoTitleValue.length}/70</p>
+                                    </div>
+                                    <div className="lg:col-span-2">
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Descripción SEO</label>
+                                        <textarea
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                            rows={3}
+                                            value={String(form.attributes?.seoDescription || '')}
+                                            placeholder={suggestedSeoDescription}
+                                            onChange={(e) => setAttribute('seoDescription', e.target.value)}
+                                            disabled={saving}
+                                            maxLength={170}
+                                        />
+                                        <p className="text-xs text-secondary mt-1">{seoDescriptionValue.length}/160</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Alt base de imágenes</label>
+                                        <input
+                                            type="text"
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                            value={String(form.attributes?.seoImageAlt || '')}
+                                            placeholder={suggestedSeoAlt}
+                                            onChange={(e) => setAttribute('seoImageAlt', e.target.value)}
+                                            disabled={saving}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-secondary text-sm font-bold uppercase mb-2 block">Palabras de búsqueda</label>
+                                        <input
+                                            type="text"
+                                            className="border border-line rounded-lg px-4 py-3 w-full outline-none transition-all bg-white focus:border-black"
+                                            value={String(form.attributes?.seoSearchTerms || '')}
+                                            placeholder={suggestedSearchTerms}
+                                            onChange={(e) => setAttribute('seoSearchTerms', e.target.value)}
+                                            disabled={saving}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {seoChecks.map((item) => (
+                                        <span
+                                            key={item.label}
+                                            className={`rounded-full px-3 py-1 text-xs font-semibold ${item.complete ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-amber-700 border border-amber-200'}`}
+                                        >
+                                            {item.complete ? 'OK' : 'Pendiente'} · {item.label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {!isDuplicateVariantMode && !isRestockMode && (
                         <div className="p-5 rounded-xl border border-line bg-surface">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="text-xs uppercase font-bold text-secondary">Imágenes del producto</div>
@@ -2824,10 +3048,18 @@ export default function ProductEditorModal({
                                                 <div key={key} className="p-3 rounded-xl border border-line bg-white">
                                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                                                         <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                            {img.url ? <Image src={img.url} alt={`Miniatura ${idx + 1}`} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
+                                                            {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Miniatura ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('thumb', idx, e.target.files?.[0])} disabled={saving} />
+                                                            <input
+                                                                type="text"
+                                                                className="mt-2 border border-line rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-black"
+                                                                value={String(img.altText || '')}
+                                                                placeholder={seoAltValue || 'Alt de miniatura'}
+                                                                onChange={(e) => setImageAltText('thumb', idx, e.target.value)}
+                                                                disabled={saving}
+                                                            />
                                                             <div className="text-xs text-secondary mt-1">
                                                                 {img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.thumb.width}x${requiredImageSizes.thumb.height}px`}
                                                                 {imageUploading[key] && <span className="ml-2 text-primary font-semibold">Subiendo...</span>}
@@ -2860,10 +3092,18 @@ export default function ProductEditorModal({
                                                 <div key={key} className="p-3 rounded-xl border border-line bg-white">
                                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                                                         <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                            {img.url ? <Image src={img.url} alt={`Imagen ficha ${idx + 1}`} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
+                                                            {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Imagen ficha ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('gallery', idx, e.target.files?.[0])} disabled={saving} />
+                                                            <input
+                                                                type="text"
+                                                                className="mt-2 border border-line rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-black"
+                                                                value={String(img.altText || '')}
+                                                                placeholder={seoAltValue || 'Alt de imagen de ficha'}
+                                                                onChange={(e) => setImageAltText('gallery', idx, e.target.value)}
+                                                                disabled={saving}
+                                                            />
                                                             <div className="text-xs text-secondary mt-1">
                                                                 {img.width && img.height ? `${img.width}x${img.height}px` : `${requiredImageSizes.gallery.width}x${requiredImageSizes.gallery.height}px`}
                                                                 {imageUploading[key] && <span className="ml-2 text-primary font-semibold">Subiendo...</span>}

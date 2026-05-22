@@ -838,6 +838,8 @@ export const getSeoBrandNames = (products: ProductType[]) => {
 }
 
 export const getProductSeoTitle = (product: ProductType) => {
+  const customTitle = typeof product.attributes?.seoTitle === 'string' ? product.attributes.seoTitle.trim() : ''
+  if (customTitle) return customTitle
   const genderWord = getGenderWord(product.gender)
   const brand = product.brand && !productNameIncludesBrand(product) ? `${product.brand} ` : ''
   const price = getProductCurrentPrice(product)
@@ -846,6 +848,8 @@ export const getProductSeoTitle = (product: ProductType) => {
 }
 
 export const getProductSeoDescription = (product: ProductType) => {
+  const customDescription = typeof product.attributes?.seoDescription === 'string' ? product.attributes.seoDescription.trim() : ''
+  if (customDescription) return customDescription
   const brand = product.brand && !productNameIncludesBrand(product) ? ` ${product.brand}` : ''
   const sku = getProductSku(product)
   const category = getCategoryLabel(product.category) || product.category || 'mascotas'

@@ -758,8 +758,8 @@ export type ProductFormState = {
     published: boolean;
     attributes: Record<string, string>;
     purchaseInvoice: PurchaseInvoiceFormState;
-    thumbImages: Array<{ url: string; width: string; height: string }>;
-    galleryImages: Array<{ url: string; width: string; height: string }>;
+    thumbImages: Array<{ url: string; width: string; height: string; altText?: string }>;
+    galleryImages: Array<{ url: string; width: string; height: string; altText?: string }>;
 }
 
 export type AddressData = {

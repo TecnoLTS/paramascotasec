@@ -1,6 +1,9 @@
 export const apiEndpoints = {
   products: '/api/products',
   product: (id: string) => `/api/products/${id}`,
+  productReviews: (id: string) => `/api/products/${id}/reviews`,
+  adminReviews: '/api/admin/reviews',
+  adminReview: (id: string) => `/api/admin/reviews/${id}`,
   contact: '/api/contact',
   health: '/api/health',
   auth: {
