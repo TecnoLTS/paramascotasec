@@ -83,8 +83,8 @@ import { fetchJson, requestApi } from '@/lib/apiClient'
 import { clearStoredSession, setStoredSessionUser } from '@/lib/authSession'
 import { createDiscount, listDiscountAudit, listDiscounts, updateDiscount, updateDiscountStatus } from '@/lib/api/discounts'
 import type { AdminDiscountAuditRow, AdminDiscountCode, AdminDiscountPayload, AdminDiscountType } from '@/lib/api/discounts'
-import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateStoreStatus } from '@/lib/api/settings'
-import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, StoreStatusSettings } from '@/lib/api/settings'
+import { getPricingCalc, getPricingMargins, getPricingRules, getProductPageSettings, getProductReferenceData, getSessionSettings, getStoreStatus, updatePricingCalc, updatePricingMargins, updatePricingRules, updateProductPageSettings, updateProductReferenceData, updateSessionSettings, updateStoreStatus } from '@/lib/api/settings'
+import type { PricingCalc, PricingMargins, PricingRules, ProductPageSettings, SessionSettings, StoreStatusSettings } from '@/lib/api/settings'
 import { unlockAdminUser } from '@/lib/api/users'
 import { createEmptyProductReferenceData, type ProductReferenceData } from '@/lib/productReferenceData'
 import {
@@ -1018,6 +1018,15 @@ const MyAccount = () => {
     })
     const [storeStatusLoading, setStoreStatusLoading] = useState(false)
     const [storeStatusSaving, setStoreStatusSaving] = useState(false)
+    const [sessionSettings, setSessionSettings] = useState<SessionSettings>({
+        customerSessionHours: 6,
+        adminSessionHours: 12,
+        minCustomerSessionHours: 6,
+        minAdminSessionHours: 12,
+        maxSessionHours: 168,
+    })
+    const [sessionSettingsLoading, setSessionSettingsLoading] = useState(false)
+    const [sessionSettingsSaving, setSessionSettingsSaving] = useState(false)
     const [localSaleSearch, setLocalSaleSearch] = useState('')
     const [localSaleDiscountCode, setLocalSaleDiscountCode] = useState('')
     const [localSalePaymentMethod, setLocalSalePaymentMethod] = useState('cash')
@@ -2293,6 +2302,29 @@ const MyAccount = () => {
         }
     }
 
+    const normalizeSessionSettings = (input?: Partial<SessionSettings> | null): SessionSettings => {
+        const minCustomer = Math.max(6, Math.round(Number(input?.minCustomerSessionHours ?? 6)))
+        const minAdmin = Math.max(12, Math.round(Number(input?.minAdminSessionHours ?? 12)))
+        const maxHours = Math.max(minAdmin, Math.round(Number(input?.maxSessionHours ?? 168)))
+        const normalizeHours = (value: unknown, fallback: number, minimum: number) => {
+            const parsed = Math.round(Number(value))
+            if (!Number.isFinite(parsed)) return fallback
+            return Math.max(minimum, Math.min(maxHours, parsed))
+        }
+        const customerSessionHours = normalizeHours(input?.customerSessionHours, minCustomer, minCustomer)
+        const adminSessionHours = normalizeHours(input?.adminSessionHours, minAdmin, minAdmin)
+
+        return {
+            customerSessionHours,
+            adminSessionHours,
+            customerSessionTtlSeconds: customerSessionHours * 3600,
+            adminSessionTtlSeconds: adminSessionHours * 3600,
+            minCustomerSessionHours: minCustomer,
+            minAdminSessionHours: minAdmin,
+            maxSessionHours: maxHours,
+        }
+    }
+
     const loadStoreStatus = async () => {
         if (!user || user.role !== 'admin') return
         setStoreStatusLoading(true)
@@ -2305,6 +2337,21 @@ const MyAccount = () => {
             showNotification('No se pudo cargar el estado de ventas.', 'error')
         } finally {
             setStoreStatusLoading(false)
+        }
+    }
+
+    const loadSessionSettings = async () => {
+        if (!user || user.role !== 'admin') return
+        setSessionSettingsLoading(true)
+        try {
+            const settings = await getSessionSettings()
+            setSessionSettings(normalizeSessionSettings(settings))
+        } catch (error) {
+            console.error(error)
+            setSessionSettings(normalizeSessionSettings(null))
+            showNotification('No se pudo cargar la configuración de sesión.', 'error')
+        } finally {
+            setSessionSettingsLoading(false)
         }
     }
 
@@ -2321,6 +2368,25 @@ const MyAccount = () => {
                 supportHours: '8:30 AM a 10:00 PM',
                 returnDays: 100
             })
+        }
+    }
+
+    const handleSaveSessionSettings = async () => {
+        if (!user || user.role !== 'admin') return
+        const payload = normalizeSessionSettings(sessionSettings)
+        setSessionSettingsSaving(true)
+        try {
+            const res = await updateSessionSettings({
+                customerSessionHours: payload.customerSessionHours,
+                adminSessionHours: payload.adminSessionHours,
+            })
+            setSessionSettings(normalizeSessionSettings(res.body))
+            showNotification('Duración de sesiones actualizada.')
+        } catch (error) {
+            console.error(error)
+            showNotification('No se pudo guardar la duración de sesiones.', 'error')
+        } finally {
+            setSessionSettingsSaving(false)
         }
     }
 
@@ -2758,6 +2824,7 @@ const MyAccount = () => {
         loadProductReferenceData,
         loadRecentPurchaseInvoices,
         loadStoreStatus,
+        loadSessionSettings,
         loadProductPageSettings,
         loadPosSnapshot,
         normalizeAdminProducts,
@@ -5959,6 +6026,72 @@ const MyAccount = () => {
                                             onNavigateToInventory={() => navigateToPanelTab('inventory')}
                                             onAlertAction={handleStrategicAlertAction}
                                         />
+                                    )}
+                                    {activeTab === 'security-settings' && (
+                                        <div className="tab text-content w-full">
+                                            <div className="heading5 pb-4">Seguridad</div>
+                                            <div className="rounded-xl border border-line bg-white p-5">
+                                                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                                                    <div className="flex-1">
+                                                        <label htmlFor="customerSessionHours" className="text-secondary text-xs uppercase font-bold mb-2 block">
+                                                            Sesión clientes (horas)
+                                                        </label>
+                                                        <input
+                                                            id="customerSessionHours"
+                                                            type="number"
+                                                            step="1"
+                                                            min={sessionSettings.minCustomerSessionHours ?? 6}
+                                                            max={sessionSettings.maxSessionHours ?? 168}
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={sessionSettings.customerSessionHours}
+                                                            onChange={(event) => {
+                                                                const value = Number(event.target.value)
+                                                                setSessionSettings((prev) => normalizeSessionSettings({
+                                                                    ...prev,
+                                                                    customerSessionHours: Number.isFinite(value) ? value : prev.customerSessionHours,
+                                                                }))
+                                                            }}
+                                                            disabled={sessionSettingsLoading || sessionSettingsSaving}
+                                                        />
+                                                        <p className="text-secondary text-xs mt-2">Mínimo {sessionSettings.minCustomerSessionHours ?? 6} horas.</p>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <label htmlFor="adminSessionHours" className="text-secondary text-xs uppercase font-bold mb-2 block">
+                                                            Sesión admins (horas)
+                                                        </label>
+                                                        <input
+                                                            id="adminSessionHours"
+                                                            type="number"
+                                                            step="1"
+                                                            min={sessionSettings.minAdminSessionHours ?? 12}
+                                                            max={sessionSettings.maxSessionHours ?? 168}
+                                                            className="border border-line px-4 py-2 rounded-lg w-full"
+                                                            value={sessionSettings.adminSessionHours}
+                                                            onChange={(event) => {
+                                                                const value = Number(event.target.value)
+                                                                setSessionSettings((prev) => normalizeSessionSettings({
+                                                                    ...prev,
+                                                                    adminSessionHours: Number.isFinite(value) ? value : prev.adminSessionHours,
+                                                                }))
+                                                            }}
+                                                            disabled={sessionSettingsLoading || sessionSettingsSaving}
+                                                        />
+                                                        <p className="text-secondary text-xs mt-2">Mínimo {sessionSettings.minAdminSessionHours ?? 12} horas.</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="button-main py-2 px-6 disabled:opacity-60"
+                                                        onClick={handleSaveSessionSettings}
+                                                        disabled={sessionSettingsLoading || sessionSettingsSaving}
+                                                    >
+                                                        {sessionSettingsSaving ? 'Guardando...' : 'Guardar sesiones'}
+                                                    </button>
+                                                </div>
+                                                <div className="mt-4 rounded-lg border border-line bg-surface px-4 py-3 text-xs text-secondary">
+                                                    Los nuevos inicios de sesión usarán {sessionSettings.customerSessionHours}h para clientes y {sessionSettings.adminSessionHours}h para administradores.
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                     {activeTab === 'reports' && (
                                         <div className="tab text-content w-full">

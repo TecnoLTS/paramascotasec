@@ -209,6 +209,14 @@ export default function AccountSidebar({
                                             <strong className="heading6">Alertas</strong>
                                         </span>
                                     </PanelNavButton>
+                                    <PanelNavButton
+                                        className="item flex items-center gap-3 w-full px-4 py-2.5 rounded-lg cursor-pointer duration-300 hover:bg-surface"
+                                        isActive={activeTab === 'security-settings'}
+                                        onClick={() => onNavigateToPanelTab('security-settings')}
+                                    >
+                                        <SealCheck size={18} />
+                                        <strong className="heading6">Seguridad</strong>
+                                    </PanelNavButton>
                                 </div>
                             )}
                         </div>

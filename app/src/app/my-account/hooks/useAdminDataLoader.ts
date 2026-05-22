@@ -53,6 +53,7 @@ type UseAdminDataLoaderParams = {
   loadProductReferenceData: (options?: { silent?: boolean }) => Promise<void>
   loadRecentPurchaseInvoices: (options?: { silent?: boolean }) => Promise<void>
   loadStoreStatus: () => Promise<void>
+  loadSessionSettings: () => Promise<void>
   loadProductPageSettings: () => Promise<void>
   loadPosSnapshot: () => Promise<void>
   normalizeAdminProducts: (products: any[]) => any[]
@@ -80,6 +81,7 @@ export const useAdminDataLoader = ({
   loadProductReferenceData,
   loadRecentPurchaseInvoices,
   loadStoreStatus,
+  loadSessionSettings,
   loadProductPageSettings,
   loadPosSnapshot,
   normalizeAdminProducts,
@@ -110,6 +112,7 @@ export const useAdminDataLoader = ({
     loadProductReferenceData,
     loadRecentPurchaseInvoices,
     loadStoreStatus,
+    loadSessionSettings,
     loadProductPageSettings,
     loadPosSnapshot,
     normalizeAdminProducts,
@@ -140,6 +143,7 @@ export const useAdminDataLoader = ({
       loadProductReferenceData,
       loadRecentPurchaseInvoices,
       loadStoreStatus,
+      loadSessionSettings,
       loadProductPageSettings,
       loadPosSnapshot,
       normalizeAdminProducts,
@@ -161,6 +165,7 @@ export const useAdminDataLoader = ({
     loadProductReferenceData,
     loadRecentPurchaseInvoices,
     loadStoreStatus,
+    loadSessionSettings,
     loadProductPageSettings,
     loadPosSnapshot,
     normalizeAdminProducts,
@@ -334,6 +339,10 @@ export const useAdminDataLoader = ({
 
       if (!isPassive && activeTab === 'store-status') {
         tasks.push(current.loadStoreStatus())
+      }
+
+      if (!isPassive && activeTab === 'security-settings') {
+        tasks.push(current.loadSessionSettings())
       }
 
       if (!isPassive && activeTab === 'local-sales') {

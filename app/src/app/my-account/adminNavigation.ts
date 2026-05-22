@@ -1,7 +1,7 @@
 import type { AdminMenuGroupKey } from './types'
 
 export const ADMIN_TAB_GROUPS: Record<AdminMenuGroupKey, string[]> = {
-  monitoring: ['alerts'],
+  monitoring: ['alerts', 'security-settings'],
   reporting: ['reports', 'sales-ranking'],
   catalog: ['products', 'inventory', 'catalogs', 'users', 'product-page'],
   operations: ['store-status', 'local-sales', 'admin-orders', 'shipments', 'billing-rides', 'balances'],

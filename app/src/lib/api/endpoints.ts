@@ -31,6 +31,7 @@ export const apiEndpoints = {
     pricingCalc: '/api/admin/settings/pricing-calc',
     pricingRules: '/api/admin/settings/pricing-rules',
     productReferenceData: '/api/admin/settings/product-reference-data',
+    session: '/api/admin/settings/session',
     storeStatus: '/api/admin/settings/store-status',
     publicStoreStatus: '/api/settings/store-status',
     publicBrandLogos: '/api/settings/brand-logos',

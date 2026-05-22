@@ -45,6 +45,16 @@ export type StoreStatusSettings = {
   updatedBy?: string | null
 }
 
+export type SessionSettings = {
+  customerSessionHours: number
+  adminSessionHours: number
+  customerSessionTtlSeconds?: number
+  adminSessionTtlSeconds?: number
+  minCustomerSessionHours?: number
+  minAdminSessionHours?: number
+  maxSessionHours?: number
+}
+
 export const getProductPageSettings = () =>
   fetchJson<ProductPageSettings>(apiEndpoints.settings.productPage)
 
@@ -80,6 +90,16 @@ export const getPricingRules = () =>
 
 export const updatePricingRules = (payload: PricingRules) =>
   requestApi<PricingRules>(apiEndpoints.settings.pricingRules, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const getSessionSettings = () =>
+  fetchJson<SessionSettings>(apiEndpoints.settings.session)
+
+export const updateSessionSettings = (payload: Pick<SessionSettings, 'customerSessionHours' | 'adminSessionHours'>) =>
+  requestApi<SessionSettings>(apiEndpoints.settings.session, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
