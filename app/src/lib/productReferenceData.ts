@@ -2,16 +2,19 @@ import {
   PET_SPECIES_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
 } from '@/lib/productTaxonomy'
+import { normalizeMeasurementLabel } from '@/lib/measurementLabel'
 
 export const PRODUCT_REFERENCE_KEYS = [
   'categories',
   'brands',
   'suppliers',
   'sizes',
+  'weights',
   'materials',
   'colors',
   'usages',
   'presentations',
+  'dosages',
   'activeIngredients',
   'storageLocations',
   'tags',
@@ -61,10 +64,12 @@ export type ProductReferenceData = {
   brands: ProductBrandReference[]
   suppliers: ProductSupplierReference[]
   sizes: string[]
+  weights: string[]
   materials: string[]
   colors: string[]
   usages: string[]
   presentations: string[]
+  dosages: string[]
   activeIngredients: string[]
   storageLocations: string[]
   tags: string[]
@@ -166,10 +171,12 @@ export const createEmptyProductReferenceData = (): ProductReferenceData => ({
   brands: [],
   suppliers: [],
   sizes: [],
+  weights: [],
   materials: [],
   colors: [],
   usages: [],
   presentations: [],
+  dosages: [],
   activeIngredients: [],
   storageLocations: [],
   tags: [],
@@ -204,6 +211,19 @@ export const normalizeReferenceList = (input: unknown): string[] => {
 
   return normalized
 }
+
+const normalizeMeasuredReferenceList = (input: unknown) =>
+  normalizeReferenceList(
+    Array.isArray(input)
+      ? input.map((value) => normalizeMeasurementLabel(String(value ?? '')))
+      : []
+  )
+
+const isWeightOrContentReference = (value?: string | null) =>
+  /\d+(?:[.,]\d+)?\s*(?:kgs?|kg|k|gr|g|lb|lbs|l|lt|lts|ml|oz|un|uni|und|unidad(?:es)?)\b/i.test(value ?? '')
+
+const isDosageReference = (value?: string | null) =>
+  /\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|µg|ui|iu)\b|(?:^|\s)\d+\s*(?:dosis|dose|tabletas?|tabs?|comprimidos?|capsulas?|cápsulas?)\b/i.test(value ?? '')
 
 export const normalizeProductBrandRecord = (
   input: unknown,
@@ -465,6 +485,14 @@ export const normalizeProductReferenceData = (input?: Partial<Record<ProductRefe
 
     defaults[key] = normalizeReferenceList(source[key]) as never
   })
+  const sizes = normalizeMeasuredReferenceList(defaults.sizes)
+  const migratedWeights = sizes.filter((value) => isWeightOrContentReference(value) && !isDosageReference(value))
+  const migratedDosages = sizes.filter((value) => isDosageReference(value))
+
+  defaults.sizes = sizes.filter((value) => !migratedWeights.includes(value) && !migratedDosages.includes(value))
+  defaults.weights = normalizeMeasuredReferenceList([...(defaults.weights || []), ...migratedWeights])
+  defaults.dosages = normalizeMeasuredReferenceList([...(defaults.dosages || []), ...migratedDosages])
+  defaults.presentations = normalizeReferenceList(defaults.presentations)
   defaults.categoryImages = normalizeProductCategoryImageRecords(source.categoryImages)
 
   return defaults
@@ -595,9 +623,18 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
     key: 'sizes',
     title: 'Tallas y tamaños',
     sidebarTitle: 'Tallas',
-    description: 'Reutiliza medidas y presentaciones frecuentes como S, M, 1 Kg o 500 ml.',
+    description: 'Tallas comerciales para ropa y tamaños no basados en peso.',
     itemLabel: 'talla o tamaño',
     placeholder: 'Ej: XL',
+    menuIcon: 'Ruler',
+  },
+  {
+    key: 'weights',
+    title: 'Pesos y contenidos',
+    sidebarTitle: 'Pesos',
+    description: 'Medidas de contenido reutilizables como 2 kg, 500 ml o 1 unidad.',
+    itemLabel: 'peso o contenido',
+    placeholder: 'Ej: 2 kg',
     menuIcon: 'Ruler',
   },
   {
@@ -635,6 +672,15 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
     itemLabel: 'presentación',
     placeholder: 'Ej: Spray 120 ml',
     menuIcon: 'Package',
+  },
+  {
+    key: 'dosages',
+    title: 'Dosis y concentraciones',
+    sidebarTitle: 'Dosis',
+    description: 'Dosis, concentraciones o cantidades clínicas reutilizables.',
+    itemLabel: 'dosis o concentración',
+    placeholder: 'Ej: 45 mg',
+    menuIcon: 'Flask',
   },
   {
     key: 'activeIngredients',
@@ -680,6 +726,36 @@ export const PRODUCT_REFERENCE_SECTIONS: ProductReferenceSection[] = [
     itemLabel: 'edad',
     placeholder: 'Ej: Adulto',
     menuIcon: 'HourglassMedium',
+  },
+]
+
+export const PRODUCT_ATTRIBUTE_REFERENCE_KEYS = [
+  'sizes',
+  'weights',
+  'materials',
+  'colors',
+  'usages',
+  'presentations',
+  'dosages',
+  'activeIngredients',
+  'storageLocations',
+  'tags',
+  'flavors',
+  'ageRanges',
+] as const satisfies readonly ProductReferenceKey[]
+
+export const PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET = new Set<ProductReferenceKey>(PRODUCT_ATTRIBUTE_REFERENCE_KEYS)
+
+export const PRODUCT_REFERENCE_NAV_SECTIONS: ProductReferenceSection[] = [
+  ...PRODUCT_REFERENCE_SECTIONS.filter((section) => ['categories', 'brands', 'suppliers'].includes(section.key)),
+  {
+    key: 'sizes',
+    title: 'Atributos de producto',
+    sidebarTitle: 'Atributos',
+    description: 'Tallas, medidas, colores, presentaciones, dosis y demás valores reutilizables desde un solo menú.',
+    itemLabel: 'atributo',
+    placeholder: 'Ej: XL, Azul, 2 kg',
+    menuIcon: 'Ruler',
   },
 ]
 

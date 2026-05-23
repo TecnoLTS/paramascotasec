@@ -9,7 +9,7 @@ import { ProductType } from '@/type/ProductType'
 import Product from '@/components/Product/Product'
 import HandlePagination from '@/components/Other/HandlePagination'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
-import { buildCatalogCategoryCards } from '@/lib/catalog'
+import { buildCatalogCategoryCards, sortCatalogProductsByFamily } from '@/lib/catalog'
 
 type Props = {
   products: ProductType[]
@@ -38,7 +38,7 @@ const SearchResultClient = ({ products, error, initialQuery, publicCategories }:
   )
 
   const filteredData = useMemo(() => {
-    return filterProductsBySearch(products, activeQuery, productSearchIndex)
+    return sortCatalogProductsByFamily(filterProductsBySearch(products, activeQuery, productSearchIndex))
   }, [activeQuery, productSearchIndex, products])
 
   const pageCount = Math.ceil(filteredData.length / productsPerPage)

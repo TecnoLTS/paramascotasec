@@ -11,23 +11,6 @@ export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024
 export const PRODUCT_IMAGE_ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
 const BASE_PRICE_FRACTION_DIGITS = 4
 
-const COLOR_INFERENCE_RULES: Array<{ canonical: string; patterns: string[] }> = [
-    { canonical: 'Verde fluorescente', patterns: ['verde fluorescente'] },
-    { canonical: 'Verde Militar', patterns: ['verde militar'] },
-    { canonical: 'Azul', patterns: [' azul ', '-az-', '-azul-', ' azul'] },
-    { canonical: 'Rojo', patterns: [' rojo ', ' roja ', '-rj-', ' rojo', ' roja'] },
-    { canonical: 'Rosa', patterns: [' rosa ', ' rosado ', ' rosada ', '-rs-', ' rosa', ' rosado', ' rosada'] },
-    { canonical: 'Morado', patterns: [' morado ', ' morada ', '-mr-', ' morado', ' morada'] },
-    { canonical: 'Turquesa', patterns: [' turquesa ', '-tq-', ' turquesa'] },
-    { canonical: 'Naranja', patterns: [' naranja ', '-nj-', ' naranja'] },
-    { canonical: 'Amarillo', patterns: [' amarillo ', ' amarilla ', '-am-', ' amarillo', ' amarilla'] },
-    { canonical: 'Verde', patterns: [' verde ', '-vd-', ' verde'] },
-    { canonical: 'Gris', patterns: [' gris ', '-gr-', ' gris'] },
-    { canonical: 'Blanco', patterns: [' blanco ', ' blanca ', '-bl-', ' blanco', ' blanca'] },
-    { canonical: 'Negro', patterns: [' negro ', ' negra ', '-ng-', '-nr-', ' negro', ' negra'] },
-    { canonical: 'Cafe', patterns: [' cafe ', ' café ', '-cf-', ' cafe', ' café'] },
-]
-
 const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -96,6 +79,72 @@ const variantLabelMatchesValue = (value: string, label: string) => {
 const normalizeVariantComparisonValue = (value: unknown) =>
     normalizeMeasurementLabel(String(value || '')).trim().toLowerCase()
 
+const normalizeVariantAxisValue = (value: unknown) =>
+    String(value || '').trim()
+
+const isCareLegacySizeLabel = (value: string) =>
+    /^(?:XXS|XS|S|M|L|XL|XXL|STANDARD|\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ))$/i.test(value.trim())
+
+const isContentMeasurementValue = (value: string) =>
+    /^\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|LBS?|L|ML|MG|OZ)$/i.test(value.trim())
+
+const normalizeGenericIdentity = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+
+const isGenericPresentationValue = (value: string) => {
+    const identity = normalizeGenericIdentity(value)
+    return identity === 'selecciona presentacion'
+        || identity === 'crear o seleccionar presentacion'
+}
+
+const CARE_VARIANT_FIELDS = new Set(['range', 'weight', 'presentation', 'dosage', 'volume', 'packaging'])
+
+const normalizeLegacyCareMeasurementAttributes = (attributes: Record<string, string>) => {
+    delete attributes.size
+    const variantAxis = normalizeVariantAxisValue(attributes.variantAxis || attributes.variantDefinitionField)
+    if (variantAxis && !CARE_VARIANT_FIELDS.has(variantAxis)) {
+        delete attributes.variantAxis
+        delete attributes.variantDefinitionField
+    }
+}
+
+const normalizeFoodMeasurementAttributes = (attributes: Record<string, string>) => {
+    if (attributes.presentation && isGenericPresentationValue(attributes.presentation)) {
+        delete attributes.presentation
+    }
+
+    const size = normalizeVariantSizeValue(String(attributes.size || ''))
+    const weight = normalizeMeasurementLabel(String(attributes.weight || '')).trim()
+
+    if (size && isContentMeasurementValue(size)) {
+        if (!weight) {
+            attributes.weight = size
+        } else if (normalizeVariantComparisonValue(weight) !== normalizeVariantComparisonValue(size)) {
+            attributes.weight = weight
+        }
+        delete attributes.size
+    } else if (size) {
+        delete attributes.size
+    }
+
+    const volume = normalizeMeasurementLabel(String(attributes.volume || '')).trim()
+    if (volume && isContentMeasurementValue(volume)) {
+        if (!String(attributes.weight || '').trim()) {
+            attributes.weight = volume
+        }
+        delete attributes.volume
+    }
+
+    if (!attributes.presentation && attributes.packaging) {
+        attributes.presentation = normalizeMeasurementLabel(String(attributes.packaging)).trim()
+    }
+}
+
 const slugifyVariantValue = (value: string) =>
     value
         .normalize('NFD')
@@ -111,6 +160,30 @@ const titleCaseWords = (value: string) =>
         .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
         .join(' ')
 
+const pluralizeSpanishColor = (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return trimmed
+    return /[aeiouáéíóú]$/i.test(trimmed) ? `${trimmed}s` : trimmed
+}
+
+const getColorValueAliases = (value: string) => {
+    const normalized = titleCaseWords(value.trim())
+    if (!normalized) return []
+    if (!normalized.includes('/')) return [normalized]
+
+    const [primary, secondary] = normalized.split('/').map((part) => part.trim()).filter(Boolean)
+    if (!primary || !secondary) return [normalized]
+
+    return [
+        normalized,
+        `${primary} ${secondary}`,
+        `${primary} con Detalles ${secondary}`,
+        `${primary} con Detalles ${pluralizeSpanishColor(secondary)}`,
+        `${primary} con detalles ${secondary}`,
+        `${primary} con detalles ${pluralizeSpanishColor(secondary)}`,
+    ]
+}
+
 const normalizeVariantSizeValue = (value: string) => {
     const normalized = normalizeMeasurementLabel(value).trim()
     if (!normalized) return ''
@@ -120,17 +193,45 @@ const normalizeVariantSizeValue = (value: string) => {
     return normalized
 }
 
-const inferColorFromText = (...values: Array<unknown>) => {
-    const haystack = ` ${values.map((value) => slugifyVariantValue(String(value || '')).replace(/-/g, ' ')).join(' ')} `.replace(/\s+/g, ' ')
-    if (!haystack.trim()) return ''
+const isAccessorySizeVariantValue = (value: string) =>
+    /^(?:XXS|XS|S|M|L|XL|XXL|STANDARD|\d+(?:[.,]\d+)?\s?CM|X?\d+)$/i.test(value.trim())
 
-    for (const rule of COLOR_INFERENCE_RULES) {
-        if (rule.patterns.some((pattern) => haystack.includes(` ${slugifyVariantValue(pattern).replace(/-/g, ' ')} `))) {
-            return rule.canonical
-        }
+const normalizeCatalogDisplayMode = (value: unknown) => {
+    const normalized = String(value || '').trim().toLowerCase()
+    if (['separate', 'individual', 'standalone', 'true', '1', 'yes', 'si', 'sí'].includes(normalized)) return 'separate'
+    if (['grouped', 'group', 'false', '0', 'no'].includes(normalized)) return 'grouped'
+    return ''
+}
+
+const stripVariantSuffixesFromName = (name: string, labels: string[]) => {
+    let strippedName = name.trim()
+    const suffixLabels = Array.from(new Set(labels.map((label) => label.trim()).filter(Boolean)))
+        .sort((left, right) => right.length - left.length)
+
+    for (let pass = 0; pass < 4; pass += 1) {
+        const beforePass = strippedName
+        suffixLabels.forEach((label) => {
+            const separator = requiresSeparatedVariantSuffix(label) ? '(?:\\s+|-)' : '(?:\\s+|-)?'
+            strippedName = strippedName
+                .replace(new RegExp(`${separator}${buildFlexibleVariantSuffixPattern(label)}$`, 'i'), '')
+                .trim()
+        })
+        if (strippedName === beforePass) break
     }
 
-    return ''
+    return strippedName
+}
+
+const resolveAccessoryColorSizeBaseName = (fullName: string, color: string, size: string) => {
+    const baseName = stripVariantSuffixesFromName(fullName, [size])
+    if (!baseName) return fullName
+
+    const baseIdentity = normalizeVariantComparisonValue(baseName)
+    const colorAliases = getColorValueAliases(color)
+    const hasColorInBase = colorAliases.some((alias) => baseIdentity.includes(normalizeVariantComparisonValue(alias)))
+    if (hasColorInBase) return baseName
+
+    return `${baseName} ${titleCaseWords(color)}`.trim()
 }
 
 const buildVariantGroupKey = ({
@@ -160,12 +261,16 @@ const getVariantCandidateValues = (type: string, source: Record<string, any>) =>
         Alimento: ['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'],
         ropa: ['variantLabel', 'size', 'color'],
         accesorios: ['variantLabel', 'size', 'presentation', 'color'],
-        cuidado: ['variantLabel', 'presentation', 'dosage', 'volume', 'size'],
+        cuidado: ['weight', 'volume', 'presentation', 'dosage', 'packaging', 'range'],
     }
 
     const keys = valuesByType[normalizedType] ?? ['variantLabel', 'size', 'presentation', 'weight']
     return keys
         .map((key) => String(source[key] || '').trim())
+        .filter((value, index) => {
+            const key = keys[index]
+            return !(normalizedType === 'cuidado' && key === 'variantLabel' && isCareLegacySizeLabel(value))
+        })
         .filter(Boolean)
 }
 
@@ -174,14 +279,13 @@ const resolveCanonicalVariantLabelByType = (type: string, attributes: Record<str
     const size = normalizeVariantSizeValue(String(attributes.size || ''))
     const weight = normalizeMeasurementLabel(String(attributes.weight || '')).trim()
     const presentation = normalizeMeasurementLabel(String(attributes.presentation || '')).trim()
+    const range = normalizeMeasurementLabel(String(attributes.range || '')).trim()
+    const dosage = normalizeMeasurementLabel(String(attributes.dosage || '')).trim()
+    const volume = normalizeMeasurementLabel(String(attributes.volume || '')).trim()
+    const packaging = normalizeMeasurementLabel(String(attributes.packaging || '')).trim()
     const color = titleCaseWords(String(attributes.color || '').trim())
     const explicit = normalizeMeasurementLabel(String(attributes.variantLabel || '')).trim()
-    const variantAxis = String(attributes.variantAxis || attributes.variantDefinitionField || '').trim()
-    if (variantAxis) {
-        const axisValue = normalizeMeasurementLabel(String(attributes[variantAxis] || '')).trim()
-        if (axisValue) return axisValue
-    }
-
+    const variantAxis = String(attributes.displayAxis || attributes.variantAxis || attributes.variantDefinitionField || '').trim().toLowerCase()
     const shouldPreserveDetailedExplicitLabel = Boolean(
         explicit
         && size
@@ -193,36 +297,101 @@ const resolveCanonicalVariantLabelByType = (type: string, attributes: Record<str
     )
 
     if (normalizedType === 'ropa') {
+        if (variantAxis === 'size' && size) return size
+        if (size && color) return `${size} ${color}`
         return shouldPreserveDetailedExplicitLabel ? explicit : (size || color || explicit)
     }
 
     if (normalizedType === 'accesorios') {
+        if (variantAxis === 'size' && size) return size
+        if (color && size) return `${color} ${size}`
         return shouldPreserveDetailedExplicitLabel ? explicit : (color || size || presentation || explicit)
     }
 
+    if (variantAxis && (normalizedType !== 'cuidado' || CARE_VARIANT_FIELDS.has(variantAxis))) {
+        const axisValue = normalizeMeasurementLabel(String(attributes[variantAxis] || '')).trim()
+        if (axisValue) return axisValue
+    }
+
     if (normalizedType === 'cuidado') {
-        return presentation || size || explicit
+        return weight || volume || dosage || presentation || packaging || range
     }
 
     if (normalizedType === 'Alimento') {
-        return weight || size || presentation || explicit
+        return weight || presentation || explicit
     }
 
     return explicit || size || weight || presentation || color
 }
 
+const resolveDisplayAxisByType = (type: string, attributes: Record<string, any>) => {
+    const normalizedType = normalizeProductType(type, String(attributes.category || ''))
+    const requestedAxis = resolveRequestedDisplayAxis(normalizedType, attributes)
+    if (requestedAxis) return requestedAxis
+
+    if (normalizedType === 'ropa') {
+        if (String(attributes.size || '').trim()) return 'size'
+        if (String(attributes.color || '').trim()) return 'color'
+    }
+
+    if (normalizedType === 'accesorios') {
+        if (String(attributes.color || '').trim()) return 'color'
+        if (String(attributes.size || '').trim()) return 'size'
+        if (String(attributes.presentation || attributes.packaging || '').trim()) return 'presentation'
+    }
+
+    if (normalizedType === 'cuidado') {
+        if (String(attributes.weight || attributes.volume || attributes.presentation || attributes.packaging || '').trim()) return 'presentation'
+        if (String(attributes.dosage || '').trim()) return 'dosage'
+        if (String(attributes.range || '').trim()) return 'range'
+    }
+
+    if (normalizedType === 'Alimento') {
+        if (String(attributes.weight || attributes.presentation || attributes.packaging || attributes.volume || '').trim()) return 'presentation'
+    }
+
+    return ''
+}
+
+const resolveRequestedDisplayAxis = (normalizedType: string, attributes: Record<string, any>) => {
+    const rawAxis = [
+        attributes.displayAxis,
+        attributes.publicVariantAxis,
+        attributes.catalogDisplayAxis,
+        attributes.variantAxis,
+        attributes.variantDefinitionField,
+    ].map((value) => String(value || '').trim().toLowerCase()).find(Boolean) || ''
+    const axis = rawAxis === 'weight' || rawAxis === 'volume' || rawAxis === 'packaging'
+        ? 'presentation'
+        : ['presentation', 'size', 'color', 'range', 'dosage'].includes(rawAxis)
+            ? rawAxis
+            : ''
+    if (!axis) return ''
+    if (normalizedType === 'cuidado' && !['presentation', 'range', 'dosage'].includes(axis)) return ''
+    if (normalizedType === 'Alimento' && axis !== 'presentation') return ''
+
+    const hasValue = (key: string) => String(attributes[key] || '').trim().length > 0
+    if (axis === 'color') return hasValue('color') ? 'color' : ''
+    if (axis === 'size') return !['cuidado', 'Alimento'].includes(normalizedType) && hasValue('size') ? 'size' : ''
+    if (axis === 'presentation') return ['weight', 'volume', 'presentation', 'packaging'].some(hasValue) ? 'presentation' : ''
+    if (axis === 'range') return hasValue('range') ? 'range' : ''
+    if (axis === 'dosage') return hasValue('dosage') ? 'dosage' : ''
+    return ''
+}
+
 export const getVariantDefinitionFieldLabel = (type: string) => {
     const normalizedType = normalizeProductType(type)
     if (normalizedType === 'ropa') return 'talla o color'
-    if (normalizedType === 'cuidado') return 'presentación'
-    if (normalizedType === 'Alimento') return 'tamaño o peso'
+    if (normalizedType === 'cuidado') return 'contenido, presentación, dosis o rango recomendado'
+    if (normalizedType === 'Alimento') return 'peso neto o contenido'
     if (normalizedType === 'accesorios') return 'tamaño o color'
     return 'variante'
 }
 
 export const getVariantDefinitionFieldKey = (type: string) => {
     const normalizedType = normalizeProductType(type)
-    if (normalizedType === 'cuidado') return 'presentation'
+    if (normalizedType === 'cuidado') return 'weight'
+    if (normalizedType === 'Alimento') return 'weight'
     return 'size'
 }
 
@@ -241,16 +410,42 @@ export const inferDuplicateVariantFieldKey = (
         || productSource?.attributes?.variantLabel
     )
 
-    if (normalizedType === 'cuidado') return 'presentation'
-
-    if (normalizedType === 'Alimento') {
-        const explicitField = String(attributeSource.__variantDefinitionField || '').trim()
-        if (explicitField === 'size' || explicitField === 'weight') {
+    if (normalizedType === 'cuidado') {
+        const explicitField = String(attributeSource.__variantDefinitionField || attributeSource.variantAxis || '').trim()
+        if (['range', 'weight', 'presentation', 'dosage', 'volume'].includes(explicitField)) {
             return explicitField
         }
 
+        const rangeValue = normalizeVariantComparisonValue(attributeSource.range || productSource?.attributes?.range || productSource.range)
         const weightValue = normalizeVariantComparisonValue(attributeSource.weight || productSource?.attributes?.weight || productSource.weight)
-        return resolvedVariantLabel && resolvedVariantLabel === weightValue ? 'weight' : 'size'
+        const presentationValue = normalizeVariantComparisonValue(attributeSource.presentation || productSource?.attributes?.presentation || productSource.presentation)
+        const dosageValue = normalizeVariantComparisonValue(attributeSource.dosage || productSource?.attributes?.dosage || productSource.dosage)
+
+        if (resolvedVariantLabel) {
+            if (rangeValue && rangeValue === resolvedVariantLabel) return 'range'
+            if (weightValue && weightValue === resolvedVariantLabel) return 'weight'
+            if (presentationValue && presentationValue === resolvedVariantLabel) return 'presentation'
+            if (dosageValue && dosageValue === resolvedVariantLabel) return 'dosage'
+        }
+
+        if (weightValue) return 'weight'
+        if (dosageValue) return 'dosage'
+        if (presentationValue) return 'presentation'
+        if (rangeValue) return 'range'
+        return 'presentation'
+    }
+
+    if (normalizedType === 'Alimento') {
+        const explicitField = String(attributeSource.__variantDefinitionField || '').trim()
+        if (explicitField === 'weight') {
+            return 'weight'
+        }
+        if (explicitField === 'size') {
+            const explicitSize = normalizeVariantSizeValue(String(attributeSource.size || productSource?.attributes?.size || productSource.size || ''))
+            return explicitSize && !isContentMeasurementValue(explicitSize) ? 'size' : 'weight'
+        }
+
+        return 'weight'
     }
 
     if (normalizedType === 'ropa') {
@@ -323,6 +518,16 @@ export const resolveProductVariantBaseName = (product: any) => {
     if (!fullName) return ''
 
     const type = normalizeProductType(String(product?.productType || ''), String(product?.category || ''))
+    const attributeSource = {
+        ...(product || {}),
+        ...(product?.attributes || {}),
+    }
+    const color = titleCaseWords(String(attributeSource.color || '').trim())
+    const size = normalizeVariantSizeValue(String(attributeSource.size || ''))
+    if (type === 'accesorios' && color && size && isAccessorySizeVariantValue(size)) {
+        return resolveAccessoryColorSizeBaseName(fullName, color, size)
+    }
+
     const variantLabel = resolveProductVariantLabel(type, product?.attributes, product)
     const explicitCandidates = [
         String(product?.variantBaseName || '').trim(),
@@ -330,10 +535,7 @@ export const resolveProductVariantBaseName = (product: any) => {
     ].filter(Boolean)
     const variantCandidates = Array.from(new Set([
         variantLabel,
-        ...getVariantCandidateValues(type, {
-            ...(product || {}),
-            ...(product?.attributes || {}),
-        }),
+        ...getVariantCandidateValues(type, attributeSource),
     ].filter(Boolean)))
 
     for (const candidate of explicitCandidates) {
@@ -385,20 +587,8 @@ export const enrichVariantAttributes = ({
 }) => {
     const normalizedType = normalizeProductType(type, String(category || ''))
     const nextAttributes: Record<string, string> = { ...(attributes || {}) }
-    const rawName = String(name || '').trim()
-
     const explicitColor = titleCaseWords(String(nextAttributes.color || '').trim())
-    const inferredColor = inferColorFromText(
-        explicitColor,
-        nextAttributes.variantLabel,
-        nextAttributes.variantBaseName,
-        nextAttributes.sku,
-        rawName,
-        nextAttributes.tag
-    )
-    if (!explicitColor && inferredColor) {
-        nextAttributes.color = inferredColor
-    } else if (explicitColor) {
+    if (explicitColor) {
         nextAttributes.color = explicitColor
     }
 
@@ -411,15 +601,59 @@ export const enrichVariantAttributes = ({
     if (nextAttributes.presentation) {
         nextAttributes.presentation = normalizeMeasurementLabel(String(nextAttributes.presentation)).trim()
     }
+    if (nextAttributes.range) {
+        nextAttributes.range = normalizeMeasurementLabel(String(nextAttributes.range)).trim()
+    }
+    if (nextAttributes.dosage) {
+        nextAttributes.dosage = normalizeMeasurementLabel(String(nextAttributes.dosage)).trim()
+    }
+    if (nextAttributes.volume) {
+        nextAttributes.volume = normalizeMeasurementLabel(String(nextAttributes.volume)).trim()
+    }
+    if (nextAttributes.packaging) {
+        nextAttributes.packaging = normalizeMeasurementLabel(String(nextAttributes.packaging)).trim()
+    }
+
+    if (normalizedType === 'cuidado') {
+        normalizeLegacyCareMeasurementAttributes(nextAttributes)
+    }
+    if (normalizedType === 'Alimento') {
+        normalizeFoodMeasurementAttributes(nextAttributes)
+    }
 
     const resolvedVariantLabel = resolveCanonicalVariantLabelByType(normalizedType, nextAttributes)
+    const resolvedDisplayAxis = resolveDisplayAxisByType(normalizedType, nextAttributes)
+    const requestedCatalogDisplayMode = normalizeCatalogDisplayMode(nextAttributes.catalogDisplayMode || nextAttributes.variantDisplayMode)
+    if (resolvedDisplayAxis) {
+        nextAttributes.displayAxis = resolvedDisplayAxis
+        if (resolvedDisplayAxis === 'size' || resolvedDisplayAxis === 'color') {
+            nextAttributes.variantAxis = resolvedDisplayAxis
+            nextAttributes.variantDefinitionField = resolvedDisplayAxis
+        }
+        if (
+            normalizedType === 'accesorios'
+            && resolvedDisplayAxis === 'size'
+            && nextAttributes.color
+            && isAccessorySizeVariantValue(String(nextAttributes.size || '').trim())
+        ) {
+            nextAttributes.catalogDisplayMode = requestedCatalogDisplayMode === 'separate' ? 'separate' : 'grouped'
+        } else if (resolvedDisplayAxis === 'color') {
+            nextAttributes.catalogDisplayMode = requestedCatalogDisplayMode || 'grouped'
+        } else if (requestedCatalogDisplayMode) {
+            nextAttributes.catalogDisplayMode = requestedCatalogDisplayMode
+        }
+    } else {
+        delete nextAttributes.displayAxis
+    }
 
     if (resolvedVariantLabel) {
         nextAttributes.variantLabel = resolvedVariantLabel
+    } else if (normalizedType === 'cuidado' && isCareLegacySizeLabel(String(nextAttributes.variantLabel || ''))) {
+        delete nextAttributes.variantLabel
     }
 
     const synthesizedProduct = {
-        name: rawName,
+        name: String(name || '').trim(),
         category: normalizeProductCategory(String(category || '')),
         productType: normalizedType,
         attributes: nextAttributes,
@@ -504,7 +738,7 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
     if (type === 'Alimento') {
         return {
             catalogCategories: '',
-            size: '',
+            presentation: '',
             weight: '',
             flavor: '',
             age: '',
@@ -556,6 +790,11 @@ export const getEmptyAttributes = (type: string): Record<string, string> => {
         return {
             catalogCategories: '',
             presentation: '',
+            weight: '',
+            range: '',
+            dosage: '',
+            volume: '',
+            packaging: '',
             activeIngredient: '',
             usage: '',
             species: '',
@@ -578,6 +817,21 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
 
     Array.from(new Set([
         ...Object.keys(base),
+        'size',
+        'weight',
+        'presentation',
+        'packaging',
+        'volume',
+        'range',
+        'dosage',
+        'material',
+        'color',
+        'usage',
+        'activeIngredient',
+        'flavor',
+        'age',
+        'gender',
+        'ingredients',
         'sku',
         'tag',
         'species',
@@ -605,6 +859,15 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
         })
     }
 
+    if (nextType === 'cuidado') {
+        ;['range', 'weight', 'dosage', 'volume', 'packaging', 'presentation', 'activeIngredient', 'usage'].forEach((key) => {
+            const value = String(current[key] || '').trim()
+            if (value) {
+                base[key] = value
+            }
+        })
+    }
+
     if (nextType === 'ropa') {
         ;['sizeGuideRows', 'sizeGuideNotes'].forEach((key) => {
             const value = String(current[key] || '').trim()
@@ -614,10 +877,15 @@ export const getAttributesForTypeChange = (nextType: string, currentAttributes?:
         })
     }
 
+    if (nextType === 'Alimento') {
+        normalizeFoodMeasurementAttributes(base)
+    }
+
     return base
 }
 
 export const normalizeAttributes = (type: string, attrs: any) => {
+    const normalizedType = normalizeProductType(type)
     const base = getEmptyAttributes(type)
     const merged = { ...base, ...(attrs || {}) }
     const cleaned: Record<string, string> = {}
@@ -638,6 +906,16 @@ export const normalizeAttributes = (type: string, attrs: any) => {
             cleaned[key] = String(value).trim()
         }
     })
+
+    if (normalizedType === 'cuidado') {
+        normalizeLegacyCareMeasurementAttributes(cleaned)
+        if (isCareLegacySizeLabel(String(cleaned.variantLabel || ''))) {
+            delete cleaned.variantLabel
+        }
+    }
+    if (normalizedType === 'Alimento') {
+        normalizeFoodMeasurementAttributes(cleaned)
+    }
 
     return cleaned
 }

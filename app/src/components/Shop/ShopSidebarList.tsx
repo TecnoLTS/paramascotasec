@@ -11,7 +11,7 @@ import 'rc-slider/assets/index.css'
 import HandlePagination from '../Other/HandlePagination';
 import { getCategoryFilter, getCategoryLabel, getCategoryUrl, matchesPetCategoryFilter } from '@/data/petCategoryCards';
 import { useSite } from '@/context/SiteContext';
-import { buildCatalogCategoryCards, getProductDiscountPercent, isProductOnSale } from '@/lib/catalog';
+import { buildCatalogCategoryCards, getProductDiscountPercent, isProductOnSale, sortCatalogProductsByFamily } from '@/lib/catalog';
 import { buildProductSearchIndex, filterProductsBySearch, matchesProductSearch, sanitizeProductSearchQuery } from '@/lib/productSearch';
 import {
     getProductColorValues,
@@ -299,7 +299,7 @@ const ShopSidebarList: React.FC<Props> = ({ data, productPerPage, dataType, cate
             return sortedProducts.sort((a, b) => a.price - b.price)
         }
 
-        return searchOrderedProducts
+        return sortCatalogProductsByFamily(searchOrderedProducts)
     }, [data, effectiveSearchQuery, matchesProduct, productSearchIndex, sortOption])
 
     const totalProducts = filteredData.length

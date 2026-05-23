@@ -1,6 +1,6 @@
 import { ProductType } from '@/type/ProductType'
 import { normalizeMeasurementLabel, normalizeMeasurementLabels } from '@/lib/measurementLabel'
-import { normalizeProductCategory, resolveAudienceGenderFromSpecies } from '@/lib/productTaxonomy'
+import { normalizeProductCategory, normalizeProductType, resolveAudienceGenderFromSpecies } from '@/lib/productTaxonomy'
 
 // Tipamos lo mínimo necesario
 type Variation = {
@@ -186,6 +186,135 @@ const parseBooleanLike = (value: unknown) => {
   return false
 }
 
+const CARE_VARIANT_FIELDS = new Set(['range', 'weight', 'presentation', 'dosage', 'volume', 'packaging'])
+const STANDALONE_SIZE_LABEL_PATTERN = /^(?:XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|STANDARD|\d+(?:[.,]\d+)?\s?(?:KGS?|KG|K|GR|G|LB|L|ML|MG|OZ|TAB|TABS|DS|UN|UNI|PACK|PZA|PZ|CM)|X?\d+)$/i
+
+const resolveProductSizeValues = (
+  product: ProductWithRelations,
+  normalizedProductType: string,
+  attributes: Record<string, string>,
+  variantLabel: string
+) => {
+  if (normalizedProductType === 'cuidado') {
+    return []
+  }
+
+  if (Array.isArray(product.sizes) && product.sizes.length > 0) {
+    return normalizeMeasurementLabels(product.sizes)
+  }
+
+  const explicitSize = typeof attributes.size === 'string'
+    ? normalizeMeasurementLabel(attributes.size).trim()
+    : ''
+  if (explicitSize) {
+    return normalizeMeasurementLabels([explicitSize])
+  }
+
+  const normalizedLabel = normalizeMeasurementLabel(variantLabel).trim()
+  return STANDALONE_SIZE_LABEL_PATTERN.test(normalizedLabel)
+    ? normalizeMeasurementLabels([normalizedLabel])
+    : []
+}
+
+const normalizeLegacyCareAttributes = (product: ProductWithRelations, attributes: Record<string, string>) => {
+  if (normalizeProductType(product.productType ?? '', product.category) !== 'cuidado') {
+    return attributes
+  }
+
+  const next = { ...attributes }
+  delete next.size
+
+  if (next.variantAxis && !CARE_VARIANT_FIELDS.has(next.variantAxis)) {
+    delete next.variantAxis
+    delete next.variantDefinitionField
+  }
+
+  return next
+}
+
+const resolveVariantLabelForProduct = (product: ProductWithRelations, attributes: Record<string, string>) => {
+  const normalizedType = normalizeProductType(product.productType ?? '', product.category)
+  const color = typeof attributes.color === 'string' ? attributes.color.trim() : ''
+  const size = typeof attributes.size === 'string' ? normalizeMeasurementLabel(attributes.size).trim() : ''
+  const variantAxis = typeof attributes.displayAxis === 'string' && attributes.displayAxis.trim()
+    ? attributes.displayAxis.trim().toLowerCase()
+    : typeof attributes.variantAxis === 'string' && attributes.variantAxis.trim()
+      ? attributes.variantAxis.trim().toLowerCase()
+      : typeof attributes.variantDefinitionField === 'string'
+        ? attributes.variantDefinitionField.trim().toLowerCase()
+        : ''
+  if (normalizedType === 'accesorios' && color && size) {
+    if (variantAxis === 'size') {
+      return normalizeMeasurementLabel(size)
+    }
+    return normalizeMeasurementLabel(`${color} ${size}`)
+  }
+  if (normalizedType === 'ropa' && size && color) {
+    if (variantAxis === 'size') {
+      return normalizeMeasurementLabel(size)
+    }
+    return normalizeMeasurementLabel(`${size} ${color}`)
+  }
+
+  if (
+    variantAxis
+    && (normalizedType !== 'cuidado' || CARE_VARIANT_FIELDS.has(variantAxis))
+    && typeof attributes[variantAxis] === 'string'
+    && attributes[variantAxis].trim()
+  ) {
+    return normalizeMeasurementLabel(attributes[variantAxis])
+  }
+
+  if (normalizedType === 'cuidado') {
+    const careLabel = [
+      attributes.weight,
+      attributes.dosage,
+      attributes.volume,
+      attributes.presentation,
+      attributes.packaging,
+      attributes.range,
+    ].find((value) => typeof value === 'string' && value.trim().length > 0)
+    if (careLabel) return normalizeMeasurementLabel(careLabel)
+
+    return ''
+  }
+
+  const valuesByType: Record<string, Array<string | undefined>> = {
+    Alimento: [
+      attributes.variantLabel,
+      attributes.weight,
+      attributes.size,
+      attributes.presentation,
+      attributes.packaging,
+      attributes.dosage,
+    ],
+    ropa: [
+      attributes.variantLabel,
+      attributes.size,
+      attributes.color,
+    ],
+    accesorios: [
+      attributes.variantLabel,
+      attributes.color,
+      attributes.size,
+      attributes.presentation,
+    ],
+  }
+
+  const fallbackValues = [
+    attributes.variantLabel,
+    attributes.size,
+    attributes.weight,
+    attributes.presentation,
+    attributes.packaging,
+    attributes.dosage,
+  ]
+  const resolved = (valuesByType[normalizedType] ?? fallbackValues)
+    .find((value) => typeof value === 'string' && value.trim().length > 0)
+
+  return typeof resolved === 'string' ? normalizeMeasurementLabel(resolved) : ''
+}
+
 const mapVariation = (variation: Variation) => ({
   color: variation.color,
   colorCode: variation.colorCode ?? '',
@@ -229,13 +358,15 @@ const resolveLastPurchaseInvoice = (product: ProductWithRelations) => {
 
 export const mapProductToDto = (product: ProductWithRelations): ProductType => {
   const attributes = product.attributes ?? {}
-  const normalizedAttributes = { ...attributes }
-  ;['variantLabel', 'size', 'weight', 'presentation', 'packaging', 'dosage', 'volume'].forEach((key) => {
+  const normalizedProductType = normalizeProductType(product.productType ?? '', product.category)
+  let normalizedAttributes = { ...attributes }
+  ;['variantLabel', 'size', 'weight', 'range', 'presentation', 'packaging', 'dosage', 'volume'].forEach((key) => {
     const value = normalizedAttributes[key]
     if (typeof value === 'string') {
       normalizedAttributes[key] = normalizeMeasurementLabel(value)
     }
   })
+  normalizedAttributes = normalizeLegacyCareAttributes(product, normalizedAttributes)
   const images =
     product.images?.map((img) => (typeof img === 'string' ? img : img.url)).filter(Boolean).map(normalizeImageUrl) ?? []
   const thumbImages =
@@ -261,17 +392,8 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     : (galleryWithoutThumbs.length > 0 ? galleryWithoutThumbs : images)
   const variations = product.variations?.map(mapVariation) ?? []
   const lastPurchaseInvoice = resolveLastPurchaseInvoice(product)
-  const variantLabel = [
-    normalizedAttributes.variantLabel,
-    normalizedAttributes.size,
-    normalizedAttributes.weight,
-    normalizedAttributes.presentation,
-    normalizedAttributes.packaging,
-    normalizedAttributes.dosage,
-  ].find((value) => typeof value === 'string' && value.trim().length > 0)
-  const resolvedSizes = Array.isArray(product.sizes) && product.sizes.length > 0
-    ? normalizeMeasurementLabels(product.sizes)
-    : normalizeMeasurementLabels(variantLabel ? [String(variantLabel)] : [])
+  const variantLabel = resolveVariantLabelForProduct(product, normalizedAttributes)
+  const resolvedSizes = resolveProductSizeValues(product, normalizedProductType, normalizedAttributes, variantLabel)
   const reviewCountRaw = normalizedAttributes.reviewCount ?? normalizedAttributes.reviewsCount ?? 0
   const resolvedGender = resolveAudienceGenderFromSpecies(
     typeof normalizedAttributes.species === 'string' ? normalizedAttributes.species : '',
@@ -282,7 +404,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
     id: product.legacyId ?? product.id,
     internalId: product.id,
     category: normalizeProductCategory(product.category),
-    productType: product.productType ?? '',
+    productType: normalizedProductType || product.productType || '',
     type: product.type ?? '',
     name: product.name,
     gender: resolvedGender,

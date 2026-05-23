@@ -22,7 +22,7 @@ export const APPAREL_GENDER_OPTIONS = [
 export const PRODUCT_TYPE_OPTIONS = [
   { value: 'Alimento', label: 'Alimento' },
   { value: 'ropa', label: 'Ropa' },
-  { value: 'cuidado', label: 'Salud / medicinas' },
+  { value: 'cuidado', label: 'Salud / higiene' },
   { value: 'accesorios', label: 'Accesorios' },
 ] as const
 
@@ -94,7 +94,7 @@ export const getDefaultCategoryForProductType = (productType?: string | null) =>
 
 export const getDefaultProductTypeForCategory = (category?: string | null) => {
   const token = normalizedToken(category)
-  if (token === 'salud') return 'cuidado'
+  if (matchesAny(token, ['salud', 'higiene', 'medicina', 'medicinas', 'farmacia', 'cuidado', 'cuidados'])) return 'cuidado'
   if (token === 'alimento') return 'Alimento'
   if (token === 'ropa') return 'ropa'
   if (token === 'accesorios') return 'accesorios'
@@ -103,8 +103,10 @@ export const getDefaultProductTypeForCategory = (category?: string | null) => {
 
 export const normalizeProductType = (value?: string | null, fallbackCategory?: string | null) => {
   const normalizedValue = resolveCanonicalProductType(normalizedToken(value))
+  const categoryType = getDefaultProductTypeForCategory(fallbackCategory)
+  if (categoryType === 'cuidado' && normalizedValue === 'accesorios') return 'cuidado'
   if (normalizedValue) return normalizedValue
-  return getDefaultProductTypeForCategory(fallbackCategory)
+  return categoryType
 }
 
 export const normalizeProductCategory = (value?: string | null, fallbackProductType?: string | null) => {

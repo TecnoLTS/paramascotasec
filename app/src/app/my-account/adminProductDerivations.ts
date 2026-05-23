@@ -1,5 +1,6 @@
 import { getAdminProductEntityId, isProductEligibleForPublication } from './productFormUtils'
 import { getProductExpirationMeta } from './statusDisplay'
+import { buildProductSearchText, matchesProductSearch, normalizeProductSearch } from '@/lib/productSearch'
 
 export const INVENTORY_LOW_STOCK_THRESHOLD = 5
 export const INVENTORY_DEFAULT_REORDER_POINT = 5
@@ -82,7 +83,7 @@ export const buildLocalSaleCatalog = (
   deferredLocalSaleSearch: string,
   parseMoney: (value: any) => number,
 ): LocalSaleCatalogItem[] => {
-  const query = deferredLocalSaleSearch.trim().toLowerCase()
+  const query = normalizeProductSearch(deferredLocalSaleSearch)
 
   return (adminProductsList || [])
     .map((product: any) => {
@@ -108,13 +109,13 @@ export const buildLocalSaleCatalog = (
         isExpired: expirationMeta.isExpired,
         expirationDate: expirationMeta.expirationDate,
         expirationStatus: expirationMeta.expirationStatus,
-        searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${legacyId}`.toLowerCase(),
+        searchText: buildProductSearchText(product) || normalizeProductSearch(`${String(product.name || '')} ${String(product.category || '')} ${sku} ${legacyId}`),
       }
     })
     .filter((product) => {
       if (!product.internalId) return false
       if (!query) return true
-      return product.searchText.includes(query)
+      return matchesProductSearch(product.searchText, query)
     })
     .sort((a, b) => {
       if (b.stock !== a.stock) return b.stock - a.stock
@@ -230,7 +231,7 @@ export const buildInventoryManagementRows = (
         purchasedUnits,
         remainingPurchasedUnits,
         source: product,
-        searchText: `${String(product.name || '')} ${String(product.category || '')} ${sku} ${lotCode} ${storageLocation} ${supplier} ${lastPurchaseInvoiceNumber} ${legacyId}`.toLowerCase(),
+        searchText: buildProductSearchText(product) || normalizeProductSearch(`${String(product.name || '')} ${String(product.category || '')} ${sku} ${lotCode} ${storageLocation} ${supplier} ${lastPurchaseInvoiceNumber} ${legacyId}`),
       }
     })
     .filter((item) => Boolean(item.internalId))

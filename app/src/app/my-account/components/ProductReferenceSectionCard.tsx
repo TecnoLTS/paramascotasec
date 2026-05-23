@@ -7,6 +7,7 @@ import type {
     ProductCategoryImageReference,
     ProductReferenceSection,
 } from '@/lib/productReferenceData'
+import { matchesProductSearch, normalizeProductSearch } from '@/lib/productSearch'
 
 type CategoryImageRequirement = {
     key: 'topImageUrl' | 'mobilePrimary' | 'mobileSecondary' | 'desktopPrimary' | 'desktopSecondary';
@@ -53,10 +54,7 @@ type ProductReferenceSectionCardProps = {
 }
 
 const normalizeComparable = (value?: string | null) =>
-    String(value || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLocaleLowerCase('es-EC')
+    normalizeProductSearch(String(value || ''))
 
 //const fixedVisualCategories = ['Todas', 'Ofertas'] as const
 
@@ -191,7 +189,7 @@ export default React.memo(function ProductReferenceSectionCard({
 
     const filteredValues = React.useMemo(() => {
         if (!normalizedSearch) return visibleValues
-        return visibleValues.filter((value) => normalizeComparable(value).includes(normalizedSearch))
+        return visibleValues.filter((value) => matchesProductSearch(normalizeComparable(value), normalizedSearch))
     }, [normalizedSearch, visibleValues])
 
     const pageSize = 8

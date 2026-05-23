@@ -37,6 +37,7 @@ type KeywordRule = {
 const ALL_SECONDARY_ID = '__all__'
 
 const APPAREL_SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] as const
+const APPAREL_SIZE_PATTERN = /^(?:XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|STANDARD|\d+(?:[.,]\d+)?\s?CM|X?\d+)$/i
 
 // Edita estas reglas si quieres cambiar como se agrupan los accesorios.
 const ACCESSORY_SUBCATEGORY_RULES: KeywordRule[] = [
@@ -87,10 +88,9 @@ const getUniqueSizeValues = (product: ProductType) =>
       [
         ...(product.sizes ?? []),
         product.attributes?.size ?? '',
-        product.variantLabel ?? '',
       ]
-        .map((value) => String(value || '').trim().toUpperCase())
-        .filter(Boolean)
+        .map((value) => String(value || '').replace(/\s+/g, ' ').trim().toUpperCase())
+        .filter((value) => value && APPAREL_SIZE_PATTERN.test(value))
     )
   )
 

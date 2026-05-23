@@ -3,6 +3,7 @@
 import React from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
+import { matchesProductSearch, normalizeProductSearch } from '@/lib/productSearch'
 import {
     createEmptyProductSupplierReference,
     createProductSupplierReferenceId,
@@ -22,10 +23,7 @@ type SupplierReferenceSectionCardProps = {
 }
 
 const normalizeComparable = (value?: string | null) =>
-    String(value || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLocaleLowerCase('es-EC')
+    normalizeProductSearch(String(value || ''))
 
 const normalizeDocumentComparable = (value?: string | null) =>
     String(value || '')
@@ -62,7 +60,7 @@ export default React.memo(function SupplierReferenceSectionCard({
     )
     const filteredValues = React.useMemo(() => {
         if (!normalizedSearch) return sortedValues
-        return sortedValues.filter((supplier) => normalizeComparable(getSupplierSearchText(supplier)).includes(normalizedSearch))
+        return sortedValues.filter((supplier) => matchesProductSearch(normalizeComparable(getSupplierSearchText(supplier)), normalizedSearch))
     }, [normalizedSearch, sortedValues])
     const totalPages = Math.max(1, Math.ceil(filteredValues.length / pageSize))
     const currentPage = Math.min(page, totalPages)

@@ -41,6 +41,7 @@ type PanelModalsProps = {
     productReferenceData: ProductReferenceData
     activeTab?: string
     openReferenceCatalog: (key: ProductReferenceKey) => void
+    onProductReferenceDataUpdated: (data: ProductReferenceData) => void
     closeProductModal: () => void
     setAdminProductsList: (products: any[]) => void
     refreshPurchaseInvoices: () => Promise<void>
@@ -92,6 +93,7 @@ export default function PanelModals({
     productReferenceData,
     activeTab,
     openReferenceCatalog,
+    onProductReferenceDataUpdated,
     closeProductModal,
     setAdminProductsList,
     refreshPurchaseInvoices,
@@ -144,6 +146,7 @@ export default function PanelModals({
                     normalizedCalc={normalizedCalc}
                     referenceData={productReferenceData}
                     onOpenReferenceCatalog={openReferenceCatalog}
+                    onReferenceDataUpdated={onProductReferenceDataUpdated}
                     activeTab={activeTab}
                     onClose={closeProductModal}
                     onProductsUpdated={setAdminProductsList}

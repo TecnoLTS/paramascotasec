@@ -11,7 +11,7 @@ import {
     isCatalogPrimaryFilterId,
     matchesCatalogSecondaryFilter,
 } from '@/lib/catalogBrowse'
-import { buildCatalogCategoryCards, isProductOnSale } from '@/lib/catalog'
+import { buildCatalogCategoryCards, isProductOnSale, sortCatalogProductsByFamily } from '@/lib/catalog'
 import { buildProductSearchIndex, filterProductsBySearch, sanitizeProductSearchQuery } from '@/lib/productSearch'
 
 interface Props {
@@ -112,6 +112,11 @@ const AllProducts: React.FC<Props> = ({ data, categoryIds, pageSize = 15 }) => {
         [activePrimaryFilter, activeSecondaryFilter, primaryScopedProducts]
     )
 
+    const orderedData = useMemo(
+        () => sortCatalogProductsByFamily(filteredData),
+        [filteredData]
+    )
+
     useEffect(() => {
         setPage(1)
     }, [effectiveSearchQuery, activePrimaryFilter, activeSecondaryFilter])
@@ -129,12 +134,12 @@ const AllProducts: React.FC<Props> = ({ data, categoryIds, pageSize = 15 }) => {
         }
     }, [activeSecondaryFilter, allSecondaryId, secondaryConfig, secondaryOptions])
 
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize))
+    const totalPages = Math.max(1, Math.ceil(orderedData.length / pageSize))
 
     const paginatedProducts = useMemo(() => {
         const start = (page - 1) * pageSize
-        return filteredData.slice(start, start + pageSize)
-    }, [filteredData, page, pageSize])
+        return orderedData.slice(start, start + pageSize)
+    }, [orderedData, page, pageSize])
 
     const scrollToTarget = (target: HTMLElement | null, extraOffset = 30) => {
         setTimeout(() => {

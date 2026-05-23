@@ -6,7 +6,6 @@ import * as Icon from '@phosphor-icons/react/dist/ssr'
 import { useModalQuickviewContext } from '@/context/ModalQuickviewContext'
 import { useCart } from '@/context/CartContext'
 import { useModalCartContext } from '@/context/ModalCartContext'
-import { ProductType } from '@/type/ProductType'
 import ModalSizeguide from './ModalSizeguide'
 import Rate from '../Other/Rate'
 import {
@@ -24,14 +23,23 @@ import {
     resolveLiveSelectedVariant,
 } from '@/lib/liveCatalog'
 import {
-    getProductColorValues,
-    getProductSizeValues,
+    getProductVariantAxes,
     getVariantColorValue,
-    getVariantSizeValue,
 } from '@/lib/catalogAttributes'
+import {
+    getAvailableVariantAxisOptions,
+    getVariantSelectionFromProduct,
+    reconcileVariantSelection,
+    resolveVariantFromSelection,
+    type VariantSelection,
+} from '@/lib/variantSelection'
 import { getProductImageAlt } from '@/lib/productImageAlt'
 
 const normalizeOptionValue = (value?: string | null) => (value ?? '').trim().toLowerCase()
+const areVariantSelectionsEqual = (left: VariantSelection, right: VariantSelection) => {
+    const keys = Array.from(new Set([...Object.keys(left), ...Object.keys(right)]))
+    return keys.every((key) => normalizeOptionValue(left[key as keyof VariantSelection]) === normalizeOptionValue(right[key as keyof VariantSelection]))
+}
 
 const ModalQuickview = () => {
     const { selectedProduct, closeQuickview } = useModalQuickviewContext()
@@ -39,8 +47,7 @@ const ModalQuickview = () => {
     const { openModalCart } = useModalCartContext()
 
     const [openSizeGuide, setOpenSizeGuide] = useState(false)
-    const [activeColor, setActiveColor] = useState('')
-    const [activeSize, setActiveSize] = useState('')
+    const [activeVariantSelection, setActiveVariantSelection] = useState<VariantSelection>({})
     const [quantity, setQuantity] = useState(1)
     const [liveProduct, setLiveProduct] = useState(selectedProduct)
     const [availabilityNotice, setAvailabilityNotice] = useState<string | null>(null)
@@ -48,10 +55,15 @@ const ModalQuickview = () => {
 
     const variantProducts = liveProduct ? getProductVariants(liveProduct) : []
     const defaultVariant = liveProduct ? resolveSelectedVariant(liveProduct) : null
-    const familySizeValues = useMemo(() => (liveProduct ? getProductSizeValues(liveProduct) : []), [liveProduct])
-    const familyColorValues = useMemo(() => (liveProduct ? getProductColorValues(liveProduct) : []), [liveProduct])
-    const hasSizeSelector = familySizeValues.length > 1
-    const hasColorSelector = familyColorValues.length > 1
+    const variantAxes = useMemo(() => (liveProduct ? getProductVariantAxes(liveProduct) : []), [liveProduct])
+    const availableVariantAxes = useMemo(
+        () => getAvailableVariantAxisOptions(variantProducts, variantAxes, activeVariantSelection),
+        [activeVariantSelection, variantAxes, variantProducts],
+    )
+    const activeColor = activeVariantSelection.color || ''
+    const setActiveAxisValue = useCallback((axis: keyof VariantSelection, value: string) => {
+        setActiveVariantSelection((current) => ({ ...current, [axis]: value }))
+    }, [])
     const genericVariantOptions = useMemo(
         () => variantProducts.map((product) => ({
             id: product.id,
@@ -59,47 +71,18 @@ const ModalQuickview = () => {
         })),
         [variantProducts],
     )
-    const showGenericVariantSelector = variantProducts.length > 1 && !hasSizeSelector && !hasColorSelector
+    const showGenericVariantSelector = variantProducts.length > 1 && variantAxes.length === 0
     const activeVariant = useMemo(() => {
         if (!liveProduct || !defaultVariant) return null
 
-        if (showGenericVariantSelector && activeSize) {
-            return variantProducts.find((product) => {
-                const label = getProductVariantLabel(product) || product.name
-                return label === activeSize
-            }) ?? defaultVariant
-        }
-
-        const matchesSize = (product: ProductType) =>
-            !activeSize || normalizeOptionValue(getVariantSizeValue(product)) === normalizeOptionValue(activeSize)
-        const matchesColor = (product: ProductType) =>
-            !activeColor || normalizeOptionValue(getVariantColorValue(product)) === normalizeOptionValue(activeColor)
-
-        const exactMatches = variantProducts.filter((product) => matchesSize(product) && matchesColor(product))
-        if (exactMatches.length > 0) {
-            return exactMatches.find((product) => product.id === defaultVariant.id) ?? exactMatches[0]
-        }
-
-        if (activeColor) {
-            const colorMatches = variantProducts.filter(matchesColor)
-            if (colorMatches.length > 0) {
-                return colorMatches.find((product) => product.id === defaultVariant.id) ?? colorMatches[0]
-            }
-        }
-
-        if (activeSize) {
-            const sizeMatches = variantProducts.filter(matchesSize)
-            if (sizeMatches.length > 0) {
-                return sizeMatches.find((product) => product.id === defaultVariant.id) ?? sizeMatches[0]
-            }
-        }
-
-        return resolveLiveSelectedVariant(liveProduct, {
-            requestedId: selectedProduct?.id,
-            preferredVariantId: defaultVariant.id,
-            preferredVariantLabel: getProductVariantLabel(defaultVariant),
-        })
-    }, [activeColor, activeSize, defaultVariant, liveProduct, selectedProduct?.id, showGenericVariantSelector, variantProducts])
+        return resolveVariantFromSelection(
+            variantProducts,
+            defaultVariant,
+            variantAxes,
+            activeVariantSelection,
+            showGenericVariantSelector,
+        )
+    }, [activeVariantSelection, defaultVariant, liveProduct, showGenericVariantSelector, variantAxes, variantProducts])
     const showReviewSummary = liveProduct ? hasRealReviews(liveProduct) : false
     const reviewCount = liveProduct ? getProductReviewCount(liveProduct) : 0
 
@@ -180,32 +163,30 @@ const ModalQuickview = () => {
             variant: refreshedVariant,
             stock: refreshedStock,
         }
-    }, [activeSize, activeVariant?.id, defaultVariant?.id, refreshLiveProduct, selectedProduct?.id])
+    }, [activeVariant?.id, defaultVariant?.id, refreshLiveProduct, selectedProduct?.id])
 
     useEffect(() => {
         if (!selectedProduct || !defaultVariant) {
             setQuantity(1)
-            setActiveColor('')
-            setActiveSize('')
+            setActiveVariantSelection({})
             return
         }
 
         setQuantity(selectedProduct.quantityPurchase ?? 1)
-        setActiveColor(getVariantColorValue(defaultVariant))
-        setActiveSize(showGenericVariantSelector ? (getProductVariantLabel(defaultVariant) || defaultVariant.name) : getVariantSizeValue(defaultVariant))
-    }, [selectedProduct?.id, defaultVariant?.id, showGenericVariantSelector])
+        setActiveVariantSelection(getVariantSelectionFromProduct(defaultVariant, variantAxes, showGenericVariantSelector))
+    }, [selectedProduct?.id, defaultVariant?.id, showGenericVariantSelector, variantAxes])
 
     useEffect(() => {
         if (!activeVariant) return
 
-        const nextColor = getVariantColorValue(activeVariant)
-        const nextSize = showGenericVariantSelector
-            ? (getProductVariantLabel(activeVariant) || activeVariant.name)
-            : getVariantSizeValue(activeVariant)
+        const nextSelection = getVariantSelectionFromProduct(activeVariant, variantAxes, showGenericVariantSelector)
+        setActiveVariantSelection((current) => areVariantSelectionsEqual(current, nextSelection) ? current : nextSelection)
+    }, [activeVariant?.id, showGenericVariantSelector, variantAxes])
 
-        setActiveColor((current) => current === nextColor ? current : nextColor)
-        setActiveSize((current) => current === nextSize ? current : nextSize)
-    }, [activeVariant?.id, showGenericVariantSelector])
+    useEffect(() => {
+        if (showGenericVariantSelector || availableVariantAxes.length === 0) return
+        setActiveVariantSelection((current) => reconcileVariantSelection(current, availableVariantAxes))
+    }, [availableVariantAxes, showGenericVariantSelector])
 
     const price = Number(activeVariant?.price ?? liveProduct?.price ?? 0)
     const originPrice = Number(activeVariant?.originPrice ?? liveProduct?.originPrice ?? 0)
@@ -214,19 +195,15 @@ const ModalQuickview = () => {
     const lineTotal = price * safeQuantity
     const hasSale = Boolean(activeVariant?.sale || liveProduct?.sale) && originPrice > price
     const percentSale = hasSale ? Math.floor(100 - ((price / originPrice) * 100)) : 0
-    const categoryLabel = (liveProduct?.category ?? '').toLowerCase()
-    const isFoodCategory = ['Alimento', 'alimento', 'premio'].some((word) => categoryLabel.includes(word))
     const productType = (liveProduct?.productType ?? '').toLowerCase()
     const isClothing = productType === 'ropa'
-    const selectorLabel = isFoodCategory
-        ? 'Tamano del paquete'
-        : (isClothing ? 'Talla' : (hasSizeSelector ? 'Tamaño' : 'Variante'))
     const formattedCategory = [liveProduct?.category, liveProduct?.gender === 'dog' ? 'Perros' : liveProduct?.gender === 'cat' ? 'Gatos' : '']
         .filter(Boolean)
         .join(' · ')
     const sku = activeVariant ? getProductSku(activeVariant) : ''
+    const colorAxisValues = variantAxes.find((axisInfo) => axisInfo.axis === 'color')?.values ?? []
     const colorOptions = useMemo(
-        () => familyColorValues.map((color) => {
+        () => colorAxisValues.map((color) => {
             const matchingVariant = variantProducts.find((product) => normalizeOptionValue(getVariantColorValue(product)) === normalizeOptionValue(color))
             const variationMatch = (matchingVariant?.variation ?? []).find((item) => normalizeOptionValue(item.color) === normalizeOptionValue(color))
             const image = variationMatch?.colorImage || variationMatch?.image || ''
@@ -237,7 +214,7 @@ const ModalQuickview = () => {
                 image,
             }
         }),
-        [familyColorValues, variantProducts],
+        [colorAxisValues, variantProducts],
     )
 
     useEffect(() => {
@@ -382,97 +359,117 @@ const ModalQuickview = () => {
                             </div>
 
                             <div className="list-action mt-6">
-                                {hasColorSelector && (
-                                    <div className="choose-color">
-                                        <div className="text-title">Color: <span className="text-title color">{activeColor}</span></div>
-                                        <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                                            {colorOptions.map((item, index) => (
-                                                item.image ? (
-                                                    <button
-                                                        type="button"
-                                                        className={`color-item w-12 h-12 rounded-xl duration-300 relative ${activeColor === item.color ? 'active' : ''}`}
-                                                        key={`${item.color}-${index}`}
-                                                        onClick={() => setActiveColor(item.color)}
-                                                    >
-                                                        <Image
-                                                            src={item.image}
-                                                            width={100}
-                                                            height={100}
-                                                            alt={item.color || 'color'}
-                                                            className="rounded-xl"
-                                                            unoptimized={item.image.startsWith('data:') || item.image.startsWith('blob:')}
-                                                        />
-                                                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                                                            {item.color}
+                                {availableVariantAxes.map((axisInfo, axisIndex) => {
+                                    const activeAxisValue = activeVariantSelection[axisInfo.axis] || ''
+                                    return (
+                                        <div key={axisInfo.axis} className={`${axisIndex > 0 ? 'mt-5' : ''}`}>
+                                            <div className="heading flex items-center justify-between">
+                                                <div className="text-title">{axisInfo.label}: <span className="text-title size">{activeAxisValue}</span></div>
+                                                {isClothing && axisInfo.axis === 'size' && (
+                                                    <>
+                                                        <div
+                                                            className="caption1 size-guide text-red underline cursor-pointer"
+                                                            onClick={() => setOpenSizeGuide(true)}
+                                                        >
+                                                            Guia de tallas
                                                         </div>
-                                                    </button>
-                                                ) : item.colorCode ? (
-                                                    <button
-                                                        type="button"
-                                                        className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
-                                                        key={`${item.color}-${index}`}
-                                                        onClick={() => setActiveColor(item.color)}
-                                                        aria-label={`Color ${item.color}`}
-                                                    >
-                                                        <span className="w-10 h-10 rounded-full block" style={{ backgroundColor: item.colorCode || '#d9d9d9' }} />
-                                                        <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                                                            {item.color}
-                                                        </div>
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        className={`px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${activeColor === item.color ? 'active' : ''}`}
-                                                        key={`${item.color}-${index}`}
-                                                        onClick={() => setActiveColor(item.color)}
-                                                        aria-label={`Color ${item.color}`}
-                                                    >
-                                                        {item.color}
-                                                    </button>
-                                                )
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {(showGenericVariantSelector || hasSizeSelector || isClothing) && (
-                                    <div className="choose-size mt-5">
-                                        <div className="heading flex items-center justify-between">
-                                            <div className="text-title">{selectorLabel}: <span className="text-title size">{showGenericVariantSelector ? (activeVariant ? (getProductVariantLabel(activeVariant) || activeVariant.name || '') : '') : activeSize}</span></div>
-                                            {isClothing && hasSizeSelector && (
-                                                <>
-                                                    <div
-                                                        className="caption1 size-guide text-red underline cursor-pointer"
-                                                        onClick={() => setOpenSizeGuide(true)}
-                                                    >
-                                                        Guia de tallas
-                                                    </div>
-                                                    <ModalSizeguide data={activeVariant ?? selectedProduct} isOpen={openSizeGuide} onClose={() => setOpenSizeGuide(false)} />
-                                                </>
-                                            )}
-                                        </div>
-                                        {(showGenericVariantSelector || hasSizeSelector) && (
+                                                        <ModalSizeguide data={activeVariant ?? selectedProduct} isOpen={openSizeGuide} onClose={() => setOpenSizeGuide(false)} />
+                                                    </>
+                                                )}
+                                            </div>
                                             <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                                                {(showGenericVariantSelector
-                                                    ? genericVariantOptions
-                                                    : familySizeValues.map((label) => ({ id: label, label }))
-                                                ).map((option) => {
-                                                    const isActive = showGenericVariantSelector
-                                                        ? (activeVariant ? (getProductVariantLabel(activeVariant) || activeVariant.name || '') : '') === option.label
-                                                        : activeSize === option.label
+                                                {axisInfo.values.map((value, index) => {
+                                                    const isActive = normalizeOptionValue(activeAxisValue) === normalizeOptionValue(value)
+                                                    if (axisInfo.axis === 'color') {
+                                                        const item = colorOptions.find((option) => normalizeOptionValue(option.color) === normalizeOptionValue(value)) || {
+                                                            color: value,
+                                                            colorCode: '',
+                                                            image: '',
+                                                        }
+                                                        if (item.image) {
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`color-item w-12 h-12 rounded-xl duration-300 relative ${isActive ? 'active' : ''}`}
+                                                                    key={`${axisInfo.axis}-${value}-${index}`}
+                                                                    onClick={() => setActiveAxisValue(axisInfo.axis, value)}
+                                                                >
+                                                                    <Image
+                                                                        src={item.image}
+                                                                        width={100}
+                                                                        height={100}
+                                                                        alt={value || 'color'}
+                                                                        className="rounded-xl"
+                                                                        unoptimized={item.image.startsWith('data:') || item.image.startsWith('blob:')}
+                                                                    />
+                                                                    <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                                                        {value}
+                                                                    </div>
+                                                                </button>
+                                                            )
+                                                        }
+                                                        return item.colorCode ? (
+                                                            <button
+                                                                type="button"
+                                                                className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${isActive ? 'border-black scale-105' : 'border-line'}`}
+                                                                key={`${axisInfo.axis}-${value}-${index}`}
+                                                                onClick={() => setActiveAxisValue(axisInfo.axis, value)}
+                                                                aria-label={`Color ${value}`}
+                                                            >
+                                                                <span className="w-10 h-10 rounded-full block" style={{ backgroundColor: item.colorCode || '#d9d9d9' }} />
+                                                                <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                                                    {value}
+                                                                </div>
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                className={`px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
+                                                                key={`${axisInfo.axis}-${value}-${index}`}
+                                                                onClick={() => setActiveAxisValue(axisInfo.axis, value)}
+                                                                aria-label={`Color ${value}`}
+                                                            >
+                                                                {value}
+                                                            </button>
+                                                        )
+                                                    }
+
                                                     return (
                                                         <button
                                                             type="button"
                                                             className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
-                                                            key={option.id}
-                                                            onClick={() => setActiveSize(option.label)}
+                                                            key={`${axisInfo.axis}-${value}-${index}`}
+                                                            onClick={() => setActiveAxisValue(axisInfo.axis, value)}
                                                         >
-                                                            {option.label}
+                                                            {value}
                                                         </button>
                                                     )
                                                 })}
                                             </div>
-                                        )}
+                                        </div>
+                                    )
+                                })}
+
+                                {showGenericVariantSelector && (
+                                    <div className="choose-size mt-5">
+                                        <div className="heading flex items-center justify-between">
+                                            <div className="text-title">Variante: <span className="text-title size">{activeVariant ? (getProductVariantLabel(activeVariant) || activeVariant.name || '') : ''}</span></div>
+                                        </div>
+                                        <div className="list-size flex items-center gap-2 flex-wrap mt-3">
+                                            {genericVariantOptions.map((option) => {
+                                                const isActive = normalizeOptionValue(activeVariantSelection.__variant) === normalizeOptionValue(option.label)
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
+                                                        key={option.id}
+                                                        onClick={() => setActiveAxisValue('__variant', option.label)}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
                                     </div>
                                 )}
 

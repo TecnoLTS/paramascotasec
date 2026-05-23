@@ -559,29 +559,46 @@ export default React.memo(function ProductsManagementPanel({
                                     </td>
                                     <td className="py-4 font-bold">${Number(product.price).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-4">
-                                        <div className="flex gap-2">
+                                        <div className="flex flex-wrap gap-2">
                                             <button
                                                 type="button"
-                                                className="p-2 hover:bg-line rounded-full transition-colors"
+                                                className="inline-flex items-center gap-1 rounded-full px-2 py-2 hover:bg-line transition-colors"
                                                 onClick={() => onRestockProduct(product)}
                                                 title="Registrar compra"
+                                                aria-label="Registrar compra"
                                             >
                                                 <Icon.Package size={18} />
+                                                <span className="hidden xl:inline text-xs font-semibold">Compra</span>
                                             </button>
-                                            <button className="p-2 hover:bg-line rounded-full transition-colors" onClick={() => onEditProduct(product)}><Icon.PencilSimple size={18} /></button>
                                             <button
                                                 type="button"
-                                                className="p-2 hover:bg-line rounded-full transition-colors"
-                                                onClick={() => onDuplicateVariant(product)}
-                                                title="Duplicar variante"
+                                                className="inline-flex items-center gap-1 rounded-full px-2 py-2 hover:bg-line transition-colors"
+                                                onClick={() => onEditProduct(product)}
+                                                title="Editar / ajustar"
+                                                aria-label="Editar o ajustar inventario"
                                             >
-                                                <Icon.Copy size={18} />
+                                                <Icon.PencilSimple size={18} />
+                                                <span className="hidden xl:inline text-xs font-semibold">Editar</span>
                                             </button>
                                             <button
-                                                className="p-2 hover:bg-line rounded-full transition-colors text-red"
+                                                type="button"
+                                                className="inline-flex items-center gap-1 rounded-full px-2 py-2 hover:bg-line transition-colors"
+                                                onClick={() => onDuplicateVariant(product)}
+                                                title="Duplicar variante"
+                                                aria-label="Duplicar variante"
+                                            >
+                                                <Icon.Copy size={18} />
+                                                <span className="hidden xl:inline text-xs font-semibold">Variante</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 rounded-full px-2 py-2 hover:bg-line transition-colors text-red"
                                                 onClick={() => onDeleteProduct(productId)}
+                                                title="Retirar producto"
+                                                aria-label="Retirar producto"
                                             >
                                                 <Icon.Trash size={18} />
+                                                <span className="hidden xl:inline text-xs font-semibold">Retirar</span>
                                             </button>
                                         </div>
                                     </td>

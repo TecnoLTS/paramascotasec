@@ -19,6 +19,7 @@ import { useModalCartContext } from '@/context/ModalCartContext'
 import {
   getProductReviewCount,
   getProductSku,
+  getProductVariantDisplayInfo,
   getProductVariantLabel,
   getProductVariants,
   hasRealReviews,
@@ -31,11 +32,17 @@ import {
   resolveLiveSelectedVariant,
 } from '@/lib/liveCatalog'
 import {
-  getProductColorValues,
-  getProductSizeValues,
+  getProductVariantAxes,
   getVariantColorValue,
   getVariantSizeValue,
 } from '@/lib/catalogAttributes'
+import {
+  getAvailableVariantAxisOptions,
+  getVariantSelectionFromProduct,
+  reconcileVariantSelection,
+  resolveVariantFromSelection,
+  type VariantSelection,
+} from '@/lib/variantSelection'
 import { getProductImageAlt } from '@/lib/productImageAlt'
 import type { ProductReview, ProductReviewSummary } from '@/lib/api/productReviews'
 
@@ -46,12 +53,18 @@ const Icon = {
 } as const
 
 const normalizeOptionValue = (value?: string | null) => (value ?? '').trim().toLowerCase()
+const normalizeDetailText = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim()
 
 const normalizeSpecKey = (value: string) =>
   value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+
+const areVariantSelectionsEqual = (left: VariantSelection, right: VariantSelection) => {
+  const keys = Array.from(new Set([...Object.keys(left), ...Object.keys(right)]))
+  return keys.every((key) => normalizeOptionValue(left[key as keyof VariantSelection]) === normalizeOptionValue(right[key as keyof VariantSelection]))
+}
 
 interface Props {
   data: Array<ProductType>
@@ -67,8 +80,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
   const [openPopupImg, setOpenPopupImg] = useState(false)
   const [openSizeGuide, setOpenSizeGuide] = useState(false)
   const [photoIndex, setPhotoIndex] = useState(0)
-  const [activeColor, setActiveColor] = useState('')
-  const [activeSize, setActiveSize] = useState('')
+  const [activeVariantSelection, setActiveVariantSelection] = useState<VariantSelection>({})
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description')
   const [quantity, setQuantity] = useState(1)
   const [liveProducts, setLiveProducts] = useState(data)
@@ -85,10 +97,15 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
     () => (productFamily ? resolveLiveSelectedVariant(productFamily, { requestedId }) : null),
     [productFamily, requestedId],
   )
-  const familySizeValues = useMemo(() => (productFamily ? getProductSizeValues(productFamily) : []), [productFamily])
-  const familyColorValues = useMemo(() => (productFamily ? getProductColorValues(productFamily) : []), [productFamily])
-  const hasSizeSelector = familySizeValues.length > 1
-  const hasColorSelector = familyColorValues.length > 1
+  const variantAxes = useMemo(() => (productFamily ? getProductVariantAxes(productFamily) : []), [productFamily])
+  const availableVariantAxes = useMemo(
+    () => getAvailableVariantAxisOptions(variantProducts, variantAxes, activeVariantSelection),
+    [activeVariantSelection, variantAxes, variantProducts],
+  )
+  const activeColor = activeVariantSelection.color || ''
+  const setActiveAxisValue = useCallback((axis: keyof VariantSelection, value: string) => {
+    setActiveVariantSelection((current) => ({ ...current, [axis]: value }))
+  }, [])
   const genericVariantOptions = useMemo(
     () => variantProducts.map((product) => ({
       id: product.id,
@@ -96,46 +113,17 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
     })),
     [variantProducts],
   )
-  const showGenericVariantSelector = variantProducts.length > 1 && !hasSizeSelector && !hasColorSelector
+  const showGenericVariantSelector = variantProducts.length > 1 && variantAxes.length === 0
   const activeVariant = useMemo(() => {
     if (!productFamily || !defaultVariant) return null
-    if (showGenericVariantSelector && activeSize) {
-      return variantProducts.find((product) => {
-        const label = getProductVariantLabel(product) || product.name
-        return label === activeSize
-      }) ?? defaultVariant
-    }
-
-    const matchesSize = (product: ProductType) =>
-      !activeSize || normalizeOptionValue(getVariantSizeValue(product)) === normalizeOptionValue(activeSize)
-    const matchesColor = (product: ProductType) =>
-      !activeColor || normalizeOptionValue(getVariantColorValue(product)) === normalizeOptionValue(activeColor)
-
-    const exactMatches = variantProducts.filter((product) => matchesSize(product) && matchesColor(product))
-    if (exactMatches.length > 0) {
-      return exactMatches.find((product) => product.id === defaultVariant.id) ?? exactMatches[0]
-    }
-
-    if (activeColor) {
-      const colorMatches = variantProducts.filter(matchesColor)
-      if (colorMatches.length > 0) {
-        return colorMatches.find((product) => product.id === defaultVariant.id) ?? colorMatches[0]
-      }
-    }
-
-    if (activeSize) {
-      const sizeMatches = variantProducts.filter(matchesSize)
-      if (sizeMatches.length > 0) {
-        return sizeMatches.find((product) => product.id === defaultVariant.id) ?? sizeMatches[0]
-      }
-    }
-
-    return resolveLiveSelectedVariant(productFamily, {
-      requestedId,
-      preferredVariantId: defaultVariant.id,
-      preferredVariantLabel: getProductVariantLabel(defaultVariant),
-    })
-  }, [activeColor, activeSize, defaultVariant, productFamily, requestedId, showGenericVariantSelector, variantProducts])
+    return resolveVariantFromSelection(
+      variantProducts,
+      defaultVariant,
+      variantAxes,
+      activeVariantSelection,
+      showGenericVariantSelector,
+    )
+  }, [activeVariantSelection, defaultVariant, productFamily, showGenericVariantSelector, variantAxes, variantProducts])
   const defaultVariantStock = getLiveProductAvailableStock(defaultVariant)
   const availableStock = getLiveProductAvailableStock(activeVariant)
   const visibleReviews = reviews
@@ -192,7 +180,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
       variant: refreshedVariant,
       stock: refreshedStock,
     }
-  }, [activeSize, activeVariant?.id, defaultVariant?.id, refreshLiveCatalog, requestedId])
+  }, [activeVariant?.id, defaultVariant?.id, refreshLiveCatalog, requestedId])
 
   useEffect(() => {
     if (!openPopupImg) return
@@ -238,21 +226,20 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
       return
     }
     setQuantity(defaultVariantStock > 0 ? 1 : 0)
-    setActiveColor(getVariantColorValue(defaultVariant))
-    setActiveSize(showGenericVariantSelector ? (getProductVariantLabel(defaultVariant) || defaultVariant.name) : getVariantSizeValue(defaultVariant))
+    setActiveVariantSelection(getVariantSelectionFromProduct(defaultVariant, variantAxes, showGenericVariantSelector))
     setPhotoIndex(0)
-  }, [defaultVariant?.id, defaultVariantStock, productFamily?.id, showGenericVariantSelector])
+  }, [defaultVariant?.id, defaultVariantStock, productFamily?.id, showGenericVariantSelector, variantAxes])
 
   useEffect(() => {
     if (!activeVariant) return
-    const nextColor = getVariantColorValue(activeVariant)
-    const nextSize = showGenericVariantSelector
-      ? (getProductVariantLabel(activeVariant) || activeVariant.name)
-      : getVariantSizeValue(activeVariant)
+    const nextSelection = getVariantSelectionFromProduct(activeVariant, variantAxes, showGenericVariantSelector)
+    setActiveVariantSelection((current) => areVariantSelectionsEqual(current, nextSelection) ? current : nextSelection)
+  }, [activeVariant?.id, showGenericVariantSelector, variantAxes])
 
-    setActiveColor((current) => current === nextColor ? current : nextColor)
-    setActiveSize((current) => current === nextSize ? current : nextSize)
-  }, [activeVariant?.id, showGenericVariantSelector])
+  useEffect(() => {
+    if (showGenericVariantSelector || availableVariantAxes.length === 0) return
+    setActiveVariantSelection((current) => reconcileVariantSelection(current, availableVariantAxes))
+  }, [availableVariantAxes, showGenericVariantSelector])
 
   useEffect(() => {
     setQuantity((current) => {
@@ -272,9 +259,6 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
   const isClothing = productType === 'ropa'
   const categoryLabel = (productFamily?.category ?? '').trim().toLowerCase()
   const isFoodCategory = ['alimento', 'premio', 'snack'].some((word) => categoryLabel.includes(word) || productType.includes(word))
-  const selectorLabel = isFoodCategory
-    ? 'Tamaño del paquete'
-    : (isClothing ? 'Talla' : (hasSizeSelector ? 'Tamaño' : 'Variante'))
   const sku = activeVariant ? getProductSku(activeVariant) : ''
   const price = Number(activeVariant?.price ?? 0)
   const originPrice = Number(activeVariant?.originPrice ?? 0)
@@ -291,11 +275,9 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
 
   const attributeLabels: Record<string, Record<string, string>> = {
     alimento: {
-      size: 'Tamaño',
       flavor: 'Sabor',
       target: 'Etapa',
       species: 'Especie',
-      presentation: 'Presentación',
     },
     ropa: {
       size: 'Talla',
@@ -313,14 +295,24 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
       presentation: 'Presentación',
     },
     cuidado: {
-      size: 'Tamaño',
-      presentation: 'Presentación',
+      weight: 'Contenido',
+      range: 'Rango recomendado',
+      presentation: 'Formato',
+      dosage: 'Dosis',
+      volume: 'Volumen',
+      packaging: 'Empaque',
+      activeIngredient: 'Ingrediente activo',
       usage: 'Uso',
       species: 'Especie',
     },
     salud: {
-      size: 'Tamaño',
-      presentation: 'Presentación',
+      weight: 'Contenido',
+      range: 'Rango recomendado',
+      presentation: 'Formato',
+      dosage: 'Dosis',
+      volume: 'Volumen',
+      packaging: 'Empaque',
+      activeIngredient: 'Ingrediente activo',
       usage: 'Uso',
       species: 'Especie',
     },
@@ -330,6 +322,28 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
     const attributes = activeVariant?.attributes ?? {}
     const labels = attributeLabels[productType] ?? attributeLabels[categoryLabel] ?? {}
 
+    if (isFoodCategory) {
+      const presentationLabel = normalizeDetailText(
+        attributes.presentation
+        || productFamily?.attributes?.presentation
+        || 'Presentacion'
+      )
+      const labelSource = activeVariant ?? productFamily
+      const contentValue = normalizeDetailText(
+        attributes.weight
+        || attributes.volume
+        || (labelSource ? getProductVariantLabel(labelSource) : '')
+      )
+      const foodRows = [
+        { key: 'presentationContent', label: presentationLabel || 'Presentación', value: contentValue },
+        { key: 'flavor', label: 'Sabor', value: attributes.flavor },
+        { key: 'target', label: 'Etapa', value: attributes.target || attributes.age },
+        { key: 'species', label: 'Especie', value: attributes.species },
+      ]
+
+      return foodRows.filter((item) => normalizeDetailText(item.value) !== '')
+    }
+
     return Object.entries(labels)
       .map(([key, label]) => {
         let value: unknown = attributes[key]
@@ -337,7 +351,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
         return { key, label, value }
       })
       .filter((item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== '')
-  }, [activeVariant, categoryLabel, productType])
+  }, [activeVariant, categoryLabel, isFoodCategory, productFamily, productType])
 
   const productImages = Array.isArray((activeVariant as any)?.images)
     ? (activeVariant as any).images.map((img: any) => (typeof img === 'string' ? img : img?.url ?? '')).filter(Boolean)
@@ -352,8 +366,9 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
   const resolvedGalleryImages = galleryImages.length > 0
     ? galleryImages
     : (thumbImages.length > 0 ? thumbImages : ['/images/product/1.webp'])
+  const colorAxisValues = variantAxes.find((axisInfo) => axisInfo.axis === 'color')?.values ?? []
   const colorOptions = useMemo(
-    () => familyColorValues.map((color) => {
+    () => colorAxisValues.map((color) => {
       const matchingVariant = variantProducts.find((product) => normalizeOptionValue(getVariantColorValue(product)) === normalizeOptionValue(color))
       const variationMatch = (matchingVariant?.variation ?? []).find((item) => normalizeOptionValue(item.color) === normalizeOptionValue(color))
       return {
@@ -362,7 +377,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
         image: variationMatch?.colorImage || variationMatch?.image || '',
       }
     }),
-    [familyColorValues, variantProducts],
+    [colorAxisValues, variantProducts],
   )
   const currentGalleryImage = resolvedGalleryImages[photoIndex] ?? resolvedGalleryImages[0] ?? '/images/product/1.webp'
   const getGalleryAlt = (image: string, index: number, kind = 'imagen') =>
@@ -370,18 +385,11 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
       ? getProductImageAlt(activeVariant, image, `${kind} ${index + 1}`)
       : (productFamily ? getProductImageAlt(productFamily, image, `${kind} ${index + 1}`) : `Imagen de producto ${index + 1}`)
 
-  const variantDisplayValues = useMemo(() => Array.from(new Set(
-    variantProducts
-      .map((product) =>
-        getProductVariantLabel(product)
-        || getVariantSizeValue(product)
-        || product.variantPresentation
-        || product.variantLabel
-        || ''
-      )
-      .map((value) => value.trim())
-      .filter(Boolean)
-  )), [variantProducts])
+  const variantDisplayInfo = useMemo(
+    () => productFamily ? getProductVariantDisplayInfo(productFamily) : { label: 'Opciones', values: [] },
+    [productFamily],
+  )
+  const variantDisplayValues = variantDisplayInfo.values
 
   const petLabel = productFamily?.gender === 'dog'
     ? 'Perros'
@@ -409,7 +417,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
       { key: 'price', label: 'Precio', value: price > 0 ? `USD ${price.toFixed(2)}` : '' },
       { key: 'stock', label: 'Disponibilidad', value: availableStock > 0 ? `${availableStock} en stock` : 'Sin stock' },
       { key: 'variants', label: 'Variantes', value: variantProducts.length > 1 ? `${variantProducts.length} opciones` : 'Producto unico' },
-      { key: 'presentations', label: 'Presentaciones', value: variantDisplayValues.join(', ') },
+      { key: 'presentations', label: variantDisplayInfo.label, value: variantDisplayValues.join(', ') },
       {
         key: 'expiration',
         label: 'Fecha de expiracion',
@@ -443,6 +451,7 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
     price,
     productFamily?.brand,
     sku,
+    variantDisplayInfo.label,
     variantDisplayValues,
     variantProducts.length,
   ])
@@ -692,78 +701,95 @@ const Default: React.FC<Props> = ({ data, productId, reviews = [], reviewSummary
             </div>
 
             <div className="list-action mt-6">
-              {hasColorSelector && (
-                <div className="choose-color">
-                  <div className="text-title">Color: <span className="text-title color">{activeColor}</span></div>
-                  <div className="list-color flex items-center gap-2 flex-wrap mt-3">
-                    {colorOptions.map((item, index) => (
-                      item.colorCode ? (
-                        <button
-                          type="button"
-                          key={`${item.color}-${index}`}
-                          onClick={() => setActiveColor(item.color)}
-                          className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${activeColor === item.color ? 'border-black scale-105' : 'border-line'}`}
-                          aria-label={`Color ${item.color}`}
-                        >
-                          <span className="w-10 h-10 rounded-full block" style={{ backgroundColor: item.colorCode || '#d9d9d9' }} />
-                          <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
-                            {item.color}
+              {availableVariantAxes.map((axisInfo, axisIndex) => {
+                const activeAxisValue = activeVariantSelection[axisInfo.axis] || ''
+                return (
+                  <div key={axisInfo.axis} className={`${axisIndex > 0 ? 'mt-5' : ''}`}>
+                    <div className="heading flex items-center justify-between gap-3">
+                      <div className="text-title">{axisInfo.label}: <span className="text-title size">{activeAxisValue}</span></div>
+                      {isClothing && axisInfo.axis === 'size' && (
+                        <>
+                          <div
+                            className="caption1 size-guide text-red underline cursor-pointer whitespace-nowrap"
+                            onClick={() => setOpenSizeGuide(true)}
+                          >
+                            Guia de tallas
                           </div>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          key={`${item.color}-${index}`}
-                          onClick={() => setActiveColor(item.color)}
-                          className={`px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${activeColor === item.color ? 'active' : ''}`}
-                          aria-label={`Color ${item.color}`}
-                        >
-                          {item.color}
-                        </button>
-                      )
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(showGenericVariantSelector || hasSizeSelector || isClothing) && (
-                <div className="choose-size mt-5">
-                  <div className="heading flex items-center justify-between gap-3">
-                    <div className="text-title">{selectorLabel}: <span className="text-title size">{showGenericVariantSelector ? (getProductVariantLabel(activeVariant) || activeVariant?.name || '') : activeSize}</span></div>
-                    {isClothing && hasSizeSelector && (
-                      <>
-                        <div
-                          className="caption1 size-guide text-red underline cursor-pointer whitespace-nowrap"
-                          onClick={() => setOpenSizeGuide(true)}
-                        >
-                          Guia de tallas
-                        </div>
-                        <ModalSizeguide data={activeVariant} isOpen={openSizeGuide} onClose={() => setOpenSizeGuide(false)} />
-                      </>
-                    )}
-                  </div>
-                  {(showGenericVariantSelector || hasSizeSelector) && (
+                          <ModalSizeguide data={activeVariant} isOpen={openSizeGuide} onClose={() => setOpenSizeGuide(false)} />
+                        </>
+                      )}
+                    </div>
                     <div className="list-size flex items-center gap-2 flex-wrap mt-3">
-                      {(showGenericVariantSelector
-                        ? genericVariantOptions
-                        : familySizeValues.map((label) => ({ id: label, label }))
-                      ).map((option) => {
-                        const isActive = showGenericVariantSelector
-                          ? (getProductVariantLabel(activeVariant) || activeVariant?.name || '') === option.label
-                          : activeSize === option.label
+                      {axisInfo.values.map((value, index) => {
+                        const isActive = normalizeOptionValue(activeAxisValue) === normalizeOptionValue(value)
+                        if (axisInfo.axis === 'color') {
+                          const item = colorOptions.find((option) => normalizeOptionValue(option.color) === normalizeOptionValue(value)) || {
+                            color: value,
+                            colorCode: '',
+                            image: '',
+                          }
+                          return item.colorCode ? (
+                            <button
+                              type="button"
+                              key={`${axisInfo.axis}-${value}-${index}`}
+                              onClick={() => setActiveAxisValue(axisInfo.axis, value)}
+                              className={`color-item w-12 h-12 rounded-full border duration-300 relative flex items-center justify-center ${isActive ? 'border-black scale-105' : 'border-line'}`}
+                              aria-label={`Color ${value}`}
+                            >
+                              <span className="w-10 h-10 rounded-full block" style={{ backgroundColor: item.colorCode || '#d9d9d9' }} />
+                              <div className="tag-action bg-black text-white caption2 capitalize px-1.5 py-0.5 rounded-sm">
+                                {value}
+                              </div>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              key={`${axisInfo.axis}-${value}-${index}`}
+                              onClick={() => setActiveAxisValue(axisInfo.axis, value)}
+                              className={`px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
+                              aria-label={`Color ${value}`}
+                            >
+                              {value}
+                            </button>
+                          )
+                        }
+
                         return (
                           <button
                             type="button"
                             className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
-                            key={option.id}
-                            onClick={() => setActiveSize(option.label)}
+                            key={`${axisInfo.axis}-${value}-${index}`}
+                            onClick={() => setActiveAxisValue(axisInfo.axis, value)}
                           >
-                            {option.label}
+                            {value}
                           </button>
                         )
                       })}
                     </div>
-                  )}
+                  </div>
+                )
+              })}
+
+              {showGenericVariantSelector && (
+                <div className="choose-size mt-5">
+                  <div className="heading flex items-center justify-between gap-3">
+                    <div className="text-title">Variante: <span className="text-title size">{getProductVariantLabel(activeVariant) || activeVariant?.name || ''}</span></div>
+                  </div>
+                  <div className="list-size flex items-center gap-2 flex-wrap mt-3">
+                    {genericVariantOptions.map((option) => {
+                      const isActive = normalizeOptionValue(activeVariantSelection.__variant) === normalizeOptionValue(option.label)
+                      return (
+                        <button
+                          type="button"
+                          className={`size-item px-3 py-2 flex items-center justify-center text-button rounded-full bg-white border border-line ${isActive ? 'active' : ''}`}
+                          key={option.id}
+                          onClick={() => setActiveAxisValue('__variant', option.label)}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 

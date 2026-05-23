@@ -4,6 +4,7 @@ import React from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import { requestApi } from '@/lib/apiClient'
+import { matchesProductSearch, normalizeProductSearch } from '@/lib/productSearch'
 import {
     createEmptyProductBrandReference,
     createProductBrandReferenceId,
@@ -29,10 +30,7 @@ type UploadLogoResponse = {
 }
 
 const normalizeComparable = (value?: string | null) =>
-    String(value || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLocaleLowerCase('es-EC')
+    normalizeProductSearch(String(value || ''))
 
 const uploadBrandLogo = async (file: File, brandName: string) => {
     const formData = new FormData()
@@ -79,7 +77,7 @@ export default React.memo(function BrandReferenceSectionCard({
     )
     const filteredValues = React.useMemo(() => {
         if (!normalizedSearch) return sortedValues
-        return sortedValues.filter((brand) => normalizeComparable(getBrandSearchText(brand)).includes(normalizedSearch))
+        return sortedValues.filter((brand) => matchesProductSearch(normalizeComparable(getBrandSearchText(brand)), normalizedSearch))
     }, [normalizedSearch, sortedValues])
     const totalPages = Math.max(1, Math.ceil(filteredValues.length / pageSize))
     const currentPage = Math.min(page, totalPages)

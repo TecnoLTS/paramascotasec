@@ -8,14 +8,19 @@ import {
     getSupplierSearchText,
     normalizeReferenceList,
     normalizeProductCategoryImageRecords,
+    PRODUCT_ATTRIBUTE_REFERENCE_KEYS,
+    PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET,
+    PRODUCT_REFERENCE_NAV_SECTIONS,
     PRODUCT_REFERENCE_SECTIONS,
     PRODUCT_SYSTEM_REFERENCE_GROUPS,
     type ProductBrandReference,
     type ProductCategoryImageReference,
     type ProductReferenceData,
     type ProductReferenceKey,
+    type ProductReferenceSection,
     type ProductSupplierReference,
 } from '@/lib/productReferenceData'
+import { matchesProductSearch, normalizeProductSearch } from '@/lib/productSearch'
 import BrandReferenceSectionCard from './BrandReferenceSectionCard'
 import ProductReferenceSectionCard from './ProductReferenceSectionCard'
 import SupplierReferenceSectionCard from './SupplierReferenceSectionCard'
@@ -30,6 +35,97 @@ type ProductReferenceDataPanelProps = {
     onSaveData?: (next: ProductReferenceData) => Promise<void> | void;
 }
 
+type ProductAttributeReferenceCatalogCardProps = {
+    data: ProductReferenceData;
+    saving?: boolean;
+    focusedKey?: ProductReferenceKey | null;
+    onChangeValues: (key: ProductReferenceKey, nextValues: string[]) => void;
+}
+
+const attributeReferenceSections: ProductReferenceSection[] = PRODUCT_ATTRIBUTE_REFERENCE_KEYS
+    .map((key) => PRODUCT_REFERENCE_SECTIONS.find((section) => section.key === key))
+    .filter(Boolean) as ProductReferenceSection[]
+
+const ProductAttributeReferenceCatalogCard = React.memo(function ProductAttributeReferenceCatalogCard({
+    data,
+    saving = false,
+    focusedKey = null,
+    onChangeValues,
+}: ProductAttributeReferenceCatalogCardProps) {
+    const [selectedAttributeKey, setSelectedAttributeKey] = React.useState<ProductReferenceKey>('sizes')
+
+    React.useEffect(() => {
+        if (focusedKey && PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET.has(focusedKey)) {
+            setSelectedAttributeKey(focusedKey)
+        }
+    }, [focusedKey])
+
+    const selectedAttributeSection = React.useMemo(
+        () => attributeReferenceSections.find((section) => section.key === selectedAttributeKey) || attributeReferenceSections[0],
+        [selectedAttributeKey]
+    )
+    const totalAttributeValues = React.useMemo(
+        () => attributeReferenceSections.reduce((acc, section) => acc + (((data[section.key] || []) as unknown[]).length || 0), 0),
+        [data]
+    )
+
+    return (
+        <div className="space-y-5">
+            <div className="rounded-2xl border border-line bg-surface p-5">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div>
+                        <div className="text-sm font-semibold">Atributos de producto</div>
+                        <p className="text-secondary text-xs mt-1 max-w-2xl">
+                            Registra todos los valores reutilizables desde este menú. Elige primero el tipo de atributo y luego agrega el valor que corresponda.
+                        </p>
+                    </div>
+                    <div className="rounded-xl border border-line bg-white px-4 py-3">
+                        <div className="text-[10px] uppercase font-bold text-secondary">Valores registrados</div>
+                        <div className="text-xl font-bold">{totalAttributeValues}</div>
+                    </div>
+                </div>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {attributeReferenceSections.map((section) => {
+                        const ItemIcon = Icon[section.menuIcon]
+                        const isActive = selectedAttributeSection.key === section.key
+                        return (
+                            <button
+                                key={`attribute-reference-${section.key}`}
+                                type="button"
+                                className={`rounded-xl border px-4 py-3 text-left transition-all ${isActive
+                                    ? 'border-primary bg-white ring-1 ring-primary/20'
+                                    : 'border-line bg-white/60 hover:bg-white'
+                                    }`}
+                                onClick={() => setSelectedAttributeKey(section.key)}
+                                disabled={saving}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="flex items-center gap-2 min-w-0">
+                                        <ItemIcon size={17} className={isActive ? 'text-primary' : 'text-secondary'} />
+                                        <span className="text-sm font-semibold truncate">{section.title}</span>
+                                    </span>
+                                    <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-bold text-secondary">
+                                        {((data[section.key] || []) as unknown[]).length || 0}
+                                    </span>
+                                </div>
+                                <div className="text-xs text-secondary mt-1 line-clamp-2">{section.description}</div>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <ProductReferenceSectionCard
+                section={selectedAttributeSection}
+                values={(data[selectedAttributeSection.key] || []) as string[]}
+                saving={saving}
+                focused={focusedKey === selectedAttributeSection.key}
+                onChangeValues={(nextValues) => onChangeValues(selectedAttributeSection.key, nextValues)}
+            />
+        </div>
+    )
+})
+
 export default React.memo(function ProductReferenceDataPanel({
     data,
     loading = false,
@@ -40,10 +136,10 @@ export default React.memo(function ProductReferenceDataPanel({
     onSaveData,
 }: ProductReferenceDataPanelProps) {
     const [panelSearch, setPanelSearch] = React.useState('')
-    const [selectedKey, setSelectedKey] = React.useState<ProductReferenceKey>(PRODUCT_REFERENCE_SECTIONS[0].key)
+    const [selectedKey, setSelectedKey] = React.useState<ProductReferenceKey>(PRODUCT_REFERENCE_NAV_SECTIONS[0].key)
 
     const normalizedPanelSearch = React.useMemo(
-        () => panelSearch.replace(/\s+/g, ' ').trim().toLocaleLowerCase('es-EC'),
+        () => normalizeProductSearch(panelSearch),
         [panelSearch]
     )
     const totalEntries = React.useMemo(
@@ -51,26 +147,39 @@ export default React.memo(function ProductReferenceDataPanel({
         [data]
     )
     const emptyCatalogCount = React.useMemo(
-        () => PRODUCT_REFERENCE_SECTIONS.filter((section) => (data[section.key] || []).length === 0).length,
+        () => PRODUCT_REFERENCE_NAV_SECTIONS.filter((section) => {
+            if (section.key === 'sizes') {
+                return attributeReferenceSections.every((attributeSection) => (data[attributeSection.key] || []).length === 0)
+            }
+            return (data[section.key] || []).length === 0
+        }).length,
         [data]
     )
     const filteredSections = React.useMemo(() => {
-        if (!normalizedPanelSearch) return PRODUCT_REFERENCE_SECTIONS
-        return PRODUCT_REFERENCE_SECTIONS.filter((section) => {
+        if (!normalizedPanelSearch) return PRODUCT_REFERENCE_NAV_SECTIONS
+        return PRODUCT_REFERENCE_NAV_SECTIONS.filter((section) => {
+            const sectionValues = section.key === 'sizes'
+                ? attributeReferenceSections.flatMap((attributeSection) => [
+                    attributeSection.title,
+                    attributeSection.sidebarTitle,
+                    attributeSection.description,
+                    ...((data[attributeSection.key] || []) as string[]),
+                ])
+                : section.key === 'brands'
+                    ? data.brands.map((brand) => getBrandSearchText(brand))
+                    : section.key === 'suppliers'
+                        ? data.suppliers.map((supplier) => getSupplierSearchText(supplier))
+                        : (data[section.key] || [])
             const haystack = [
                 section.title,
                 section.sidebarTitle,
                 section.description,
-                ...(section.key === 'brands'
-                    ? data.brands.map((brand) => getBrandSearchText(brand))
-                    : section.key === 'suppliers'
-                        ? data.suppliers.map((supplier) => getSupplierSearchText(supplier))
-                        : (data[section.key] || [])),
+                ...sectionValues,
             ]
                 .join(' ')
-                .toLocaleLowerCase('es-EC')
+            const normalizedHaystack = normalizeProductSearch(haystack)
 
-            return haystack.includes(normalizedPanelSearch)
+            return matchesProductSearch(normalizedHaystack, normalizedPanelSearch)
         })
     }, [data, normalizedPanelSearch])
 
@@ -114,18 +223,18 @@ export default React.memo(function ProductReferenceDataPanel({
 
     React.useEffect(() => {
         if (focusKey) {
-            setSelectedKey(focusKey)
+            setSelectedKey(PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET.has(focusKey) ? 'sizes' : focusKey)
         }
     }, [focusKey])
 
     React.useEffect(() => {
         if (!filteredSections.some((section) => section.key === selectedKey)) {
-            setSelectedKey(filteredSections[0]?.key ?? PRODUCT_REFERENCE_SECTIONS[0].key)
+            setSelectedKey(filteredSections[0]?.key ?? PRODUCT_REFERENCE_NAV_SECTIONS[0].key)
         }
     }, [filteredSections, selectedKey])
 
     const selectedSection = React.useMemo(
-        () => PRODUCT_REFERENCE_SECTIONS.find((section) => section.key === selectedKey) || PRODUCT_REFERENCE_SECTIONS[0],
+        () => PRODUCT_REFERENCE_NAV_SECTIONS.find((section) => section.key === selectedKey) || PRODUCT_REFERENCE_NAV_SECTIONS[0],
         [selectedKey]
     )
 
@@ -142,7 +251,7 @@ export default React.memo(function ProductReferenceDataPanel({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 xl:min-w-[420px]">
                     <div className="rounded-xl border border-line bg-white px-4 py-3">
                         <div className="text-[10px] uppercase font-bold text-secondary">Catálogos</div>
-                        <div className="text-2xl font-bold mt-1">{PRODUCT_REFERENCE_SECTIONS.length}</div>
+                        <div className="text-2xl font-bold mt-1">{PRODUCT_REFERENCE_NAV_SECTIONS.length}</div>
                     </div>
                     <div className="rounded-xl border border-line bg-white px-4 py-3">
                         <div className="text-[10px] uppercase font-bold text-secondary">Opciones</div>
@@ -252,7 +361,14 @@ export default React.memo(function ProductReferenceDataPanel({
                     {loading ? (
                         <div className="py-12 text-center text-secondary">Cargando catálogos...</div>
                     ) : (
-                        selectedSection.key === 'suppliers' ? (
+                        selectedSection.key === 'sizes' ? (
+                            <ProductAttributeReferenceCatalogCard
+                                data={data}
+                                saving={saving}
+                                focusedKey={focusKey}
+                                onChangeValues={updateSectionValues}
+                            />
+                        ) : selectedSection.key === 'suppliers' ? (
                             <SupplierReferenceSectionCard
                                 section={selectedSection}
                                 values={data.suppliers}

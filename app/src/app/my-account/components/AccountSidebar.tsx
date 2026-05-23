@@ -43,7 +43,11 @@ import {
     Users,
 } from "@phosphor-icons/react/dist/ssr"
 
-import { PRODUCT_REFERENCE_SECTIONS, type ProductReferenceKey } from '@/lib/productReferenceData'
+import {
+    PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET,
+    PRODUCT_REFERENCE_NAV_SECTIONS,
+    type ProductReferenceKey,
+} from '@/lib/productReferenceData'
 import type { AdminMenuGroupKey, AdminReportSection } from '../types'
 import PanelNavButton from './PanelNavButton'
 
@@ -256,13 +260,15 @@ export default function AccountSidebar({
                                                 Listas operativas
                                             </div>
                                             <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-                                            {PRODUCT_REFERENCE_SECTIONS.map((section) => {
+                                            {PRODUCT_REFERENCE_NAV_SECTIONS.map((section) => {
                                                 const ItemIcon = referenceCatalogIcons[section.menuIcon] ?? Tag
+                                                const isActiveReference = focusedReferenceCatalogKey === section.key
+                                                    || (section.key === 'sizes' && !!focusedReferenceCatalogKey && PRODUCT_ATTRIBUTE_REFERENCE_KEY_SET.has(focusedReferenceCatalogKey))
                                                 return (
                                                     <PanelNavButton
                                                         key={`reference-catalog-${section.key}`}
                                                         className="item flex items-center gap-3 w-full px-3 py-2.5 rounded-lg cursor-pointer duration-300 border border-transparent hover:bg-white hover:border-line"
-                                                        isActive={focusedReferenceCatalogKey === section.key}
+                                                        isActive={isActiveReference}
                                                         onClick={() => onNavigateToReferenceCatalog(section.key)}
                                                     >
                                                         <div className="w-8 h-8 rounded-lg bg-white border border-line flex items-center justify-center shrink-0">
