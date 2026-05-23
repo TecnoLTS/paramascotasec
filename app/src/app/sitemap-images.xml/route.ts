@@ -8,8 +8,11 @@ import type { ProductType } from '@/type/ProductType'
 
 export const dynamic = 'force-dynamic'
 
+const FALLBACK_IMAGE_PATH = '/images/collection/home-top/catalogo-completo-para-mascotas-4x5.webp'
+
 const xmlEscape = (value?: string | number | null) =>
   String(value ?? '')
+    .replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -45,21 +48,60 @@ const renderImage = (loc: string, title: string, caption: string) => [
   '</image:image>',
 ].join('\n')
 
+const renderUrl = (pageUrl: string, images: string[]) => {
+  if (images.length === 0) return ''
+
+  return [
+    '<url>',
+    `<loc>${xmlEscape(pageUrl)}</loc>`,
+    ...images,
+    '</url>',
+  ].join('\n')
+}
+
 const renderProductUrl = (baseUrl: string, product: ProductType) => {
   const images = getProductImages(product)
   if (images.length === 0) return ''
   const pageUrl = `${baseUrl}${getProductSeoPath(product)}`
   const caption = product.description || product.name
-  return [
-    '<url>',
-    `<loc>${xmlEscape(pageUrl)}</loc>`,
-    ...images.slice(0, 20).map((image, index) => renderImage(
+  return renderUrl(
+    pageUrl,
+    images.slice(0, 20).map((image, index) => renderImage(
       toAbsoluteUrl(baseUrl, image),
       getProductImageAlt(product, image, `imagen ${index + 1}`),
       caption,
     )),
-    '</url>',
-  ].join('\n')
+  )
+}
+
+const renderCategoryUrl = (baseUrl: string, categoryName: string, images: string[]) => {
+  if (images.length === 0) return ''
+  const pageUrl = `${baseUrl}${getCatalogPagePath(categoryName)}`
+  return renderUrl(
+    pageUrl,
+    images.map((image) => renderImage(
+      toAbsoluteUrl(baseUrl, image),
+      `${categoryName} para mascotas en ParaMascotasEC`,
+      `Productos de ${categoryName} para mascotas en Ecuador`,
+    )),
+  )
+}
+
+const renderFallbackUrl = (baseUrl: string) => renderUrl(
+  `${baseUrl}/tienda`,
+  [
+    renderImage(
+      `${baseUrl}${FALLBACK_IMAGE_PATH}`,
+      'Catalogo de productos para mascotas en ParaMascotasEC',
+      'Alimento, accesorios, salud y cuidado para perros y gatos en Ecuador',
+    ),
+  ],
+)
+
+const logRejectedResult = (label: string, result: PromiseSettledResult<unknown>) => {
+  if (result.status === 'rejected') {
+    console.error(`No se pudo cargar ${label} para sitemap de imagenes`, result.reason)
+  }
 }
 
 export async function GET() {
@@ -68,6 +110,9 @@ export async function GET() {
     fetchProducts({ fresh: true }),
     getPublicProductCategoryReferences(),
   ])
+
+  logRejectedResult('productos', productsResult)
+  logRejectedResult('categorias', categoryReferencesResult)
 
   const products = productsResult.status === 'fulfilled'
     ? productsResult.value.filter((product) => product.published !== false)
@@ -84,25 +129,20 @@ export async function GET() {
         category.featuredImages?.desktopSecondary,
       ])
       if (images.length === 0) return []
-      const pageUrl = `${baseUrl}${getCatalogPagePath(category.name)}`
-      return [[
-        '<url>',
-        `<loc>${xmlEscape(pageUrl)}</loc>`,
-        ...images.map((image) => renderImage(
-          toAbsoluteUrl(baseUrl, image),
-          `${category.name} para mascotas en ParaMascotasEC`,
-          `Productos de ${category.name} para mascotas en Ecuador`,
-        )),
-        '</url>',
-      ].join('\n')]
+      return [renderCategoryUrl(baseUrl, category.name, images)]
     })
     : []
+
+  const sitemapUrls = [...productUrls, ...categoryUrls].filter(Boolean)
+  if (sitemapUrls.length === 0) {
+    console.error('Sitemap de imagenes sin entradas dinamicas; usando fallback publico.')
+    sitemapUrls.push(renderFallbackUrl(baseUrl))
+  }
 
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
-    ...productUrls,
-    ...categoryUrls,
+    ...sitemapUrls,
     '</urlset>',
   ].join('\n')
 

@@ -164,6 +164,27 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 
 ## Historial de trabajo IA
 
+### 2026-05-23 - Sitemap de Imagenes Robusto Para Search Console
+
+Objetivo: corregir el error de Search Console en `https://paramascotasec.com/sitemap-images.xml` ("Falta la etiqueta XML url") y evitar respuestas vacias cuando fallan datos dinamicos.
+
+Cambios frontend:
+- `sitemap-images.xml/route.ts` sanitiza caracteres XML invalidos, reutiliza render de `<url>` y registra fallos al cargar productos/categorias.
+- Si productos/categorias no generan entradas, devuelve fallback valido con `/tienda` y una imagen publica estable, evitando `<urlset>` vacio.
+- `audit-seo-merchant.mjs` valida `/sitemap-images.xml`: conteo de `<url>`, imagenes, `<loc>`, imagen por URL y falla con exit code si hay errores estructurales.
+
+Despliegue/verificacion:
+- Publicado en este ambiente dev/QA con perfil frontend `production` usando `paramascotasec/scripts/deploy-production.sh`; pendiente promover el mismo cambio a produccion real.
+- Verificado `https://paramascotasec.com/sitemap-images.xml`: HTTP 200, 107 URLs, 281 imagenes, `urlsetIsEmpty=false`, `errors=[]`.
+- `robots.txt` incluye `sitemap.xml` y `sitemap-images.xml`.
+
+Decisiones:
+- Mantener `sitemap-images.xml` como sitemap separado listado en robots; no retirarlo de Search Console porque ya aporta URLs e imagenes validas.
+- La causa probable del fallo del 22/05 fue una lectura de Google mientras el generador entrego un `urlset` sin entradas por fallo/intermitencia de datos.
+
+Pendientes:
+- Promover el cambio a produccion real, verificar `https://paramascotasec.com/sitemap-images.xml` desde fuera del servidor y reenviar `sitemap-images.xml` en Search Console; Google debe reemplazar el error tras nueva lectura.
+
 ### 2026-05-23 - Reportes Actualizados Tras Corregir Costos
 
 Objetivo: evitar que Reporte de trazabilidad, Ranking de productos y resumen financiero sigan mostrando advertencias invalidas o utilidad inflada despues de corregir el costo de un producto.

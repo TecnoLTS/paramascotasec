@@ -95,6 +95,45 @@ const readSitemap = async () => {
   return Array.from(text.matchAll(/<loc>([\s\S]*?)<\/loc>/gi)).map((match) => decodeXml(match[1].trim()))
 }
 
+const readImageSitemap = async () => {
+  const { response, text } = await fetchText('/sitemap-images.xml')
+  if (!response.ok) {
+    throw new Error(`/sitemap-images.xml respondió ${response.status}`)
+  }
+
+  const urlBlocks = Array.from(text.matchAll(/<url\b[^>]*>([\s\S]*?)<\/url>/gi)).map((match) => match[1])
+  const imageTags = Array.from(text.matchAll(/<image:image\b[^>]*>/gi))
+  const urlsetIsEmpty = /<urlset\b[^>]*>\s*<\/urlset>/i.test(text)
+  const entriesMissingLoc = urlBlocks
+    .map((block, index) => ({ index: index + 1, loc: tagValue(block, 'loc') }))
+    .filter((entry) => !entry.loc)
+    .map((entry) => entry.index)
+  const entriesMissingImage = urlBlocks
+    .map((block, index) => ({
+      index: index + 1,
+      imageCount: Array.from(block.matchAll(/<image:image\b[^>]*>/gi)).length,
+    }))
+    .filter((entry) => entry.imageCount === 0)
+    .map((entry) => entry.index)
+
+  const errors = [
+    urlsetIsEmpty ? 'urlset_empty' : '',
+    urlBlocks.length === 0 ? 'missing_url_entries' : '',
+    imageTags.length === 0 ? 'missing_image_entries' : '',
+    entriesMissingLoc.length ? 'url_entries_missing_loc' : '',
+    entriesMissingImage.length ? 'url_entries_missing_image' : '',
+  ].filter(Boolean)
+
+  return {
+    urlCount: urlBlocks.length,
+    imageCount: imageTags.length,
+    urlsetIsEmpty,
+    entriesMissingLoc,
+    entriesMissingImage,
+    errors,
+  }
+}
+
 const mapLimit = async (items, limit, worker) => {
   const results = []
   let index = 0
@@ -294,10 +333,11 @@ const hasProductImage = (product) => Boolean(product.thumbImage?.[0] || product.
 const getSku = (product) => product.attributes?.sku || product.attributes?.SKU || product.attributes?.code || product.attributes?.codigo
 
 const main = async () => {
-  const [products, feedItems, sitemapUrls] = await Promise.all([
+  const [products, feedItems, sitemapUrls, imageSitemap] = await Promise.all([
     readProducts(),
     readFeed(),
     readSitemap(),
+    readImageSitemap(),
   ])
 
   const publicProducts = products.filter((product) => product.published !== false)
@@ -340,6 +380,8 @@ const main = async () => {
       feedItems: feedItems.length,
       sitemapUrls: sitemapUrls.length,
       sitemapProductUrls: sitemapUrls.filter((url) => url.includes('/productos/')).length,
+      imageSitemapUrls: imageSitemap.urlCount,
+      imageSitemapImages: imageSitemap.imageCount,
       feedItemsWithItemGroupId: feedItems.filter((item) => item.itemGroupId).length,
     },
     feed: {
@@ -366,6 +408,7 @@ const main = async () => {
         .filter((check) => check.referencesOldCss)
         .map((check) => check.url),
     },
+    imageSitemap,
     structuredData: {
       productPagesChecked: productStructuredChecks.length,
       productPagesWithTopLevelProduct: productStructuredChecks.filter((check) => check.structuredProduct.hasTopLevelProduct).length,
@@ -402,6 +445,9 @@ const main = async () => {
   }
 
   console.log(JSON.stringify(report, null, 2))
+  if (imageSitemap.errors.length > 0) {
+    process.exitCode = 1
+  }
 }
 
 main().catch((error) => {
