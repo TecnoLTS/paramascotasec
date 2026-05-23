@@ -44,6 +44,7 @@ type PanelModalsProps = {
     onProductReferenceDataUpdated: (data: ProductReferenceData) => void
     closeProductModal: () => void
     setAdminProductsList: (products: any[]) => void
+    onProductsChanged?: () => void
     refreshPurchaseInvoices: () => Promise<void>
     handleLogout: () => void
     showNotification: (text: string, type?: 'success' | 'error') => void
@@ -96,6 +97,7 @@ export default function PanelModals({
     onProductReferenceDataUpdated,
     closeProductModal,
     setAdminProductsList,
+    onProductsChanged,
     refreshPurchaseInvoices,
     handleLogout,
     showNotification,
@@ -149,7 +151,10 @@ export default function PanelModals({
                     onReferenceDataUpdated={onProductReferenceDataUpdated}
                     activeTab={activeTab}
                     onClose={closeProductModal}
-                    onProductsUpdated={setAdminProductsList}
+                    onProductsUpdated={(products) => {
+                        setAdminProductsList(products)
+                        onProductsChanged?.()
+                    }}
                     onRefreshPurchaseInvoices={refreshPurchaseInvoices}
                     onSessionExpired={handleLogout}
                     showNotification={showNotification}

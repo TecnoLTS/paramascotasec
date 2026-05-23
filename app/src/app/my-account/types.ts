@@ -106,6 +106,152 @@ export type ReportPeriodSummary = {
     }>;
 }
 
+export type InventoryRecommendedAction =
+    | 'monitor'
+    | 'restock_now'
+    | 'restock_soon'
+    | 'rotate_or_discount'
+    | 'remove_expired'
+    | 'reduce_or_promote'
+    | 'fix_data'
+    | 'review_assortment'
+
+export type InventoryIntelligenceRow = {
+    product_id: string;
+    legacy_id?: string | null;
+    name: string;
+    sku: string;
+    category: string;
+    product_type?: string;
+    supplier: string;
+    quantity: number;
+    status: 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired' | 'overstock';
+    avg_daily_units: number;
+    units_sold_window?: number;
+    coverage_days: number | null;
+    reorder_point: number;
+    critical_point?: number;
+    stock_max: number;
+    unit_cost: number;
+    inventory_cost: number;
+    unit_price: number;
+    price_net?: number;
+    market_value: number;
+    potential_profit?: number;
+    margin: number;
+    expiration_date: string | null;
+    expiration_alert_days?: number;
+    days_to_expire?: number | null;
+    days_expired?: number | null;
+    open_lots_count: number;
+    unlinked_open_lots_count?: number;
+    last_purchase_invoice_id?: string;
+    last_purchase_invoice_number?: string;
+    last_purchase_issued_at?: string | null;
+    last_purchase_received_at?: string | null;
+    last_purchase_quantity?: number;
+    last_purchase_unit_cost?: number;
+    priority_score: number;
+    recommended_action: InventoryRecommendedAction;
+    suggested_purchase_qty: number;
+    suggested_purchase_cost: number;
+    quality_issues?: string[];
+    published?: boolean;
+}
+
+export type InventoryIntelligenceAction = {
+    id: string;
+    product_id: string;
+    name: string;
+    sku?: string;
+    supplier?: string;
+    severity: 'critical' | 'warning' | 'info';
+    title: string;
+    detail: string;
+    action: InventoryRecommendedAction;
+    priority_score: number;
+    suggested_purchase_qty: number;
+    suggested_purchase_cost: number;
+}
+
+export type InventoryPurchasePlanGroup = {
+    supplier: string;
+    items_count: number;
+    units: number;
+    estimated_cost: number;
+    max_priority_score: number;
+    items: Array<{
+        product_id: string;
+        name: string;
+        sku?: string;
+        quantity: number;
+        unit_cost: number;
+        estimated_cost: number;
+        priority_score: number;
+    }>;
+}
+
+export type InventoryIntelligence = {
+    summary: {
+        total_skus: number;
+        total_units: number;
+        skus_with_stock: number;
+        inventory_cost: number;
+        market_value: number;
+        potential_profit: number;
+        purchase_recommended_skus: number;
+        suggested_purchase_units: number;
+        suggested_purchase_cost: number;
+        risk_skus: number;
+        expired_units: number;
+        expiring_units: number;
+        overstock_capital: number;
+        avg_margin: number;
+    };
+    health: {
+        available: number;
+        out_of_stock: number;
+        critical_stock: number;
+        low_stock: number;
+        overstock: number;
+        expired_products: number;
+        expiring_products: number;
+        purchase_recommended: number;
+        review_recommended: number;
+        data_quality_issues: number;
+    };
+    actions: InventoryIntelligenceAction[];
+    purchasePlan: InventoryPurchasePlanGroup[];
+    categories: Array<{
+        category: string;
+        skus: number;
+        units: number;
+        inventory_cost: number;
+        market_value: number;
+        suggested_purchase_units: number;
+        suggested_purchase_cost: number;
+        risk_skus: number;
+    }>;
+    suppliers: Array<{
+        supplier: string;
+        skus: number;
+        units: number;
+        inventory_cost: number;
+        market_value: number;
+        suggested_purchase_units: number;
+        suggested_purchase_cost: number;
+        risk_skus: number;
+    }>;
+    rows: InventoryIntelligenceRow[];
+    parameters: {
+        window_days: number;
+        target_days: number;
+        realized_statuses: string[];
+        cost_source?: string;
+    };
+    generated_at: string;
+}
+
 export interface DashboardStats {
     totalSales: {
         amount: number;
@@ -176,6 +322,7 @@ export interface DashboardStats {
             committed_net_roi?: number;
         };
         inventoryValue: { market_value: number, cost_value: number, total_items: number, products_count?: number, skus_with_stock?: number };
+        inventoryIntelligence?: InventoryIntelligence;
         ordersByStatus: Array<{ status: string, count: number }>;
         recentOrders: Array<{ id: string, user_name: string, total: number, status: string, created_at: string }>;
         salesDeepDive?: {
@@ -187,7 +334,16 @@ export interface DashboardStats {
         };
         inventoryDeepDive?: {
             highValueItems: Array<{ name: string, quantity: number, cost: string, total_cost: string }>;
-            riskItems: Array<{ name: string, quantity: number, units_sold_30d?: number | string, avg_daily_units?: number | string, estimated_days_left?: number | string | null }>;
+            riskItems: Array<{
+                name: string;
+                quantity: number;
+                status?: InventoryIntelligenceRow['status'];
+                reorder_point?: number | string;
+                critical_point?: number | string;
+                units_sold_30d?: number | string;
+                avg_daily_units?: number | string;
+                estimated_days_left?: number | string | null;
+            }>;
             expiringItems?: Array<{
                 id?: string;
                 legacy_id?: string;
@@ -208,6 +364,7 @@ export interface DashboardStats {
             health: {
                 out_of_stock: number | string;
                 low_stock: number | string;
+                critical_stock?: number | string;
                 overstock: number | string;
                 expired_products?: number | string;
                 expiring_products?: number | string;
@@ -835,6 +992,100 @@ export type SalesRankingRow = {
     historical_cost: number;
     historical_profit: number;
     historical_margin: number;
+}
+
+export type TraceabilityIssueSeverity = 'critical' | 'warning' | 'info'
+
+export type TraceabilityIssueType =
+    | 'cost_zero'
+    | 'negative_margin'
+    | 'low_margin'
+    | 'missing_contact'
+    | 'missing_document'
+    | 'missing_payment'
+    | 'missing_delivery'
+    | 'missing_order_refs'
+    | 'incomplete_product_data'
+
+export type TraceabilityIssue = {
+    id: string;
+    severity: TraceabilityIssueSeverity;
+    type: TraceabilityIssueType;
+    entityType: 'order' | 'product' | 'category';
+    entityId: string;
+    orderId?: string;
+    productId?: string;
+    productName?: string;
+    category?: string;
+    title: string;
+    detail: string;
+    impact?: number;
+    actionLabel: string;
+}
+
+export type TraceabilitySummary = {
+    ordersAudited: number;
+    productsAudited: number;
+    categoriesAudited: number;
+    grossSales: number;
+    netSales: number;
+    vat: number;
+    shipping: number;
+    cost: number;
+    grossProfit: number;
+    grossMargin: number;
+    coverageScore: number;
+    ordersWithContact: number;
+    ordersWithDocument: number;
+    ordersWithPayment: number;
+    ordersWithDelivery: number;
+    productsWithOrderRefs: number;
+    productsWithCost: number;
+    issuesCount: number;
+    criticalIssues: number;
+    warningIssues: number;
+    infoIssues: number;
+}
+
+export type ProductRankingDecisionAction =
+    | InventoryRecommendedAction
+    | 'fix_cost'
+    | 'protect_margin'
+    | 'review_no_sales'
+
+export type ProductRankingDecisionRow = SalesRankingRow & {
+    contribution_pct: number;
+    stock_current: number | null;
+    coverage_days: number | null;
+    recommended_action: ProductRankingDecisionAction;
+    action_label: string;
+    action_reason: string;
+    priority_score: number;
+    supplier: string;
+    suggested_purchase_qty: number;
+    suggested_purchase_cost: number;
+    unit_net: number;
+    unit_cost: number;
+    unit_profit: number;
+    inventory_status?: InventoryIntelligenceRow['status'];
+    inventory_quality_issues: string[];
+}
+
+export type ProductRankingActionItem = {
+    id: string;
+    product_id: string;
+    product_name: string;
+    category: string;
+    action: ProductRankingDecisionAction;
+    action_label: string;
+    detail: string;
+    priority_score: number;
+    severity: TraceabilityIssueSeverity;
+    stock_current: number | null;
+    coverage_days: number | null;
+    supplier: string;
+    suggested_purchase_qty: number;
+    suggested_purchase_cost: number;
 }
 
 export type LocalSaleLineItem = {

@@ -148,6 +148,7 @@ import { useCustomerAccountData } from './hooks/useCustomerAccountData'
 import { useLocalSaleQuote } from './hooks/useLocalSaleQuote'
 import { usePosShift } from './hooks/usePosShift'
 import SalesRankingPanel from './reports/SalesRankingPanel'
+import TraceabilityPanel from './reports/TraceabilityPanel'
 import { useReportData } from './reports/useReportData'
 import {
     ADMIN_TABS_WITH_ORDERS,
@@ -171,10 +172,14 @@ import {
 } from './adminProductDerivations'
 import {
     buildInventoryProductBreakdown,
+    buildProductRankingActionItems,
+    buildProductRankingDecisionRows,
     buildProductBreakdownMeta,
     buildSalesProductBreakdown,
     buildSalesRankingRows,
     buildSalesTrendPreview,
+    buildTraceabilityIssues,
+    buildTraceabilitySummary,
     filterStrategicAlerts,
     summarizeInventoryRows,
     summarizePurchaseInvoices,
@@ -205,6 +210,7 @@ import type {
     FinancialPeriod,
     FinancialPeriodPreview,
     FinancialTrendPoint,
+    InventoryIntelligence,
     LocalSaleLineItem,
     LocalSaleQuotationResult,
     LocalSaleQuote,
@@ -214,6 +220,8 @@ import type {
     PosShift,
     ProductEditorMode,
     ProductDetailMetric,
+    ProductRankingActionItem,
+    ProductRankingDecisionRow,
     ProductFormState,
     ProductProcurementDetail,
     ProductPublicationFilter,
@@ -828,6 +836,7 @@ const MyAccount = () => {
 
     // Admin Data State
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
+    const [inventoryIntelligenceState, setInventoryIntelligence] = useState<InventoryIntelligence | null>(null)
     const [trendRange, setTrendRange] = useState<'week' | 'month'>('week')
     const [trendMetric, setTrendMetric] = useState<'gross' | 'profit'>('gross')
     const [salesRankingView, setSalesRankingView] = useState<'month' | 'historical' | 'daily'>('month')
@@ -1082,6 +1091,7 @@ const MyAccount = () => {
             showNotification('Producto retirado correctamente');
             const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT);
             setAdminProductsList(normalizeAdminProducts(res.body));
+            invalidateAdminPanelData();
         } catch (error) {
             console.error(error);
             showNotification('Error al eliminar producto', 'error');
@@ -1110,6 +1120,7 @@ const MyAccount = () => {
             showNotification(`Precio optimizado a $${newPrice}`);
             const res = await requestApi<any[]>(ADMIN_PRODUCTS_ENDPOINT);
             setAdminProductsList(normalizeAdminProducts(res.body));
+            invalidateAdminPanelData();
         } catch (error) {
             console.error(error);
             showNotification('Error al optimizar precio', 'error');
@@ -1890,6 +1901,7 @@ const MyAccount = () => {
                 }
             }))
             showNotification(nextPublished ? 'Artículo publicado.' : 'Artículo ocultado del sitio.')
+            invalidateAdminPanelData()
         } catch (error) {
             const message = error instanceof Error && error.message.trim()
                 ? error.message
@@ -2716,6 +2728,7 @@ const MyAccount = () => {
         setActiveTab(undefined)
         setAdminDataError(null)
         setDashboardStats(null)
+        setInventoryIntelligence(null)
         setAdminOrdersList([])
         setAdminProductsList([])
         setAdminUsersList([])
@@ -2751,6 +2764,7 @@ const MyAccount = () => {
         setAdminDataLoading,
         setAdminDataError,
         setDashboardStats,
+        setInventoryIntelligence,
         setAdminProductsList,
         setAdminUsersList,
         setAdminOrdersList,
@@ -3182,6 +3196,60 @@ const MyAccount = () => {
         () => reportSalesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0),
         [reportSalesCategories]
     )
+    const reportTraceabilityCategories = React.useMemo<ReportPeriodSummary['categories']>(() => {
+        const reportData = reportDataRef.current
+        const reportCategories = reportData?.categories ?? effectiveReportData?.categories ?? []
+        const reportPeriodKey = reportData?.period?.period_key ?? effectiveReportData?.period?.period_key
+        const canUseReportCategories = (salesRankingView === 'daily' ? 'range' : salesRankingView) !== 'month' || reportPeriodKey === selectedRankingMonth
+        if (canUseReportCategories && reportCategories.length > 0) {
+            return reportCategories.map((item) => ({
+                category: item.category || 'Sin categoría',
+                orders_count: Number((item as any).orders_count ?? 0),
+                units_sold: Number((item as any).units_sold ?? 0),
+                gross_revenue: Number((item as any).gross_revenue ?? 0),
+                net_revenue: Number(item.net_revenue ?? 0),
+                vat_amount: Number((item as any).vat_amount ?? 0),
+                shipping_amount: Number((item as any).shipping_amount ?? 0),
+                cost: Number((item as any).cost ?? 0),
+                profit: Number((item as any).profit ?? 0),
+                margin: Number((item as any).margin ?? 0),
+                order_refs: Array.isArray((item as any).order_refs) ? (item as any).order_refs : [],
+            }))
+        }
+
+        const grouped = new Map<string, ReportPeriodSummary['categories'][number]>()
+        reportSalesRankingRows.forEach((product) => {
+            const category = product.category || 'Sin categoría'
+            const existing = grouped.get(category) || {
+                category,
+                orders_count: 0,
+                units_sold: 0,
+                gross_revenue: 0,
+                net_revenue: 0,
+                vat_amount: 0,
+                shipping_amount: 0,
+                cost: 0,
+                profit: 0,
+                margin: 0,
+                order_refs: [],
+            }
+            existing.orders_count += Number(product.orders_count ?? 0)
+            existing.units_sold += Number(product.units_sold ?? 0)
+            existing.gross_revenue += Number(product.gross_revenue ?? 0)
+            existing.net_revenue += Number(product.net_revenue ?? 0)
+            existing.vat_amount += Number(product.vat_amount ?? 0)
+            existing.shipping_amount += Number(product.shipping_amount ?? 0)
+            existing.cost += Number(product.cost ?? 0)
+            existing.profit += Number(product.profit ?? 0)
+            existing.order_refs = Array.from(new Set([
+                ...existing.order_refs,
+                ...(Array.isArray(product.order_refs) ? product.order_refs : []),
+            ]))
+            existing.margin = existing.net_revenue > 0 ? (existing.profit / existing.net_revenue) * 100 : 0
+            grouped.set(category, existing)
+        })
+        return Array.from(grouped.values()).sort((a, b) => Number(b.net_revenue ?? 0) - Number(a.net_revenue ?? 0))
+    }, [effectiveReportData, reportSalesRankingRows, salesRankingView, selectedRankingMonth])
     const reportSalesOrders = React.useMemo(() => {
         const reportData = reportDataRef.current
         if (reportData) {
@@ -3203,6 +3271,60 @@ const MyAccount = () => {
         }
         return report?.orders ?? []
     }, [effectiveReportData, selectedRankingMonth, salesRankingView])
+    const traceabilityReportSource = React.useMemo(() => {
+        const salesData = (effectiveReportData?.sales ?? {}) as Record<string, unknown>
+        const profitData = (effectiveReportData?.profit ?? {}) as Record<string, unknown>
+        const productRows = reportSalesRankingRows.map((product) => ({
+            product_id: product.product_id,
+            product_name: product.product_name,
+            category: product.category,
+            orders_count: Number(product.orders_count ?? 0),
+            units_sold: Number(product.units_sold ?? 0),
+            gross_revenue: Number(product.gross_revenue ?? 0),
+            net_revenue: Number(product.net_revenue ?? 0),
+            vat_amount: Number(product.vat_amount ?? 0),
+            shipping_amount: Number(product.shipping_amount ?? 0),
+            cost: Number(product.cost ?? 0),
+            profit: Number(product.profit ?? 0),
+            margin: Number(product.margin ?? 0),
+            order_refs: Array.isArray(product.order_refs) ? product.order_refs : [],
+        }))
+        return {
+            orders: reportSalesOrders,
+            products: productRows,
+            categories: reportTraceabilityCategories,
+            sales: {
+            orders_count: reportSalesOrders.length,
+                total: Number(salesData.total ?? salesData.gross ?? reportSalesOrders.reduce((acc, order) => acc + Number(order.gross ?? 0), 0)),
+                net: Number(salesData.net ?? reportSalesOrders.reduce((acc, order) => acc + Number(order.net ?? 0), 0)),
+                tax: Number(salesData.tax ?? salesData.vat ?? reportSalesOrders.reduce((acc, order) => acc + Number(order.vat ?? 0), 0)),
+                shipping: Number(salesData.shipping ?? reportSalesOrders.reduce((acc, order) => acc + Number(order.shipping ?? 0), 0)),
+            },
+            profit: {
+                cost: Number(profitData.cost ?? productRows.reduce((acc, product) => acc + Number(product.cost ?? 0), 0)),
+                gross_profit: Number(profitData.gross_profit ?? profitData.profit ?? productRows.reduce((acc, product) => acc + Number(product.profit ?? 0), 0)),
+                gross_margin: Number(profitData.gross_margin ?? profitData.margin ?? 0),
+                period_expenses: Number(profitData.period_expenses ?? 0),
+                paid_expenses: Number(profitData.paid_expenses ?? 0),
+                pending_expenses: Number(profitData.pending_expenses ?? 0),
+                overdue_expenses: Number(profitData.overdue_expenses ?? 0),
+                committed_expenses: Number(profitData.committed_expenses ?? 0),
+                financial_adjustments: Number(profitData.financial_adjustments ?? 0),
+                net_cash_profit: Number(profitData.net_cash_profit ?? 0),
+                net_cash_margin: Number(profitData.net_cash_margin ?? 0),
+                net_period_profit: Number(profitData.net_period_profit ?? 0),
+                net_period_margin: Number(profitData.net_period_margin ?? 0),
+            },
+        }
+    }, [effectiveReportData, reportSalesOrders, reportSalesRankingRows, reportTraceabilityCategories])
+    const traceabilityIssues = React.useMemo(
+        () => buildTraceabilityIssues(traceabilityReportSource),
+        [traceabilityReportSource]
+    )
+    const traceabilitySummary = React.useMemo(
+        () => buildTraceabilitySummary(traceabilityReportSource),
+        [traceabilityReportSource]
+    )
     const reportSalesOrderSearchCache = React.useMemo(() => {
         const statusMap = new Map<string, string>()
         const searchTextMap = new Map<string, string>()
@@ -3278,7 +3400,7 @@ const MyAccount = () => {
     const totalUnitsSold = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.units_count) || 0), 0) : 0
     const totalCost = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.cost) || 0), 0) : 0
     const totalProfit = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.profit) || 0), 0) : 0
-    const fallbackTotals = { units_sold: totalUnitsSold, net_revenue: effectiveReportData?.sales?.net ?? 0, cost: totalCost, profit: totalProfit }
+    const fallbackTotals = { units_sold: totalUnitsSold, net_revenue: Number((effectiveReportData?.sales as any)?.net ?? 0), cost: totalCost, profit: totalProfit }
     const salesRankingTotals = salesRankingView === 'daily'
         ? (dailySalesRankingTotals || fallbackTotals)
         : salesRankingView === 'month'
@@ -3497,6 +3619,47 @@ const MyAccount = () => {
         }
     }, [dashboardStats?.salesTrend30Days, reportFinancialSummary])
     const generalFinancialSummary = (trendRange === 'week' ? weekFinancialSummary : monthFinancialSummary) ?? reportFinancialSummary
+    const inventoryIntelligence = inventoryIntelligenceState ?? dashboardStats?.businessMetrics?.inventoryIntelligence ?? null
+    const productRankingDecisionRows = React.useMemo<ProductRankingDecisionRow[]>(() => {
+        const sourceRows = reportSalesRankingRows.length > 0 ? reportSalesRankingRows : salesRankingRows
+        return buildProductRankingDecisionRows(sourceRows, inventoryIntelligence)
+    }, [inventoryIntelligence, reportSalesRankingRows, salesRankingRows])
+    const productRankingActionItems = React.useMemo<ProductRankingActionItem[]>(
+        () => buildProductRankingActionItems(productRankingDecisionRows, inventoryIntelligence),
+        [inventoryIntelligence, productRankingDecisionRows]
+    )
+    const adminProductByReportId = React.useMemo(() => {
+        const map = new Map<string, any>()
+        for (const product of adminProductsList || []) {
+            const keys = [
+                getAdminProductEntityId(product),
+                product?.id,
+                product?.internalId,
+                product?.legacyId,
+                product?.legacy_id,
+            ].map((value) => String(value ?? '').trim()).filter(Boolean)
+            keys.forEach((key) => map.set(key, product))
+        }
+        return map
+    }, [adminProductsList])
+    const openAdminProductByReportId = React.useCallback((productId?: string | null) => {
+        const key = String(productId || '').trim()
+        const product = key ? adminProductByReportId.get(key) : null
+        if (!product) {
+            showNotification('No se encontró la ficha del producto en el catálogo admin.', 'error')
+            return
+        }
+        handleEditProduct(product)
+    }, [adminProductByReportId, handleEditProduct, showNotification])
+    const restockAdminProductByReportId = React.useCallback((productId?: string | null) => {
+        const key = String(productId || '').trim()
+        const product = key ? adminProductByReportId.get(key) : null
+        if (!product) {
+            showNotification('No se encontró la ficha del producto para registrar compra.', 'error')
+            return
+        }
+        handleRestockProduct(product)
+    }, [adminProductByReportId, handleRestockProduct, showNotification])
     const inventoryValue = dashboardStats?.businessMetrics?.inventoryValue
     const reportPurchaseInvoicesSummary = React.useMemo(() => {
         const periodPurchases = (effectiveReportData as ReportPeriodSummary | null | undefined)?.purchase_invoices
@@ -3591,7 +3754,6 @@ const MyAccount = () => {
     }, [inventoryValue, reportFinancialSummary, reportPurchaseInvoicesSummary, vatCreditCarryforwardDisplayRate, vatCreditCurrentDisplayRate])
     const inventoryDeepDive = dashboardStats?.businessMetrics?.inventoryDeepDive
     const inventoryHealth = inventoryDeepDive?.health
-    const traceabilityData = dashboardStats?.businessMetrics?.traceability
     const getProductTaxRate = React.useCallback((product: any) => {
         const explicitRate = Number(product?.tax?.rate)
         if (Number.isFinite(explicitRate)) {
@@ -3616,9 +3778,9 @@ const MyAccount = () => {
         const basePrice = getProductBasePrice(product)
         return Math.max(price - basePrice, 0)
     }, [getProductBasePrice])
-    const traceabilityOrders = traceabilityData?.orders ?? []
-    const traceabilityProducts = traceabilityData?.products ?? []
-    const traceabilityCategories = traceabilityData?.categories ?? []
+    const traceabilityOrders = reportSalesOrders
+    const traceabilityProducts = reportSalesRankingRows
+    const traceabilityCategories = reportTraceabilityCategories
     const salesCategories = dashboardStats?.salesByCategory ?? []
     const salesCategoriesTotal = React.useMemo(
         () => salesCategories.reduce((acc, item) => acc + Number(item.total ?? 0), 0),
@@ -3743,7 +3905,7 @@ const MyAccount = () => {
         setIsSalesProductModalOpen(true)
     }
     const productsNeededForLocalSales = activeTab === 'local-sales' || activeTab === 'quotations' || activeTab === 'expenses'
-    const productsNeededForInventory = activeTab === 'inventory' || activeTab === 'reports' || activeTab === 'alerts'
+    const productsNeededForInventory = activeTab === 'inventory' || activeTab === 'reports' || activeTab === 'alerts' || activeTab === 'sales-ranking'
     const productsNeededForProductsPanel = activeTab === 'products'
     const productsNeededForBreakdowns = Boolean(selectedDeepDive === 'product-breakdown')
     const inventoryRowsNeeded = productsNeededForInventory || productsNeededForLocalSales || productsNeededForBreakdowns
@@ -3811,10 +3973,15 @@ const MyAccount = () => {
                 },
                 salesOrders: filteredReportSalesOrders,
                 salesRankingRows: reportSalesRankingRows,
+                rankingDecisionRows: productRankingDecisionRows,
+                rankingActionItems: productRankingActionItems,
                 salesCategories: reportSalesCategories,
                 salesTrendRows,
                 inventoryManagementRows,
+                inventoryIntelligence,
                 recentPurchaseInvoices,
+                traceabilitySummary,
+                traceabilityIssues,
             })
             downloadReportExport(filename, content)
             showNotification('Reporte exportado correctamente. Ábrelo con Excel.')
@@ -3826,17 +3993,80 @@ const MyAccount = () => {
         adminReportSection,
         currentDateLabel,
         dashboardStats,
+        inventoryIntelligence,
         inventoryManagementRows,
+        productRankingActionItems,
+        productRankingDecisionRows,
         recentPurchaseInvoices,
         reportFinancialScopeLabel,
         reportFinancialSummary,
         filteredReportSalesOrders,
         reportSalesCategories,
         reportSalesRankingRows,
+        salesRankingView,
         salesTrendRows,
         selectedRankingMonth,
         selectedRankingMonthLabel,
         showNotification,
+        traceabilityIssues,
+        traceabilitySummary,
+        vatCreditCarryforwardDisplayRate,
+        vatCreditCurrentDisplayRate,
+    ])
+    const handleExportSalesRankingReport = React.useCallback(() => {
+        try {
+            const { filename, content } = buildReportExport({
+                section: 'sales',
+                reportTitle: 'Ranking de productos',
+                generatedAt: new Date(),
+                currentDateLabel,
+                selectedRankingMonth,
+                selectedRankingMonthLabel,
+                salesRankingView,
+                dashboardStats,
+                financialScopeLabel: reportFinancialScopeLabel,
+                financialSummary: reportFinancialSummary,
+                taxPolicy: {
+                    creditCurrentRate: vatCreditCurrentDisplayRate,
+                    creditCarryforwardRate: vatCreditCarryforwardDisplayRate,
+                },
+                salesOrders: filteredReportSalesOrders,
+                salesRankingRows: reportSalesRankingRows,
+                rankingDecisionRows: productRankingDecisionRows,
+                rankingActionItems: productRankingActionItems,
+                salesCategories: reportSalesCategories,
+                salesTrendRows,
+                inventoryManagementRows,
+                inventoryIntelligence,
+                recentPurchaseInvoices,
+                traceabilitySummary,
+                traceabilityIssues,
+            })
+            downloadReportExport(filename, content)
+            showNotification('Ranking exportado correctamente. Ábrelo con Excel.')
+        } catch (error) {
+            showNotification(String((error as any)?.message || 'No se pudo exportar el ranking.'), 'error')
+        }
+    }, [
+        currentDateLabel,
+        dashboardStats,
+        filteredReportSalesOrders,
+        inventoryIntelligence,
+        inventoryManagementRows,
+        productRankingActionItems,
+        productRankingDecisionRows,
+        recentPurchaseInvoices,
+        reportFinancialScopeLabel,
+        reportFinancialSummary,
+        reportSalesCategories,
+        reportSalesRankingRows,
+        salesRankingView,
+        salesTrendRows,
+        selectedRankingMonth,
+        selectedRankingMonthLabel,
+        showNotification,
+        traceabilityIssues,
+        traceabilitySummary,
         vatCreditCarryforwardDisplayRate,
         vatCreditCurrentDisplayRate,
     ])
@@ -6801,6 +7031,62 @@ const MyAccount = () => {
                                                         </p>
                                                     </div>
 
+                                                    {inventoryIntelligence && (
+                                                        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+                                                            <div className="rounded-2xl border border-line bg-white p-5">
+                                                                <div className="text-[10px] font-bold uppercase text-secondary">Plan operativo sugerido</div>
+                                                                <div className="mt-2 text-3xl font-bold">{formatMoney(inventoryIntelligence.summary.suggested_purchase_cost)}</div>
+                                                                <div className="mt-1 text-sm text-secondary">
+                                                                    {Number(inventoryIntelligence.summary.suggested_purchase_units ?? 0).toLocaleString('es-EC')} unidades en {Number(inventoryIntelligence.summary.purchase_recommended_skus ?? 0).toLocaleString('es-EC')} SKU.
+                                                                </div>
+                                                                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                                                    <div className="rounded-lg bg-surface p-3">
+                                                                        <div className="text-[10px] font-bold uppercase text-secondary">Riesgo</div>
+                                                                        <div className="font-bold">{Number(inventoryIntelligence.summary.risk_skus ?? 0).toLocaleString('es-EC')} SKU</div>
+                                                                    </div>
+                                                                    <div className="rounded-lg bg-surface p-3">
+                                                                        <div className="text-[10px] font-bold uppercase text-secondary">Datos</div>
+                                                                        <div className="font-bold">{Number(inventoryIntelligence.health.data_quality_issues ?? 0).toLocaleString('es-EC')} revisar</div>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="mt-4 w-full rounded-lg border border-black bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-primary"
+                                                                    onClick={() => navigateToPanelTab('inventory')}
+                                                                >
+                                                                    Abrir centro operativo
+                                                                </button>
+                                                            </div>
+                                                            <div className="rounded-2xl border border-line bg-white p-5">
+                                                                <div className="heading6 mb-1">Prioridades inteligentes</div>
+                                                                <p className="mb-4 text-xs text-secondary">
+                                                                    Basadas en ventas reales, cobertura, margen, vencimientos y capital.
+                                                                </p>
+                                                                <div className="space-y-2">
+                                                                    {(inventoryIntelligence.actions || []).slice(0, 5).map((action) => (
+                                                                        <div key={action.id} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 md:flex-row md:items-center md:justify-between">
+                                                                            <div className="min-w-0">
+                                                                                <div className="text-sm font-semibold break-words">{action.name}</div>
+                                                                                <div className="text-xs text-secondary">{action.title}: {action.detail}</div>
+                                                                            </div>
+                                                                            <div className="text-xs font-bold text-secondary md:text-right">
+                                                                                Score {Number(action.priority_score ?? 0).toLocaleString('es-EC')}
+                                                                                {Number(action.suggested_purchase_qty ?? 0) > 0 && (
+                                                                                    <span className="ml-2 text-black">+{Number(action.suggested_purchase_qty).toLocaleString('es-EC')} uds</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                    {(inventoryIntelligence.actions || []).length === 0 && (
+                                                                        <div className="rounded-xl border border-line bg-surface p-4 text-sm text-secondary">
+                                                                            No hay acciones urgentes con la información actual.
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {/* ── Financial summary row ── */}
                                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                                                         <div className="p-4 rounded-xl border border-line bg-white">
@@ -6823,9 +7109,9 @@ const MyAccount = () => {
                                                     {/* ── Risk cards row ── */}
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-6">
                                                         {([
-                                                            { key: 'out' as const, label: 'Sin stock', value: Number(inventoryHealth?.out_of_stock ?? 0), color: 'text-red', bg: 'bg-red-50/30', caption: 'Productos sin unidades disponibles', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0) },
-                                                            { key: 'critical' as const, label: 'Stock crítico', value: Number(inventoryHealth?.low_stock ?? 0) > 0 ? Math.min(Number(inventoryHealth?.low_stock ?? 0), 3) : 0, color: 'text-orange-600', bg: 'bg-orange-50/30', caption: 'Stock por debajo del punto crítico', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2) },
-                                                            { key: 'low' as const, label: 'Bajo stock', value: Number(inventoryHealth?.low_stock ?? 0), color: 'text-amber-700', bg: 'bg-amber-50/30', caption: 'Requieren reposición preventiva', items: riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5) },
+                                                            { key: 'out' as const, label: 'Sin stock', value: Number(inventoryHealth?.out_of_stock ?? 0), color: 'text-red', bg: 'bg-red-50/30', caption: 'Productos sin unidades disponibles', items: riskInventoryItems.filter((i) => (i as any).status === 'out' || Number(i.quantity ?? 0) <= 0) },
+                                                            { key: 'critical' as const, label: 'Stock crítico', value: Number(inventoryHealth?.critical_stock ?? 0), color: 'text-orange-600', bg: 'bg-orange-50/30', caption: 'Stock por debajo del punto crítico', items: riskInventoryItems.filter((i) => (i as any).status === 'critical') },
+                                                            { key: 'low' as const, label: 'Bajo stock', value: Number(inventoryHealth?.low_stock ?? 0), color: 'text-amber-700', bg: 'bg-amber-50/30', caption: 'Requieren reposición preventiva', items: riskInventoryItems.filter((i) => (i as any).status === 'low') },
                                                             { key: 'expiring' as const, label: 'Por vencer', value: Number(inventoryHealth?.expiring_products ?? 0), color: 'text-amber-600', bg: 'bg-amber-50/30', caption: 'Próximos a expirar', items: expiringInventoryItems },
                                                             { key: 'expired' as const, label: 'Vencidos', value: Number(inventoryHealth?.expired_products ?? 0), color: 'text-red', bg: 'bg-red-50/30', caption: 'Productos ya vencidos', items: expiredInventoryItems },
                                                             { key: 'all' as const, label: 'Capital invertido', value: `${formatMoney(Number(inventoryValue?.cost_value ?? 0))}`, color: 'text-black', bg: 'bg-surface', caption: 'Valor total del inventario', items: highValueInventoryItems.slice(0, 5) },
@@ -6868,30 +7154,30 @@ const MyAccount = () => {
                                                     </div>
 
                                                     {/* ── Inline detail panels ── */}
-                                                    {inventoryExpandedSection === 'out' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0).length > 0 && (
+                                                    {inventoryExpandedSection === 'out' && riskInventoryItems.filter((i) => (i as any).status === 'out' || Number(i.quantity ?? 0) <= 0).length > 0 && (
                                                         <InventoryExpandedDetail
                                                             label="Sin stock"
-                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) <= 0).slice(0, 10)}
+                                                            items={riskInventoryItems.filter((i) => (i as any).status === 'out' || Number(i.quantity ?? 0) <= 0).slice(0, 10)}
                                                             stockKey="quantity"
                                                             extraLabel="Sin ventas recientes"
                                                             onClose={() => setInventoryExpandedSection(null)}
                                                             onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
                                                         />
                                                     )}
-                                                    {inventoryExpandedSection === 'critical' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2).length > 0 && (
+                                                    {inventoryExpandedSection === 'critical' && riskInventoryItems.filter((i) => (i as any).status === 'critical').length > 0 && (
                                                         <InventoryExpandedDetail
                                                             label="Stock crítico"
-                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 0 && Number(i.quantity ?? 0) <= 2).slice(0, 10)}
+                                                            items={riskInventoryItems.filter((i) => (i as any).status === 'critical').slice(0, 10)}
                                                             stockKey="quantity"
                                                             extraLabel="Cobertura por días"
                                                             onClose={() => setInventoryExpandedSection(null)}
                                                             onManage={() => { setInventoryExpandedSection(null); navigateToPanelTab('inventory') }}
                                                         />
                                                     )}
-                                                    {inventoryExpandedSection === 'low' && riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5).length > 0 && (
+                                                    {inventoryExpandedSection === 'low' && riskInventoryItems.filter((i) => (i as any).status === 'low').length > 0 && (
                                                         <InventoryExpandedDetail
                                                             label="Bajo stock"
-                                                            items={riskInventoryItems.filter((i) => Number(i.quantity ?? 0) > 2 && Number(i.quantity ?? 0) <= 5).slice(0, 10)}
+                                                            items={riskInventoryItems.filter((i) => (i as any).status === 'low').slice(0, 10)}
                                                             stockKey="quantity"
                                                             extraLabel="Cobertura por días"
                                                             onClose={() => setInventoryExpandedSection(null)}
@@ -7025,174 +7311,30 @@ const MyAccount = () => {
                                             )}
 
                                             {adminReportSection === 'traceability' && (
-                                                <>
-                                                    <div className="mb-4 rounded-lg border border-line bg-surface px-4 py-3">
-                                                        <div className="text-sm font-bold">Cómo leer este reporte</div>
-                                                        <p className="mt-1 text-xs text-secondary">
-                                                            Trazabilidad no es un resumen de ventas; es la evidencia que permite revisar de qué pedidos, productos y categorías salen las cifras comerciales.
-                                                        </p>
-                                                        <div className="mt-3 grid grid-cols-1 gap-2 text-xs md:grid-cols-3">
-                                                            <div className="rounded-md border border-line bg-white px-3 py-2">
-                                                                <span className="font-bold">1. Pedidos fuente:</span> comprueba los pedidos que respaldan las ventas.
-                                                            </div>
-                                                            <div className="rounded-md border border-line bg-white px-3 py-2">
-                                                                <span className="font-bold">2. Productos:</span> identifica qué productos explican el ingreso.
-                                                            </div>
-                                                            <div className="rounded-md border border-line bg-white px-3 py-2">
-                                                                <span className="font-bold">3. Categorías:</span> valida el mix comercial agrupado.
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Pedidos auditados</div>
-                                                            <div className="text-2xl font-bold">{traceabilityOrders.length.toLocaleString('es-EC')}</div>
-                                                            <div className="text-xs text-secondary mt-1">Pedidos fuente incluidos</div>
-                                                        </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas netas auditadas</div>
-                                                            <div className="text-2xl font-bold">{formatMoney(traceabilityOrders.reduce((acc, order) => acc + Number(order.net ?? 0), 0))}</div>
-                                                            <div className="text-xs text-secondary mt-1">Sin IVA ni envío</div>
-                                                        </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Productos auditados</div>
-                                                            <div className="text-2xl font-bold">{traceabilityProducts.length.toLocaleString('es-EC')}</div>
-                                                            <div className="text-xs text-secondary mt-1">Productos ligados a pedidos fuente</div>
-                                                        </div>
-                                                        <div className="p-4 rounded-xl border border-line bg-white">
-                                                            <div className="text-[10px] uppercase font-bold text-secondary mb-1">Categorías auditadas</div>
-                                                            <div className="text-2xl font-bold">{traceabilityCategories.length.toLocaleString('es-EC')}</div>
-                                                            <div className="text-xs text-secondary mt-1">Agrupaciones para validar el mix</div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="bg-white border border-line rounded-2xl p-5 mb-6">
-                                                        <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
-                                                            <div>
-                                                                <div className="heading6">Pedidos fuente que respaldan el reporte</div>
-                                                                <p className="text-secondary text-xs mt-1">Cada fila permite abrir el pedido y revisar su desglose comercial.</p>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                className="w-fit px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface"
-                                                                onClick={() => navigateToPanelTab('admin-orders')}
-                                                            >
-                                                                Ver todos los pedidos
-                                                            </button>
-                                                        </div>
-                                                        <div className="overflow-x-auto rounded-xl border border-line">
-                                                            <table className="w-full min-w-[920px] text-left text-sm">
-                                                                <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
-                                                                    <tr>
-                                                                        <th className="px-4 py-3">Pedido</th>
-                                                                        <th className="px-4 py-3">Fecha</th>
-                                                                        <th className="px-4 py-3 text-right">Ventas brutas</th>
-                                                                        <th className="px-4 py-3 text-right">Ventas netas</th>
-                                                                        <th className="px-4 py-3 text-right">IVA cobrado</th>
-                                                                        <th className="px-4 py-3 text-right">Envío cobrado</th>
-                                                                        <th className="px-4 py-3 text-right">Acción</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-line">
-                                                                    {traceabilityOrders.slice(0, 12).map((order) => (
-                                                                        <tr key={order.id} className="hover:bg-surface/40">
-                                                                            <td className="px-4 py-3 font-bold">#{order.id}</td>
-                                                                            <td className="px-4 py-3">{formatDateEcuador(order.created_at)}</td>
-                                                                            <td className="px-4 py-3 text-right font-semibold">{formatMoney(order.gross)}</td>
-                                                                            <td className="px-4 py-3 text-right">{formatMoney(order.net)}</td>
-                                                                            <td className="px-4 py-3 text-right">{formatMoney(order.vat)}</td>
-                                                                            <td className="px-4 py-3 text-right">{formatMoney(order.shipping)}</td>
-                                                                            <td className="px-4 py-3 text-right">
-                                                                                <button type="button" className="text-xs font-bold underline" onClick={() => handleViewOrder(order.id)}>
-                                                                                    Ver pedido
-                                                                                </button>
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    {traceabilityOrders.length === 0 && (
-                                                                        <tr>
-                                                                            <td colSpan={7} className="px-4 py-8 text-center text-secondary">No hay pedidos fuente para auditar en este periodo.</td>
-                                                                        </tr>
-                                                                    )}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
-                                                        <div className="bg-white border border-line rounded-2xl p-5">
-                                                            <div className="heading6 mb-1">Productos que explican el resultado</div>
-                                                            <p className="text-secondary text-xs mb-4">Lista de productos vendidos, su categoría, unidades y pedidos relacionados.</p>
-                                                            <div className="overflow-x-auto rounded-xl border border-line">
-                                                                <table className="w-full min-w-[820px] text-left text-sm">
-                                                                    <thead className="bg-surface text-[10px] uppercase font-bold text-secondary border-b border-line">
-                                                                        <tr>
-                                                                            <th className="px-4 py-3">Producto</th>
-                                                                            <th className="px-4 py-3">Categoría</th>
-                                                                            <th className="px-4 py-3 text-right">Unidades</th>
-                                                                            <th className="px-4 py-3 text-right">Ventas netas</th>
-                                                                            <th className="px-4 py-3">Pedidos asociados</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-line">
-                                                                        {traceabilityProducts.slice(0, 10).map((product, idx) => {
-                                                                            const refs = Array.isArray(product.order_refs)
-                                                                                ? product.order_refs
-                                                                                : String(product.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
-                                                                            return (
-                                                                                <tr key={`${product.product_id || product.product_name}-${idx}`} className="hover:bg-surface/40">
-                                                                                    <td className="px-4 py-3 font-semibold">{product.product_name}</td>
-                                                                                    <td className="px-4 py-3 capitalize">{product.category || 'Sin categoría'}</td>
-                                                                                    <td className="px-4 py-3 text-right">{Number(product.units_sold || 0).toLocaleString('es-EC')}</td>
-                                                                                    <td className="px-4 py-3 text-right font-semibold">{formatMoney(product.net_revenue)}</td>
-                                                                                    <td className="px-4 py-3 text-xs text-secondary break-words">{refs.length > 0 ? refs.join(', ') : 'Sin referencia'}</td>
-                                                                                </tr>
-                                                                            )
-                                                                        })}
-                                                                        {traceabilityProducts.length === 0 && (
-                                                                            <tr>
-                                                                                <td colSpan={5} className="px-4 py-8 text-center text-secondary">No hay productos vendidos para auditar.</td>
-                                                                            </tr>
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="bg-white border border-line rounded-2xl p-5">
-                                                            <div className="heading6 mb-1">Categorías auditadas</div>
-                                                            <p className="text-secondary text-xs mb-4">Agrupación simple para revisar qué categorías explican las ventas netas.</p>
-                                                            <div className="space-y-3">
-                                                                {traceabilityCategories.slice(0, 10).map((category, idx) => {
-                                                                    const refs = Array.isArray(category.order_refs)
-                                                                        ? category.order_refs
-                                                                        : String(category.order_refs || '').split(',').map((value) => value.trim()).filter(Boolean)
-                                                                    const categoryNet = Number(category.net_revenue ?? 0)
-                                                                    const totalNet = traceabilityCategories.reduce((acc, item) => acc + Number(item.net_revenue ?? 0), 0)
-                                                                    const ratio = totalNet > 0 && categoryNet > 0 ? Math.max((categoryNet / totalNet) * 100, 4) : 0
-                                                                    return (
-                                                                        <div key={`${category.category}-${idx}`} className="p-3 rounded-lg border border-line bg-surface">
-                                                                            <div className="flex items-center justify-between gap-3">
-                                                                                <div className="font-semibold text-sm capitalize">{category.category || 'Sin categoría'}</div>
-                                                                                <div className="font-bold">{formatMoney(categoryNet)}</div>
-                                                                            </div>
-                                                                            <div className="mt-2 h-2 rounded-full bg-white overflow-hidden">
-                                                                                <div className="h-full bg-black rounded-full" style={{ width: `${ratio}%` }}></div>
-                                                                            </div>
-                                                                            <div className="text-xs text-secondary mt-2 break-words">
-                                                                                Pedidos asociados: {refs.length > 0 ? refs.join(', ') : 'Sin referencia'}
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                })}
-                                                                {traceabilityCategories.length === 0 && (
-                                                                    <div className="text-sm text-secondary">No hay categorías para auditar.</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </>
+                                                <TraceabilityPanel
+                                                    currentDateLabel={currentDateLabel}
+                                                    formatMoney={formatMoney}
+                                                    formatDateEcuador={formatDateEcuador}
+                                                    formatDateTimeEcuador={formatDateTimeEcuador}
+                                                    getCustomerDocument={getReportCustomerDocument}
+                                                    getDeliveryMethodLabel={getReportDeliveryMethodLabel}
+                                                    getPaymentMethodLabel={getReportPaymentMethodLabel}
+                                                    issues={traceabilityIssues}
+                                                    orders={traceabilityOrders}
+                                                    products={traceabilityProducts}
+                                                    categories={traceabilityCategories}
+                                                    periodLabel={reportSalesPeriodLabel}
+                                                    salesRankingMonth={salesRankingMonth}
+                                                    salesRankingView={salesRankingView}
+                                                    selectedRankingMonthLabel={selectedRankingMonthLabel}
+                                                    selectReportMonth={selectReportMonth}
+                                                    setSalesRankingView={setSalesRankingView}
+                                                    summary={traceabilitySummary}
+                                                    onViewOrder={handleViewOrder}
+                                                    onOpenProduct={openAdminProductByReportId}
+                                                    onRegisterPurchase={restockAdminProductByReportId}
+                                                    onOpenOrders={() => navigateToPanelTab('admin-orders')}
+                                                />
                                             )}
                                         </div>
                                     )}
@@ -7202,16 +7344,20 @@ const MyAccount = () => {
                                             effectiveReportData={effectiveReportData}
                                             formatMoney={formatMoney}
                                             openSalesProductDetail={openSalesProductDetail}
+                                            productRankingActionItems={productRankingActionItems}
+                                            productRankingDecisionRows={productRankingDecisionRows}
                                             productSalesRanking={productSalesRanking}
                                             salesRankingFinancial={salesRankingFinancial}
                                             salesRankingMonth={salesRankingMonth}
-                                            salesRankingRows={salesRankingRows}
                                             salesRankingTotals={salesRankingTotals}
                                             salesRankingView={salesRankingView}
                                             selectReportMonth={selectReportMonth}
                                             selectedRankingMonthLabel={selectedRankingMonthLabel}
                                             setSalesRankingView={setSalesRankingView}
                                             totalUnitsSold={totalUnitsSold}
+                                            onExportRanking={handleExportSalesRankingReport}
+                                            onOpenProduct={openAdminProductByReportId}
+                                            onRestockProduct={restockAdminProductByReportId}
                                         />
                                     )}
 
@@ -7420,6 +7566,7 @@ const MyAccount = () => {
                                         <InventoryManagementPanel
                                             summary={inventorySummary}
                                             rows={filteredInventoryRows}
+                                            intelligence={inventoryIntelligence}
                                             searchQuery={inventorySearch}
                                             statusFilter={inventoryStatusFilter}
                                             typeFilter={inventoryTypeFilter}
@@ -8143,6 +8290,7 @@ const MyAccount = () => {
                         setProductEditorMode('create')
                     }}
                     setAdminProductsList={setAdminProductsList}
+                    onProductsChanged={invalidateAdminPanelData}
                     refreshPurchaseInvoices={() => loadRecentPurchaseInvoices({ silent: true })}
                     handleLogout={handleLogout}
                     showNotification={showNotification}

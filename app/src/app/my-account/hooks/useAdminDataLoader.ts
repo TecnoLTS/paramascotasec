@@ -17,6 +17,7 @@ import {
 import type {
   AdminUserSummary,
   DashboardStats,
+  InventoryIntelligence,
   Order,
   ShippingPickup,
   ShippingProvider,
@@ -41,6 +42,7 @@ type UseAdminDataLoaderParams = {
   setAdminDataLoading: React.Dispatch<React.SetStateAction<boolean>>
   setAdminDataError: React.Dispatch<React.SetStateAction<string | null>>
   setDashboardStats: React.Dispatch<React.SetStateAction<DashboardStats | null>>
+  setInventoryIntelligence: React.Dispatch<React.SetStateAction<InventoryIntelligence | null>>
   setAdminProductsList: React.Dispatch<React.SetStateAction<any[]>>
   setAdminUsersList: React.Dispatch<React.SetStateAction<AdminUserSummary[]>>
   setAdminOrdersList: React.Dispatch<React.SetStateAction<Order[]>>
@@ -69,6 +71,7 @@ export const useAdminDataLoader = ({
   setAdminDataLoading,
   setAdminDataError,
   setDashboardStats,
+  setInventoryIntelligence,
   setAdminProductsList,
   setAdminUsersList,
   setAdminOrdersList,
@@ -100,6 +103,7 @@ export const useAdminDataLoader = ({
     setAdminDataLoading,
     setAdminDataError,
     setDashboardStats,
+    setInventoryIntelligence,
     setAdminProductsList,
     setAdminUsersList,
     setAdminOrdersList,
@@ -131,6 +135,7 @@ export const useAdminDataLoader = ({
       setAdminDataLoading,
       setAdminDataError,
       setDashboardStats,
+      setInventoryIntelligence,
       setAdminProductsList,
       setAdminUsersList,
       setAdminOrdersList,
@@ -153,6 +158,7 @@ export const useAdminDataLoader = ({
     setAdminDataLoading,
     setAdminDataError,
     setDashboardStats,
+    setInventoryIntelligence,
     setAdminProductsList,
     setAdminUsersList,
     setAdminOrdersList,
@@ -285,6 +291,21 @@ export const useAdminDataLoader = ({
               const normalizedProducts = current.normalizeAdminProducts(res.body)
               setCached('products', normalizedProducts)
               if (!cancelled) current.setAdminProductsList(normalizedProducts)
+            }),
+          )
+        }
+      }
+
+      if (['inventory', 'reports', 'alerts', 'sales-ranking'].includes(activeTab)) {
+        const inventoryCacheKey = 'inventory-intelligence:30:30'
+        const cachedInventory = getCached<InventoryIntelligence>(inventoryCacheKey)
+        if (cachedInventory && !isPassive) {
+          if (!cancelled) current.setInventoryIntelligence(cachedInventory)
+        } else {
+          tasks.push(
+            withTransientRetry(() => requestApi<InventoryIntelligence>('/api/admin/inventory/intelligence?window_days=30&target_days=30', { headers })).then((res) => {
+              setCached(inventoryCacheKey, res.body)
+              if (!cancelled) current.setInventoryIntelligence(res.body)
             }),
           )
         }

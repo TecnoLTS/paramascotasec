@@ -2,6 +2,7 @@
 
 import React from 'react'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
+import type { InventoryIntelligence, InventoryRecommendedAction } from '../types'
 
 type InventorySummary = {
     totalSkus: number;
@@ -25,6 +26,7 @@ type PurchaseInvoicesSummary = {
 type InventoryManagementPanelProps = {
     summary: InventorySummary;
     rows: any[];
+    intelligence?: InventoryIntelligence | null;
     searchQuery: string;
     statusFilter: 'all' | 'available' | 'low' | 'critical' | 'out' | 'expiring' | 'expired';
     typeFilter: 'all' | 'perishable' | 'nonperishable';
@@ -70,6 +72,53 @@ const INVENTORY_TYPE_OPTIONS: Array<{ key: InventoryManagementPanelProps['typeFi
     { key: 'perishable', label: 'Solo perecederos' },
     { key: 'nonperishable', label: 'Solo no perecederos' },
 ]
+
+const INVENTORY_ACTION_OPTIONS: Array<{ key: 'all' | InventoryRecommendedAction; label: string }> = [
+    { key: 'all', label: 'Todas las acciones' },
+    { key: 'restock_now', label: 'Comprar ahora' },
+    { key: 'restock_soon', label: 'Reponer pronto' },
+    { key: 'rotate_or_discount', label: 'Rotar/liquidar' },
+    { key: 'remove_expired', label: 'Retirar vencido' },
+    { key: 'reduce_or_promote', label: 'Liberar capital' },
+    { key: 'fix_data', label: 'Completar datos' },
+    { key: 'review_assortment', label: 'Revisar surtido' },
+    { key: 'monitor', label: 'Monitorear' },
+]
+
+const getInventoryActionLabel = (action?: string) => {
+    const option = INVENTORY_ACTION_OPTIONS.find((item) => item.key === action)
+    return option?.label || 'Monitorear'
+}
+
+const getActionTone = (action?: string) => {
+    if (action === 'restock_now' || action === 'remove_expired') return 'bg-red-100 text-red-700'
+    if (action === 'restock_soon' || action === 'rotate_or_discount') return 'bg-amber-100 text-amber-800'
+    if (action === 'reduce_or_promote') return 'bg-blue-100 text-blue-800'
+    if (action === 'fix_data' || action === 'review_assortment') return 'bg-surface text-secondary'
+    return 'bg-emerald-100 text-emerald-700'
+}
+
+const escapeCsvCell = (value: unknown) => {
+    const text = String(value ?? '')
+    if (/[",\n\r;]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`
+    }
+    return text
+}
+
+const downloadCsv = (filename: string, rows: unknown[][]) => {
+    if (typeof window === 'undefined') return
+    const content = rows.map((row) => row.map(escapeCsvCell).join(',')).join('\n')
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+}
 
 function renderSummaryCardButton({
     label,
@@ -239,9 +288,162 @@ function RestockSuggestionsPanel({ rows, formatMoney, onRestockProduct }: {
     )
 }
 
+function InventoryIntelligenceSummary({
+    intelligence,
+    formatMoney,
+    onExportPurchasePlan,
+    onRestockProduct,
+    productById,
+}: {
+    intelligence?: InventoryIntelligence | null;
+    formatMoney: (value: any) => string;
+    onExportPurchasePlan: () => void;
+    onRestockProduct: (product: any) => void;
+    productById: Map<string, any>;
+}) {
+    if (!intelligence) {
+        return null
+    }
+
+    const topActions = (intelligence.actions || []).slice(0, 6)
+    const topPurchaseGroups = (intelligence.purchasePlan || []).slice(0, 4)
+
+    return (
+        <div className="space-y-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                <div className="p-4 rounded-xl border border-line bg-white">
+                    <div className="text-[10px] uppercase font-bold text-secondary">Compra sugerida</div>
+                    <div className="text-2xl font-bold mt-1">{formatMoney(intelligence.summary.suggested_purchase_cost)}</div>
+                    <div className="text-xs text-secondary mt-1">{intelligence.summary.suggested_purchase_units.toLocaleString('es-EC')} uds / {intelligence.summary.purchase_recommended_skus.toLocaleString('es-EC')} SKU</div>
+                </div>
+                <div className="p-4 rounded-xl border border-line bg-white">
+                    <div className="text-[10px] uppercase font-bold text-secondary">Riesgo operativo</div>
+                    <div className="text-2xl font-bold mt-1">{intelligence.summary.risk_skus.toLocaleString('es-EC')}</div>
+                    <div className="text-xs text-secondary mt-1">quiebres, bajos, vencidos o por vencer</div>
+                </div>
+                <div className="p-4 rounded-xl border border-line bg-white">
+                    <div className="text-[10px] uppercase font-bold text-secondary">Capital inmovilizado</div>
+                    <div className="text-2xl font-bold mt-1">{formatMoney(intelligence.summary.inventory_cost)}</div>
+                    <div className="text-xs text-secondary mt-1">margen promedio {Number(intelligence.summary.avg_margin ?? 0).toLocaleString('es-EC', { maximumFractionDigits: 1 })}%</div>
+                </div>
+                <div className="p-4 rounded-xl border border-line bg-white">
+                    <div className="text-[10px] uppercase font-bold text-secondary">Sobrestock</div>
+                    <div className="text-2xl font-bold mt-1">{formatMoney(intelligence.summary.overstock_capital)}</div>
+                    <div className="text-xs text-secondary mt-1">{Number(intelligence.health.overstock ?? 0).toLocaleString('es-EC')} SKU sobre máximo</div>
+                </div>
+                <div className="p-4 rounded-xl border border-line bg-white">
+                    <div className="text-[10px] uppercase font-bold text-secondary">Datos por corregir</div>
+                    <div className="text-2xl font-bold mt-1">{Number(intelligence.health.data_quality_issues ?? 0).toLocaleString('es-EC')}</div>
+                    <div className="text-xs text-secondary mt-1">SKU, costo, precio, proveedor o lote</div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-4">
+                <div className="p-5 rounded-2xl border border-line bg-white">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                        <div>
+                            <div className="heading6">Qué hacer ahora</div>
+                            <p className="text-sm text-secondary mt-1">Prioridad balanceada por ventas, cobertura, margen, capital y vencimientos.</p>
+                        </div>
+                        <div className="text-xs text-secondary">
+                            Ventana {intelligence.parameters.window_days}d · objetivo {intelligence.parameters.target_days}d
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        {topActions.map((action) => {
+                            const sourceProduct = productById.get(action.product_id)
+                            return (
+                                <div key={action.id} className="flex flex-col gap-3 rounded-xl border border-line p-3 md:flex-row md:items-center md:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${action.severity === 'critical' ? 'bg-red-100 text-red-700' : action.severity === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-surface text-secondary'}`}>
+                                                {action.priority_score}
+                                            </span>
+                                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${getActionTone(action.action)}`}>
+                                                {action.title}
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 text-sm font-semibold break-words">{action.name}</div>
+                                        <div className="text-xs text-secondary">{action.detail}</div>
+                                    </div>
+                                    <div className="shrink-0 text-left md:text-right">
+                                        {action.suggested_purchase_qty > 0 && (
+                                            <div className="text-xs text-secondary mb-2">
+                                                +{action.suggested_purchase_qty.toLocaleString('es-EC')} uds · {formatMoney(action.suggested_purchase_cost)}
+                                            </div>
+                                        )}
+                                        {sourceProduct && action.suggested_purchase_qty > 0 && (
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 rounded-lg border border-black bg-black text-white text-xs font-semibold hover:bg-primary transition-all"
+                                                onClick={() => onRestockProduct(sourceProduct)}
+                                            >
+                                                Registrar compra
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                        {topActions.length === 0 && (
+                            <div className="rounded-xl border border-line bg-surface p-4 text-sm text-secondary">
+                                No hay acciones urgentes con la información actual.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="p-5 rounded-2xl border border-line bg-white">
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                            <div className="heading6">Plan de compra</div>
+                            <p className="text-sm text-secondary mt-1">Agrupado por proveedor para comprar sin revisar SKU por SKU.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold hover:bg-surface transition-all"
+                            onClick={onExportPurchasePlan}
+                            disabled={(intelligence.purchasePlan || []).length === 0}
+                        >
+                            Exportar
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        {topPurchaseGroups.map((group) => (
+                            <div key={group.supplier} className="rounded-xl border border-line bg-surface p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-sm break-words">{group.supplier}</div>
+                                        <div className="text-xs text-secondary">{group.items_count} SKU · {group.units.toLocaleString('es-EC')} uds</div>
+                                    </div>
+                                    <div className="text-sm font-bold">{formatMoney(group.estimated_cost)}</div>
+                                </div>
+                                <div className="mt-2 space-y-1 text-xs text-secondary">
+                                    {group.items.slice(0, 3).map((item) => (
+                                        <div key={item.product_id} className="flex justify-between gap-2">
+                                            <span className="truncate">{item.name}</span>
+                                            <span className="font-semibold text-black">+{item.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        {topPurchaseGroups.length === 0 && (
+                            <div className="rounded-xl border border-line bg-surface p-4 text-sm text-secondary">
+                                No hay compras sugeridas; revisa rotación o datos faltantes antes de reponer.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default React.memo(function InventoryManagementPanel({
     summary,
     rows,
+    intelligence,
     searchQuery,
     statusFilter,
     typeFilter,
@@ -271,6 +473,81 @@ export default React.memo(function InventoryManagementPanel({
     formatDateEcuador,
     formatDateTimeEcuador,
 }: InventoryManagementPanelProps) {
+    const [actionFilter, setActionFilter] = React.useState<'all' | InventoryRecommendedAction>('all')
+    const [categoryFilter, setCategoryFilter] = React.useState('all')
+    const [supplierFilter, setSupplierFilter] = React.useState('all')
+
+    const intelligenceByProductId = React.useMemo(() => {
+        return new Map((intelligence?.rows || []).map((row) => [String(row.product_id), row]))
+    }, [intelligence])
+
+    const productById = React.useMemo(() => {
+        const map = new Map<string, any>()
+        rows.forEach((row) => {
+            const source = row.source || row
+            const ids = [row.internalId, source?.internalId, source?.id, source?.legacyId, row.legacyId]
+                .map((value) => String(value || '').trim())
+                .filter(Boolean)
+            ids.forEach((id) => map.set(id, source))
+        })
+        return map
+    }, [rows])
+
+    const categoryOptions = React.useMemo(() => {
+        return Array.from(new Set(rows.map((row) => String(row.category || 'Sin categoría').trim() || 'Sin categoría')))
+            .sort((left, right) => left.localeCompare(right, 'es'))
+    }, [rows])
+
+    const supplierOptions = React.useMemo(() => {
+        return Array.from(new Set(rows.map((row) => String(row.supplier || 'Proveedor por definir').trim() || 'Proveedor por definir')))
+            .sort((left, right) => left.localeCompare(right, 'es'))
+    }, [rows])
+
+    const displayRows = React.useMemo(() => {
+        return rows.filter((row) => {
+            const intel = intelligenceByProductId.get(String(row.internalId || row.source?.id || ''))
+                || intelligenceByProductId.get(String(row.source?.id || ''))
+                || intelligenceByProductId.get(String(row.legacyId || ''))
+            const action = intel?.recommended_action || 'monitor'
+            const category = String(row.category || 'Sin categoría').trim() || 'Sin categoría'
+            const supplier = String(row.supplier || 'Proveedor por definir').trim() || 'Proveedor por definir'
+
+            if (actionFilter !== 'all' && action !== actionFilter) return false
+            if (categoryFilter !== 'all' && category !== categoryFilter) return false
+            if (supplierFilter !== 'all' && supplier !== supplierFilter) return false
+            return true
+        })
+    }, [actionFilter, categoryFilter, intelligenceByProductId, rows, supplierFilter])
+
+    const exportPurchasePlan = React.useCallback(() => {
+        const plan = intelligence?.purchasePlan || []
+        const rowsForCsv: unknown[][] = [[
+            'Proveedor',
+            'Producto',
+            'SKU',
+            'Unidades sugeridas',
+            'Costo unitario',
+            'Costo estimado',
+            'Prioridad',
+        ]]
+
+        plan.forEach((group) => {
+            group.items.forEach((item) => {
+                rowsForCsv.push([
+                    group.supplier,
+                    item.name,
+                    item.sku || '',
+                    item.quantity,
+                    item.unit_cost,
+                    item.estimated_cost,
+                    item.priority_score,
+                ])
+            })
+        })
+
+        downloadCsv(`plan-compra-inventario-${new Date().toISOString().slice(0, 10)}.csv`, rowsForCsv)
+    }, [intelligence])
+
     return (
         <div className="tab text-content w-full">
             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
@@ -293,6 +570,14 @@ export default React.memo(function InventoryManagementPanel({
                     </button>
                 </div>
             </div>
+
+            <InventoryIntelligenceSummary
+                intelligence={intelligence}
+                formatMoney={formatMoney}
+                onExportPurchasePlan={exportPurchasePlan}
+                onRestockProduct={onRestockProduct}
+                productById={productById}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
                 {renderSummaryCardButton({
@@ -487,11 +772,11 @@ export default React.memo(function InventoryManagementPanel({
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
                 <div className="xl:col-span-2">
-                    <InventoryCategoryOverview rows={rows} />
+                    <InventoryCategoryOverview rows={displayRows} />
                 </div>
                 <div>
                     <RestockSuggestionsPanel
-                        rows={rows}
+                        rows={displayRows}
                         formatMoney={formatMoney}
                         onRestockProduct={onRestockProduct}
                     />
@@ -510,7 +795,7 @@ export default React.memo(function InventoryManagementPanel({
                             onChange={(event) => onSearchChange(event.target.value)}
                         />
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3 xl:w-auto">
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 xl:w-auto">
                         <select
                             className="min-w-[220px] rounded-full border border-line bg-white px-4 py-4 text-sm outline-none transition-all focus:border-black"
                             value={statusFilter}
@@ -533,10 +818,50 @@ export default React.memo(function InventoryManagementPanel({
                                 </option>
                             ))}
                         </select>
+                        <select
+                            className="min-w-[220px] rounded-full border border-line bg-white px-4 py-4 text-sm outline-none transition-all focus:border-black"
+                            value={actionFilter}
+                            onChange={(event) => setActionFilter(event.target.value as 'all' | InventoryRecommendedAction)}
+                        >
+                            {INVENTORY_ACTION_OPTIONS.map((option) => (
+                                <option key={option.key} value={option.key}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            className="min-w-[220px] rounded-full border border-line bg-white px-4 py-4 text-sm outline-none transition-all focus:border-black"
+                            value={categoryFilter}
+                            onChange={(event) => setCategoryFilter(event.target.value)}
+                        >
+                            <option value="all">Todas las categorías</option>
+                            {categoryOptions.map((category) => (
+                                <option key={category} value={category}>
+                                    {category}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            className="min-w-[220px] rounded-full border border-line bg-white px-4 py-4 text-sm outline-none transition-all focus:border-black"
+                            value={supplierFilter}
+                            onChange={(event) => setSupplierFilter(event.target.value)}
+                        >
+                            <option value="all">Todos los proveedores</option>
+                            {supplierOptions.map((supplier) => (
+                                <option key={supplier} value={supplier}>
+                                    {supplier}
+                                </option>
+                            ))}
+                        </select>
                         <button
                             type="button"
                             className="rounded-full border border-line px-5 py-4 text-sm font-semibold hover:bg-surface transition-all"
-                            onClick={onClearFilters}
+                            onClick={() => {
+                                setActionFilter('all')
+                                setCategoryFilter('all')
+                                setSupplierFilter('all')
+                                onClearFilters()
+                            }}
                         >
                             Limpiar filtros
                         </button>
@@ -544,7 +869,7 @@ export default React.memo(function InventoryManagementPanel({
                 </div>
                 <div className="mt-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <div className="text-sm text-secondary">
-                        {rows.length.toLocaleString('es-EC')} productos encontrados
+                        {displayRows.length.toLocaleString('es-EC')} productos encontrados
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-secondary">
                         <span className="rounded-full bg-surface px-3 py-1"><strong className="text-black">Registrar compra:</strong> repone stock con factura</span>
@@ -557,11 +882,12 @@ export default React.memo(function InventoryManagementPanel({
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-line bg-white">
-                <table className="w-full min-w-[1180px] text-left">
+                <table className="w-full min-w-[1320px] text-left">
                     <thead className="border-b border-line bg-surface">
                         <tr className="text-[11px] uppercase font-bold text-secondary">
                             <th className="px-4 py-3 min-w-[280px]">Producto</th>
                             <th className="px-4 py-3 min-w-[180px]">Inventario</th>
+                            <th className="px-4 py-3 min-w-[190px]">Decisión</th>
                             {hasPerishableProducts && (
                                 <th className="px-4 py-3 min-w-[170px]">Vencimiento</th>
                             )}
@@ -572,7 +898,10 @@ export default React.memo(function InventoryManagementPanel({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                        {rows.map((row) => {
+                        {displayRows.map((row) => {
+                            const intel = intelligenceByProductId.get(String(row.internalId || row.source?.id || ''))
+                                || intelligenceByProductId.get(String(row.source?.id || ''))
+                                || intelligenceByProductId.get(String(row.legacyId || ''))
                             const stockBadge = row.stockStatus === 'expired'
                                 ? { label: 'Vencido', className: 'bg-red-100 text-red-700' }
                                 : row.stockStatus === 'expiring'
@@ -610,6 +939,37 @@ export default React.memo(function InventoryManagementPanel({
                                             {(row.stockStatus === 'low' || row.stockStatus === 'critical') && (
                                                 <div className="text-xs text-secondary pt-1">
                                                     Reorder: {row.reorderPoint} · Crítico: {row.criticalPoint}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${getActionTone(intel?.recommended_action)}`}>
+                                                    {getInventoryActionLabel(intel?.recommended_action)}
+                                                </span>
+                                                {intel && (
+                                                    <span className="inline-flex px-2.5 py-1 rounded-full bg-black text-white text-[11px] font-bold">
+                                                        {Number(intel.priority_score ?? 0)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {intel?.suggested_purchase_qty ? (
+                                                <div className="text-xs text-secondary">
+                                                    Comprar <span className="font-semibold text-black">+{Number(intel.suggested_purchase_qty).toLocaleString('es-EC')} uds</span>
+                                                    {' · '}{formatMoney(intel.suggested_purchase_cost)}
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-secondary">
+                                                    {intel?.coverage_days != null
+                                                        ? `Cobertura ${Number(intel.coverage_days).toLocaleString('es-EC')} días`
+                                                        : 'Sin ventas recientes para cobertura'}
+                                                </div>
+                                            )}
+                                            {intel?.quality_issues && intel.quality_issues.length > 0 && (
+                                                <div className="text-[11px] text-amber-700">
+                                                    {intel.quality_issues.length} dato(s) por revisar
                                                 </div>
                                             )}
                                         </div>
@@ -706,6 +1066,13 @@ export default React.memo(function InventoryManagementPanel({
                                             >
                                                 Editar
                                             </button>
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 rounded-lg border border-line text-xs font-semibold hover:bg-surface transition-all"
+                                                onClick={() => onEditProduct(row.source)}
+                                            >
+                                                Ajustar stock
+                                            </button>
                                             {row.lastPurchaseInvoiceId && (
                                                 <button
                                                     type="button"
@@ -720,9 +1087,9 @@ export default React.memo(function InventoryManagementPanel({
                                 </tr>
                             )
                         })}
-                        {rows.length === 0 && (
+                        {displayRows.length === 0 && (
                             <tr>
-                                <td colSpan={hasPerishableProducts ? 7 : 6} className="px-3 py-8 text-center text-sm text-secondary">
+                                <td colSpan={hasPerishableProducts ? 8 : 7} className="px-3 py-8 text-center text-sm text-secondary">
                                     No hay productos para los filtros actuales.
                                 </td>
                             </tr>

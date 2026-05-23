@@ -1,8 +1,17 @@
 import type {
   DashboardStats,
+  InventoryIntelligence,
+  InventoryIntelligenceRow,
   ProductDetailMetric,
+  ProductRankingActionItem,
+  ProductRankingDecisionAction,
+  ProductRankingDecisionRow,
   PurchaseInvoiceSummary,
+  ReportPeriodSummary,
   SalesRankingRow,
+  TraceabilityIssue,
+  TraceabilityIssueSeverity,
+  TraceabilitySummary,
 } from './types'
 
 type ProductSalesRanking = DashboardStats['businessMetrics'] extends infer BM
@@ -10,6 +19,68 @@ type ProductSalesRanking = DashboardStats['businessMetrics'] extends infer BM
   : never
 
 type SalesTrendRow = { day: string; date?: string; total: number }
+
+type TraceabilitySource = Pick<ReportPeriodSummary, 'orders' | 'products' | 'categories' | 'sales' | 'profit'> | null | undefined
+
+const toNumber = (value: unknown): number => {
+  const number = Number(value ?? 0)
+  return Number.isFinite(number) ? number : 0
+}
+
+const toText = (value: unknown): string => String(value ?? '').trim()
+
+const toOrderRefs = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => toText(item)).filter(Boolean)
+  }
+  return toText(value).split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+const percentOf = (part: number, total: number): number => total > 0 ? (part / total) * 100 : 0
+
+export const getRankingActionLabel = (action?: string): string => {
+  switch (action) {
+    case 'restock_now':
+      return 'Comprar ahora'
+    case 'restock_soon':
+      return 'Reponer pronto'
+    case 'rotate_or_discount':
+      return 'Rotar o liquidar'
+    case 'remove_expired':
+      return 'Retirar vencido'
+    case 'reduce_or_promote':
+      return 'Promover sobrestock'
+    case 'fix_data':
+    case 'fix_cost':
+      return 'Corregir costo'
+    case 'protect_margin':
+      return 'Proteger margen'
+    case 'review_assortment':
+      return 'Revisar surtido'
+    case 'review_no_sales':
+      return 'Revisar sin movimiento'
+    case 'monitor':
+    default:
+      return 'Monitorear'
+  }
+}
+
+const severityWeight: Record<TraceabilityIssueSeverity, number> = {
+  critical: 3,
+  warning: 2,
+  info: 1,
+}
+
+const traceabilityIssueSort = (a: TraceabilityIssue, b: TraceabilityIssue) => {
+  const severityDelta = severityWeight[b.severity] - severityWeight[a.severity]
+  if (severityDelta !== 0) return severityDelta
+  return toNumber(b.impact) - toNumber(a.impact)
+}
+
+const getInventoryRowKeys = (row: InventoryIntelligenceRow) => [
+  row.product_id,
+  row.legacy_id,
+].map((value) => toText(value)).filter(Boolean)
 
 const formatTrendDateLabel = (row: SalesTrendRow, options: Intl.DateTimeFormatOptions) => {
   const rawDate = String(row.date || row.day || '').trim()
@@ -99,6 +170,391 @@ export const buildSalesRankingRows = (
     historical_profit: Number(item.historical_profit ?? 0),
     historical_margin: Number(item.historical_margin ?? 0),
   }))
+}
+
+export const buildTraceabilitySummary = (source: TraceabilitySource): TraceabilitySummary => {
+  const orders = source?.orders ?? []
+  const products = source?.products ?? []
+  const categories = source?.categories ?? []
+  const grossSales = toNumber(source?.sales?.total) || orders.reduce((acc, order) => acc + toNumber(order.gross), 0)
+  const netSales = toNumber(source?.sales?.net) || orders.reduce((acc, order) => acc + toNumber(order.net), 0)
+  const vat = toNumber(source?.sales?.tax) || orders.reduce((acc, order) => acc + toNumber(order.vat), 0)
+  const shipping = toNumber(source?.sales?.shipping) || orders.reduce((acc, order) => acc + toNumber(order.shipping), 0)
+  const cost = toNumber(source?.profit?.cost) || products.reduce((acc, product) => acc + toNumber(product.cost), 0)
+  const grossProfit = toNumber(source?.profit?.gross_profit) || (netSales - cost)
+  const grossMargin = toNumber(source?.profit?.gross_margin) || percentOf(grossProfit, netSales)
+
+  const ordersWithContact = orders.filter((order) => toText(order.customer_email) || toText(order.customer_phone)).length
+  const ordersWithDocument = orders.filter((order) => toText(order.customer_document_number)).length
+  const ordersWithPayment = orders.filter((order) => toText(order.payment_method)).length
+  const ordersWithDelivery = orders.filter((order) => toText(order.delivery_method)).length
+  const productsWithOrderRefs = products.filter((product) => toOrderRefs(product.order_refs).length > 0).length
+  const productsWithCost = products.filter((product) => toNumber(product.units_sold) <= 0 || toNumber(product.cost) > 0).length
+
+  const coverageParts = [
+    orders.length > 0 ? ordersWithContact / orders.length : 1,
+    orders.length > 0 ? ordersWithDocument / orders.length : 1,
+    orders.length > 0 ? ordersWithPayment / orders.length : 1,
+    orders.length > 0 ? ordersWithDelivery / orders.length : 1,
+    products.length > 0 ? productsWithOrderRefs / products.length : 1,
+    products.length > 0 ? productsWithCost / products.length : 1,
+  ]
+  const coverageScore = coverageParts.length > 0
+    ? (coverageParts.reduce((acc, item) => acc + item, 0) / coverageParts.length) * 100
+    : 100
+
+  const issues = buildTraceabilityIssues(source)
+
+  return {
+    ordersAudited: orders.length,
+    productsAudited: products.length,
+    categoriesAudited: categories.length,
+    grossSales,
+    netSales,
+    vat,
+    shipping,
+    cost,
+    grossProfit,
+    grossMargin,
+    coverageScore,
+    ordersWithContact,
+    ordersWithDocument,
+    ordersWithPayment,
+    ordersWithDelivery,
+    productsWithOrderRefs,
+    productsWithCost,
+    issuesCount: issues.length,
+    criticalIssues: issues.filter((issue) => issue.severity === 'critical').length,
+    warningIssues: issues.filter((issue) => issue.severity === 'warning').length,
+    infoIssues: issues.filter((issue) => issue.severity === 'info').length,
+  }
+}
+
+export const buildTraceabilityIssues = (source: TraceabilitySource): TraceabilityIssue[] => {
+  const issues: TraceabilityIssue[] = []
+  const orders = source?.orders ?? []
+  const products = source?.products ?? []
+
+  const addIssue = (issue: Omit<TraceabilityIssue, 'id'>) => {
+    issues.push({
+      ...issue,
+      id: `${issue.type}:${issue.entityType}:${issue.entityId}`,
+    })
+  }
+
+  for (const order of orders) {
+    const orderId = toText(order.id)
+    const orderLabel = orderId ? `Pedido #${orderId}` : 'Pedido sin identificador'
+    const hasContact = Boolean(toText(order.customer_email) || toText(order.customer_phone))
+    const hasDocument = Boolean(toText(order.customer_document_number))
+    const hasPayment = Boolean(toText(order.payment_method))
+    const hasDelivery = Boolean(toText(order.delivery_method))
+    const impact = toNumber(order.net)
+
+    if (!hasContact) {
+      addIssue({
+        severity: 'warning',
+        type: 'missing_contact',
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        title: `${orderLabel} sin contacto`,
+        detail: 'No hay email ni telefono para validar postventa, facturacion o entrega.',
+        impact,
+        actionLabel: 'Ver pedido',
+      })
+    }
+    if (!hasDocument) {
+      addIssue({
+        severity: 'warning',
+        type: 'missing_document',
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        title: `${orderLabel} sin documento`,
+        detail: 'Falta identificacion del cliente para una trazabilidad comercial completa.',
+        impact,
+        actionLabel: 'Ver pedido',
+      })
+    }
+    if (!hasPayment) {
+      addIssue({
+        severity: 'info',
+        type: 'missing_payment',
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        title: `${orderLabel} sin forma de pago`,
+        detail: 'La venta no tiene metodo de pago registrado en el resumen auditado.',
+        impact,
+        actionLabel: 'Ver pedido',
+      })
+    }
+    if (!hasDelivery) {
+      addIssue({
+        severity: 'info',
+        type: 'missing_delivery',
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        title: `${orderLabel} sin entrega`,
+        detail: 'La venta no tiene metodo de entrega registrado en el resumen auditado.',
+        impact,
+        actionLabel: 'Ver pedido',
+      })
+    }
+  }
+
+  for (const product of products) {
+    const productId = toText(product.product_id)
+    const productName = toText(product.product_name) || 'Producto sin nombre'
+    const category = toText(product.category) || 'Sin categoria'
+    const units = toNumber(product.units_sold)
+    const net = toNumber(product.net_revenue)
+    const cost = toNumber(product.cost)
+    const profit = toNumber(product.profit)
+    const margin = toNumber(product.margin)
+    const refs = toOrderRefs(product.order_refs)
+
+    if (units > 0 && cost <= 0) {
+      addIssue({
+        severity: 'critical',
+        type: 'cost_zero',
+        entityType: 'product',
+        entityId: productId || productName,
+        productId,
+        productName,
+        category,
+        title: `${productName} vendido sin costo`,
+        detail: 'La utilidad queda inflada porque el costo vendido es cero.',
+        impact: net,
+        actionLabel: 'Registrar compra',
+      })
+    }
+    if (units > 0 && profit < 0) {
+      addIssue({
+        severity: 'critical',
+        type: 'negative_margin',
+        entityType: 'product',
+        entityId: productId || productName,
+        productId,
+        productName,
+        category,
+        title: `${productName} con margen negativo`,
+        detail: `Pierde dinero en el periodo auditado: utilidad ${profit.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
+        impact: Math.abs(profit),
+        actionLabel: 'Abrir producto',
+      })
+    } else if (units > 0 && margin > 0 && margin < 15) {
+      addIssue({
+        severity: 'warning',
+        type: 'low_margin',
+        entityType: 'product',
+        entityId: productId || productName,
+        productId,
+        productName,
+        category,
+        title: `${productName} con margen bajo`,
+        detail: `Margen bruto ${margin.toLocaleString('es-EC', { maximumFractionDigits: 1 })}%. Revisar precio, costo o descuento.`,
+        impact: net,
+        actionLabel: 'Abrir producto',
+      })
+    }
+    if (refs.length === 0) {
+      addIssue({
+        severity: 'warning',
+        type: 'missing_order_refs',
+        entityType: 'product',
+        entityId: productId || productName,
+        productId,
+        productName,
+        category,
+        title: `${productName} sin pedidos vinculados`,
+        detail: 'El producto aparece vendido pero no trae referencias de pedidos en el reporte.',
+        impact: net,
+        actionLabel: 'Abrir producto',
+      })
+    }
+    if (!productId || !toText(product.product_name) || !toText(product.category)) {
+      addIssue({
+        severity: 'info',
+        type: 'incomplete_product_data',
+        entityType: 'product',
+        entityId: productId || productName,
+        productId,
+        productName,
+        category,
+        title: `${productName} con ficha incompleta`,
+        detail: 'Faltan identificador, nombre o categoria para auditar bien el mix comercial.',
+        impact: net,
+        actionLabel: 'Abrir producto',
+      })
+    }
+  }
+
+  return issues.sort(traceabilityIssueSort)
+}
+
+export const buildProductRankingDecisionRows = (
+  salesRows: SalesRankingRow[],
+  inventoryIntelligence?: InventoryIntelligence | null,
+): ProductRankingDecisionRow[] => {
+  const totalNet = salesRows.reduce((acc, item) => acc + toNumber(item.net_revenue), 0)
+  const inventoryById = new Map<string, InventoryIntelligenceRow>()
+
+  for (const row of inventoryIntelligence?.rows ?? []) {
+    for (const key of getInventoryRowKeys(row)) {
+      inventoryById.set(key, row)
+    }
+  }
+
+  return salesRows.map((row) => {
+    const inventory = inventoryById.get(toText(row.product_id))
+    const units = toNumber(row.units_sold)
+    const net = toNumber(row.net_revenue)
+    const cost = toNumber(row.cost)
+    const profit = toNumber(row.profit)
+    const margin = toNumber(row.margin)
+    const unitNet = units > 0 ? net / units : 0
+    const unitCost = units > 0 ? cost / units : toNumber(inventory?.unit_cost)
+    const unitProfit = units > 0 ? profit / units : unitNet - unitCost
+    const stock = inventory ? toNumber(inventory.quantity) : null
+    const coverageDays = inventory?.coverage_days === null || inventory?.coverage_days === undefined
+      ? null
+      : toNumber(inventory.coverage_days)
+    let action = (inventory?.recommended_action ?? 'monitor') as ProductRankingDecisionAction
+    let priority = toNumber(inventory?.priority_score)
+    let reason = 'Venta estable; mantener seguimiento.'
+
+    if (units > 0 && cost <= 0) {
+      action = 'fix_cost'
+      priority = Math.max(priority, 100)
+      reason = 'Producto vendido sin costo registrado; corregir antes de decidir precio o reposicion.'
+    } else if (margin < 0) {
+      action = 'protect_margin'
+      priority = Math.max(priority, 96)
+      reason = 'Margen negativo en ventas realizadas; revisar costo, precio y descuentos.'
+    } else if (stock !== null && stock <= 0 && units > 0) {
+      action = 'restock_now'
+      priority = Math.max(priority, 92)
+      reason = 'Producto vendido en el periodo y sin stock disponible.'
+    } else if (margin > 0 && margin < 15) {
+      action = 'protect_margin'
+      priority = Math.max(priority, 78)
+      reason = 'Margen bajo; proteger precio o negociar costo antes de empujar volumen.'
+    } else if (inventory?.status === 'overstock' || inventory?.recommended_action === 'reduce_or_promote') {
+      action = 'reduce_or_promote'
+      priority = Math.max(priority, 58)
+      reason = 'Hay capital inmovilizado; promover rotacion sin sacrificar margen.'
+    } else if (inventory?.recommended_action === 'restock_now' || inventory?.recommended_action === 'restock_soon') {
+      action = inventory.recommended_action
+      priority = Math.max(priority, inventory.recommended_action === 'restock_now' ? 88 : 70)
+      reason = inventory.recommended_action === 'restock_now'
+        ? 'La inteligencia de inventario recomienda compra inmediata.'
+        : 'La cobertura se esta acercando al punto de reposicion.'
+    } else if (inventory?.quality_issues?.length) {
+      action = 'fix_data'
+      priority = Math.max(priority, 62)
+      reason = 'La ficha o los lotes tienen datos por completar.'
+    }
+
+    return {
+      ...row,
+      contribution_pct: percentOf(net, totalNet),
+      stock_current: stock,
+      coverage_days: coverageDays,
+      recommended_action: action,
+      action_label: getRankingActionLabel(action),
+      action_reason: reason,
+      priority_score: priority,
+      supplier: toText(inventory?.supplier) || 'Sin proveedor',
+      suggested_purchase_qty: toNumber(inventory?.suggested_purchase_qty),
+      suggested_purchase_cost: toNumber(inventory?.suggested_purchase_cost),
+      unit_net: unitNet,
+      unit_cost: unitCost,
+      unit_profit: unitProfit,
+      inventory_status: inventory?.status,
+      inventory_quality_issues: inventory?.quality_issues ?? [],
+    }
+  })
+}
+
+export const buildProductRankingActionItems = (
+  decisionRows: ProductRankingDecisionRow[],
+  inventoryIntelligence?: InventoryIntelligence | null,
+): ProductRankingActionItem[] => {
+  const itemsById = new Map<string, ProductRankingActionItem>()
+  const soldProductIds = new Set(decisionRows.map((row) => toText(row.product_id)).filter(Boolean))
+  const upsertItem = (item: ProductRankingActionItem) => {
+    const current = itemsById.get(item.id)
+    if (
+      !current
+      || severityWeight[item.severity] > severityWeight[current.severity]
+      || (severityWeight[item.severity] === severityWeight[current.severity] && item.priority_score > current.priority_score)
+    ) {
+      itemsById.set(item.id, item)
+    }
+  }
+
+  for (const row of decisionRows) {
+    if (['monitor', 'review_assortment'].includes(row.recommended_action) && row.priority_score < 55) continue
+    const severity: TraceabilityIssueSeverity = row.priority_score >= 90
+      ? 'critical'
+      : row.priority_score >= 65
+        ? 'warning'
+        : 'info'
+    upsertItem({
+      id: `ranking:${row.recommended_action}:${row.product_id}`,
+      product_id: row.product_id,
+      product_name: row.product_name,
+      category: row.category,
+      action: row.recommended_action,
+      action_label: row.action_label,
+      detail: row.action_reason,
+      priority_score: row.priority_score,
+      severity,
+      stock_current: row.stock_current,
+      coverage_days: row.coverage_days,
+      supplier: row.supplier,
+      suggested_purchase_qty: row.suggested_purchase_qty,
+      suggested_purchase_cost: row.suggested_purchase_cost,
+    })
+  }
+
+  for (const inventory of inventoryIntelligence?.rows ?? []) {
+    const productId = toText(inventory.product_id)
+    if (!productId || soldProductIds.has(productId)) continue
+    const hasNoMovement = toNumber(inventory.units_sold_window) <= 0 && toNumber(inventory.quantity) > 0
+    const hasOverstock = inventory.status === 'overstock' || inventory.recommended_action === 'reduce_or_promote'
+    if (!hasNoMovement && !hasOverstock) continue
+
+    upsertItem({
+      id: `inventory:${productId}`,
+      product_id: productId,
+      product_name: inventory.name,
+      category: inventory.category || 'Sin categoria',
+      action: hasOverstock ? 'reduce_or_promote' : 'review_no_sales',
+      action_label: getRankingActionLabel(hasOverstock ? 'reduce_or_promote' : 'review_no_sales'),
+      detail: hasOverstock
+        ? 'SKU con sobrestock o capital inmovilizado; crear rotacion controlada.'
+        : 'SKU con inventario disponible y sin ventas en la ventana de inventario.',
+      priority_score: Math.max(toNumber(inventory.priority_score), hasOverstock ? 55 : 35),
+      severity: hasOverstock ? 'warning' : 'info',
+      stock_current: toNumber(inventory.quantity),
+      coverage_days: inventory.coverage_days === null ? null : toNumber(inventory.coverage_days),
+      supplier: toText(inventory.supplier) || 'Sin proveedor',
+      suggested_purchase_qty: 0,
+      suggested_purchase_cost: 0,
+    })
+  }
+
+  return Array.from(itemsById.values())
+    .sort((a, b) => {
+      const severityDelta = severityWeight[b.severity] - severityWeight[a.severity]
+      if (severityDelta !== 0) return severityDelta
+      return b.priority_score - a.priority_score
+    })
+    .slice(0, 12)
 }
 
 export const buildSalesTrendPreview = (salesTrendRows: SalesTrendRow[]) => {

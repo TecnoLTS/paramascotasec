@@ -2,8 +2,13 @@ import { formatDateTimeEcuador, formatMoney, getLocalSalePaymentMethodLabel } fr
 import type {
   AdminReportSection,
   DashboardStats,
+  InventoryIntelligence,
+  ProductRankingActionItem,
+  ProductRankingDecisionRow,
   PurchaseInvoiceSummary,
   SalesRankingRow,
+  TraceabilityIssue,
+  TraceabilitySummary,
 } from './types'
 import type { InventoryManagementRow } from './adminProductDerivations'
 
@@ -77,10 +82,15 @@ type ExportContext = {
     average_unit_net?: number
   }>
   salesRankingRows: SalesRankingRow[]
+  rankingDecisionRows?: ProductRankingDecisionRow[]
+  rankingActionItems?: ProductRankingActionItem[]
   salesCategories: Array<{ category: string; total: number }>
   salesTrendRows: Array<{ day: string; date?: string; total: number }>
   inventoryManagementRows: InventoryManagementRow[]
+  inventoryIntelligence?: InventoryIntelligence | null
   recentPurchaseInvoices: PurchaseInvoiceSummary[]
+  traceabilitySummary?: TraceabilitySummary
+  traceabilityIssues?: TraceabilityIssue[]
 }
 
 type CellType = 'String' | 'Number'
@@ -500,6 +510,7 @@ const buildGeneralWorksheets = (context: ExportContext): WorksheetDefinition[] =
 
 const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => {
   const { dashboardStats, salesRankingRows, selectedRankingMonth, selectedRankingMonthLabel, salesRankingView } = context
+  const rankingRows = context.rankingDecisionRows?.length ? context.rankingDecisionRows : salesRankingRows
   const periodReport = dashboardStats?.businessMetrics?.report
   const resolvedView = salesRankingView === 'daily' ? 'range' : salesRankingView
   const financial = resolvedView === 'month' && periodReport
@@ -599,25 +610,53 @@ const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => 
     },
     {
       name: 'Ranking productos',
-      columnWidths: [280, 180, 260, 100, 100, 130, 130, 110, 110, 130, 130, 100],
+      columnWidths: [280, 180, 260, 150, 90, 100, 100, 130, 130, 110, 110, 130, 130, 120, 100, 100, 140, 130, 130, 180],
       rows: [
-        titleRow('Ranking de productos', 9),
-        subtitleRow('Ordenados por desempeño del período, con pedidos relacionados y desglose financiero.', 9),
+        titleRow('Ranking de productos', 12),
+        subtitleRow('Ordenados por desempeño del período, con pedidos relacionados, inventario y decisión operativa.', 12),
         blankRow(),
-        headerRow(['Producto', 'Categoría', 'Pedidos relacionados', 'Pedidos', 'Unidades', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Costo', 'Utilidad', 'Margen']),
-        ...salesRankingRows.map((item) => [
+        headerRow(['Producto', 'Categoría', 'Pedidos relacionados', 'Acción recomendada', 'Prioridad', 'Pedidos', 'Unidades', 'Contribución', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Costo', 'Utilidad', 'Utilidad/u', 'Margen', 'Stock', 'Cobertura días', 'Compra sugerida', 'Proveedor']),
+        ...rankingRows.map((item) => [
           textCell(item.product_name),
           textCell(item.category),
           textCell(Array.isArray(item.order_refs) ? item.order_refs.join(', ') : '-'),
+          textCell('action_label' in item ? item.action_label : ''),
+          numberCell('priority_score' in item ? item.priority_score : 0, 'integer'),
           numberCell(item.orders_count, 'integer'),
           numberCell(item.units_sold, 'integer'),
+          percentCell('contribution_pct' in item ? item.contribution_pct : 0),
           moneyCell(item.gross_revenue),
           moneyCell(item.net_revenue),
           moneyCell(item.vat_amount),
           moneyCell(item.shipping_amount),
           moneyCell(item.cost),
           moneyCell(item.profit),
+          moneyCell('unit_profit' in item ? item.unit_profit : 0),
           percentCell(item.margin),
+          numberCell('stock_current' in item ? item.stock_current : 0, 'integer'),
+          numberCell('coverage_days' in item ? item.coverage_days : 0, 'integer'),
+          moneyCell('suggested_purchase_cost' in item ? item.suggested_purchase_cost : 0),
+          textCell('supplier' in item ? item.supplier : ''),
+        ]),
+      ],
+    },
+    {
+      name: 'Acciones ranking',
+      columnWidths: [150, 280, 180, 130, 90, 90, 120, 150, 360],
+      rows: [
+        titleRow('Qué hacer ahora', 7),
+        blankRow(),
+        headerRow(['Acción', 'Producto', 'Categoría', 'Proveedor', 'Stock', 'Cobertura', 'Compra sugerida', 'Severidad', 'Detalle']),
+        ...(context.rankingActionItems ?? []).map((item) => [
+          textCell(item.action_label),
+          textCell(item.product_name),
+          textCell(item.category),
+          textCell(item.supplier),
+          numberCell(item.stock_current ?? 0, 'integer'),
+          numberCell(item.coverage_days ?? 0, 'integer'),
+          moneyCell(item.suggested_purchase_cost),
+          textCell(item.severity),
+          textCell(item.detail),
         ]),
       ],
     },
@@ -748,9 +787,10 @@ const buildBalanceWorksheets = (context: ExportContext): WorksheetDefinition[] =
 }
 
 const buildInventoryWorksheets = (context: ExportContext): WorksheetDefinition[] => {
-  const { dashboardStats, inventoryManagementRows, recentPurchaseInvoices } = context
+  const { dashboardStats, inventoryManagementRows, inventoryIntelligence, recentPurchaseInvoices } = context
   const inventory = dashboardStats?.businessMetrics?.inventoryValue
   const health = dashboardStats?.businessMetrics?.inventoryDeepDive?.health
+  const intelligence = inventoryIntelligence || dashboardStats?.businessMetrics?.inventoryIntelligence
 
   return [
     {
@@ -768,6 +808,49 @@ const buildInventoryWorksheets = (context: ExportContext): WorksheetDefinition[]
         metricRow('Sobrestock', numberCell(health?.overstock, 'integer')),
         metricRow('Por vencer', numberCell(health?.expiring_products, 'integer')),
         metricRow('Vencidos', numberCell(health?.expired_products, 'integer')),
+        metricRow('Compra sugerida', moneyCell(intelligence?.summary?.suggested_purchase_cost)),
+        metricRow('Unidades sugeridas', numberCell(intelligence?.summary?.suggested_purchase_units, 'integer')),
+        metricRow('SKU con compra sugerida', numberCell(intelligence?.summary?.purchase_recommended_skus, 'integer')),
+        metricRow('Datos por corregir', numberCell(intelligence?.health?.data_quality_issues, 'integer')),
+      ],
+    },
+    {
+      name: 'Plan compra',
+      columnWidths: [220, 260, 120, 110, 110, 120, 90],
+      rows: [
+        titleRow('Plan de compra sugerido', 6),
+        subtitleRow(`Ventana ${intelligence?.parameters?.window_days ?? 30} días / objetivo ${intelligence?.parameters?.target_days ?? 30} días`, 6),
+        blankRow(),
+        headerRow(['Proveedor', 'Producto', 'SKU', 'Unidades', 'Costo unitario', 'Costo estimado', 'Prioridad']),
+        ...((intelligence?.purchasePlan ?? []).flatMap((group) =>
+          group.items.map((item) => [
+            textCell(group.supplier),
+            textCell(item.name),
+            textCell(item.sku || ''),
+            numberCell(item.quantity, 'integer'),
+            moneyCell(item.unit_cost),
+            moneyCell(item.estimated_cost),
+            numberCell(item.priority_score, 'integer'),
+          ])
+        )),
+      ],
+    },
+    {
+      name: 'Acciones',
+      columnWidths: [150, 260, 120, 160, 120, 120, 300],
+      rows: [
+        titleRow('Cola de acciones de inventario', 6),
+        blankRow(),
+        headerRow(['Acción', 'Producto', 'SKU', 'Proveedor', 'Prioridad', 'Compra sugerida', 'Detalle']),
+        ...((intelligence?.actions ?? []).map((item) => [
+          textCell(item.title),
+          textCell(item.name),
+          textCell(item.sku || ''),
+          textCell(item.supplier || ''),
+          numberCell(item.priority_score, 'integer'),
+          moneyCell(item.suggested_purchase_cost),
+          textCell(item.detail),
+        ])),
       ],
     },
     {
@@ -827,58 +910,136 @@ const buildInventoryWorksheets = (context: ExportContext): WorksheetDefinition[]
 
 const buildTraceabilityWorksheets = (context: ExportContext): WorksheetDefinition[] => {
   const traceability = context.dashboardStats?.businessMetrics?.traceability
+  const categories = context.dashboardStats?.businessMetrics?.report?.categories ?? traceability?.categories ?? []
+  const summary = context.traceabilitySummary
+  const issues = context.traceabilityIssues ?? []
+  const issueTypeLabel = (type: string) => ({
+    cost_zero: 'Costo cero',
+    negative_margin: 'Margen negativo',
+    low_margin: 'Margen bajo',
+    missing_contact: 'Sin contacto',
+    missing_document: 'Sin documento',
+    missing_payment: 'Sin pago',
+    missing_delivery: 'Sin entrega',
+    missing_order_refs: 'Sin pedidos vinculados',
+    incomplete_product_data: 'Ficha incompleta',
+  } as Record<string, string>)[type] ?? type
   return [
     {
-      name: 'Pedidos',
-      columnWidths: [260, 180, 120, 180, 120, 120, 100, 100],
+      name: 'Resumen',
+      columnWidths: [260, 160, 160, 160],
       rows: [
-        titleRow('Trazabilidad por pedido', 5),
+        titleRow('Resumen de trazabilidad', 3),
         blankRow(),
-        headerRow(['Pedido', 'Fecha y hora', 'Estado', 'Cliente', 'Venta total', 'Venta neta', 'IVA', 'Envío']),
-        ...(traceability?.orders ?? []).map((item) => [
-          textCell(item.id),
-          textCell(formatDateTimeEcuador(item.created_at)),
-          textCell(item.status),
-          textCell(item.user_name ?? ''),
-          moneyCell(item.gross),
-          moneyCell(item.net),
-          moneyCell(item.vat),
-          moneyCell(item.shipping),
+        headerRow(['Indicador', 'Valor']),
+        metricRow('Pedidos auditados', numberCell(summary?.ordersAudited ?? context.salesOrders.length, 'integer')),
+        metricRow('Productos auditados', numberCell(summary?.productsAudited ?? context.salesRankingRows.length, 'integer')),
+        metricRow('Categorías auditadas', numberCell(summary?.categoriesAudited ?? categories.length, 'integer')),
+        metricRow('Venta total', moneyCell(summary?.grossSales)),
+        metricRow('Venta neta', moneyCell(summary?.netSales)),
+        metricRow('IVA', moneyCell(summary?.vat)),
+        metricRow('Envío', moneyCell(summary?.shipping)),
+        metricRow('Costo', moneyCell(summary?.cost)),
+        metricRow('Utilidad bruta', moneyCell(summary?.grossProfit)),
+        metricRow('Margen bruto', percentCell(summary?.grossMargin)),
+        metricRow('Cobertura de datos', percentCell(summary?.coverageScore)),
+        metricRow('Incidencias', numberCell(summary?.issuesCount ?? issues.length, 'integer')),
+        metricRow('Críticas', numberCell(summary?.criticalIssues, 'integer')),
+        metricRow('Advertencias', numberCell(summary?.warningIssues, 'integer')),
+      ],
+    },
+    {
+      name: 'Incidencias',
+      columnWidths: [120, 170, 140, 180, 280, 380, 120, 160],
+      rows: [
+        titleRow('Incidencias accionables', 6),
+        blankRow(),
+        headerRow(['Severidad', 'Tipo', 'Entidad', 'ID', 'Título', 'Detalle', 'Impacto', 'Acción']),
+        ...issues.map((item) => [
+          textCell(item.severity),
+          textCell(issueTypeLabel(item.type)),
+          textCell(item.entityType),
+          textCell(item.entityId),
+          textCell(item.title),
+          textCell(item.detail),
+          moneyCell(item.impact ?? 0),
+          textCell(item.actionLabel),
         ]),
       ],
     },
     {
-      name: 'Productos',
-      columnWidths: [280, 180, 90, 120, 120, 100, 100, 320],
+      name: 'Pedidos auditados',
+      columnWidths: [260, 130, 90, 180, 220, 130, 140, 150, 130, 320, 80, 130, 130, 120, 120, 120, 120, 120, 100, 120, 120],
       rows: [
-        titleRow('Trazabilidad por producto', 5),
+        titleRow('Pedidos auditados', 10),
         blankRow(),
-        headerRow(['Producto', 'Categoría', 'Unidades', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Pedidos vinculados']),
-        ...(traceability?.products ?? []).map((item) => [
+        headerRow(['Pedido', 'Fecha', 'Hora', 'Estado', 'Cliente', 'Email', 'Teléfono', 'Documento', 'Entrega', 'Pago', 'Productos', 'Unidades', 'Subtotal items', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Descuento', 'Costo', 'Utilidad', 'Margen']),
+        ...context.salesOrders.map((item) => [
+          textCell(item.id),
+          textCell(formatDateTimeEcuador(item.created_at, { year: 'numeric', month: '2-digit', day: '2-digit' })),
+          textCell(formatDateTimeEcuador(item.created_at, { hour: '2-digit', minute: '2-digit' })),
+          textCell(item.status),
+          textCell(item.user_name || 'Cliente sin nombre'),
+          textCell(item.customer_email || '-'),
+          textCell(item.customer_phone || '-'),
+          textCell(getCustomerDocument(item)),
+          textCell(getDeliveryMethodLabel(item.delivery_method)),
+          textCell(getPaymentMethodLabel(item.payment_method)),
+          textCell(item.items_summary || '-'),
+          numberCell(item.units_count ?? 0, 'integer'),
+          moneyCell(item.items_subtotal ?? 0),
+          moneyCell(item.gross),
+          moneyCell(item.net),
+          moneyCell(item.vat),
+          moneyCell(item.shipping),
+          moneyCell(item.discount_total ?? 0),
+          moneyCell(item.cost ?? 0),
+          moneyCell(item.profit ?? 0),
+          percentCell(item.margin ?? 0),
+        ]),
+      ],
+    },
+    {
+      name: 'Productos auditados',
+      columnWidths: [280, 180, 260, 90, 120, 120, 100, 100, 120, 120, 100, 320],
+      rows: [
+        titleRow('Productos auditados', 8),
+        blankRow(),
+        headerRow(['Producto', 'Categoría', 'Pedidos vinculados', 'Pedidos', 'Unidades', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Costo', 'Utilidad', 'Margen']),
+        ...context.salesRankingRows.map((item) => [
           textCell(item.product_name),
           textCell(item.category),
+          textCell((item.order_refs ?? []).join(', ')),
+          numberCell(item.orders_count, 'integer'),
           numberCell(item.units_sold, 'integer'),
           moneyCell(item.gross_revenue),
           moneyCell(item.net_revenue),
           moneyCell(item.vat_amount),
           moneyCell(item.shipping_amount),
-          textCell((item.order_refs ?? []).join(', ')),
+          moneyCell(item.cost),
+          moneyCell(item.profit),
+          percentCell(item.margin),
         ]),
       ],
     },
     {
-      name: 'Categorias',
-      columnWidths: [220, 120, 120, 100, 100, 320],
+      name: 'Categorías',
+      columnWidths: [220, 100, 90, 120, 120, 100, 100, 120, 120, 100, 320],
       rows: [
-        titleRow('Trazabilidad por categoría', 4),
+        titleRow('Categorías auditadas', 7),
         blankRow(),
-        headerRow(['Categoría', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Pedidos vinculados']),
-        ...(traceability?.categories ?? []).map((item) => [
+        headerRow(['Categoría', 'Pedidos', 'Unidades', 'Venta total', 'Venta neta', 'IVA', 'Envío', 'Costo', 'Utilidad', 'Margen', 'Pedidos vinculados']),
+        ...categories.map((item) => [
           textCell(item.category),
+          numberCell((item as any).orders_count ?? 0, 'integer'),
+          numberCell((item as any).units_sold ?? 0, 'integer'),
           moneyCell(item.gross_revenue),
           moneyCell(item.net_revenue),
           moneyCell(item.vat_amount),
           moneyCell(item.shipping_amount),
+          moneyCell((item as any).cost ?? 0),
+          moneyCell((item as any).profit ?? 0),
+          percentCell((item as any).margin ?? 0),
           textCell((item.order_refs ?? []).join(', ')),
         ]),
       ],
