@@ -399,6 +399,29 @@ input[type="file"] {
   transform: translateY(-1px);
 }
 
+/* Ajuste FHD: mantiene visible CTA sin recortar los extremos de la imagen */
+@media (min-width: 1920px) and (max-width: 2559.98px) {
+  .pet-hero-frame {
+    min-height: 360px;
+    --pet-hero-title-size: clamp(37px, 2.02vw, 44px);
+    --pet-hero-title-line: 1.12;
+    --pet-hero-subtitle-size: clamp(14px, 0.9vw, 16px);
+    --pet-hero-cta-size: clamp(16px, 1vw, 19px);
+    --pet-hero-subtitle-line: 1.38;
+    --pet-hero-subtitle-gap: 8px;
+    --pet-hero-cta-gap: 10px;
+    --pet-hero-cta-pad-y: 10px;
+    --pet-hero-cta-pad-x: 22px;
+  }
+
+  .pet-hero-copy,
+  .pet-hero-copy--slide-1,
+  .pet-hero-copy--slide-2,
+  .pet-hero-copy--slide-3 {
+    --pet-hero-copy-top: 15.8%;
+  }
+}
+
 /* Cuando la altura del viewport es baja, reduce texto para que no invada la imagen */
 @media (max-height: 520px) {
   .slider-text-display {
@@ -552,6 +575,13 @@ input[type="file"] {
     max-width: 1200px !important;
     padding-right: 18px;
     padding-left: 18px;
+  }
+
+  .pet-hero-frame {
+    --pet-hero-cta-size: clamp(16px, 1.05vw, 20px);
+    --pet-hero-cta-gap: 12px;
+    --pet-hero-cta-pad-y: 10px;
+    --pet-hero-cta-pad-x: 22px;
   }
 
   .text-display {

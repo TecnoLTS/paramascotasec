@@ -1,9 +1,3 @@
-# ParamascotasEC - AI_CONTEXT.md
-
-> Copia versionada de `/home/admincenter/contenedores/AGENTS.md`.
-> Si este archivo y `AGENTS.md` difieren, manda `AGENTS.md` en la raiz del workspace.
-> Ultima sincronizacion: 2026-05-23.
-
 # ParamascotasEC - AGENTS.md
 
 Fuente canonica de contexto IA para `/home/admincenter/contenedores`.
@@ -45,6 +39,8 @@ cd paramascotasec-backend
 RUN_COMPOSER_INSTALL=1 RUN_DB_SETUP=1 ./scripts/deploy-development.sh
 ```
 
+PostgreSQL major actual: 18. La DB principal usa `postgres18_data` y conserva `postgres16_data` para rollback; Facturador usa el volumen Docker `postgres18-data` y conserva `postgres-data` para rollback.
+
 ## Red
 
 Todos los contenedores comparten la red bridge externa `edge`, creada por los scripts.
@@ -60,11 +56,11 @@ Todos los contenedores comparten la red bridge externa `edge`, creada por los sc
 
 | Componente | Tech | Contenedores |
 |------------|------|--------------|
-| Frontend | Next.js 16 + React 19 + Tailwind CSS + TypeScript | `paramascotasec-app` prod / `paramascotasec-app-dev` dev |
-| Backend | PHP 8.2 MVC propio + PostgreSQL | `paramascotasec-backend-app`, `paramascotasec-backend-web` |
-| Database | PostgreSQL 16 | `next-test-db` |
-| Facturador | PHP 8.2 + PostgreSQL | `billing-service`, `billing-recovery-worker`, `billing-postgres`, `billing-nginx` |
-| Gateway | Nginx + Certbot | `nginx-gateway`, `certbot` |
+| Frontend | Node 24 LTS + Next.js 16 + React 19 + Tailwind CSS 4 + TypeScript 6 | `paramascotasec-app` prod / `paramascotasec-app-dev` dev |
+| Backend | PHP 8.5 MVC propio + PostgreSQL | `paramascotasec-backend-app`, `paramascotasec-backend-web` |
+| Database | PostgreSQL 18 | `next-test-db` |
+| Facturador | PHP 8.5 + PostgreSQL 18 | `billing-service`, `billing-recovery-worker`, `billing-postgres`, `billing-nginx` |
+| Gateway | Nginx stable 1.30 + Certbot | `nginx-gateway`, `certbot` |
 
 ## Frontend `paramascotasec/app`
 
@@ -163,6 +159,191 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 - Guia SEO/Google: `paramascotasec/SEO-GOOGLE-SETUP.md`.
 
 ## Historial de trabajo IA
+
+### 2026-05-24 - Hotfix de Recorte en Slider Superior por Resolucion
+
+Objetivo: evitar que el contenido del hero principal (titulo/subtitulo/CTA) se recorte en resoluciones desktop intermedias donde el banner quedaba demasiado bajo para el texto.
+
+Cambios frontend:
+- `app/src/styles/globals.scss` agrega un ajuste scoped para `@media (min-width: 1024px) and (max-width: 1535.98px)`:
+  - Primera pasada: `pet-hero-frame` con `min-height: clamp(260px, 24vw, 332px)` y ajuste de espaciado vertical del copy.
+  - Segunda pasada: `pet-hero-frame` sube a `min-height: clamp(300px, 25vw, 360px)` y `pet-hero-copy` cambia a anclaje por `bottom: clamp(50px, 4.2vw, 76px)` (en lugar de depender de `top`) para evitar recorte del boton "Descubrir ahora".
+  - Las variantes `--slide-1/2/3` mantienen ajustes de `left/width/max` para reducir wrapping agresivo.
+- Tercera pasada: se agrega override global para desktop de poca altura `@media (min-width: 1024px) and (max-height: 920px)` que reduce tipografias del hero, sube el bloque de copy (`top` fijo por slide) y fuerza `min-height: clamp(330px, 47vh, 430px)` para evitar recortes cuando el viewport es ancho pero bajo.
+- Cuarta pasada: se agrega override final para `@media (min-width: 1280px) and (max-width: 1919.98px)`, caso tipico al acoplar DevTools, con `aspect-ratio: 2560 / 660`, `min-height: clamp(360px, 25.8vw, 440px)`, tipografias mas contenidas y `top: 18%` para mantener visible el CTA dentro del slide.
+- Quinta pasada: la captura mostro `section` en `1920 x 360`; se ajusto el override FHD `@media (min-width: 1920px) and (max-width: 2559.98px)` conservando el ratio real del asset (`aspect-ratio: 3840 / 720`, `min-height: 360px`) y compactando tipografias/espaciados para que el CTA entre sin deformar ni recortar la imagen de fondo.
+- Sexta pasada: para el caso FHD donde el hero quedaba alrededor de `360px` y seguia recortando el CTA, el override `1920-2559.98px` ahora usa `min-height: clamp(390px, 23vw, 460px)`, compacta tipografia y ancla `pet-hero-copy*` con `top: auto` + `bottom: clamp(56px, 3.4vw, 78px)` para garantizar visibilidad del boton.
+- Septima pasada (ajuste correctivo): se revierte el enfoque de la sexta pasada porque generaba recorte lateral del gato y distribuia el texto demasiado abajo. El override `1920-2559.98px` vuelve a `min-height: 360px`, compacta ligeramente tipografia/espaciado y reubica el copy con `--pet-hero-copy-top: 16.5%` (sin anclaje por `bottom`) para equilibrar composicion y mantener el CTA visible.
+- Octava pasada (ajuste de legibilidad): se incrementan de forma moderada titulo, subtitulo y CTA del hero en `1920-2559.98px` (`--pet-hero-title-size: clamp(37px, 2.02vw, 44px)`, `--pet-hero-cta-size: clamp(13px, 0.82vw, 15px)`, padding de CTA mayor) y se sube levemente el bloque de copy a `--pet-hero-copy-top: 15.8%` para conservar balance visual.
+- Novena pasada (copy comercial slides 2 y 3): en `app/src/components/Slider/SliderPet.tsx` se mejora el texto de los slides promocionales:
+  - Slide 2: `La Tri también se vive en cuatro patas`, subtitulo enfocado en camiseta de Ecuador y CTA `Ver camisetas`.
+  - Slide 3: `Todo para su día a día, en un solo lugar`, subtitulo orientado a categorias de compra recurrente y CTA `Ver productos`.
+- Decima pasada (CTA mas grande): se agranda visualmente el boton del hero para `1920-2559.98px` aumentando `--pet-hero-cta-size` a `clamp(14px, 0.9vw, 16px)` y padding a `9px 18px`, manteniendo el layout sin recorte.
+- Undecima pasada (CTA claramente mayor): para que el cambio sea visible tambien en resoluciones `1280-1919.98px` como el caso `1752px` del navegador con DevTools acoplado, se aumenta el CTA a `--pet-hero-cta-size: clamp(16px, 1.05vw, 20px)` con `padding: 10px 22px`; en `1920-2559.98px` sube a `clamp(16px, 1vw, 19px)` con `padding: 10px 22px`.
+
+Despliegue/verificacion:
+- Se valido el diff CSS en `globals.scss` con reglas nuevas del rango `1024-1535.98px`.
+- Correccion de entorno: este workspace opera en `development`; se aplico `paramascotasec/scripts/deploy-development.sh` y quedo `paramascotasec-app-dev` healthy en `127.0.0.1:3000`.
+- Verificado en `127.0.0.1:3000/_next/static/css/app/layout.css` que la compilacion incluye `min-height: clamp(300px, 25vw, 360px)` y `bottom: clamp(50px, 4.2vw, 76px)` en el media query critico.
+- Verificado adicionalmente en `127.0.0.1:3000/_next/static/css/app/layout.css` la presencia del media query `@media (min-width: 1024px) and (max-height: 920px)` con `min-height: clamp(330px, 47vh, 430px)` y `top` ajustado para `pet-hero-copy*`.
+- Verificado en CSS servido local que el override final `1280-1919.98px` incluye `min-height: clamp(360px, 25.8vw, 440px)` y `--pet-hero-title-size: clamp(31px, 2.35vw, 42px)`.
+- Verificado en CSS servido local que el override `1920-2559.98px` incluye `min-height: 360px` y `--pet-hero-title-size: clamp(36px, 1.95vw, 42px)`.
+- Verificado en `127.0.0.1:3000/_next/static/css/app/layout.css` que el override `1920-2559.98px` refleja `min-height: clamp(390px, 23vw, 460px)` y `bottom: clamp(56px, 3.4vw, 78px)`.
+- Captura Playwright de control en `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_fhd_after.png` confirma el CTA completo visible en ancho ~1923.
+- Verificado en `127.0.0.1:3000` (despues del ajuste correctivo) que el hero mantiene CTA visible sin recorte lateral evidente de la imagen en `1923x900` y `1923x700` con capturas `hero_fhd_after_v2.png` y `hero_fhd_after_v2_h700.png`.
+- Entorno restaurado a modo correcto de este workspace (`development`) con `paramascotasec/scripts/deploy-development.sh`; solo queda activo `paramascotasec-app-dev`.
+- Verificado en CSS servido local que el override final FHD refleja `--pet-hero-title-size: clamp(37px, 2.02vw, 44px)`, `--pet-hero-cta-size: clamp(13px, 0.82vw, 15px)` y `--pet-hero-copy-top: 15.8%`.
+- Capturas Playwright de la octava pasada en `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_fhd_after_v3.png` y `hero_fhd_after_v3_h700.png` confirman mayor legibilidad sin recortar gato ni CTA.
+- Capturas Playwright de control de copy para los nuevos slides:
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_slide2_copy_v1.png`
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_slide3_copy_v1.png`
+- Verificado en `127.0.0.1:3000` el agrandado de CTA con capturas:
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_cta_bigger_v1.png`
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_slide2_cta_bigger_v1.png`
+- Verificado adicionalmente en viewport `1752x342` y `1752x480` (escenario similar a DevTools docked) con:
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_slide3_cta_bigger_v2_1752x342.png`
+  - `paramascotasec/docs/screenshots/2026-05-24-slider-cta-fix/hero_slide3_cta_bigger_v2_1752x480.png`
+- `npm run lint` no pudo completarse por error preexistente de toolchain (`TypeError: scopeManager.addGlobals is not a function` en ESLint 10.4.0).
+- `npm run typecheck` no pudo completarse por configuracion preexistente (`TS5101` por `baseUrl` deprecado sin `ignoreDeprecations` en TS6).
+
+Pendientes:
+- Validar visualmente el hero en resoluciones objetivo (especialmente 1024-1366 y 1280-1535) tras redeploy del frontend.
+- Promover el ajuste al host real de produccion (la URL publica puede seguir sirviendo otro host si el DNS no apunta a este workspace).
+
+### 2026-05-24 - Auditoria de Solapes de Estilos (Modales + Buscadores)
+
+Objetivo: corregir solapes visuales adicionales detectados en modal de edicion admin, buscador rapido del header y buscador del catalogo/tienda.
+
+Cambios frontend:
+- `app/src/app/my-account/components/AdminAccountShellStyles.tsx` reduce alcance de reglas tipograficas/wrapping dentro de tabs (`p/li/label` + `.break-words`) para evitar que estilos globales de shell deformen componentes complejos.
+- `app/src/app/my-account/components/product-editor/ProductEditorController.tsx` agrega clases `pm-product-editor-modal*` y elimina la barra meta sticky con offsets fijos (`top-[88px]/[96px]`) para evitar solapes bajo headers variables.
+- `app/src/styles/visual-polish.scss` agrega hardening scoped para `pm-product-editor-modal*`, `pm-quickview-modal*` y `pm-catalog-search*`; corrige alineacion/espaciado de acciones en buscadores y wrapping en quickview.
+- `app/src/components/Product/AllProducts.tsx` y `app/src/components/Shop/ShopBreadCrumb1.tsx` cambian `type=\"search\"` por `type=\"text\"` para eliminar el clear nativo del browser que se montaba sobre acciones custom.
+- `app/src/components/Modal/ModalQuickview.tsx` incorpora clases `pm-quickview-modal*` para aislar correcciones de layout.
+- `app/src/styles/modal.scss` elimina un bloque duplicado de `.modal-cart-main` para reducir ruido de cascada.
+
+Despliegue/verificacion:
+- `npm run lint`, `npm run typecheck` y `bash /home/admincenter/contenedores/scripts/check-paramascotas.sh` pasaron.
+- Se verifico en `127.0.0.1:3000` que el CSS compilado incluye reglas nuevas (`pm-product-editor-modal`, `pm-catalog-search__actions`, `pm-quickview-modal`) y se generaron capturas en `paramascotasec/docs/screenshots/2026-05-24-overlap-audit`.
+
+Pendientes:
+- QA autenticada completa del modal admin de producto y tabs de cuenta sigue pendiente por credenciales temporales.
+
+### 2026-05-24 - Hotfix de Recortes y Overflow (Publico + Panel)
+
+Objetivo: corregir regresiones visuales reportadas tras la pasada integral (botones/paginacion recortados, textos que se salen del contenedor y panel con sensacion de corte en secciones anchas).
+
+Cambios frontend:
+- `app/src/components/Product/AllProducts.tsx` elimina `button-main` de la navegacion de paginacion (`Anterior/Siguiente`) para evitar herencia de caja negra y recorte de texto.
+- `app/src/styles/visual-polish.scss` rehace `pm-catalog-pagination__nav`/`__page` con anchos independientes (nav auto + min-width, numeros cuadrados), hover/disabled claros y ajuste movil; ademas agrega `overflow-wrap`/`word-break` en bloques publicos clave para evitar desbordes de texto.
+- `app/src/app/my-account/components/AdminAccountShellStyles.tsx` quita `overflow-x: hidden` del shell, fuerza `max-width/min-width` seguros en grid/main tabs, mejora wrappers scrollables y wrapping de texto en `tab/tab_address`; en movil el sidebar admin vuelve a `position: static` para evitar cortes visuales.
+- `app/src/app/my-account/MyAccountController.tsx` ajusta paddings del contenedor admin y reduce el ancho de columna sidebar para dar mas aire al contenido principal.
+- `app/src/app/my-account/components/{ProductReferenceSectionCard,BrandReferenceSectionCard,SupplierReferenceSectionCard}.tsx` normaliza paginacion interna con botones de ancho minimo y `flex-wrap`, evitando botones comprimidos.
+
+Despliegue/verificacion:
+- `npm run lint`, `npm run typecheck` y `bash /home/admincenter/contenedores/scripts/check-paramascotas.sh` pasaron.
+- `paramascotasec/scripts/deploy-development.sh` recreo `paramascotasec-app-dev` y quedo healthy.
+- Verificado que `127.0.0.1:3000` sirve el CSS actualizado (regla `pm-catalog-pagination__nav` nueva).
+- Capturas Playwright de validacion en `paramascotasec/docs/screenshots/2026-05-24-visual-hotfix`, incluyendo home con paginacion cargada (`home_pagination_after_redeploy.png`) y rutas base de tienda/cuenta.
+
+Pendientes:
+- QA autenticada completa de tabs admin/cliente sigue pendiente por credenciales temporales.
+
+### 2026-05-24 - Reacomodo Visual Integral Publico + Cuenta (Dev)
+
+Objetivo: reacomodar paddings, margins y distribucion en paginas publicas + cuenta/autenticacion, consolidar la cascada de estilos y mantener el boton flotante de WhatsApp siempre visible sin tapar CTAs.
+
+Cambios frontend:
+- `visual-polish.scss` se dejo consolidado como fuente unica para layout publico (checkout, carrito, tienda, contacto, FAQ, footer, catalogo, buscadores y detalle), removiendo bloques duplicados de overrides y reforzando espaciado responsive.
+- Se agrego `auth-account.scss` y se importa al final de `styles.scss` para normalizar layout/cards/formularios en `/login`, `/register`, `/forgot-password`, `/reset-password`, `/order-tracking` y estado no autenticado de `/my-account`.
+- `login`, `register`, `forgot-password`, `reset-password` y `order-tracking` ahora usan clases `pm-auth-page*` con paneles, campos, alturas y separaciones consistentes.
+- `MyAccountController.tsx` agrega estructura `pm-account-shell*` y `pm-account-guest*`; `AdminAccountShellStyles.tsx` refuerza contenedor, sidebar sticky, ritmo tipografico/vertical y overflow horizontal de tablas para tabs admin/cliente.
+- `WhatsAppFloatingButton.tsx` ya no se oculta en checkout; permanece visible en todas las rutas y se compensa con safe bottom spacing en vistas criticas (publico, auth y cuenta).
+
+Despliegue/verificacion:
+- `paramascotasec/scripts/deploy-development.sh` recreo `paramascotasec-app-dev` (healthy) en `127.0.0.1:3000`.
+- `npm run lint`, `npm run typecheck` y `bash /home/admincenter/contenedores/scripts/check-paramascotas.sh` pasaron.
+- Capturas Playwright desktop + movil regeneradas para: `/`, `/tienda`, `/pages/contact`, `/pages/preguntas-frecuentes`, `/cart`, `/checkout`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/order-tracking`, `/my-account`.
+- Evidencia en `paramascotasec/docs/screenshots/2026-05-24-visual-reacomodo`.
+
+Pendientes:
+- Validacion autenticada completa de tabs admin/cliente pendiente por credenciales temporales (y recovery/MFA si aplica).
+- Promover los cambios al host de produccion real y confirmar visual desde Internet publica.
+
+### 2026-05-24 - Reordenamiento Visual de Paginas Publicas
+
+Objetivo: corregir espacios, alturas, paddings, margins y jerarquia visual de las paginas publicas despues de la migracion Tailwind 4, especialmente home, tienda, contacto y preguntas frecuentes.
+
+Cambios frontend:
+- `visual-polish.scss` consolida ritmo vertical publico con variables de seccion/card, espaciado consistente para home, catalogo, tienda, contacto, FAQ y footer.
+- Home: se ajustan categorias, catalogo, beneficios, bloque "Las mejores razones", novedades y marcas; en movil se elimina la imagen flotante del bloque de razones porque invadia el texto durante carga lazy.
+- Tienda: la grilla publica usa productos limpios sin cajas pesadas, thumbnails estables, nombres con clamp y mejor separacion entre sidebar, filtros, toolbar y paginacion.
+- Contacto: formulario, inputs, textarea, cards laterales y quick links quedan con radios/paddings responsivos; se reducen letter-spacings excesivos en movil.
+- Preguntas frecuentes: `pages/preguntas-frecuentes` recibe clases `pm-faq-page*`, cards/acordeones scoped, layout responsivo limpio y el enlace de contacto apunta a `/pages/contact`.
+- Segunda pasada: `AllProducts` separa el buscador del catalogo en `pm-catalog-search*`, agrega paginacion `pm-catalog-pagination*` con color de marca, aumenta distancia filtro/grilla/paginacion y corrige badges `Nuevo`/`Oferta` con padding, line-height y sombra consistentes.
+- Segunda pasada: el buscador del header usa clases `pm-header-search*` y resultados rapidos en grid para que imagen, nombre, meta, precio y accion no se aplasten ni se solapen.
+- Tercera pasada: se recupera el lenguaje visual anterior de catalogo/home/novedades quitando bordes, sombras y fondos de cards de producto; paginacion vuelve a negro/gris, filtros quedan mas compactos y `Nuevo`/`Oferta` se apilan sin solaparse cuando coexisten.
+- Tercera pasada: `/tienda` reutiliza `pm-catalog-search*`, en movil muestra primero busqueda/catalogo y luego filtros; `Product/Detail/Default.tsx` agrega clases `pm-product-detail*` para estabilizar ficha de producto, cantidad, CTAs, tarjetas informativas, tabs y relacionados.
+- Cuarta pasada: checkout, carrito y footer reciben clases `pm-checkout-page*`, `pm-cart-page*` y `pm-site-footer`; se redistribuyen contenedores, steps, formularios, resumen de pedido, tabla de carrito, estado vacio y links del footer con grids y paddings estables.
+- `CartContext` expone `hydrated` y `/checkout` espera la hidratacion del carrito antes de redirigir a `/cart`, evitando falsos vacios al abrir checkout directo con carrito en `localStorage`.
+- `WhatsAppFloatingButton` se oculta en `/checkout` para no tapar campos del formulario en movil.
+
+Despliegue/verificacion:
+- `paramascotasec/scripts/deploy-development.sh` recreo el frontend dev y quedo healthy.
+- `paramascotasec/scripts/deploy-production.sh` recreo el frontend production de este workspace (`paramascotasec-app`) y quedo healthy.
+- Screenshots Playwright revisados en home movil/desktop, tienda desktop, contacto movil, about desktop y FAQ movil; tambien se verifico que el CSS servido por `127.0.0.1:3000` contiene las reglas `pm-*` nuevas.
+- Segunda pasada verificada con capturas Playwright de catalogo desktop/movil, buscador rapido del header y tienda; `bash scripts/check-paramascotas.sh` paso.
+- `npm run lint`, `npm run typecheck`, build Docker de produccion con Node 24 y `bash scripts/check-paramascotas.sh` pasaron. El build mantiene advertencias preexistentes de Sass `@import`, trazas dinamicas de uploads y peer deps de ESLint/TypeScript.
+- Tercera pasada verificada con capturas Playwright de home, catalogo, paginacion/beneficios, buscador rapido, tienda desktop/movil y ficha de producto desktop/movil; `paramascotasec/scripts/deploy-production.sh` dejo `paramascotasec-app` healthy y `bash scripts/check-paramascotas.sh` paso.
+- Cuarta pasada verificada con capturas Playwright de checkout desktop/movil, carrito desktop con producto y catalogo desktop; `paramascotasec/scripts/deploy-production.sh` dejo `paramascotasec-app` healthy y `bash scripts/check-paramascotas.sh` paso.
+- Diagnostico de publicacion: `paramascotasec.com` resuelve a `80.241.213.31`, mientras este workspace sale a Internet como `157.100.87.179`; por DNS, la URL publica real sigue sirviendo otro host/build aunque este workspace este actualizado.
+
+Pendientes:
+- Promover estos cambios en el host real de produccion o actualizar el DNS/ruteo correspondiente; luego revisar visualmente `https://paramascotasec.com/` desde fuera del servidor.
+
+### 2026-05-23 - Correccion de Regresion Visual Tras Tailwind 4
+
+Objetivo: recuperar layout de home, tienda, contacto y panel privado despues de la migracion a Tailwind CSS 4, donde utilidades globales empezaron a pisar estilos del tema y componentes.
+
+Cambios frontend:
+- `styles.scss` carga Tailwind antes de los estilos del tema para que `.container` y reglas propias de Paramascotas mantengan el ancho esperado.
+- `loading.scss` limita la regla `.icon` al loader (`.ajax-loader .icon`) para no estirar iconos de secciones como "Las mejores razones para elegirnos".
+- `shop.scss` elimina redefiniciones globales de `.grid-cols-2`, `.grid-cols-3` y `.grid-cols-4`, evitando que pisen variantes responsive como `lg:grid-cols-4`.
+- `header.scss` fija explicitamente `position: fixed; left: 0; right: 0;` cuando el header usa estado `fixed`.
+- Segunda pasada: `visual-polish.scss` agrega estilos scoped `pm-contact-*`, `pm-catalog-*` y `pm-feature-products*` para estabilizar contacto, buscador/categorias del catalogo y tabs de novedades sin depender solo de utilidades Tailwind.
+- El panel admin limita el ancho del shell a `max-w-[1720px]` para evitar estiramiento excesivo en monitores grandes.
+- Tercera pasada: home usa `pm-home`/`pm-home-categories` para separar categorias del catalogo; `/tienda` usa `pm-shop-page*` con grid sidebar/contenido, filtros compactos y grilla `xl:grid-cols-4`.
+- Cuarta pasada: el filtro secundario del home/catalogo (`Marcas`) usa `pm-catalog-filter__tabs--secondary` como fila horizontal desplazable, reduciendo altura y evitando que el card crezca con varias filas de pills.
+
+Despliegue/verificacion:
+- `NODE_ENV=production npm run build` ejecutado dentro de `paramascotasec-app-dev` paso.
+- `paramascotasec/scripts/deploy-development.sh` recreo el frontend dev y quedo healthy.
+- `scripts/check-paramascotas.sh` paso tras las pasadas visuales.
+
+Pendientes:
+- Si el navegador apunta al DNS publico de produccion, promover estos cambios con el script de produccion en una ventana controlada.
+
+### 2026-05-23 - Actualizacion Tecnologica General
+
+Objetivo: subir runtimes, dependencias e imagenes base a ramas estables/LTS actuales para reducir exposicion por versiones obsoletas.
+
+Cambios workspace:
+- Frontend objetivo: Node 24 LTS, Next 16.2, React 19.2, Tailwind 4.3, ESLint 10 y TypeScript 6; se elimino dependencias frontend directas sin uso detectado y se migro PostCSS a `@tailwindcss/postcss`.
+- Backend y Facturador objetivo: PHP 8.5, Composer 2, extensiones PHP declaradas/instaladas explicitamente y lockfiles actualizados; Facturador versiona `composer.lock`.
+- Infraestructura objetivo: PostgreSQL 18, Nginx stable 1.30 y pulls/builds con base actualizada dentro de scripts de deploy/renovacion.
+- Tests Facturador se ajustaron al dominio actual (`AccessKey::fromValue()`, namespace PSR-4 real, config obligatoria de `XmlInvoiceBuilder`) para correr en PHPUnit 13.
+
+Despliegue/verificacion:
+- Development migrado con `backup-and-stop.sh` + `restore-from-backup.sh` sobre PostgreSQL 18; luego `./deploy-development.sh` dejo Facturador, DB, Backend, Frontend y Gateway healthy.
+- Conteos post-restore: DB principal PostgreSQL 18.4 con productos=163, usuarios=23, ordenes=79; Facturador PostgreSQL 18.4 con invoice_headers=77 e invoice_details=60.
+
+Decisiones:
+- No adoptar ramas current/beta/mainline: Node 26, TypeScript 7 preview y Nginx mainline quedan fuera.
+- La migracion PostgreSQL 16 -> 18 usa snapshot cifrado + restore sobre volumen nuevo; los volumenes PostgreSQL 16 se conservan para rollback.
+- En PostgreSQL 18 el mount debe apuntar a `/var/lib/postgresql`, no a `/var/lib/postgresql/data`, porque la imagen oficial usa subdirectorios versionados.
+
+Pendientes:
+- Promover a produccion en ventana de mantenimiento con backup cifrado previo y rollback apuntando a los volumenes PostgreSQL 16 conservados.
 
 ### 2026-05-23 - Sitemap de Imagenes Robusto Para Search Console
 

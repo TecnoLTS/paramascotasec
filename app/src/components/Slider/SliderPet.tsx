@@ -40,18 +40,18 @@ const slides: SlideContent[] = [
   },
   {
     id: 2,
-    title: '¡Un hincha más en casa!',
+    title: 'La Tri también se vive en cuatro patas',
     subtitle:
-      'Comparte la pasión con tu peludito y celebren juntos cada gol con la camiseta de la Tri.',
-    ctaLabel: 'Consíguela aquí',
+      'Viste a tu peludito con la camiseta de Ecuador y celebren juntos cada partido.',
+    ctaLabel: 'Ver camisetas',
     ctaHref: '/tienda/ropa?query=camiseta',
   },
   {
     id: 3,
-    title: 'Todo lo que ama, en un solo lugar',
+    title: 'Todo para su día a día, en un solo lugar',
     subtitle:
-      'Pequeños detalles que lo hacen feliz, con la calidad y cuidado que se merece.',
-    ctaLabel: 'Explorar tienda',
+      'Alimento, snacks, juguetes y cuidado diario con calidad que sí se nota.',
+    ctaLabel: 'Ver productos',
     ctaHref: '/tienda/alimento',
   },
 ]
