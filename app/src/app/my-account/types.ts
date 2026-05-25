@@ -669,7 +669,7 @@ export interface AdminUserSummary {
 
 export type DeepDiveView = 'sales' | 'profit' | 'aov' | 'inventory' | 'product-breakdown'
 export type ProductDetailMetric = 'gross' | 'net' | 'vat' | 'shipping' | 'profit' | 'inventory'
-export type AdminReportSection = 'general' | 'sales' | 'balance' | 'inventory' | 'traceability'
+export type AdminReportSection = 'general' | 'sales' | 'balance' | 'inventory' | 'traceability' | 'products-purchases'
 export type AdminMenuGroupKey = 'monitoring' | 'reporting' | 'catalog' | 'operations' | 'finance'
 
 export type BillingRidePdf = {

@@ -21,4 +21,8 @@ export const REPORT_SECTION_META: Record<AdminReportSection, { title: string; su
     title: 'Reporte de trazabilidad',
     subtitle: 'Auditoría de soporte por pedido, producto y categoría para validar ventas y rentabilidad.',
   },
+  'products-purchases': {
+    title: 'Productos x compra',
+    subtitle: 'Consulta por producto el historial de compras/lotes, consumo FIFO y capital remanente por lote.',
+  },
 }

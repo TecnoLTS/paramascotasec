@@ -175,6 +175,10 @@ export default function AccountSidebar({
                                         <Files size={18} />
                                         <strong className="heading6">Reporte de trazabilidad</strong>
                                     </PanelNavButton>
+                                    <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-3 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'reports' && adminReportSection === 'products-purchases'} onClick={() => onOpenAdminReportSection('products-purchases')}>
+                                        <Package size={18} />
+                                        <strong className="heading6">Productos x Compra</strong>
+                                    </PanelNavButton>
                                     <PanelNavButton className="item flex items-center gap-3 w-full px-4 py-3 rounded-lg cursor-pointer duration-300 hover:bg-surface" isActive={activeTab === 'sales-ranking'} onClick={() => onNavigateToPanelTab('sales-ranking')}>
                                         <Trophy size={18} />
                                         <strong className="heading6">Ranking de productos</strong>

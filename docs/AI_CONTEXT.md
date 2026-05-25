@@ -160,6 +160,115 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 
 ## Historial de trabajo IA
 
+### 2026-05-25 - Ajuste de Espaciado del Slide 3 Hero (Dev)
+
+Objetivo: separar el contenido del slide 3 y centrarlo un poco mas hacia la derecha en resoluciones compactas, sin modificar el alto global del slider ni las imagenes de fondo.
+
+Cambios frontend:
+- `app/src/styles/globals.scss` ajusta solo la variante `pet-hero-showcase--slide-3`:
+  - en `1024-1279.98px` mueve el copy a `26%`, reduce ligeramente ancho/tamanos internos y baja los dots del slide 3 para que no tapen el subtitulo.
+  - en `640-1023.98px` mueve el copy a `26%`, reduce el ancho maximo, ajusta `line-height`/margenes del titulo compuesto y aumenta la separacion entre etiqueta, subtitulo y CTA.
+
+Verificacion:
+- `git diff --check` paso.
+- `http://127.0.0.1:3000/` respondio `200` y `/healthz` respondio `ok`.
+- Capturas Playwright generadas:
+  - `paramascotasec/docs/screenshots/2026-05-25-slide-showcase-proportions/slide3_spacing_viewport_1024x768_v3.png`
+  - `paramascotasec/docs/screenshots/2026-05-25-slide-showcase-proportions/slide3_spacing_viewport_768x768_v3.png`
+
+### 2026-05-25 - Fix Responsive y Fecha en Ventas por Factura (Dev)
+
+Objetivo: corregir en `Productos x Compra > Ventas` que la fecha no aparecia y que la informacion se perdia hacia la derecha por falta de ancho.
+
+Cambios frontend:
+- `app/src/app/my-account/reports/ProductPurchaseHistoryPanel.tsx`:
+  - fix de fecha para ventas con `formatSalesOrderDate`, que acepta timestamps completos (`YYYY-MM-DDTHH:mm:ss...`) y no solo `YYYY-MM-DD`.
+  - normalizacion de referencias de factura/pedido (`normalizeOrderReference`) para resolver mejor `order_refs` contra `id`/`order_number`.
+  - reemplazo de la tabla horizontal ancha por tarjetas responsivas por factura en la vista ventas:
+    - bloque superior con `Factura / pedido`, estado y `Fecha`.
+    - bloque de `Cliente` y `Pago / entrega`.
+    - grilla de metricas (`Venta neta`, `Costo`, `Utilidad`, `Margen`, `IVA`, `Envío`) sin overflow horizontal.
+  - ajuste de placeholder cuando no hay producto seleccionado: ahora menciona ventas o compras.
+
+Verificacion:
+- `git diff --check` paso.
+- `npx tsc --noEmit --ignoreDeprecations 6.0` mantiene unico bloqueo preexistente en `tailwind.config.ts`: `mode` no reconocido por `Config`.
+
+### 2026-05-25 - Ventas por Factura en Reporte Productos x Compra (Dev)
+
+Objetivo: ajustar la vista **Ventas** del reporte `Productos x Compra` para mostrar una lista separada por factura/pedido, no solo agregados por producto.
+
+Cambios frontend:
+- `app/src/app/my-account/reports/ProductPurchaseHistoryPanel.tsx`:
+  - agrega prop `salesOrders` y construye un indice por referencia (`id`/`order_number`).
+  - usa `selectedSalesRow.order_refs` para resolver las facturas/pedidos del producto seleccionado.
+  - reemplaza el bloque agregado de ventas por una tabla de filas individuales por factura con: `Fecha`, `Factura / pedido`, `Cliente`, `Pago / entrega`, `Venta neta`, `Costo`, `Utilidad`, `Margen`, `IVA`, `Envío`.
+  - mensaje vacio cuando no existan facturas vinculadas en el periodo.
+  - la vista de ventas ya no depende del estado/error de compras para renderizar.
+- `app/src/app/my-account/MyAccountController.tsx`:
+  - pasa `reportSalesOrders` al panel (`salesOrders={reportSalesOrders}`) para habilitar el desglose por factura.
+
+Verificacion:
+- `git diff --check` paso.
+- `npx tsc --noEmit --ignoreDeprecations 6.0` mantiene bloqueo preexistente en `tailwind.config.ts`: `mode` no reconocido por `Config`.
+
+### 2026-05-25 - Reporte Productos x Compra con Vista Ventas por Defecto (Dev)
+
+Objetivo: extender el reporte `Productos x Compra` para incluir lectura de ventas y dejar **Ventas** como vista por defecto, con conmutador manual a **Compras** (la vista existente de lotes/procurement).
+
+Cambios frontend:
+- `app/src/app/my-account/reports/ProductPurchaseHistoryPanel.tsx` agrega modo dual:
+  - segmentado `Ventas / Compras` con estado local y default `Ventas`.
+  - modo `Ventas`: lista y detalle comercial por producto usando datos existentes de `SalesRankingRow` (pedidos, unidades, venta neta, costo, utilidad, margen, IVA y envío) para el periodo activo del reporte.
+  - modo `Compras`: conserva la vista actual de historial de lotes/compras con factura, proveedor, cantidades y costos.
+  - filtros rapidos adaptativos segun modo (`Con/Sin ventas` o `Con/Sin compras`).
+  - tarjetas resumen superiores enfocadas en ventas (total productos, con ventas, unidades vendidas, venta neta, utilidad).
+- `app/src/app/my-account/MyAccountController.tsx`:
+  - pasa `reportSalesRankingRows` y `reportSalesPeriodLabel` al panel para alimentar modo ventas sin endpoints nuevos.
+  - ajusta el badge contextual de cabecera en esta seccion para mostrar cobertura dual:
+    - `Ventas: X SKU`
+    - `Compras: Y SKU`.
+
+Verificacion:
+- `git diff --check` paso.
+- Validacion de tipos acotada con `npx tsc --noEmit --ignoreDeprecations 6.0`:
+  - sin errores nuevos del reporte.
+  - persiste bloqueo preexistente en `tailwind.config.ts`: `mode` no reconocido por tipo `Config`.
+
+### 2026-05-25 - Reporte Productos x Compra (Dev)
+
+Objetivo: crear en **Reportes** una vista interna tipo maestro-detalle para consultar productos admin y su historial de compras/lotes, reutilizando endpoints existentes y sin cambios de backend.
+
+Cambios frontend:
+- Se agrega la seccion `products-purchases` en:
+  - `app/src/app/my-account/types.ts` (`AdminReportSection`).
+  - `app/src/app/my-account/reportSections.ts` (`REPORT_SECTION_META`).
+  - `app/src/app/my-account/hooks/useAdminSidebarNavigation.ts` (allowlist de secciones por query param y navegacion).
+- `app/src/app/my-account/components/AccountSidebar.tsx` agrega el boton **Productos x Compra** dentro del grupo **Reportes**, navegando a `activeTab='reports'` con `adminReportSection='products-purchases'`.
+- Se crea `app/src/app/my-account/reports/ProductPurchaseHistoryPanel.tsx` con:
+  - layout responsive maestro-detalle (lista izquierda + panel derecho en desktop, apilado en movil).
+  - buscador y filtros rapidos `Todos / Con compras / Sin compras`.
+  - orden de lista por compra mas reciente primero.
+  - tarjetas de resumen: total productos, productos con compras, unidades compradas, unidades restantes y capital restante.
+  - panel de detalle con metricas del producto y tabla de lotes con columnas: `Fecha`, `Factura / origen`, `Proveedor`, `Comprado`, `Consumido`, `Restante`, `Costo unitario`, `Total compra`, `Estado`.
+  - lotes sin factura asociados a su `source_type/source_ref` como origen no enlazado (sin ocultarlos).
+  - click en factura enlazada abre `PurchaseInvoiceDetailModal` via `onOpenPurchaseInvoice`.
+- `app/src/app/my-account/MyAccountController.tsx` integra:
+  - estado para producto seleccionado, detalle seleccionado, loading/error.
+  - cache por `product_id` (`productPurchaseReportDetailCache`).
+  - loader del detalle con `/api/products/{id}?scope=admin&procurement_detail=1`.
+  - reutilizacion del listado admin existente (`/api/products?scope=admin`) y de normalizacion `normalizeProductProcurementDetail`.
+  - render condicional de `ProductPurchaseHistoryPanel` dentro de `activeTab === 'reports'`.
+
+Verificacion:
+- `git diff --check` paso.
+- `npm run lint` (en `paramascotasec/app`) mantiene bloqueo preexistente de ESLint 10.4.0: `TypeError: scopeManager.addGlobals is not a function`.
+- `npm run typecheck` (en `paramascotasec/app`) mantiene bloqueo preexistente TS6: `TS5101` por `baseUrl` deprecado sin `ignoreDeprecations`.
+- Verificacion adicional de tipos del cambio con `npx tsc --noEmit --ignoreDeprecations 6.0`: no reporta errores nuevos del reporte; persiste issue preexistente en `tailwind.config.ts` (`mode` no reconocido en `Config`).
+
+Pendientes:
+- QA manual en `/my-account?tab=reports` para validar UX completa (filtros, seleccion de producto, apertura de factura y comportamiento responsive en browser real).
+
 ### 2026-05-25 - Rebalance de Proporciones Internas del Hero (Dev)
 
 Objetivo: reducir la escala interna de los elementos graficos de los 3 slides sin tocar tamanos globales, aspect ratios ni breakpoints del slider, manteniendo aire superior e inferior.

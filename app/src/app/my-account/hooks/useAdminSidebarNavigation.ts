@@ -7,7 +7,7 @@ import { createAdminMenuExpandedState, getAdminGroupForTab } from '../adminNavig
 import type { AdminMenuGroupKey, AdminReportSection, DeepDiveView } from '../types'
 import { PRODUCT_REFERENCE_KEY_SET, type ProductReferenceKey } from '@/lib/productReferenceData'
 
-const ADMIN_REPORT_SECTION_SET = new Set<AdminReportSection>(['general', 'sales', 'balance', 'inventory', 'traceability'])
+const ADMIN_REPORT_SECTION_SET = new Set<AdminReportSection>(['general', 'sales', 'balance', 'inventory', 'traceability', 'products-purchases'])
 
 type UseAdminSidebarNavigationParams = {
   userRole?: string

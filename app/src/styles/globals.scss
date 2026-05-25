@@ -2253,6 +2253,11 @@ input[type="file"] {
     --pet-showcase-cta: clamp(14px, 0.96vw, 18px);
   }
 
+  .pet-hero-showcase.pet-hero-showcase--slide-1 {
+    --pet-showcase-left: clamp(304px, 22vw, 400px);
+    --pet-showcase-width: min(53vw, 960px);
+  }
+
   .pet-hero-showcase__badge {
     justify-content: center;
     min-width: clamp(270px, 20vw, 380px);
@@ -2556,6 +2561,11 @@ input[type="file"] {
     --pet-showcase-cta: clamp(14px, 0.84vw, 18px);
   }
 
+  .pet-hero-showcase.pet-hero-showcase--slide-1 {
+    --pet-showcase-left: clamp(390px, 21.8vw, 520px);
+    --pet-showcase-width: min(50vw, 920px);
+  }
+
   .pet-hero-showcase.pet-hero-showcase--slide-2 {
     --pet-showcase-left: clamp(154px, 9.8vw, 238px);
     --pet-showcase-top: clamp(24px, 1.38vw, 34px);
@@ -2667,6 +2677,11 @@ input[type="file"] {
     --pet-showcase-top: clamp(58px, 2.65vw, 78px);
   }
 
+  .pet-hero-showcase.pet-hero-showcase--slide-1 {
+    --pet-showcase-left: clamp(520px, 20.8vw, 700px);
+    --pet-showcase-width: min(47vw, 1040px);
+  }
+
   .pet-hero-showcase.pet-hero-showcase--slide-2 {
     --pet-showcase-left: clamp(260px, 10.2vw, 440px);
     --pet-showcase-top: clamp(54px, 2.36vw, 76px);
@@ -2712,12 +2727,12 @@ input[type="file"] {
   }
 
   .pet-hero-showcase.pet-hero-showcase--slide-3 {
-    --pet-showcase-left: 23%;
+    --pet-showcase-left: 26%;
     --pet-showcase-top: 15px;
-    --pet-showcase-width: 48vw;
-    --pet-showcase-daily-top: clamp(27px, 2.62vw, 33px);
-    --pet-showcase-daily-main: clamp(40px, 3.9vw, 48px);
-    --pet-showcase-daily-tag: clamp(16px, 1.62vw, 20px);
+    --pet-showcase-width: 46vw;
+    --pet-showcase-daily-top: clamp(26px, 2.52vw, 32px);
+    --pet-showcase-daily-main: clamp(38px, 3.74vw, 46px);
+    --pet-showcase-daily-tag: clamp(15px, 1.54vw, 19px);
     --pet-showcase-subtitle: clamp(10px, 0.94vw, 12px);
     --pet-showcase-cta: clamp(11px, 1vw, 13px);
   }
@@ -2768,15 +2783,54 @@ input[type="file"] {
     margin-top: 3px;
   }
 
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-title {
+    margin-top: 4px;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-top {
+    line-height: 0.96;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-main {
+    margin-top: 0.01em;
+    line-height: 0.88;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-tag {
+    margin-top: 0.1em;
+  }
+
   .pet-hero-showcase__subtitle--slide-2,
   .pet-hero-showcase__subtitle--slide-3 {
     width: min(48vw, 430px);
     margin-top: 6px;
   }
 
+  .pet-hero-showcase__subtitle--slide-3 {
+    width: min(42vw, 400px);
+    margin-top: 7px;
+  }
+
   .pet-hero-showcase__actions--slide-2,
   .pet-hero-showcase__actions--slide-3 {
     margin-top: 6px;
+  }
+
+  .pet-hero-showcase__actions--slide-3 {
+    margin-top: 8px;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__cta {
+    min-height: 27px;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__cta-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .pet-hero-frame--slide-3 .pet-hero-dots {
+    bottom: 2px;
   }
 }
 
@@ -2793,12 +2847,12 @@ input[type="file"] {
   }
 
   .pet-hero-showcase.pet-hero-showcase--slide-3 {
-    --pet-showcase-left: 22%;
-    --pet-showcase-top: clamp(16px, 2vw, 22px);
-    --pet-showcase-width: 56vw;
-    --pet-showcase-daily-top: clamp(26px, 3.72vw, 36px);
-    --pet-showcase-daily-main: clamp(40px, 5.44vw, 54px);
-    --pet-showcase-daily-tag: clamp(16px, 2.42vw, 24px);
+    --pet-showcase-left: 26%;
+    --pet-showcase-top: clamp(18px, 2.25vw, 24px);
+    --pet-showcase-width: 52vw;
+    --pet-showcase-daily-top: clamp(24px, 3.48vw, 34px);
+    --pet-showcase-daily-main: clamp(36px, 5.05vw, 50px);
+    --pet-showcase-daily-tag: clamp(15px, 2.22vw, 22px);
     --pet-showcase-subtitle: clamp(10px, 1.48vw, 13px);
     --pet-showcase-cta: clamp(11px, 1.62vw, 14px);
   }
@@ -2842,7 +2896,24 @@ input[type="file"] {
   }
 
   .pet-hero-showcase__copy--slide-3 {
-    max-width: 58vw;
+    max-width: 54vw;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-title {
+    margin-top: 5px;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-top {
+    line-height: 0.98;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-main {
+    margin-top: 0.01em;
+    line-height: 0.9;
+  }
+
+  .pet-hero-showcase--slide-3 .pet-hero-showcase__daily-tag {
+    margin-top: 0.12em;
   }
 
   .pet-hero-showcase__tri-row,
@@ -2853,6 +2924,15 @@ input[type="file"] {
   .pet-hero-showcase__subtitle--slide-2,
   .pet-hero-showcase__subtitle--slide-3 {
     width: min(58vw, 460px);
+  }
+
+  .pet-hero-showcase__subtitle--slide-3 {
+    width: min(52vw, 430px);
+    margin-top: 9px;
+  }
+
+  .pet-hero-showcase__actions--slide-3 {
+    margin-top: 10px;
   }
 }
 

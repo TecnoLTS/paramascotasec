@@ -148,6 +148,7 @@ import { useCustomerAccountData } from './hooks/useCustomerAccountData'
 import { useLocalSaleQuote } from './hooks/useLocalSaleQuote'
 import { usePosShift } from './hooks/usePosShift'
 import SalesRankingPanel from './reports/SalesRankingPanel'
+import ProductPurchaseHistoryPanel from './reports/ProductPurchaseHistoryPanel'
 import TraceabilityPanel from './reports/TraceabilityPanel'
 import { useReportData } from './reports/useReportData'
 import {
@@ -903,6 +904,11 @@ const MyAccount = () => {
     const [selectedProductProcurementDetail, setSelectedProductProcurementDetail] = useState<ProductProcurementDetail | null>(null)
     const [productProcurementDetailLoading, setProductProcurementDetailLoading] = useState(false)
     const [isProductProcurementModalOpen, setIsProductProcurementModalOpen] = useState(false)
+    const [selectedProductPurchaseReportId, setSelectedProductPurchaseReportId] = useState<string | null>(null)
+    const [selectedProductPurchaseReportDetail, setSelectedProductPurchaseReportDetail] = useState<ProductProcurementDetail | null>(null)
+    const [productPurchaseReportDetailLoading, setProductPurchaseReportDetailLoading] = useState(false)
+    const [productPurchaseReportDetailError, setProductPurchaseReportDetailError] = useState<string | null>(null)
+    const [productPurchaseReportDetailCache, setProductPurchaseReportDetailCache] = useState<Record<string, ProductProcurementDetail>>({})
     const [vatRate, setVatRate] = useState<number>(0)
     const [vatCreditCurrentRate, setVatCreditCurrentRate] = useState<number>(60)
     const [vatCreditCarryforwardRate, setVatCreditCarryforwardRate] = useState<number>(40)
@@ -2174,6 +2180,13 @@ const MyAccount = () => {
         setSelectedPurchaseInvoice(null)
     }
 
+    const fetchProductProcurementDetail = React.useCallback(async (productId: string) => {
+        const normalizedProductId = String(productId || '').trim()
+        if (!normalizedProductId) return null
+        const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(normalizedProductId)}?scope=admin&procurement_detail=1`))
+        return normalizeProductProcurementDetail(res.body)
+    }, [])
+
     const handleOpenProductBalance = async (product: any) => {
         const productId = String(getAdminProductEntityId(product) || '').trim()
         if (!productId) {
@@ -2183,8 +2196,8 @@ const MyAccount = () => {
         setIsProductProcurementModalOpen(true)
         setProductProcurementDetailLoading(true)
         try {
-            const res = await withTransientRetry(() => requestApi<any>(`/api/products/${encodeURIComponent(productId)}?scope=admin&procurement_detail=1`))
-            setSelectedProductProcurementDetail(normalizeProductProcurementDetail(res.body))
+            const detail = await fetchProductProcurementDetail(productId)
+            setSelectedProductProcurementDetail(detail)
         } catch (error) {
             console.error(error)
             setIsProductProcurementModalOpen(false)
@@ -2197,6 +2210,50 @@ const MyAccount = () => {
         } finally {
             setProductProcurementDetailLoading(false)
         }
+    }
+
+    const loadProductPurchaseReportDetail = async (productId: string, options?: { force?: boolean }) => {
+        const normalizedProductId = String(productId || '').trim()
+        if (!normalizedProductId) return
+        const force = options?.force === true
+        const cached = productPurchaseReportDetailCache[normalizedProductId]
+
+        setSelectedProductPurchaseReportId(normalizedProductId)
+        setProductPurchaseReportDetailError(null)
+
+        if (cached && !force) {
+            setSelectedProductPurchaseReportDetail(cached)
+            setProductPurchaseReportDetailLoading(false)
+            return
+        }
+
+        setSelectedProductPurchaseReportDetail(null)
+        setProductPurchaseReportDetailLoading(true)
+        try {
+            const detail = await fetchProductProcurementDetail(normalizedProductId)
+            if (!detail) throw new Error('No se pudo normalizar el detalle del producto.')
+            setProductPurchaseReportDetailCache((prev) => ({ ...prev, [normalizedProductId]: detail }))
+            setSelectedProductPurchaseReportDetail(detail)
+        } catch (error) {
+            console.error(error)
+            setSelectedProductPurchaseReportDetail(null)
+            if (error instanceof Error && error.message.includes('401')) {
+                handleLogout()
+                return
+            }
+            setProductPurchaseReportDetailError(String((error as any)?.message || 'No se pudo cargar el historial de compras del producto.'))
+        } finally {
+            setProductPurchaseReportDetailLoading(false)
+        }
+    }
+
+    const handleSelectProductPurchaseReport = (productId: string) => {
+        void loadProductPurchaseReportDetail(productId)
+    }
+
+    const handleRetryProductPurchaseReportDetail = () => {
+        if (!selectedProductPurchaseReportId) return
+        void loadProductPurchaseReportDetail(selectedProductPurchaseReportId, { force: true })
     }
 
     const closeProductProcurementModal = () => {
@@ -2691,6 +2748,35 @@ const MyAccount = () => {
             setSelectedDeepDive(null)
         }
     }, [activeTab, selectedDeepDive, user?.role])
+
+    React.useEffect(() => {
+        if (activeTab !== 'reports' || adminReportSection !== 'products-purchases') return
+        const availableIds = new Set(
+            (adminProductsList || [])
+                .map((product: any) => String(getAdminProductEntityId(product) || '').trim())
+                .filter(Boolean)
+        )
+
+        if (!selectedProductPurchaseReportId) return
+        if (!availableIds.has(selectedProductPurchaseReportId)) {
+            setSelectedProductPurchaseReportId(null)
+            setSelectedProductPurchaseReportDetail(null)
+            setProductPurchaseReportDetailError(null)
+            return
+        }
+
+        const cached = productPurchaseReportDetailCache[selectedProductPurchaseReportId]
+        if (cached && selectedProductPurchaseReportDetail?.product_id !== cached.product_id) {
+            setSelectedProductPurchaseReportDetail(cached)
+        }
+    }, [
+        activeTab,
+        adminProductsList,
+        adminReportSection,
+        productPurchaseReportDetailCache,
+        selectedProductPurchaseReportDetail?.product_id,
+        selectedProductPurchaseReportId,
+    ])
 
     React.useEffect(() => {
         if (!user || user.role !== 'admin') return
@@ -3426,6 +3512,38 @@ const MyAccount = () => {
         margin: (rawFinancial as any).margin ?? 0,
     } : null
     const activeReportMeta = REPORT_SECTION_META[adminReportSection]
+    const productsPurchaseSectionSummary = React.useMemo(() => {
+        const soldProductIds = new Set(
+            (reportSalesRankingRows || [])
+                .filter((row) => Number(row.units_sold ?? 0) > 0 || Number(row.net_revenue ?? 0) > 0)
+                .map((row) => String(row.product_id || '').trim())
+                .filter(Boolean)
+        )
+
+        return (adminProductsList || []).reduce((acc, product: any) => {
+            const productId = String(getAdminProductEntityId(product) || '').trim()
+            const purchaseHistory = product?.inventory?.purchaseHistory || {}
+            const procurement = product?.inventory?.procurement || {}
+            const entriesCount = Math.max(0, Number(purchaseHistory?.entriesCount ?? 0))
+            const purchasedUnits = Math.max(0, Number(purchaseHistory?.purchasedUnits ?? 0))
+            const remainingUnits = Math.max(0, Number(procurement?.remainingUnitsTotal ?? purchaseHistory?.remainingUnits ?? 0))
+            const remainingCapital = Math.max(0, Number(procurement?.remainingCostTotal ?? 0))
+            acc.totalProducts += 1
+            if (entriesCount > 0 || purchasedUnits > 0) acc.productsWithPurchases += 1
+            if (productId && soldProductIds.has(productId)) acc.productsWithSales += 1
+            acc.purchasedUnits += purchasedUnits
+            acc.remainingUnits += remainingUnits
+            acc.remainingCapital += remainingCapital
+            return acc
+        }, {
+            totalProducts: 0,
+            productsWithPurchases: 0,
+            productsWithSales: 0,
+            purchasedUnits: 0,
+            remainingUnits: 0,
+            remainingCapital: 0,
+        })
+    }, [adminProductsList, reportSalesRankingRows])
     const rawSalesSummary = dashboardStats?.businessMetrics?.salesSummary
     const salesSummary: {orders_count:number;gross:number;net:number;vat:number;shipping:number;cost:number;profit:number;margin:number} | null = rawSalesSummary ? {
         orders_count: (rawSalesSummary as any).orders_count ?? 0,
@@ -6008,6 +6126,13 @@ const MyAccount = () => {
                                                             Soporte auditado: <span className="ml-1 text-black">{traceabilityOrders.length.toLocaleString('es-EC')} pedidos</span>
                                                         </div>
                                                     )}
+                                                    {adminReportSection === 'products-purchases' && (
+                                                        <div className="mt-2 inline-flex rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] font-bold text-secondary">
+                                                            Ventas: <span className="ml-1 text-black">{productsPurchaseSectionSummary.productsWithSales.toLocaleString('es-EC')} SKU</span>
+                                                            <span className="mx-1 text-secondary/60">·</span>
+                                                            Compras: <span className="ml-1 text-black">{productsPurchaseSectionSummary.productsWithPurchases.toLocaleString('es-EC')} SKU</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                                                     <button
@@ -7334,6 +7459,24 @@ const MyAccount = () => {
                                                     onOpenProduct={openAdminProductByReportId}
                                                     onRegisterPurchase={restockAdminProductByReportId}
                                                     onOpenOrders={() => navigateToPanelTab('admin-orders')}
+                                                />
+                                            )}
+
+                                            {adminReportSection === 'products-purchases' && (
+                                                <ProductPurchaseHistoryPanel
+                                                    products={adminProductsList}
+                                                    salesRows={reportSalesRankingRows}
+                                                    salesOrders={reportSalesOrders}
+                                                    salesPeriodLabel={reportSalesPeriodLabel}
+                                                    selectedProductId={selectedProductPurchaseReportId}
+                                                    selectedDetail={selectedProductPurchaseReportDetail}
+                                                    detailLoading={productPurchaseReportDetailLoading}
+                                                    detailError={productPurchaseReportDetailError}
+                                                    onSelectProduct={handleSelectProductPurchaseReport}
+                                                    onRetryLoadSelectedProduct={handleRetryProductPurchaseReportDetail}
+                                                    onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
+                                                    formatMoney={formatMoney}
+                                                    formatIsoDate={formatIsoDate}
                                                 />
                                             )}
                                         </div>
