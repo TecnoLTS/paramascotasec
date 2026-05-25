@@ -160,6 +160,82 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 
 ## Historial de trabajo IA
 
+### 2026-05-25 - Rebuild Responsive del Slider Hero en Movil (Dev)
+
+Objetivo: corregir recorte del CTA y exceso de texto apretado en el hero principal en resoluciones moviles.
+
+Cambios frontend:
+- `app/src/components/Slider/SliderPet.tsx` agrega `mobileTitle` y `mobileSubtitle` por slide para mostrar copy corto en `<= 639.98px` sin depender de JS por viewport.
+- `SliderPet.tsx` envuelve titulo/subtitulo en spans `pet-hero-text--desktop` / `pet-hero-text--mobile` y agrega clases `pet-hero-dots*` para controlar paginador movil por CSS.
+- `app/src/styles/globals.scss` agrega reglas base `pet-hero-text*` y redefine solo movil:
+  - copy mas compacto y mejor posicionado por slide (`left/top/width/max`).
+  - tipografias, line-height y espaciados del CTA optimizados para evitar corte.
+  - `min-height` movil moderado (`clamp(208px, 56vw, 246px)` y `clamp(214px, 59vw, 252px)` para `<400px`) para asegurar visibilidad del boton sin recortar agresivamente la imagen.
+  - clamp de texto movil (titulo max 3 lineas, subtitulo max 2 lineas).
+  - paginador movil mas compacto (`pet-hero-dots__track`, `__btn`, `__dot`) para que no tape el CTA.
+- Segunda pasada (desktop/FHD): se corrige escala pequena de copy y botones en resoluciones grandes para los 3 slides:
+  - `1280-1919.98px`: `--pet-hero-title-size: clamp(34px, 2.62vw, 48px)`, `--pet-hero-subtitle-size: clamp(15px, 1.12vw, 20px)`, `--pet-hero-cta-size: clamp(16px, 1.12vw, 21px)` y `--pet-hero-copy-top: 17%`.
+  - `1920-2559.98px`: `--pet-hero-title-size: clamp(46px, 2.58vw, 60px)`, `--pet-hero-subtitle-size: clamp(18px, 1.02vw, 24px)`, `--pet-hero-cta-size: clamp(19px, 1.02vw, 24px)` y `--pet-hero-copy-top: 14.8%`.
+- Tercera pasada (texto aun mayor en desktop/FHD): se incrementa especificamente `title/subtitle` manteniendo el CTA:
+  - `1280-1919.98px`: `--pet-hero-title-size: clamp(40px, 2.95vw, 56px)` y `--pet-hero-subtitle-size: clamp(17px, 1.28vw, 24px)`.
+  - `1920-2559.98px`: `--pet-hero-title-size: clamp(54px, 2.9vw, 72px)` y `--pet-hero-subtitle-size: clamp(21px, 1.22vw, 29px)`.
+- Cuarta pasada (H1 claramente dominante en resoluciones grandes): incremento fuerte del titulo para evitar desproporcion con el boton y el fondo:
+  - `1280-1919.98px`: `--pet-hero-title-size: clamp(52px, 3.42vw, 74px)` (`--pet-hero-title-line: 1.1`).
+  - `1920-2559.98px`: `--pet-hero-title-size: clamp(68px, 3.58vw, 94px)` (`--pet-hero-title-line: 1.08`).
+  - `2560+`: base QHD sube a `--pet-hero-title-size: clamp(78px, 2.95vw, 98px)`.
+  - `3840+`: base UHD sube a `--pet-hero-title-size: clamp(92px, 2.05vw, 116px)`.
+- Quinta pasada (ajuste solicitado: texto aun pequeno en los 3 slides): se incrementa de forma agresiva el texto superior en todos los rangos grandes y se sube el bloque de copy para conservar composicion:
+  - `1280-1919.98px`: `--pet-hero-title-size: clamp(66px, 4.08vw, 98px)`, `--pet-hero-subtitle-size: clamp(24px, 1.68vw, 34px)`, `--pet-hero-copy-top: 14.2%`.
+  - `1920-2559.98px`: `--pet-hero-title-size: clamp(86px, 4.22vw, 124px)`, `--pet-hero-subtitle-size: clamp(30px, 1.52vw, 42px)`, `--pet-hero-copy-top: 12.6%`.
+  - `2560+`: base QHD sube a `--pet-hero-title-size: clamp(102px, 3.55vw, 142px)` y `--pet-hero-subtitle-size: clamp(34px, 1.45vw, 52px)`.
+  - `3840+`: base UHD sube a `--pet-hero-title-size: clamp(126px, 2.65vw, 182px)` y `--pet-hero-subtitle-size: clamp(42px, 1.08vw, 62px)`.
+- Sexta pasada (correccion definitiva solicitada): se aplican overrides directos sobre el selector exacto del bloque superior `.pet-hero-copy` para evitar que cualquier regla global reduzca el texto:
+  - `1280-1919.98px`: `.pet-hero-copy .pet-hero-title { font-size: clamp(72px, 4.45vw, 106px) !important; }` y subtitulo `clamp(26px, 1.8vw, 36px) !important`.
+  - `1920-2559.98px`: titulo `clamp(94px, 4.62vw, 138px) !important` y subtitulo `clamp(34px, 1.72vw, 48px) !important`.
+  - `2560+`: titulo `clamp(116px, 4.05vw, 170px) !important` y subtitulo `clamp(40px, 1.65vw, 58px) !important`.
+  - No se modifica `.pet-hero-cta`; solo texto superior de los 3 slides.
+- Septima pasada (causa raiz encontrada): el texto del hero venia envuelto en `<span class=\"pet-hero-text\">` y una regla global (`div, span, p { font-size: 16px; line-height: 26px; }`) le imponia 16px, anulando visualmente el escalado de `h1/h2`.
+  - Fix definitivo: `.pet-hero-text` ahora hereda tipografia del contenedor (`font-size/line-height/font-weight/letter-spacing/color: inherit`), permitiendo que los tamanos grandes del titulo/subtitulo apliquen en los 3 slides.
+- Octava pasada (rebalance): tras validar overflow en desktop, se reducen los overrides directos de texto superior para mantener impacto visual sin salirse del slide:
+  - `1280-1919.98px`: titulo `clamp(50px, 3.15vw, 72px)` y subtitulo `clamp(18px, 1.15vw, 24px)`.
+  - `1920-2559.98px`: titulo `clamp(62px, 3.2vw, 88px)` y subtitulo `clamp(22px, 1.18vw, 30px)`.
+  - `2560+`: titulo `clamp(74px, 2.72vw, 108px)` y subtitulo `clamp(26px, 1.08vw, 36px)`.
+  - Boton CTA se conserva sin cambios.
+- Novena pasada (ajuste fino solicitado): se reduce solo el titulo superior del `slide-1` (`ParaMascotasEC...`) manteniendo el resto de slides y CTA:
+  - `1280-1919.98px`: `clamp(42px, 2.75vw, 60px)`.
+  - `1920-2559.98px`: `clamp(52px, 2.75vw, 76px)`.
+  - `2560+`: `clamp(62px, 2.28vw, 92px)`.
+  - Implementado con selector especifico `.pet-hero-copy--slide-1 .pet-hero-title`.
+- Decima pasada (rebalance global solicitado): el texto seguia grande; se unifica y reduce para los 3 slides, eliminando el override exclusivo de `slide-1` y ajustando posicion vertical:
+  - `1280-1919.98px`: titulo `clamp(38px, 2.45vw, 54px)`, subtitulo `clamp(15px, 0.98vw, 20px)`, `top: 10.5%`.
+  - `1920-2559.98px`: titulo `clamp(48px, 2.56vw, 66px)`, subtitulo `clamp(18px, 0.95vw, 24px)`, `top: 9.8%`.
+  - `2560+`: titulo `clamp(58px, 2.2vw, 80px)`, subtitulo `clamp(22px, 0.88vw, 30px)`, `top: 9.2%`.
+  - CTA queda sin cambios.
+
+Despliegue/verificacion:
+- No se ejecuto deploy de produccion; cambio aplicado para este workspace en `development`.
+- Se aplico `paramascotasec/scripts/deploy-development.sh` y `paramascotasec-app-dev` quedo healthy en `127.0.0.1:3000`.
+- Verificado en `127.0.0.1:3000/_next/static/css/app/layout.css` que compilacion incluye los nuevos `clamp()` desktop/FHD y `--pet-hero-copy-top` de la segunda pasada.
+- Verificado en CSS servido local que la tercera pasada refleja `clamp(40px, 2.95vw, 56px)`, `clamp(17px, 1.28vw, 24px)`, `clamp(54px, 2.9vw, 72px)` y `clamp(21px, 1.22vw, 29px)`.
+- Verificado en CSS servido local que la cuarta pasada refleja `clamp(52px, 3.42vw, 74px)`, `clamp(68px, 3.58vw, 94px)`, `clamp(78px, 2.95vw, 98px)` y `clamp(92px, 2.05vw, 116px)`.
+- Verificado en CSS servido local que la quinta pasada refleja `clamp(66px, 4.08vw, 98px)`, `clamp(86px, 4.22vw, 124px)`, `clamp(102px, 3.55vw, 142px)`, `clamp(126px, 2.65vw, 182px)`, y los nuevos `--pet-hero-copy-top` (`14.2%`, `12.6%`).
+- Verificado en CSS servido local la presencia de reglas directas `.slider-block.style-one.pet-hero-frame .pet-hero-copy .pet-hero-title`/`.pet-hero-subtitle` con `!important` y `clamp(...)` grandes para `1280+`.
+- Verificado en `127.0.0.1:3000/_next/static/css/app/layout.css` que `.pet-hero-text` compila con `font-size: inherit; line-height: inherit; font-weight: inherit; letter-spacing: inherit; color: inherit;`.
+- Verificado en CSS servido local que la octava pasada refleja los nuevos clamps balanceados (`50/18`, `62/22`, `74/26` por breakpoint) en los overrides directos del hero.
+- Verificado en CSS servido local la presencia de los nuevos overrides de `slide-1` con `clamp(42,2.75,60)`, `clamp(52,2.75,76)` y `clamp(62,2.28,92)`.
+- Verificado en CSS servido local que la decima pasada compila con `clamp(38/15)`, `clamp(48/18)`, `clamp(58/22)` y offsets `top: 10.5% / 9.8% / 9.2%`.
+- `npm run lint` no pudo completarse por error preexistente de ESLint 10.4.0: `TypeError: scopeManager.addGlobals is not a function`.
+- `npm run typecheck` no pudo completarse por configuracion preexistente de TS6: `TS5101` por `baseUrl` deprecado sin `ignoreDeprecations`.
+
+Dimensiones recomendadas para nuevas imagenes moviles (si se decide regenerar arte):
+- `slade{1,2,3}-mobile-xs.webp`: **960x560** (aspect ratio 12:7), con area segura de texto en el 60% izquierdo y 12% superior.
+- `slade{1,2,3}-mobile.webp`: **1200x700** (aspect ratio 12:7), misma area segura.
+- `slade{1,2,3}-mobile-wide.webp`: **1440x760** (aspect ratio 1.89:1), dejando sujeto principal hacia derecha y margen inferior libre para dots.
+
+Pendientes:
+- Validar visual en `127.0.0.1:3000` en viewports moviles reales (360x800, 390x844, 412x915 y 430x932).
+- Si se crean nuevos assets moviles con las dimensiones sugeridas, reemplazar tanto `public/images/slider/*.webp` como `public/images/slider/generated/*.webp` para slides 1-3.
+
 ### 2026-05-24 - Hotfix de Recorte en Slider Superior por Resolucion
 
 Objetivo: evitar que el contenido del hero principal (titulo/subtitulo/CTA) se recorte en resoluciones desktop intermedias donde el banner quedaba demasiado bajo para el texto.

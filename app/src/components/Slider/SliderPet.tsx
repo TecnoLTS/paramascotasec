@@ -23,6 +23,8 @@ type SlideContent = {
   id: SlideId
   title: string
   subtitle: string
+  mobileTitle: string
+  mobileSubtitle: string
   ctaLabel: string
   ctaHref: string
 }
@@ -35,6 +37,8 @@ const slides: SlideContent[] = [
     title: 'ParaMascotasEC: tienda de mascotas online en Ecuador',
     subtitle:
       'Alimento para perros y gatos, accesorios, ropa, snacks y cuidado para comprar online con atención cercana.',
+    mobileTitle: 'ParaMascotasEC: tienda online para mascotas',
+    mobileSubtitle: 'Alimento, accesorios y cuidado para tus peluditos en Ecuador.',
     ctaLabel: 'Descubrir ahora',
     ctaHref: '/tienda',
   },
@@ -43,6 +47,8 @@ const slides: SlideContent[] = [
     title: 'La Tri también se vive en cuatro patas',
     subtitle:
       'Viste a tu peludito con la camiseta de Ecuador y celebren juntos cada partido.',
+    mobileTitle: 'La Tri tambien se vive en cuatro patas',
+    mobileSubtitle: 'Camisetas de Ecuador para tu peludito.',
     ctaLabel: 'Ver camisetas',
     ctaHref: '/tienda/ropa?query=camiseta',
   },
@@ -51,6 +57,8 @@ const slides: SlideContent[] = [
     title: 'Todo para su día a día, en un solo lugar',
     subtitle:
       'Alimento, snacks, juguetes y cuidado diario con calidad que sí se nota.',
+    mobileTitle: 'Todo para su dia a dia en un solo lugar',
+    mobileSubtitle: 'Alimento, snacks y accesorios para cada etapa.',
     ctaLabel: 'Ver productos',
     ctaHref: '/tienda/alimento',
   },
@@ -208,11 +216,20 @@ const SliderSlideContent = ({
       ) : null}
       <div className={`pet-hero-copy pet-hero-copy--slide-${slide.id}`}>
         {slide.id === 1 ? (
-          <h1 className="pet-hero-title">{slide.title}</h1>
+          <h1 className="pet-hero-title">
+            <span className="pet-hero-text pet-hero-text--desktop">{slide.title}</span>
+            <span className="pet-hero-text pet-hero-text--mobile">{slide.mobileTitle}</span>
+          </h1>
         ) : (
-          <h2 className="pet-hero-title">{slide.title}</h2>
+          <h2 className="pet-hero-title">
+            <span className="pet-hero-text pet-hero-text--desktop">{slide.title}</span>
+            <span className="pet-hero-text pet-hero-text--mobile">{slide.mobileTitle}</span>
+          </h2>
         )}
-        <p className="pet-hero-subtitle">{slide.subtitle}</p>
+        <p className="pet-hero-subtitle">
+          <span className="pet-hero-text pet-hero-text--desktop">{slide.subtitle}</span>
+          <span className="pet-hero-text pet-hero-text--mobile">{slide.mobileSubtitle}</span>
+        </p>
         {active ? (
           <Link className="pet-hero-cta" href={slide.ctaHref}>
             {slide.ctaLabel}
@@ -327,8 +344,8 @@ const SliderPet = () => {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-1.5 z-10 flex items-center justify-center px-3 sm:bottom-5 md:bottom-6 md:px-4">
-          <div className="pointer-events-auto mx-auto flex items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 shadow-[0_4px_14px_rgba(0,0,0,0.14)] backdrop-blur-sm sm:gap-1.5 sm:px-2.5 sm:py-1 md:px-3 xl:gap-2">
+        <div className="pet-hero-dots pointer-events-none absolute inset-x-0 bottom-1.5 z-10 flex items-center justify-center px-3 sm:bottom-5 md:bottom-6 md:px-4">
+          <div className="pet-hero-dots__track pointer-events-auto mx-auto flex items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 shadow-[0_4px_14px_rgba(0,0,0,0.14)] backdrop-blur-sm sm:gap-1.5 sm:px-2.5 sm:py-1 md:px-3 xl:gap-2">
             {slides.map((slide, index) => (
               <button
                 key={slide.id}
@@ -336,10 +353,10 @@ const SliderPet = () => {
                 aria-label={`Ir al slide ${index + 1}`}
                 aria-pressed={selectedIndex === index}
                 onClick={() => goToSlide(index)}
-                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)] sm:h-9 sm:w-9 md:h-10 md:w-10"
+                className="pet-hero-dots__btn flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-300 hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)] sm:h-9 sm:w-9 md:h-10 md:w-10"
               >
                 <span
-                  className={`block h-2 w-2 rounded-full border transition-all duration-300 sm:h-2.5 sm:w-2.5 ${
+                  className={`pet-hero-dots__dot block h-2 w-2 rounded-full border transition-all duration-300 sm:h-2.5 sm:w-2.5 ${
                   selectedIndex === index
                     ? 'scale-110 border-[var(--blue)] bg-[var(--blue)] shadow-[0_0_0_2px_rgba(10,123,143,0.18)] sm:shadow-[0_0_0_3px_rgba(10,123,143,0.18)]'
                     : 'border-[var(--blue)]/45 bg-white hover:bg-[var(--blue)]/12'
