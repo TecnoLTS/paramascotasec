@@ -211,9 +211,9 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     return (
         <>
             {type === "grid" ? (
-                <div className={`product-item grid-type ${style}`}>
-                    <div onClick={handleDetailProduct} className="product-main cursor-pointer block">
-                        <div className="product-thumb bg-white relative overflow-hidden rounded-2xl">
+                <div className={`product-item pm-product-card grid-type ${style}`}>
+                    <div onClick={handleDetailProduct} className="product-main pm-product-card__main cursor-pointer block">
+                        <div className="product-thumb pm-product-card__thumb bg-white relative overflow-hidden rounded-2xl">
                             {data.new && (
                                 <div className="product-tag text-button-uppercase text-white bg-[var(--green)] px-3 py-0.5 inline-block rounded-full absolute top-3 left-3 z-[1]">
                                     Nuevo
@@ -225,7 +225,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                 </div>
                             )}
 
-                            <div className="product-img w-full aspect-[4/5] max-h-[240px] bg-white">
+                            <div className="product-img pm-product-card__image w-full aspect-[4/5] max-h-[240px] bg-white">
                                 {activeColor ? (
                                     <>
                                         {renderProductImage(variations.find((item: any) => item.color === activeColor)?.image || primaryImage)}
@@ -343,7 +343,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                             </div>
                         </div>
 
-                        <div className="product-infor mt-4 lg:mb-7">
+                        <div className="product-infor pm-product-card__info mt-4 lg:mb-7">
                             <div className="product-sold sm:pb-4 pb-2">
                                 <div className="progress bg-line h-1.5 w-full rounded-full overflow-hidden relative">
                                     <div
@@ -362,15 +362,15 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
                                     </div>
                                 </div>
                             </div>
-                            <div className="product-name text-title duration-300">{data.name}</div>
+                            <div className="product-name pm-product-card__name text-title duration-300">{data.name}</div>
                             {variantDisplayRows.length > 0 && (
-                                <div className="caption1 text-secondary mt-1 space-y-0.5">
+                                <div className="pm-product-card__variants caption1 text-secondary mt-1 space-y-0.5">
                                     {variantDisplayRows.map((row) => (
                                         <div key={`${row.label}-${row.values.join('|')}`}>{row.label}: {row.values.join(', ')}</div>
                                     ))}
                                 </div>
                             )}
-                            <div className="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
+                            <div className="product-price-block pm-product-card__price flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
                                 <div className="product-price text-title">{showFromPrice ? 'Desde ' : ''}${price.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                 {hasSale && (
                                     <>

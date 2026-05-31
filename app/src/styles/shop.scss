@@ -268,6 +268,99 @@
     }
 }
 
+.shop-product.breadcrumb1 {
+    .container {
+        max-width: 1322px !important;
+    }
+
+    .container > .flex {
+        display: flex;
+        align-items: flex-start;
+        gap: 28px;
+    }
+
+    .sidebar {
+        flex: 0 0 250px;
+        width: 250px !important;
+        padding-right: 0 !important;
+    }
+
+    .list-product-block {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding-left: 0 !important;
+    }
+
+    .list-product-block .list-product.hide-product-sold.grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 28px 24px !important;
+        align-items: start;
+    }
+
+    .list-product-block .product-item {
+        min-width: 0;
+    }
+
+    .filter-heading,
+    .list-filtered {
+        min-width: 0;
+    }
+}
+
+@media (min-width: 1280px) {
+    .shop-product.breadcrumb1 {
+        .sidebar {
+            flex-basis: 260px;
+            width: 260px !important;
+        }
+
+        .list-product-block .list-product.hide-product-sold.grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+    }
+}
+
+@media (max-width: 767.98px) {
+    .shop-product.breadcrumb1 {
+        .container > .flex {
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .list-product-block {
+            order: 1;
+            width: 100% !important;
+        }
+
+        .sidebar {
+            order: 2;
+            width: 100% !important;
+            flex-basis: auto;
+        }
+
+        .list-product-block .list-product.hide-product-sold.grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 20px 14px !important;
+        }
+
+        .filter-heading {
+            gap: 12px !important;
+        }
+
+        .filter-heading .left,
+        .filter-heading .right,
+        .list-filtered {
+            width: 100%;
+        }
+
+        .list-filtered {
+            flex-wrap: wrap;
+            gap: 8px !important;
+        }
+    }
+}
+
 .grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }

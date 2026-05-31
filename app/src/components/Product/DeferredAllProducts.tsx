@@ -16,14 +16,14 @@ interface Props {
 }
 
 const AllProductsPlaceholder = () => (
-    <section className="container md:py-10 py-5" aria-busy="true">
-        <div className="heading flex flex-col items-center text-center">
-            <div className="heading3">Todos los productos</div>
-            <div className="heading6 font-normal text-secondary mt-2">
+    <section className="container pm-catalog md:py-10 py-5" aria-busy="true">
+        <div className="pm-catalog__heading heading flex flex-col items-center text-center">
+            <div className="heading3 pm-catalog__title">Todos los productos</div>
+            <div className="heading6 pm-catalog__subtitle font-normal text-secondary mt-2">
                 Explora nuestro catálogo completo
             </div>
         </div>
-        <div className="mt-8 grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px]">
+        <div className="pm-catalog__grid mt-8 grid lg:grid-cols-5 grid-cols-2 sm:gap-[30px] gap-[20px]">
             {Array.from({ length: 10 }).map((_, index) => (
                 <div
                     key={index}

@@ -112,37 +112,37 @@ export default function ContactPage() {
     <>
       <MenuPet />
 
-      <main className="bg-[#f3f7fa] text-slate-900 pb-16">
+      <main className="pm-contact-page bg-[#f3f7fa] text-slate-900 pb-16">
         {/* CABECERA (HERO) */}
-        <section className="border-b border-[#d9e7ee] bg-white">
-          <div className="mx-auto max-w-4xl px-4 py-12 text-center md:px-6 lg:py-16">
-            <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#cfeaf2] bg-[#eefafe] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a7d99]">
+        <section className="pm-contact-hero border-b border-[#d9e7ee] bg-white">
+          <div className="pm-contact-hero__inner mx-auto max-w-4xl px-4 py-12 text-center md:px-6 lg:py-16">
+            <div className="pm-contact-hero__eyebrow mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#cfeaf2] bg-[#eefafe] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a7d99]">
               Centro de Ayuda Paramascotas
             </div>
-            <h1 className="mb-4 text-4xl font-black leading-[1.05] tracking-[-0.03em] text-[#0a7b8f] sm:text-5xl md:text-6xl">
+            <h1 className="pm-contact-hero__title mb-4 text-4xl font-black leading-[1.05] tracking-[-0.03em] text-[#0a7b8f] sm:text-5xl md:text-6xl">
               ¿En qué podemos ayudarte?
             </h1>
-            <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-600">
+            <p className="pm-contact-hero__intro mx-auto max-w-2xl text-lg leading-8 text-slate-600">
               Estamos aquí para resolver tus dudas sobre compras, pedidos y soporte. Escríbenos con contexto y te responderemos pronto.
             </p>
           </div>
         </section>
 
         {/* CONTENIDO PRINCIPAL */}
-        <section className="mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">
-          <div className="grid gap-8 lg:grid-cols-[1fr_360px] lg:gap-10">
+        <section className="pm-contact-content mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">
+          <div className="pm-contact-layout grid gap-8 lg:grid-cols-[1fr_360px] lg:gap-10">
             
             {/* COLUMNA IZQUIERDA: Formulario */}
-            <div className="rounded-[34px] border border-[#d9e7ee] bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] md:p-10">
-              <div className="mb-8 max-w-3xl space-y-3">
-                <h2 className="text-3xl font-black tracking-[-0.03em] text-[#0a7b8f]">Envíanos un mensaje</h2>
-                <p className="text-base leading-7 text-slate-600">
+            <div className="pm-contact-card rounded-[34px] border border-[#d9e7ee] bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] md:p-10">
+              <div className="pm-contact-card__header mb-8 max-w-3xl space-y-3">
+                <h2 className="pm-contact-card__title text-3xl font-black tracking-[-0.03em] text-[#0a7b8f]">Envíanos un mensaje</h2>
+                <p className="pm-contact-card__copy text-base leading-7 text-slate-600">
                   Déjanos nombre, correo y el mayor contexto posible para que la respuesta sea concreta desde el primer mensaje.
                 </p>
               </div>
 
-              <form className="grid gap-6" onSubmit={handleSubmit}>
-                <div className="grid gap-6 md:grid-cols-2">
+              <form className="pm-contact-form grid gap-6" onSubmit={handleSubmit}>
+                <div className="pm-contact-form__row grid gap-6 md:grid-cols-2">
                   <label className="grid gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Nombre completo</span>
                     <input
@@ -166,7 +166,7 @@ export default function ContactPage() {
                   </label>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
+                <div className="pm-contact-form__row grid gap-6 md:grid-cols-2">
                   <label className="grid gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Teléfono (Opcional)</span>
                     <input
@@ -199,7 +199,7 @@ export default function ContactPage() {
                     rows={7}
                     className="rounded-[28px] border border-[#d9e7ee] px-5 py-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#0a7d99] resize-none"
                   />
-                  <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
+                  <div className="pm-contact-form__meta flex items-center justify-between gap-4 text-xs text-slate-500">
                     <span>Escribe al menos 10 caracteres para poder enviar el mensaje.</span>
                     <span>{form.message.trim().length}/10 mínimo</span>
                   </div>
@@ -226,11 +226,11 @@ export default function ContactPage() {
                 ) : null}
 
                 {/* Área del botón enviar */}
-                <div className="mt-2 grid gap-5 rounded-[28px] border border-[#e7edf2] bg-[#f9fbfc] p-5 md:grid-cols-[1fr_auto] md:items-center">
+                <div className="pm-contact-submit mt-2 grid gap-5 rounded-[28px] border border-[#e7edf2] bg-[#f9fbfc] p-5 md:grid-cols-[1fr_auto] md:items-center">
                   <p className="text-sm leading-7 text-slate-600">
                     Si tu consulta está ligada a una compra, incluye tu <strong>número de pedido</strong> para acelerar la respuesta.
                   </p>
-                  <div className="grid gap-2">
+                  <div className="pm-contact-submit__actions grid gap-2">
                     <button
                       type="submit"
                       disabled={!canSubmit}
@@ -248,10 +248,10 @@ export default function ContactPage() {
             </div>
 
             {/* COLUMNA DERECHA: Info lateral */}
-            <aside className="flex flex-col gap-6 lg:sticky lg:top-28 lg:self-start">
+            <aside className="pm-contact-aside flex flex-col gap-6 lg:sticky lg:top-28 lg:self-start">
               
               {/* Tarjeta WhatsApp */}
-              <div className="rounded-[32px] bg-[linear-gradient(180deg,#1c8da3_0%,#166b80_100%)] p-7 text-white shadow-[0_28px_80px_rgba(22,107,128,0.22)]">
+              <div className="pm-contact-whatsapp rounded-[32px] bg-[linear-gradient(180deg,#1c8da3_0%,#166b80_100%)] p-7 text-white shadow-[0_28px_80px_rgba(22,107,128,0.22)]">
                 <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#d9f7fb]">Canal Inmediato</div>
                 <h3 className="mt-4 text-2xl font-black leading-[1.1] tracking-[-0.03em] text-white">
                   ¿Respuesta urgente?
@@ -271,7 +271,7 @@ export default function ContactPage() {
               </div>
 
               {/* Tarjeta Info de Contacto */}
-              <div className="rounded-[32px] border border-[#d9e7ee] bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
+              <div className="pm-contact-info rounded-[32px] border border-[#d9e7ee] bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-6">Información de contacto</div>
                 <div className="grid gap-6">
                   <div className="flex items-center gap-4">
@@ -300,10 +300,10 @@ export default function ContactPage() {
           </div>
 
           {/* ENLACES RÁPIDOS INFERIORES */}
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
+          <div className="pm-contact-quicklinks mt-8 grid gap-5 md:grid-cols-3">
             <Link
               href="/tienda"
-              className="rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
+              className="pm-contact-quicklink rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
             >
               <Package size={28} weight="duotone" className="text-[#0a7d99] mb-4" />
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Compra</div>
@@ -314,7 +314,7 @@ export default function ContactPage() {
             <Link
               href="/my-account"
               prefetch={false}
-              className="rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
+              className="pm-contact-quicklink rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
             >
               <Receipt size={28} weight="duotone" className="text-[#0a7d99] mb-4" />
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Pedido</div>
@@ -324,7 +324,7 @@ export default function ContactPage() {
 
             <Link
               href="/pages/preguntas-frecuentes"
-              className="relative rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
+              className="pm-contact-quicklink relative rounded-[28px] border border-[#d9e7ee] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.05)] transition hover:border-[#0a7d99]"
             >
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-4">Ayuda rápida</div>
               <div className="text-xl font-black tracking-[-0.03em] text-slate-950">Preguntas Frecuentes</div>

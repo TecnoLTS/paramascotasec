@@ -87,17 +87,139 @@
         }
     }
 
+    &.pm-cart-page {
+        .pm-cart-layout {
+            gap: 32px;
+        }
+
+        .pm-cart-empty {
+            display: flex;
+            min-height: 112px;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed var(--line);
+            border-radius: 18px;
+            background: var(--surface);
+            color: var(--secondary);
+            text-align: center;
+        }
+
+        .pm-cart-summary {
+            border-radius: 20px !important;
+        }
+    }
+
     @media (max-width: 640px) {
         .content-main {
             .list-product {
-                overflow-x: auto;
+                overflow-x: visible;
 
                 >div {
-                    width: 600px;
-                    max-width: 600px;
-                    overflow: hidden;
-                    white-space: nowrap;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow: visible;
+                    white-space: normal;
                 }
+            }
+        }
+
+        &.pm-cart-page {
+            padding-top: 28px !important;
+
+            .pm-cart-heading {
+                display: none;
+            }
+
+            .pm-cart-list {
+                margin-top: 0 !important;
+            }
+
+            .pm-cart-item {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 14px;
+                padding: 16px !important;
+                margin-top: 14px !important;
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                background: var(--white);
+            }
+
+            .pm-cart-product-cell,
+            .pm-cart-price-cell,
+            .pm-cart-quantity-cell,
+            .pm-cart-total-cell {
+                width: auto !important;
+            }
+
+            .pm-cart-product-cell {
+                grid-column: 1 / -1;
+            }
+
+            .pm-cart-product-cell > .flex {
+                align-items: flex-start;
+                gap: 12px !important;
+            }
+
+            .pm-cart-product-cell .bg-img {
+                width: 72px !important;
+                flex: 0 0 72px;
+            }
+
+            .pm-cart-product-cell .text-title {
+                font-size: 14px !important;
+                line-height: 20px !important;
+            }
+
+            .pm-cart-price-cell,
+            .pm-cart-quantity-cell,
+            .pm-cart-total-cell {
+                display: grid !important;
+                grid-template-columns: 72px minmax(0, 1fr);
+                grid-column: 1 / -1;
+                align-items: center;
+                justify-content: stretch !important;
+                gap: 10px;
+                text-align: left;
+            }
+
+            .pm-cart-price-cell::before,
+            .pm-cart-quantity-cell::before,
+            .pm-cart-total-cell::before {
+                content: attr(data-label);
+                color: var(--secondary);
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 18px;
+            }
+
+            .pm-cart-price-cell .text-title,
+            .pm-cart-total-cell .text-title {
+                text-align: left !important;
+                font-size: 14px !important;
+                line-height: 20px !important;
+            }
+
+            .pm-cart-quantity-cell .quantity-block {
+                width: 96px !important;
+                padding: 8px 10px !important;
+            }
+
+            .pm-cart-remove-cell {
+                width: auto !important;
+                grid-column: 2;
+                grid-row: 1;
+                align-self: start;
+            }
+
+            .pm-cart-summary {
+                padding: 18px !important;
+            }
+
+            .pm-cart-summary .text-title,
+            .pm-cart-summary .heading5 {
+                font-size: 16px !important;
+                line-height: 22px !important;
             }
         }
     }

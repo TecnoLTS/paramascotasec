@@ -103,12 +103,12 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
       <button
         key={category.id}
         type="button"
-        className={`trending-item relative cursor-pointer flex flex-col items-center group text-left ${wrapperClassName}`}
+        className={`trending-item pm-category-card relative cursor-pointer flex flex-col items-center group text-left ${wrapperClassName}`}
         draggable={false}
         onClickCapture={preventDraggedClick}
         onClick={() => handleCategoryClick(category.id)}
       >
-        <div className="bg-img mx-auto w-full rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-[4/5] bg-[#f6f7f9]">
+        <div className="bg-img pm-category-card__image mx-auto w-full rounded-[18px] sm:rounded-[22px] lg:rounded-[24px] overflow-hidden relative aspect-[4/5] bg-[#f6f7f9]">
           <picture>
             <source
               type="image/webp"
@@ -126,7 +126,7 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
             />
           </picture>
         </div>
-        <div className="trending-name text-center mt-3 sm:mt-4 duration-500 w-full">
+        <div className="trending-name pm-category-card__label text-center mt-3 sm:mt-4 duration-500 w-full">
           <span className="font-semibold text-[13px] leading-[18px] sm:text-[14px] sm:leading-[20px] lg:text-[15px] lg:leading-[22px] text-[var(--blue)]">
             {category.label}
           </span>
@@ -136,16 +136,16 @@ const Collection: React.FC<CollectionProps> = ({ categories }) => {
   }
 
   return (
-    <div className="trending-block style-six md:py-10 py-5">
+    <div className="trending-block style-six pm-home-categories md:py-10 py-5">
       <div className="container">
-        <div className="heading3 text-center">Categorías</div>
-        <div className="list-trending md:mt-10 mt-6">
+        <div className="heading3 pm-home-categories__title text-center">Categorías</div>
+        <div className="list-trending pm-home-categories__list md:mt-10 mt-6">
           <div className="overflow-hidden">
             <div
               ref={mobileTrackRef}
               onMouseDown={startMouseDrag}
               onMouseLeave={stopMouseDrag}
-              className={`mx-auto flex max-w-[1160px] justify-start gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth overscroll-x-contain md:gap-4 lg:gap-5 ${shouldCenterDesktopTrack ? 'xl:justify-center' : ''} [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
+              className={`pm-home-categories__track mx-auto flex max-w-[1160px] justify-start gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth overscroll-x-contain md:gap-4 lg:gap-5 ${shouldCenterDesktopTrack ? 'xl:justify-center' : ''} [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
               style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
             >
               {resolvedCategories.map((category) =>

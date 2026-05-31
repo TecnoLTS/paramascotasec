@@ -117,15 +117,15 @@ const Cart = () => {
             <div id="header" className='relative w-full'>
                 <MenuOne props="bg-transparent" />
             </div>
-            <div className="cart-block md:py-20 py-10">
+            <div className="cart-block pm-cart-page md:py-20 py-10">
                 <div className="container">
-                    <div className="content-main flex justify-between max-xl:flex-col gap-y-8">
-                        <div className="xl:w-2/3 xl:pr-3 w-full">
+                    <div className="content-main pm-cart-layout flex justify-between max-xl:flex-col gap-y-8">
+                        <div className="pm-cart-list-panel xl:w-2/3 xl:pr-3 w-full">
                             
                             <div className="heading banner mt-5" />
-                            <div className="list-product w-full sm:mt-7 mt-5">
-                                <div className='w-full'>
-                                    <div className="heading bg-surface bora-4 pt-4 pb-4">
+                            <div className="list-product pm-cart-products w-full sm:mt-7 mt-5">
+                                <div className='pm-cart-table w-full'>
+                                    <div className="pm-cart-heading heading bg-surface bora-4 pt-4 pb-4">
                                         <div className="flex">
                                             <div className="w-1/2">
                                                 <div className="text-button text-center">Productos</div>
@@ -141,9 +141,9 @@ const Cart = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="list-product-main w-full mt-3">
+                                    <div className="pm-cart-list list-product-main w-full mt-3">
                                         {cartState.cartArray.length < 1 ? (
-                                            <p className='text-button pt-3'>No hay productos en el carrito</p>
+                                            <p className='pm-cart-empty text-button pt-3'>No hay productos en el carrito</p>
                                         ) : (
                                             cartState.cartArray.map((product) => {
                                                 const itemPrice = Number((product as any).price ?? 0)
@@ -154,8 +154,8 @@ const Cart = () => {
                                                 )
                                                 const itemTotal = itemPrice * itemQuantity
                                                 return (
-                                                    <div className="item flex md:mt-7 md:pb-7 mt-5 pb-5 border-b border-line w-full" key={product.id}>
-                                                        <div className="w-1/2">
+                                                    <div className="pm-cart-item item flex md:mt-7 md:pb-7 mt-5 pb-5 border-b border-line w-full" key={product.id}>
+                                                        <div className="pm-cart-product-cell w-1/2">
                                                             <div className="flex items-center gap-6">
                                                                 <div className="bg-img md:w-[100px] w-20 aspect-[3/4]">
                                                                     <Image
@@ -180,10 +180,10 @@ const Cart = () => {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="w-1/12 price flex items-center justify-center">
+                                                        <div className="pm-cart-price-cell w-1/12 price flex items-center justify-center" data-label="Precio">
                                                             <div className="text-title text-center">${itemPrice.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                         </div>
-                                                        <div className="w-1/6 flex items-center justify-center">
+                                                        <div className="pm-cart-quantity-cell w-1/6 flex items-center justify-center" data-label="Cantidad">
                                                             <div className="quantity-block bg-surface md:p-3 p-2 flex items-center justify-between rounded-lg border border-line md:w-[100px] flex-shrink-0 w-20">
                                                                 <Icon.Minus
                                                                     onClick={() => {
@@ -200,10 +200,10 @@ const Cart = () => {
                                                                 />
                                                             </div>
                                                         </div>
-                                                        <div className="w-1/6 flex total-price items-center justify-center">
+                                                        <div className="pm-cart-total-cell w-1/6 flex total-price items-center justify-center" data-label="Total">
                                                             <div className="text-title text-center">${itemTotal.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                         </div>
-                                                        <div className="w-1/12 flex items-center justify-center">
+                                                        <div className="pm-cart-remove-cell w-1/12 flex items-center justify-center">
                                                             <Icon.XCircle
                                                                 className='text-xl max-md:text-base text-red cursor-pointer hover:text-black duration-500'
                                                                 onClick={() => {
@@ -220,8 +220,8 @@ const Cart = () => {
                             </div>
                             
                         </div>
-                        <div className="xl:w-1/3 xl:pl-12 w-full">
-                            <div className="checkout-block bg-surface p-6 rounded-2xl">
+                        <div className="pm-cart-summary-panel xl:w-1/3 xl:pl-12 w-full">
+                            <div className="checkout-block pm-cart-summary bg-surface p-6 rounded-2xl">
                                 <div className="heading5">Resumen de compra</div>
                                 <div className="total-block py-5 flex justify-between border-b border-line">
                                     <div className="text-title">Subtotal sin IVA</div>
