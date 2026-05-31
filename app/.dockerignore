@@ -11,6 +11,8 @@ node_modules
 *.pfx
 secrets
 secrets/
+.secrets
+.secrets/
 npm-debug.log
 logs
 *.log

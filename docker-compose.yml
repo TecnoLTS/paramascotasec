@@ -44,8 +44,8 @@ services:
       timeout: 3s
       retries: 6
       start_period: 20s
-    ports:
-      - "${APP_BIND_IP:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
+    expose:
+      - "3000"
     volumes:
       - ./app/public/uploads:/app/public/uploads:rw
     tmpfs:
@@ -123,8 +123,8 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
-    ports:
-      - "${APP_DEV_BIND_IP:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
+    expose:
+      - "3000"
     secrets:
       - source: internal_proxy_token
         target: internal_proxy_token
@@ -146,4 +146,4 @@ volumes:
 
 secrets:
   internal_proxy_token:
-    environment: INTERNAL_PROXY_TOKEN
+    file: ${INTERNAL_PROXY_TOKEN_SOURCE_FILE:-./.secrets/internal_proxy_token}

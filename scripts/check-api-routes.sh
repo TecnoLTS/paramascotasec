@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${1:-http://127.0.0.1:3000}"
 HOST_HEADER="${2:-paramascotasec.com}"
+BASE_URL="${1:-https://${HOST_HEADER}}"
+USE_LOCAL_GATEWAY="${USE_LOCAL_GATEWAY:-}"
+if [[ $# -eq 0 ]]; then
+  USE_LOCAL_GATEWAY=1
+fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -25,6 +29,13 @@ request_status() {
     -X "$method"
     "${REQUEST_HEADERS[@]}"
   )
+
+  if [[ "${USE_LOCAL_GATEWAY}" == "1" ]]; then
+    curl_args+=(
+      -k
+      --resolve "${HOST_HEADER}:443:127.0.0.1"
+    )
+  fi
 
   if [[ -n "$body" ]]; then
     curl_args+=(

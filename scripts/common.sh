@@ -18,6 +18,41 @@ read_env_value() {
   ' "${env_file}"
 }
 
+normalize_env_value() {
+  local value="$1"
+
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  value="${value%$'\r'}"
+
+  if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf '%s' "${value}"
+}
+
+prepare_frontend_secrets() {
+  local env_file="$1"
+  local token secret_dir secret_file
+
+  token="$(normalize_env_value "$(read_env_value "${env_file}" "INTERNAL_PROXY_TOKEN")")"
+  if [[ -z "${token}" || "${token}" == "replace-with-shared-internal-proxy-token" ]]; then
+    echo "INTERNAL_PROXY_TOKEN no esta configurado en ${env_file}" >&2
+    exit 1
+  fi
+
+  secret_dir="${APP_DIR}/.secrets"
+  secret_file="${secret_dir}/internal_proxy_token"
+  mkdir -p "${secret_dir}"
+  chmod 700 "${secret_dir}"
+  umask 077
+  printf '%s' "${token}" > "${secret_file}"
+  chmod 600 "${secret_file}"
+}
+
 ensure_docker_ready() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "docker no esta instalado"
@@ -157,6 +192,7 @@ deploy_frontend() {
 
   ensure_docker_ready
   env_file="$(resolve_env_file "${mode}")"
+  prepare_frontend_secrets "${env_file}"
   if [[ "${mode}" == "development" ]]; then
     unexpected_container="$(frontend_container_name production)"
   else
