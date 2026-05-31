@@ -202,8 +202,6 @@ const resolvePublicDir = async () => {
   const candidates = [
     process.env.UPLOADS_PUBLIC_DIR,
     path.join(process.cwd(), 'public'),
-    path.join(process.cwd(), '..', 'public'),
-    path.join(process.cwd(), '..', '..', 'public'),
   ].filter(Boolean) as string[]
 
   for (const candidate of candidates) {
@@ -322,14 +320,14 @@ export const handleProductImageUpload = async (req: Request) => {
 
     const publicDir = await resolvePublicDir()
     const uploadFolder = kindValue === 'brandLogo' ? 'brands' : isCategoryImageKind(kindValue) ? 'categories' : 'products'
-    const uploadDir = path.join(publicDir, 'uploads', uploadFolder)
+    const uploadDir = path.join(/* turbopackIgnore: true */ publicDir, 'uploads', uploadFolder)
     await fs.mkdir(uploadDir, { recursive: true })
     const fileName = buildSeoImageFileName(metadata, kindValue, outputImageExtension)
-    const filePath = path.join(uploadDir, fileName)
+    const filePath = path.join(/* turbopackIgnore: true */ uploadDir, fileName)
     await fs.writeFile(filePath, webpBuffer)
     if (kindValue === 'thumb' || kindValue === 'gallery') {
       await Promise.all(productUploadVariantWidths.map(async (width) => {
-        const variantPath = path.join(uploadDir, buildVariantFileName(fileName, width))
+        const variantPath = path.join(/* turbopackIgnore: true */ uploadDir, buildVariantFileName(fileName, width))
         await sharp(webpBuffer)
           .resize({ width, withoutEnlargement: true })
           .webp({ quality: 78, effort: 5 })

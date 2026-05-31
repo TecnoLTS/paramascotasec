@@ -18,7 +18,7 @@ const nextConfig = {
     images: {
         minimumCacheTTL: 0,
         unoptimized: imageOptimizationDisabled,
-        qualities: [75, 85, 90],
+        qualities: [75, 85, 90, 92],
         formats: ['image/avif', 'image/webp'],
         localPatterns: [
             {

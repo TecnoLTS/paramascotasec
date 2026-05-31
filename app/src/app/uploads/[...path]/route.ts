@@ -15,11 +15,11 @@ const contentTypes: Record<string, string> = {
   '.webp': 'image/webp',
 }
 
-const uploadsRoot = path.join(process.cwd(), 'public', 'uploads')
+const uploadsRoot = path.join(/* turbopackIgnore: true */ process.cwd(), 'public', 'uploads')
 
 const resolveUploadPath = (segments: string[]) => {
   const decodedSegments = segments.map((segment) => decodeURIComponent(segment))
-  const resolvedPath = path.resolve(uploadsRoot, ...decodedSegments)
+  const resolvedPath = path.resolve(/* turbopackIgnore: true */ uploadsRoot, ...decodedSegments)
   const relativePath = path.relative(uploadsRoot, resolvedPath)
 
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -41,12 +41,12 @@ export async function GET(
   }
 
   try {
-    const stat = await fs.stat(filePath)
+    const stat = await fs.stat(/* turbopackIgnore: true */ filePath)
     if (!stat.isFile()) {
       return new NextResponse('Not found', { status: 404 })
     }
 
-    const body = await fs.readFile(filePath)
+    const body = await fs.readFile(/* turbopackIgnore: true */ filePath)
     const contentType = contentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream'
 
     return new NextResponse(body, {
