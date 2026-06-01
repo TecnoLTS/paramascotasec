@@ -36,7 +36,7 @@ cd <component> && ./scripts/deploy-{mode}.sh
 
 # Bootstrap de DB vacia (requiere DB + Backend corriendo):
 cd paramascotasec-backend
-RUN_COMPOSER_INSTALL=1 RUN_DB_SETUP=1 ./scripts/deploy-development.sh
+RUN_DB_SETUP=1 ./scripts/deploy-development.sh
 ```
 
 PostgreSQL major actual: 18. La DB principal usa `postgres18_data` y conserva `postgres16_data` para rollback; Facturador usa el volumen Docker `postgres18-data` y conserva `postgres-data` para rollback.
@@ -55,7 +55,7 @@ El workspace usa redes Docker segmentadas, creadas por los scripts. `edge` queda
 |----------|--------------|-------|
 | Backend API | `http://paramascotasec-backend-web:8080/api` | PHP-FPM detras de Nginx |
 | Frontend | `http://paramascotasec-frontend:3000` | Next.js |
-| Facturador | `http://facturador` | Alias interno en `paramascotasec-services-internal` |
+| Facturador | `http://facturador:8080` | Alias interno en `paramascotasec-services-internal` |
 | DB principal | `db:5432` | PostgreSQL principal |
 
 ## Arquitectura
@@ -91,7 +91,7 @@ npm run test         # lint + typecheck
 - Arquitectura: MVC propio sin framework; Router custom, JWT auth, CORS, CSRF y tenant resolution.
 - Namespace PHP: `App\` -> `src/`.
 - Bootstrap DB: `scripts/bootstrap_schema.php`, ejecutado con `RUN_DB_SETUP=1`.
-- Composer se instala en deploy cuando falta `vendor/autoload.php` o se define `RUN_COMPOSER_INSTALL=1`.
+- Composer se ejecuta en build de imagen; no se instala ni corre dentro del contenedor runtime.
 
 ## Facturador SRI Ecuador
 
@@ -159,7 +159,7 @@ cd paramascotasec-backend
 docker stop $(docker ps -aq) 2>/dev/null || true
 docker system prune -a --volumes -f
 ./deploy-development.sh
-cd paramascotasec-backend && RUN_COMPOSER_INSTALL=1 RUN_DB_SETUP=1 ./scripts/deploy-development.sh
+cd paramascotasec-backend && RUN_DB_SETUP=1 ./scripts/deploy-development.sh
 ```
 
 Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando el objetivo dependa de ellas y haya confirmacion clara.
@@ -257,7 +257,7 @@ Cambios:
 Verificacion:
 - `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias tras limitar el alcance a la sucursal principal.
 - `./scripts/check-container-connectivity.sh development` paso completo despues del redeploy de development.
-- Produccion no se desplego para no activar worker/SRI produccion; preflight confirma prod con `SRI_ENVIRONMENT=produccion`, backend hacia `http://facturador` + `/api/production/v1/invoices`, solo Gateway publica `80/443`, y certificado publico Let's Encrypt vigente hasta 2026-07-20.
+- Produccion no se desplego para no activar worker/SRI produccion; preflight confirma prod con `SRI_ENVIRONMENT=produccion`, backend hacia `http://facturador:8080` + `/api/production/v1/invoices`, solo Gateway publica `80/443`, y certificado publico Let's Encrypt vigente hasta 2026-07-20.
 
 ### 2026-05-31 - Segmentacion de Red y Verificacion de Puertos (Dev)
 
@@ -268,7 +268,7 @@ Cambios infraestructura:
 - Gateway se une a `paramascotasec-services-internal` y publica el facturador solo bajo `/facturador/api/...`, reescribiendo a `/api/...`; el resto de `/facturador/` queda bloqueado salvo `/facturador/health`.
 - Facturador queda segmentado en `billing_internal` (DB/service/worker/nginx), `billing_egress` (service/worker para SRI/SMTP) y `paramascotasec-services-internal` (nginx alias `facturador`).
 - Desarrollo agrega sidecars `billing-nginx-local` y `billing-postgres-local` para diagnostico local `127.0.0.1:8084` y `127.0.0.1:5434`; los contenedores reales no publican puertos.
-- Backend App se une a `paramascotasec-services-internal` para `http://facturador` y a `backend_egress` para SMTP; Backend Web y Frontend siguen internos por gateway.
+- Backend App se une a `paramascotasec-services-internal` para `http://facturador:8080` y a `backend_egress` para SMTP; Backend Web y Frontend siguen internos por gateway.
 - Scripts normalizan ambientes: dev usa `development`/`SRI_ENVIRONMENT=pruebas`; prod usa `production`/`SRI_ENVIRONMENT=produccion`; frontend publico queda en `https://paramascotasec.com/api`.
 - Se agrega `scripts/check-container-connectivity.sh development|production` para validar modo, puertos, redes, salud, DB, facturador, SMTP, SRI, gateway y rechazo no autenticado del facturador.
 

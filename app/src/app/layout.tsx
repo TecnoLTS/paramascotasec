@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
-import { Instrument_Sans } from 'next/font/google'
 import '@/styles/styles.scss'
 import '@/styles/tailwind.css'
 import GlobalProvider from './GlobalProvider'
@@ -12,7 +11,6 @@ import { versionLocalImagePath } from '@/lib/staticAsset'
 import { generatePetStoreJsonLd, generateWebSiteJsonLd } from '@/lib/seo'
 import { getCanonicalSiteUrl } from '@/lib/publicUrl'
 
-const instrument = Instrument_Sans({ subsets: ['latin'], display: 'swap' })
 const serverTimeLeft: CountdownTimeType = countdownTime();
 
 export const dynamic = 'force-dynamic'
@@ -82,7 +80,7 @@ export default async function RootLayout({
   return (
     <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head />
-      <body className={instrument.className}>
+      <body>
         <GlobalProvider>
           <div id="app-root">
             {children}

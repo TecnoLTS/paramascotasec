@@ -46,4 +46,10 @@ else
   fi
 fi
 
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /app/src/generated /app/.next /app/node_modules
+  chown -R appuser:app /app/src/generated /app/.next /app/node_modules 2>/dev/null || true
+  exec su-exec appuser:app "$@"
+fi
+
 exec "$@"

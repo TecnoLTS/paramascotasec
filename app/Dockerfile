@@ -6,8 +6,10 @@ FROM ${NODE_IMAGE} AS base
 ENV TZ=America/Guayaquil \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN npm install -g npm@11.16.0 --no-audit --no-fund && \
-    apk add --no-cache tzdata && \
+RUN addgroup -S -g 10001 app && \
+    adduser -S -D -H -u 10001 -G app appuser && \
+    npm install -g npm@11.16.0 --no-audit --no-fund && \
+    apk add --no-cache tzdata su-exec && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /app
@@ -56,9 +58,6 @@ ENV APP_ENV=production \
     NODE_ENV=production \
     PORT=3000
 
-RUN addgroup -S -g 10001 app && \
-    adduser -S -D -H -u 10001 -G app appuser
-
 COPY --from=builder --chown=10001:10001 /app/package*.json ./
 COPY --from=builder --chown=10001:10001 /app/next.config.js ./next.config.js
 COPY --from=builder --chown=10001:10001 /app/public ./public
@@ -68,7 +67,7 @@ COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod 755 /usr/local/bin/docker-entrypoint.sh && \
     mkdir -p /app/public/uploads /app/.next/cache && \
-    chown -R 10001:10001 /app
+    chown -R 10001:10001 /app/public/uploads /app/.next/cache
 
 USER appuser
 
