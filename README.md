@@ -29,7 +29,7 @@ cd /home/admincenter/contenedores/paramascotasec
 ## 📌 3. Datos Relevantes y Contexto a Tomar en Cuenta
 
 *   **Red Docker Oculta (API Backend):**
-    Aún cuando el panel interactúa vía web pública, existe una variable **super clave** e invisible al usuario donde Next extrae información directamente de la red sin cifrar cruzando internamente su propio ruteo: `BACKEND_URL_INTERNAL=http://paramascotasec-backend-web/api`.
+    Aún cuando el panel interactúa vía web pública, existe una variable **super clave** e invisible al usuario donde Next extrae información directamente de la red sin cifrar cruzando internamente su propio ruteo: `BACKEND_URL_INTERNAL=http://paramascotasec-backend-web:8080/api`.
 *   **Token Proxied (Autenticador):**
     Otra llave secreta puente se llama `INTERNAL_PROXY_TOKEN`. Este valor permite a los sistemas evadir logins para llamadas inter-contenedores.
 *   **Limites de Acceso Privado (Protección IP):**
@@ -53,3 +53,83 @@ La arquitectura publica usa URLs canonicas limpias:
 * Feed Merchant: `https://paramascotasec.com/feeds/google-products.xml`
 
 Para Search Console, Merchant Center y Business Profile revisa `SEO-GOOGLE-SETUP.md`.
+
+---
+
+## 🚚 5. Migrar el sistema de un servidor a otro
+
+Antes de mover este frontend a otro servidor, confirma que el cambio incluya toda la arquitectura relacionada. Este contenedor no debe exponerse directamente a Internet; debe quedar detras de `nginx-gateway` en la red Docker `edge`.
+
+### Archivos y secretos
+
+* Copia el codigo actualizado de `paramascotasec`.
+* Copia el `.env` real del servidor origen o crea uno nuevo desde `.env.example`.
+* No copies `.secrets/` como artefacto versionado. El deploy lo regenera desde `INTERNAL_PROXY_TOKEN` en `.env`.
+* Verifica que `INTERNAL_PROXY_TOKEN` coincida con el backend si ambos validan el mismo token interno.
+* Verifica `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_BACKEND_URL`, `BACKEND_URL_INTERNAL` y la llave publica de Google Maps.
+* Restringe `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` por HTTP referrer en Google Cloud.
+
+### Red y gateway
+
+* Debe existir la red Docker externa `edge`. Los scripts la crean si falta.
+* `nginx-gateway` debe estar conectado a `edge`.
+* El gateway debe apuntar al alias interno `paramascotasec-frontend:3000`.
+* El frontend debe verse en `docker ps` como `3000/tcp`, sin publish tipo `127.0.0.1:3000->3000` ni `0.0.0.0:3000->3000`.
+* Los unicos puertos publicos esperados para la web son `80` y `443` en `nginx-gateway`.
+
+### Volumen de uploads
+
+El contenedor de produccion corre como UID/GID `10001:10001`. El directorio persistente de imagenes debe permitir escritura a ese usuario:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec
+sudo chown -R 10001:10001 app/public/uploads
+```
+
+No cambies el contenedor para correr como `root` o como un usuario poderoso del host.
+
+### Orden recomendado de despliegue
+
+En el servidor destino, levanta primero las piezas internas y al final el gateway:
+
+```bash
+cd /home/admincenter/contenedores/paramascotasec-DB && ./scripts/deploy-production.sh
+cd /home/admincenter/contenedores/paramascotasec-backend && ./scripts/deploy-production.sh
+cd /home/admincenter/contenedores/paramascotasec && ./scripts/deploy-production.sh
+cd /home/admincenter/contenedores/Gateway && ./scripts/deploy-production.sh
+```
+
+Si usas el script del workspace completo, confirma que este apuntando al ambiente correcto:
+
+```bash
+cd /home/admincenter/contenedores
+./deploy-production.sh
+```
+
+### Validaciones despues del cambio
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+docker exec nginx-gateway sh -lc 'wget -q -O - http://paramascotasec-frontend:3000/healthz'
+cd /home/admincenter/contenedores/paramascotasec && ./scripts/check-api-routes.sh
+curl -k -I https://paramascotasec.com/
+```
+
+Resultado esperado:
+
+* `paramascotasec-app` healthy.
+* `paramascotasec-app` solo muestra `3000/tcp`.
+* `nginx-gateway` publica `0.0.0.0:80` y `0.0.0.0:443`.
+* La prueba interna desde gateway responde `ok`.
+* `https://paramascotasec.com/` responde `200`, no `502`.
+
+### DNS y cambio de IP
+
+Antes de concluir la migracion, confirma que el DNS publico apunte al servidor correcto:
+
+```bash
+getent hosts paramascotasec.com
+curl -4 -fsS https://ifconfig.me && echo
+```
+
+Si el dominio apunta a otro host, puedes tener el nuevo servidor sano y seguir viendo `502` desde el navegador. En ese caso, actualiza DNS, proxy externo o balanceador para que `paramascotasec.com` llegue al servidor donde corre `nginx-gateway`.

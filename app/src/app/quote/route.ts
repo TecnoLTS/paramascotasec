@@ -3,7 +3,7 @@ import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
 
 const resolveBackendUrl = () => {
-  const base = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api'
+  const base = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web:8080/api'
   return `${base.replace(/\/$/, '')}/orders/quote`
 }
 

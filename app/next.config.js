@@ -64,10 +64,6 @@ const nextConfig = {
                 }]),
             {
                 protocol: 'https',
-                hostname: 'api.paramascotasec.com',
-            },
-            {
-                protocol: 'https',
                 hostname: 'paramascotasec.com',
             },
             {

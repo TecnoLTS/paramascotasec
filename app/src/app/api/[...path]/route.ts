@@ -3,7 +3,7 @@ import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
 
 const getBackendBase = () => {
-  return (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api').replace(/\/$/, '')
+  return (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web:8080/api').replace(/\/$/, '')
 }
 
 const buildExpiredCookie = (name: string, options?: { domain?: string; httpOnly?: boolean }) => {

@@ -86,7 +86,7 @@ export const siteConfig: SiteConfig = {
   shortName: 'ParaMascotasEC',
   domain: 'paramascotasec.com',
   baseUrl: 'https://paramascotasec.com',
-  apiBaseUrl: 'https://api.paramascotasec.com',
+  apiBaseUrl: 'https://paramascotasec.com/api',
   description:
     'ParaMascotasEC es una tienda de mascotas online en Ecuador con alimento para perros y gatos, comida húmeda, snacks, ropa, juguetes, accesorios y cuidado.',
   logo: {

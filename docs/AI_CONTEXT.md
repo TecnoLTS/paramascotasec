@@ -43,13 +43,19 @@ PostgreSQL major actual: 18. La DB principal usa `postgres18_data` y conserva `p
 
 ## Red
 
-Todos los contenedores comparten la red bridge externa `edge`, creada por los scripts.
+El workspace usa redes Docker segmentadas, creadas por los scripts. `edge` queda para entrada del Gateway; las comunicaciones internas usan redes `internal` y los contenedores con salida externa tienen redes de egreso dedicadas.
+
+- `paramascotasec-web-internal`: Gateway, Frontend y Backend Web.
+- `paramascotasec-db-internal`: Backend App y DB principal.
+- `paramascotasec-services-internal`: Gateway, Backend App y Facturador Nginx (`facturador`).
+- Redes de egreso no publicadas: Backend App para SMTP; Facturador service/worker para SRI y SMTP.
+- En desarrollo, los puertos locales de diagnostico del Facturador se publican mediante sidecars (`billing-nginx-local`, `billing-postgres-local`) en `127.0.0.1`; los servicios reales y DBs permanecen en redes internas.
 
 | Servicio | Host interno | Notas |
 |----------|--------------|-------|
-| Backend API | `http://paramascotasec-backend-web/api` | PHP-FPM detras de Nginx |
+| Backend API | `http://paramascotasec-backend-web:8080/api` | PHP-FPM detras de Nginx |
 | Frontend | `http://paramascotasec-frontend:3000` | Next.js |
-| Facturador | `http://facturador:8084` | Billing/SRI |
+| Facturador | `http://facturador` | Alias interno en `paramascotasec-services-internal` |
 | DB principal | `db:5432` | PostgreSQL principal |
 
 ## Arquitectura
@@ -59,7 +65,7 @@ Todos los contenedores comparten la red bridge externa `edge`, creada por los sc
 | Frontend | Node 24 LTS + Next.js 16 + React 19 + Tailwind CSS 4 + TypeScript 6 | `paramascotasec-app` prod / `paramascotasec-app-dev` dev |
 | Backend | PHP 8.5 MVC propio + PostgreSQL | `paramascotasec-backend-app`, `paramascotasec-backend-web` |
 | Database | PostgreSQL 18 | `next-test-db` |
-| Facturador | PHP 8.5 + PostgreSQL 18 | `billing-service`, `billing-recovery-worker`, `billing-postgres`, `billing-nginx` |
+| Facturador | PHP 8.5 + PostgreSQL 18 | `billing-service`, `billing-recovery-worker`, `billing-postgres`, `billing-nginx`; dev agrega `billing-nginx-local`, `billing-postgres-local` |
 | Gateway | Nginx stable 1.30 + Certbot | `nginx-gateway`, `certbot` |
 
 ## Frontend `paramascotasec/app`
@@ -93,13 +99,19 @@ npm run test         # lint + typecheck
 - API principal: `POST /api/{env}/v1/invoices` y `GET /api/{env}/v1/invoices/{accessKey}/status`.
 - Auth: `X-API-Key` o `Authorization: Bearer`.
 - Worker: `php bin/process_pending_invoices.php --limit=50 --min-age-seconds=3600`, ejecutado en loop por `billing-recovery-worker`.
-- DB propia: `billing-postgres`, puerto host 5434, puerto interno 5432.
+- DB propia: `billing-postgres`, puerto interno 5432; en desarrollo `billing-postgres-local` publica `127.0.0.1:5434` solo para diagnostico.
+- HTTP local de facturador `127.0.0.1:8084` existe solo en desarrollo via `billing-nginx-local` para diagnostico.
+- Acceso publico del facturador, cuando aplique, entra por Gateway bajo `/facturador/api/...` y reescribe a las rutas internas `/api/...`; paneles/admin no se publican por Gateway.
+- SRI por entorno: desarrollo usa `pruebas` (`celcer.sri.gob.ec`) y produccion usa `produccion` (`cel.sri.gob.ec`).
+- El correo del facturador puede venir de la configuracion de sucursal en DB; `billing-service` y `billing-recovery-worker` requieren egreso SMTP cuando haya sucursales con mail activo.
 - Rutas por entorno: `FACTURADOR_API_INVOICES_PATH=/api/test/v1/invoices` en dev y `/api/production/v1/invoices` en prod.
 
 ## Gateway
 
 - Fragil para SSL y perfiles: nunca levantar manualmente con `docker compose up`.
 - Usar `Gateway/scripts/deploy-development.sh` o `Gateway/scripts/deploy-production.sh`.
+- Dominios publicados: solo `paramascotasec.com` y `www.paramascotasec.com`; no usar subdominio `api` ni dominios de terceros.
+- En desarrollo `GATEWAY_BIND_IP` debe apuntar a localhost/LAN; en produccion publica solo `80/443`.
 - `certbot` corre solo en produccion via perfil `certbot`.
 - Renovacion manual:
 
@@ -111,9 +123,12 @@ cd Gateway && ./scripts/renew-letsencrypt.sh
 
 ```bash
 scripts/check-paramascotas.sh    # frontend lint + typecheck + backend PHP syntax + backend health
+scripts/check-env-secrets.sh all # preflight .env/secrets sin imprimir valores
+scripts/check-container-connectivity.sh development
+scripts/check-container-connectivity.sh production
 ```
 
-Para cambios acotados, correr tambien checks del componente afectado cuando aplique.
+`check-container-connectivity.sh` tambien valida que `/api/products` devuelva productos publicos. Un deploy dev/prod debe fallar si el catalogo publico queda vacio; en development solo se permite sembrar datasets demo con `SEED_DEVELOPMENT_CATALOG=1`, no por defecto. `check-container-connectivity.sh production` valida el runtime de produccion; no correrlo esperando exito mientras el workspace esta desplegado en development. Para cambios acotados, correr tambien checks del componente afectado cuando aplique.
 
 ## Reglas de negocio criticas
 
@@ -122,7 +137,7 @@ Para cambios acotados, correr tambien checks del componente afectado cuando apli
 - Envio: gratis en Centro/Norte Quito; USD 5.00 para Sur/Valles. Se determina desde direccion via `GET /api/settings/shipping`.
 - Descuentos: server-side; tipos porcentaje o fijo; soportan `min_subtotal`, `max_discount`, `max_uses`.
 - Inventario FIFO: `inventory_lots` rastrea lotes de compra; ordenes consumen lotes antiguos primero; costos se restauran al cancelar.
-- Multi-tenant: tenant por HTTP Host header, fallback a `DEFAULT_TENANT`; config en `config/tenants.php`.
+- Sitio unico: solo `paramascotasec.com` y `www.paramascotasec.com`; `DEFAULT_TENANT=paramascotasec`; dominios ajenos deben quedar rechazados por el Gateway.
 
 ## Seguridad
 
@@ -159,6 +174,110 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 - Guia SEO/Google: `paramascotasec/SEO-GOOGLE-SETUP.md`.
 
 ## Historial de trabajo IA
+
+### 2026-05-31 - Restauracion Completa de Data Development
+
+Objetivo: recuperar el estado real completo del ambiente de desarrollo (productos, imagenes, facturas/compras, ordenes e inventario) tras detectar que el data dir nuevo de development no contenia la data historica.
+
+Causa:
+- La separacion de ambientes dejo development apuntando a `postgres18_development_data`, un data dir creado el 2026-05-31. La data completa estaba en `postgres18_data` (snapshot previo del workspace), no perdida.
+
+Cambios:
+- Se respaldo el data dir parcial en `paramascotasec-DB/postgres18_development_data.before-full-restore-20260531-125837`.
+- Se copio `paramascotasec-DB/postgres18_data` hacia `postgres18_development_data` y se levanto la DB con `paramascotasec-DB/scripts/deploy-development.sh`.
+- Se limpio solo el alcance single-site dentro de la copia de development: se elimino la DB `tecnolts` y el registro `Tenant` no principal, dejando solo `paramascotasec`.
+- Se corrigieron 31 referencias de imagen antiguas `.jpg` en la tabla `Image` para apuntar a sus archivos `.webp` existentes.
+- `scripts/deploy-workspace.sh` ya no siembra catalogo demo por defecto; si el catalogo publico esta vacio, falla. Solo permite reimportar datasets demo con `SEED_DEVELOPMENT_CATALOG=1`.
+
+Estado restaurado:
+- DB principal dev: 166 productos, 378 imagenes, 31 facturas de compra, 185 lineas de compra, 89 ordenes y 187 lotes de inventario.
+- Facturador dev mantiene 89 `invoice_headers` y 88 `invoice_details`.
+- Imagenes referenciadas por DB: 378/378 encontradas en disco.
+- Catalogo publico visible: 127 productos.
+
+Verificacion:
+- `https://paramascotasec.com/api/products` devuelve 127 productos publicos; primer producto `Avant Premium Control de Peso` con imagen servida `200 image/webp`.
+- `https://paramascotasec.com/tienda` responde 200 y contiene catalogo restaurado.
+- `./scripts/check-container-connectivity.sh development` paso, incluyendo `gateway /api/products returns 127 public products`.
+- `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias.
+
+### 2026-05-31 - Recuperacion de Catalogo Development y Guardrail Produccion
+
+Objetivo: corregir que la pagina de tienda mostraba `0 productos` en development tras separar ambientes y asegurar que production no se marque como desplegado correctamente con catalogo publico vacio.
+
+Causa:
+- Development quedo usando su data dir separado (`postgres18_development_data`) y la tabla `Product` estaba vacia, aunque API/frontend/gateway respondian correctamente.
+- Nota posterior: esta recuperacion parcial fue reemplazada por la restauracion completa del data dir anterior; conservar solo como antecedente de la proteccion contra catalogo vacio.
+
+Cambios:
+- Se reimporto el catalogo development con scripts existentes del backend:
+  - `import_provider_products.php` (185 productos).
+  - `import_misha_fashion_pets.php` (18 productos + 20 lineas de compra).
+  - `import_viba_pets.php` (28 productos + 28 lineas de compra).
+- `scripts/deploy-workspace.sh` valida en cualquier ambiente que el catalogo publico tenga productos visibles; no siembra datos por defecto y falla el deploy si `/api/products` queda en cero.
+- `scripts/check-container-connectivity.sh` valida `gateway /api/products` y falla si devuelve 0 productos publicos.
+
+Verificacion:
+- `./deploy-development.sh` completo paso; durante deploy mostro `Catalogo publico development disponible (46 productos visibles)` y al final `Catalogo publico verificado (46 productos visibles)`.
+- `./scripts/check-container-connectivity.sh development` paso, incluyendo `gateway /api/products returns 46 public products`.
+- `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias.
+- `https://paramascotasec.com/api/products` en development devuelve 46 productos publicos; primer producto: `Arenero verde`.
+- `https://paramascotasec.com/tienda` responde 200 y contiene contenido de catalogo/productos.
+
+### 2026-05-31 - Alcance Single-Site ParamascotasEC
+
+Objetivo: dejar el workspace limitado a `paramascotasec.com` / `www.paramascotasec.com`, sin dominios/tenants anteriores ni egresos hacia servicios de terceros no usados.
+
+Cambios:
+- Gateway queda sin bloques/upstreams de dominios anteriores; `CERTBOT_DOMAINS` dev/prod solo incluye `paramascotasec.com,www.paramascotasec.com`.
+- Backend `config/tenants.php` y migracion `006_add_tenants.sql` quedan solo con `paramascotasec`; scripts auxiliares de tenants ya no crean DBs no usadas.
+- Frontend deja de permitir `api.paramascotasec.com`; las APIs e imagenes de uploads quedan bajo el mismo sitio (`/api`, `paramascotasec.com`, `www.paramascotasec.com`).
+- DB dev principal queda solo con base `paramascotasec` y `Tenant=paramascotasec`; se elimino la DB dev auxiliar vacia no usada.
+- Facturador conserva solo cliente/sucursal principal activa; clientes/sucursales no principales quedaron inactivos, sin SMTP/certificados/logos y con API keys historicas revocadas para evitar egresos o accesos accidentales.
+- `scripts/check-env-secrets.sh` ahora valida alcance single-site, tenant unico, ausencia de egresos/certificados en sucursales no principales y ausencia de API keys vigentes no principales.
+
+Verificacion:
+- `./deploy-development.sh` completo paso y luego se redeplego frontend dev para recargar `next.config.js`.
+- `./scripts/check-container-connectivity.sh development` paso completo: puertos cerrados, redes internas, backend/facturador/DB/SMTP/SRI pruebas y rutas criticas OK.
+- `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias para dev/prod.
+- Gateway dev: `https://paramascotasec.com/` 200, `https://www.paramascotasec.com/` 301, `/healthz` 200, `/api/health` 200, `/facturador/health` 200; `tecnolts.com` queda cerrado (`000`/empty reply).
+- Certificado publico productivo validado contra Let's Encrypt E8, SAN `paramascotasec.com,www.paramascotasec.com`, vigente del 2026-04-21 al 2026-07-20.
+
+### 2026-05-31 - Auditoria de .env, Secretos y Preflight Produccion
+
+Objetivo: revisar todos los `.env` reales y de desarrollo sin exponer valores, asegurar consistencia dev/prod y dejar produccion lista a nivel de configuracion sin activar worker/SRI produccion.
+
+Cambios:
+- Se agrega `scripts/check-env-secrets.sh development|production|all` para validar existencia/permisos de `.env`, secretos configurados sin imprimirlos, tokens internos frontend/backend, rutas del facturador por ambiente, bind del gateway, puertos renderizados de compose y API key del backend contra `api_keys` del facturador.
+- Se limpia un password real que estaba comentado en `Facturador/.env` y `Facturador/.env.development`; queda como placeholder y el correo real del facturador sigue saliendo de `client_branches`.
+- Backend queda alineado: `SRI_ENVIRONMENT=pruebas` en dev y `SRI_ENVIRONMENT=produccion` en prod; los scripts del backend lo normalizan en despliegues futuros.
+- Facturador ahora carga ambiente desde variables Docker y/o el archivo activo (`BILLING_ENV_FILE`), no depende de leer siempre `.env`; PHP-FPM queda con `clear_env=no`.
+- `config/sri.php` del facturador recupera defaults de empresa, certificado y correo desde variables de entorno para evitar fallos duros si un contexto de sucursal queda incompleto.
+
+Verificacion:
+- `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias tras limitar el alcance a la sucursal principal.
+- `./scripts/check-container-connectivity.sh development` paso completo despues del redeploy de development.
+- Produccion no se desplego para no activar worker/SRI produccion; preflight confirma prod con `SRI_ENVIRONMENT=produccion`, backend hacia `http://facturador` + `/api/production/v1/invoices`, solo Gateway publica `80/443`, y certificado publico Let's Encrypt vigente hasta 2026-07-20.
+
+### 2026-05-31 - Segmentacion de Red y Verificacion de Puertos (Dev)
+
+Objetivo: reducir superficie de ataque sin cambiar flujos funcionales, manteniendo comunicaciones internas y egreso solo donde aplica (SMTP, SRI, API facturador).
+
+Cambios infraestructura:
+- Gateway publica solo `80/443`; en development se liga a IP LAN/local y en production a `0.0.0.0`.
+- Gateway se une a `paramascotasec-services-internal` y publica el facturador solo bajo `/facturador/api/...`, reescribiendo a `/api/...`; el resto de `/facturador/` queda bloqueado salvo `/facturador/health`.
+- Facturador queda segmentado en `billing_internal` (DB/service/worker/nginx), `billing_egress` (service/worker para SRI/SMTP) y `paramascotasec-services-internal` (nginx alias `facturador`).
+- Desarrollo agrega sidecars `billing-nginx-local` y `billing-postgres-local` para diagnostico local `127.0.0.1:8084` y `127.0.0.1:5434`; los contenedores reales no publican puertos.
+- Backend App se une a `paramascotasec-services-internal` para `http://facturador` y a `backend_egress` para SMTP; Backend Web y Frontend siguen internos por gateway.
+- Scripts normalizan ambientes: dev usa `development`/`SRI_ENVIRONMENT=pruebas`; prod usa `production`/`SRI_ENVIRONMENT=produccion`; frontend publico queda en `https://paramascotasec.com/api`.
+- Se agrega `scripts/check-container-connectivity.sh development|production` para validar modo, puertos, redes, salud, DB, facturador, SMTP, SRI, gateway y rechazo no autenticado del facturador.
+
+Verificacion:
+- `./deploy-development.sh` completo dejo Facturador, DB, Backend, Frontend y Gateway healthy.
+- `scripts/check-container-connectivity.sh development` paso completo: gateway LAN `192.168.100.229:80/443`, diagnostico local `127.0.0.1:8084/5434`, backend->DB/facturador/SMTP, facturador->DB/SRI pruebas/SMTP y rutas `/`, `/healthz`, `/api/health`, `/facturador/health`.
+- Produccion no se desplego para no activar worker/SRI produccion; se validaron configs renderizadas: solo Gateway publica `0.0.0.0:80/443`, Facturador prod usa `SRI_ENVIRONMENT=produccion`, no hay sidecars/puertos de diagnostico, y frontend prod usa `https://paramascotasec.com/api`.
+- Certificado publico actual de `paramascotasec.com` validado contra Let's Encrypt E8, SAN `paramascotasec.com,www.paramascotasec.com`, vigente del 2026-04-21 al 2026-07-20.
+- Nota posterior: el workspace quedo limitado a `paramascotasec.com`; se retiro la DB dev auxiliar no usada y se dejo solo el tenant logico `paramascotasec`.
 
 ### 2026-05-25 - Ajuste de Espaciado del Slide 3 Hero (Dev)
 

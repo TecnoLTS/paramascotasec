@@ -15,6 +15,9 @@ const isInternalHost = (host: string) => {
   return INTERNAL_HOST_PATTERNS.some((pattern) => pattern.test(host))
 }
 
+const isAllowedPublicHost = (host: string) =>
+  host === 'paramascotasec.com' || host === 'www.paramascotasec.com'
+
 export const getConfiguredTenantHost = () => {
   const base = readConfiguredBase()
   if (!base) return null
@@ -48,7 +51,7 @@ export const normalizeHost = (host?: string | null) => {
 
 export const resolveTenantHost = (incomingHost?: string | null) => {
   const normalizedIncoming = normalizeHost(incomingHost)
-  if (normalizedIncoming && !isInternalHost(normalizedIncoming)) {
+  if (normalizedIncoming && !isInternalHost(normalizedIncoming) && isAllowedPublicHost(normalizedIncoming)) {
     return normalizedIncoming
   }
   return getConfiguredTenantHost() || null

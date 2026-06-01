@@ -34,6 +34,42 @@ normalize_env_value() {
   printf '%s' "${value}"
 }
 
+upsert_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+
+  python3 - "$file" "$key" "$value" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+lines = path.read_text().splitlines()
+for index, line in enumerate(lines):
+    if line.startswith(f"{key}="):
+        lines[index] = f"{key}={value}"
+        break
+else:
+    lines.append(f"{key}={value}")
+path.write_text("\n".join(lines) + "\n")
+PY
+}
+
+configure_frontend_public_urls() {
+  local env_file="$1"
+  local base_url
+
+  base_url="$(read_env_value "${env_file}" "NEXT_PUBLIC_BASE_URL" || true)"
+  base_url="$(normalize_env_value "${base_url}")"
+  base_url="${base_url:-https://paramascotasec.com}"
+
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_BASE_URL" "${base_url%/}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_BACKEND_URL" "${base_url%/}/api"
+  upsert_env_value "${env_file}" "BACKEND_URL_INTERNAL" "http://paramascotasec-backend-web:8080/api"
+}
+
 prepare_frontend_secrets() {
   local env_file="$1"
   local token secret_dir secret_file
@@ -67,6 +103,10 @@ ensure_docker_ready() {
   if ! docker network inspect edge >/dev/null 2>&1; then
     docker network create edge >/dev/null
   fi
+
+  if ! docker network inspect paramascotasec-web-internal >/dev/null 2>&1; then
+    docker network create --internal paramascotasec-web-internal >/dev/null
+  fi
 }
 
 resolve_env_file() {
@@ -75,6 +115,7 @@ resolve_env_file() {
   if [[ "${mode}" == "development" ]]; then
     local env_file="${APP_DIR}/.env.development"
     if [[ -f "${env_file}" ]]; then
+      configure_frontend_public_urls "${env_file}"
       printf '%s\n' "${env_file}"
       return 0
     fi
@@ -82,6 +123,7 @@ resolve_env_file() {
     if [[ -f "${APP_DIR}/.env.example" ]]; then
       cp "${APP_DIR}/.env.example" "${env_file}"
       echo "Se creo ${env_file} desde .env.example. Ajusta token y URLs si hace falta."
+      configure_frontend_public_urls "${env_file}"
       printf '%s\n' "${env_file}"
       return 0
     fi
@@ -91,6 +133,7 @@ resolve_env_file() {
   fi
 
   if [[ -f "${APP_DIR}/.env" ]]; then
+    configure_frontend_public_urls "${APP_DIR}/.env"
     printf '%s\n' "${APP_DIR}/.env"
     return 0
   fi
@@ -98,6 +141,7 @@ resolve_env_file() {
   if [[ -f "${APP_DIR}/.env.example" ]]; then
     cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
     echo "Se creo ${APP_DIR}/.env desde .env.example. Ajusta valores de produccion antes de exponer."
+    configure_frontend_public_urls "${APP_DIR}/.env"
     printf '%s\n' "${APP_DIR}/.env"
     return 0
   fi

@@ -70,7 +70,7 @@ const resolveUrl = (path: string) => {
 
   // Si estamos en el servidor (SSR), usamos la URL interna de Docker
   if (typeof window === 'undefined') {
-    const internalUrl = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web/api'
+    const internalUrl = process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web:8080/api'
     return `${internalUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
   }
 

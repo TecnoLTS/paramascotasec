@@ -142,8 +142,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
     const isDirectUploadImage = (src: string) =>
         src.startsWith('/uploads/') ||
         src.startsWith('https://paramascotasec.com/uploads/') ||
-        src.startsWith('https://www.paramascotasec.com/uploads/') ||
-        src.startsWith('https://api.paramascotasec.com/uploads/')
+        src.startsWith('https://www.paramascotasec.com/uploads/')
     const shouldBypassOptimizer = (src: string) =>
         src.startsWith('data:') || src.startsWith('blob:') || isDirectUploadImage(src)
     const resolveFallbackImage = (src: string) => src || '/images/product/1.webp'

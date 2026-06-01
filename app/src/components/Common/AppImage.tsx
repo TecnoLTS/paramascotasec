@@ -6,8 +6,7 @@ const isDevelopment = process.env.NODE_ENV !== 'production'
 const shouldAlwaysBypassOptimizer = (src: string) =>
   src.startsWith('/uploads/') ||
   src.startsWith('https://paramascotasec.com/uploads/') ||
-  src.startsWith('https://www.paramascotasec.com/uploads/') ||
-  src.startsWith('https://api.paramascotasec.com/uploads/')
+  src.startsWith('https://www.paramascotasec.com/uploads/')
 
 const shouldBypassOptimizerInDevelopment = (src: string) => {
   if (!isDevelopment) return false

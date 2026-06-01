@@ -31,7 +31,7 @@ services:
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
       NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME:-pm_csrf}
-      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
+      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web:8080/api}
       INTERNAL_PROXY_TOKEN_FILE: /run/secrets/internal_proxy_token
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
       PANEL_IP_MODE: ${PANEL_IP_MODE:-off}
@@ -56,7 +56,7 @@ services:
         target: internal_proxy_token
         mode: 0444
     networks:
-      edge:
+      web_internal:
         aliases:
           - next-test-app
           - paramascotasec-frontend
@@ -90,7 +90,7 @@ services:
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
       NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME:-pm_csrf}
-      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web/api}
+      BACKEND_URL_INTERNAL: ${BACKEND_URL_INTERNAL:-http://paramascotasec-backend-web:8080/api}
       INTERNAL_PROXY_TOKEN_FILE: /run/secrets/internal_proxy_token
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
       PANEL_IP_MODE: ${PANEL_IP_MODE:-off}
@@ -130,15 +130,15 @@ services:
         target: internal_proxy_token
         mode: 0444
     networks:
-      edge:
+      web_internal:
         aliases:
           - next-test-app
           - paramascotasec-frontend
 
 networks:
-  edge:
+  web_internal:
     external: true
-    name: edge
+    name: paramascotasec-web-internal
 
 volumes:
   paramascotasec_node_modules:
