@@ -431,7 +431,7 @@ export default function LocalSalesPanel(props: LocalSalesPanelProps) {
                                                                         onChange={(event) => setLocalSaleAutoPrint(event.target.checked)}
                                                                         className="w-4 h-4 accent-black"
                                                                     />
-                                                                    <span>Imprimir factura automáticamente al registrar la venta</span>
+                                                                    <span>Imprimir comprobante interno automáticamente al registrar la venta</span>
                                                                 </label>
                                                             </div>
                                                         </div>

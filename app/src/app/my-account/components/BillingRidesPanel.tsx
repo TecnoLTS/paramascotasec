@@ -2,6 +2,14 @@
 
 import type { BillingRidePdf } from '../types'
 
+const isTruthyFlag = (value: unknown) => {
+  if (value === true || value === 1) return true
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
+  }
+  return false
+}
+
 type BillingRidesPanelProps = {
   rides: BillingRidePdf[]
   loading: boolean
@@ -25,6 +33,8 @@ export default function BillingRidesPanel({
   formatDate,
   formatDateTime,
 }: BillingRidesPanelProps) {
+  const operationalErrorCount = rides.filter((ride) => isTruthyFlag(ride.operational_error)).length
+
   return (
     <div className="tab text-content w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-4">
@@ -41,6 +51,13 @@ export default function BillingRidesPanel({
           {loading ? 'Actualizando...' : 'Actualizar'}
         </button>
       </div>
+
+      {operationalErrorCount > 0 && (
+        <div className="mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="font-bold">Facturas consumidor final autorizadas por error; revisar tratamiento fiscal.</div>
+          <div className="mt-1 text-xs text-amber-800">{operationalErrorCount.toLocaleString('es-EC')} documento{operationalErrorCount === 1 ? '' : 's'} marcado{operationalErrorCount === 1 ? '' : 's'} para auditoría/contador.</div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-line bg-white">
         <table className="w-full min-w-[980px] text-sm">
@@ -63,6 +80,11 @@ export default function BillingRidesPanel({
               const canReissue = ['RECIBIDA', 'EN PROCESAMIENTO', 'PENDING', 'UNKNOWN', 'DEVUELTA', 'NO AUTORIZADO'].includes(status) && !ride.replacement_access_key
               const isReissuing = reissueAccessKey === String(ride.access_key || '').replace(/\D/g, '')
               const canOpenPdf = Boolean(ride.pdf_exists || ride.pdf_can_generate)
+              const accountingDate = ride.accounting_date || null
+              const issueDate = ride.issue_date || null
+              const showIssueDate = Boolean(accountingDate && issueDate && accountingDate !== issueDate)
+              const isOperationalError = isTruthyFlag(ride.operational_error)
+              const operationalLabel = String(ride.operational_error_label || '').trim() || 'Emitida por error operativo'
               return (
                 <tr key={ride.access_key} className="hover:bg-surface/50">
                   <td className="px-3 py-2">
@@ -74,15 +96,31 @@ export default function BillingRidesPanel({
                     <div className="text-[11px] text-secondary">{ride.customer_identification || '-'}</div>
                   </td>
                   <td className="px-3 py-2 text-secondary">{ride.customer_email || 'Sin correo'}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatMoney(ride.total ?? 0)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="font-semibold">{formatMoney(ride.total ?? 0)}</div>
+                    <div className="text-[11px] text-secondary">IVA {formatMoney(ride.total_tax ?? 0)}</div>
+                  </td>
                   <td className="px-3 py-2">
-                    <div>{ride.issue_date ? formatDate(ride.issue_date) : '-'}</div>
-                    <div className="text-[11px] text-secondary">{ride.pdf_modified_at ? `PDF ${formatDateTime(ride.pdf_modified_at)}` : 'Sin archivo generado'}</div>
+                    <div>{accountingDate ? `Venta ${formatDate(accountingDate)}` : issueDate ? `SRI ${formatDate(issueDate)}` : '-'}</div>
+                    <div className="text-[11px] text-secondary">
+                      {showIssueDate ? `SRI ${formatDate(issueDate!)}` : ride.pdf_modified_at ? `PDF ${formatDateTime(ride.pdf_modified_at)}` : 'Sin archivo generado'}
+                    </div>
+                    {showIssueDate && (
+                      <div className="text-[11px] text-secondary">{ride.pdf_modified_at ? `PDF ${formatDateTime(ride.pdf_modified_at)}` : 'Sin archivo generado'}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${status === 'AUTORIZADO' ? 'bg-emerald-100 text-emerald-700' : status === 'ANULADA_LOCAL' ? 'bg-zinc-100 text-zinc-700' : 'bg-surface text-secondary'}`}>
                       {ride.sri_status || '-'}
                     </span>
+                    {isOperationalError && (
+                      <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800">
+                        {operationalLabel}
+                      </div>
+                    )}
+                    {isOperationalError && ride.operational_error_reason && (
+                      <div className="mt-1 max-w-[260px] text-[11px] text-secondary">{ride.operational_error_reason}</div>
+                    )}
                     {ride.replacement_access_key && (
                       <div className="mt-1 text-[11px] text-secondary break-all">Reemplazada por {ride.replacement_access_key}</div>
                     )}

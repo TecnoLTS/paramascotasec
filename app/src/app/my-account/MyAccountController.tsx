@@ -1233,6 +1233,16 @@ const MyAccount = () => {
             return
         }
 
+        const confirmation = window.prompt(
+            `Esta acción puede generar un nuevo comprobante SRI para ${sequential}. Escribe REEMITIR para confirmar:`,
+            ''
+        )
+        if (confirmation === null) return
+        if (confirmation.trim() !== 'REEMITIR') {
+            showNotification('Reemisión cancelada: confirmación inválida.', 'error')
+            return
+        }
+
         setBillingRideReissueAccessKey(normalized)
         try {
             await requestApi(`/api/admin/billing/rides/${encodeURIComponent(normalized)}/cancel-and-reissue`, {
@@ -1240,6 +1250,7 @@ const MyAccount = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     reason: cleanReason,
+                    confirm_reissue: 'REEMITIR',
                     ambiente: ride.ambiente || undefined,
                 }),
             })
@@ -1494,7 +1505,7 @@ const MyAccount = () => {
                 credentials: 'include'
             })
             if (!res.ok) {
-                throw new Error('No se pudo preparar la factura para impresión.')
+                throw new Error('No se pudo preparar el comprobante interno para impresión.')
             }
 
             const invoiceHtml = await res.text()

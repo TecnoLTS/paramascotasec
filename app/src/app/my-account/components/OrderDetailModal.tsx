@@ -337,7 +337,7 @@ export default function OrderDetailModal({
                     <div className="flex flex-wrap gap-2 md:justify-end">
                         {showInvoiceButton && (
                             <button className="px-4 py-2 rounded-lg bg-black text-white hover:bg-primary transition-all text-sm font-semibold" onClick={onViewInvoice}>
-                                Imprimir factura
+                                Imprimir comprobante interno
                             </button>
                         )}
                         {canManageStatus && (
