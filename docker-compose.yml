@@ -148,4 +148,4 @@ volumes:
 
 secrets:
   internal_proxy_token:
-    file: ${INTERNAL_PROXY_TOKEN_SOURCE_FILE:-./.secrets/internal_proxy_token}
+    file: ./entorno/.secrets/internal_proxy_token

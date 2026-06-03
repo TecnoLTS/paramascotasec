@@ -28,6 +28,9 @@ El despliegue de development usa `FRONTEND_DEV_RUNTIME=stable`: compila temporal
 
 ## 📌 3. Datos Relevantes y Contexto a Tomar en Cuenta
 
+*   **Configuracion Local:**
+    El servicio usa solo `entorno/.env` y `entorno/servidor.env`. Si falta el archivo real, el deploy crea una copia desde `entorno/.env.example` y aborta para que completes secretos.
+
 *   **Red Docker Oculta (API Backend):**
     Aún cuando el panel interactúa vía web pública, existe una variable **super clave** e invisible al usuario donde Next extrae información directamente de la red sin cifrar cruzando internamente su propio ruteo: `BACKEND_URL_INTERNAL=http://paramascotasec-backend-web:8080/api`.
 *   **Token Proxied (Autenticador):**
@@ -63,8 +66,8 @@ Antes de mover este frontend a otro servidor, confirma que el cambio incluya tod
 ### Archivos y secretos
 
 * Copia el codigo actualizado de `paramascotasec`.
-* Copia el `.env` real del servidor origen o crea uno nuevo desde `.env.example`.
-* No copies `.secrets/` como artefacto versionado. El deploy lo regenera desde `INTERNAL_PROXY_TOKEN` en `.env`.
+* Copia `entorno/.env` y `entorno/servidor.env` del servidor origen o crea uno nuevo desde `entorno/.env.example`.
+* No copies `entorno/.secrets/` como artefacto versionado. El deploy lo regenera desde `INTERNAL_PROXY_TOKEN` en `entorno/.env`.
 * Verifica que `INTERNAL_PROXY_TOKEN` coincida con el backend si ambos validan el mismo token interno.
 * Verifica `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_BACKEND_URL`, `BACKEND_URL_INTERNAL` y la llave publica de Google Maps.
 * Restringe `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` por HTTP referrer en Google Cloud.

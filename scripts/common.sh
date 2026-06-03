@@ -3,6 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENTORNO_DIR="${APP_DIR}/entorno"
+ENTORNO_ENV_FILE="${ENTORNO_DIR}/.env"
+ENTORNO_SERVER_FILE="${ENTORNO_DIR}/servidor.env"
 
 read_env_value() {
   local env_file="$1"
@@ -32,6 +35,52 @@ normalize_env_value() {
   fi
 
   printf '%s' "${value}"
+}
+
+ensure_entorno_files() {
+  local created=0
+
+  mkdir -p "${ENTORNO_DIR}"
+
+  if [[ ! -f "${ENTORNO_ENV_FILE}" ]]; then
+    if [[ ! -f "${ENTORNO_DIR}/.env.example" ]]; then
+      echo "No se encontro ${ENTORNO_DIR}/.env.example" >&2
+      exit 1
+    fi
+    cp "${ENTORNO_DIR}/.env.example" "${ENTORNO_ENV_FILE}"
+    chmod 600 "${ENTORNO_ENV_FILE}"
+    echo "Se creo ${ENTORNO_ENV_FILE} desde entorno/.env.example."
+    created=1
+  fi
+
+  if [[ ! -f "${ENTORNO_SERVER_FILE}" ]]; then
+    if [[ ! -f "${ENTORNO_DIR}/servidor.env.example" ]]; then
+      echo "No se encontro ${ENTORNO_DIR}/servidor.env.example" >&2
+      exit 1
+    fi
+    cp "${ENTORNO_DIR}/servidor.env.example" "${ENTORNO_SERVER_FILE}"
+    chmod 600 "${ENTORNO_SERVER_FILE}"
+    echo "Se creo ${ENTORNO_SERVER_FILE} desde entorno/servidor.env.example."
+    created=1
+  fi
+
+  if [[ "${created}" == "1" ]]; then
+    echo "Completa valores reales en entorno/.env y verifica ENTORNO_MODE en entorno/servidor.env antes de desplegar." >&2
+    exit 1
+  fi
+}
+
+assert_entorno_mode() {
+  local expected="$1"
+  local actual
+
+  actual="$(read_env_value "${ENTORNO_SERVER_FILE}" "ENTORNO_MODE" || true)"
+  actual="$(normalize_env_value "${actual}")"
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "ENTORNO_MODE=${actual:-<vacio>} en ${ENTORNO_SERVER_FILE}; esperado ${expected}." >&2
+    exit 1
+  fi
 }
 
 upsert_env_value() {
@@ -80,7 +129,7 @@ prepare_frontend_secrets() {
     exit 1
   fi
 
-  secret_dir="${APP_DIR}/.secrets"
+  secret_dir="${ENTORNO_DIR}/.secrets"
   secret_file="${secret_dir}/internal_proxy_token"
   mkdir -p "${secret_dir}"
   chmod 700 "${secret_dir}"
@@ -112,42 +161,17 @@ ensure_docker_ready() {
 resolve_env_file() {
   local mode="${1:-development}"
 
-  if [[ "${mode}" == "development" ]]; then
-    local env_file="${APP_DIR}/.env.development"
-    if [[ -f "${env_file}" ]]; then
-      configure_frontend_public_urls "${env_file}"
-      printf '%s\n' "${env_file}"
-      return 0
-    fi
-
-    if [[ -f "${APP_DIR}/.env.example" ]]; then
-      cp "${APP_DIR}/.env.example" "${env_file}"
-      echo "Se creo ${env_file} desde .env.example. Ajusta token y URLs si hace falta."
-      configure_frontend_public_urls "${env_file}"
-      printf '%s\n' "${env_file}"
-      return 0
-    fi
-
-    echo "No se encontro ${env_file} ni .env.example" >&2
+  if [[ "${mode}" != "development" && "${mode}" != "production" ]]; then
+    echo "Modo invalido: ${mode}. Usa development o production." >&2
     exit 1
   fi
 
-  if [[ -f "${APP_DIR}/.env" ]]; then
-    configure_frontend_public_urls "${APP_DIR}/.env"
-    printf '%s\n' "${APP_DIR}/.env"
-    return 0
-  fi
-
-  if [[ -f "${APP_DIR}/.env.example" ]]; then
-    cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
-    echo "Se creo ${APP_DIR}/.env desde .env.example. Ajusta valores de produccion antes de exponer."
-    configure_frontend_public_urls "${APP_DIR}/.env"
-    printf '%s\n' "${APP_DIR}/.env"
-    return 0
-  fi
-
-  echo "No se encontro .env ni .env.example" >&2
-  exit 1
+  ensure_entorno_files
+  assert_entorno_mode "${mode}"
+  upsert_env_value "${ENTORNO_ENV_FILE}" "APP_ENV" "${mode}"
+  upsert_env_value "${ENTORNO_ENV_FILE}" "COMPOSE_PROFILES" "${mode}"
+  configure_frontend_public_urls "${ENTORNO_ENV_FILE}"
+  printf '%s\n' "${ENTORNO_ENV_FILE}"
 }
 
 compose_cmd() {

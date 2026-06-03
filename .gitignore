@@ -1,7 +1,13 @@
 .env
 .env.*
-!.env.example
 .secrets/
+entorno/.env
+entorno/.env.*
+!entorno/.env.example
+entorno/servidor.env
+entorno/certs/
+entorno/.secrets/
+entorno/certbot/
 
 logs/
 *.log
