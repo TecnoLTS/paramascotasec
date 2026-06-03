@@ -108,6 +108,10 @@ type WorksheetDefinition = {
   columnWidths?: number[]
 }
 
+type SalesOrderExportRow = ExportContext['salesOrders'][number]
+type SalesCategoryExportRow = ExportContext['salesCategories'][number]
+type SalesRankingExportRow = ExportContext['salesRankingRows'][number]
+
 const slugify = (value: string): string => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -126,6 +130,67 @@ const toPlainNumber = (value: unknown): number => {
   const number = Number(value ?? 0)
   return Number.isFinite(number) ? number : 0
 }
+
+const normalizeKeyPart = (value: unknown): string => String(value ?? '').trim().toLowerCase()
+
+const uniqueByKey = <T,>(items: T[], getKey: (item: T) => string): T[] => {
+  const seen = new Set<string>()
+  const result: T[] = []
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = getKey(item)
+    if (!key) {
+      result.push(item)
+      continue
+    }
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(item)
+  }
+  return result
+}
+
+const getSalesOrderKey = (order: SalesOrderExportRow): string => {
+  const id = normalizeKeyPart(order.id)
+  if (id) return id
+  return [
+    order.created_at,
+    order.user_name,
+    order.customer_email,
+    order.gross,
+    order.items_summary,
+  ].map(normalizeKeyPart).join('|')
+}
+
+const getPurchaseInvoiceKey = (invoice: PurchaseInvoiceSummary): string => {
+  const id = normalizeKeyPart(invoice.id)
+  if (id) return id
+  return [
+    invoice.invoice_number,
+    invoice.supplier_document,
+    invoice.supplier_name,
+    invoice.issued_at,
+    invoice.total,
+  ].map(normalizeKeyPart).join('|')
+}
+
+const getSalesRankingKey = (row: SalesRankingExportRow): string => {
+  const productId = normalizeKeyPart(row.product_id)
+  if (productId) return `id:${productId}`
+  return `name:${normalizeKeyPart(row.product_name)}|${normalizeKeyPart(row.category)}`
+}
+
+const getSalesCategoryKey = (row: SalesCategoryExportRow): string => normalizeKeyPart(row.category)
+
+const normalizeExportContext = (context: ExportContext): ExportContext => ({
+  ...context,
+  salesOrders: uniqueByKey(context.salesOrders, getSalesOrderKey),
+  salesRankingRows: uniqueByKey(context.salesRankingRows, getSalesRankingKey),
+  rankingDecisionRows: context.rankingDecisionRows
+    ? uniqueByKey(context.rankingDecisionRows, getSalesRankingKey)
+    : context.rankingDecisionRows,
+  salesCategories: uniqueByKey(context.salesCategories, getSalesCategoryKey),
+  recentPurchaseInvoices: uniqueByKey(context.recentPurchaseInvoices, getPurchaseInvoiceKey),
+})
 
 const numberCell = (value: unknown, styleId = 'number'): WorkbookCell => ({
   value: toPlainNumber(value),
@@ -1059,9 +1124,10 @@ const buildWorksheets = (context: ExportContext): WorksheetDefinition[] => {
 
 export const buildReportExport = (context: ExportContext): { filename: string; content: string } => {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+  const normalizedContext = normalizeExportContext(context)
   return {
     filename: `${slugify(context.reportTitle)}-${stamp}.xls`,
-    content: buildWorkbookXml(buildWorksheets(context)),
+    content: buildWorkbookXml(buildWorksheets(normalizedContext)),
   }
 }
 

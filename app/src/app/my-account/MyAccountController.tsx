@@ -236,6 +236,54 @@ import type {
 
 type ReportSalesOrder = ReportPeriodSummary['orders'][number]
 
+const getStableKeyPart = (value: unknown) => String(value ?? '').trim().toLowerCase()
+
+const uniqueReportRowsByKey = <T,>(items: T[], getKey: (item: T) => string): T[] => {
+    const seen = new Set<string>()
+    const result: T[] = []
+    for (const item of Array.isArray(items) ? items : []) {
+        const key = getKey(item)
+        if (!key) {
+            result.push(item)
+            continue
+        }
+        if (seen.has(key)) continue
+        seen.add(key)
+        result.push(item)
+    }
+    return result
+}
+
+const getReportSalesOrderKey = (order: ReportSalesOrder): string => {
+    const id = getStableKeyPart(order.id)
+    if (id) return id
+    return [
+        order.created_at,
+        order.user_name,
+        order.customer_email,
+        order.gross,
+        order.items_summary,
+    ].map(getStableKeyPart).join('|')
+}
+
+const getPurchaseInvoiceSummaryKey = (invoice: PurchaseInvoiceSummary): string => {
+    const id = getStableKeyPart(invoice.id)
+    if (id) return id
+    return [
+        invoice.invoice_number,
+        invoice.supplier_document,
+        invoice.supplier_name,
+        invoice.issued_at,
+        invoice.total,
+    ].map(getStableKeyPart).join('|')
+}
+
+const dedupeReportSalesOrders = (orders: ReportSalesOrder[]) =>
+    uniqueReportRowsByKey(orders, getReportSalesOrderKey)
+
+const dedupePurchaseInvoiceSummaries = (invoices: PurchaseInvoiceSummary[]) =>
+    uniqueReportRowsByKey(invoices, getPurchaseInvoiceSummaryKey)
+
 const escapeHtml = (value: unknown) =>
     String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -2145,7 +2193,7 @@ const MyAccount = () => {
         try {
             const res = await withTransientRetry(() => requestApi<any[]>('/api/admin/purchase-invoices?limit=200'))
             const rows = Array.isArray(res.body) ? res.body.map(normalizePurchaseInvoiceSummary) : []
-            setRecentPurchaseInvoices(rows)
+            setRecentPurchaseInvoices(dedupePurchaseInvoiceSummaries(rows))
         } catch (error) {
             console.error(error)
             if (error instanceof Error && error.message.includes('401')) {
@@ -3330,7 +3378,6 @@ const MyAccount = () => {
                 margin: 0,
                 order_refs: [],
             }
-            existing.orders_count += Number(product.orders_count ?? 0)
             existing.units_sold += Number(product.units_sold ?? 0)
             existing.gross_revenue += Number(product.gross_revenue ?? 0)
             existing.net_revenue += Number(product.net_revenue ?? 0)
@@ -3338,10 +3385,14 @@ const MyAccount = () => {
             existing.shipping_amount += Number(product.shipping_amount ?? 0)
             existing.cost += Number(product.cost ?? 0)
             existing.profit += Number(product.profit ?? 0)
-            existing.order_refs = Array.from(new Set([
+            const orderRefs = Array.from(new Set([
                 ...existing.order_refs,
                 ...(Array.isArray(product.order_refs) ? product.order_refs : []),
             ]))
+            existing.order_refs = orderRefs
+            existing.orders_count = orderRefs.length > 0
+                ? orderRefs.length
+                : existing.orders_count + Number(product.orders_count ?? 0)
             existing.margin = existing.net_revenue > 0 ? (existing.profit / existing.net_revenue) * 100 : 0
             grouped.set(category, existing)
         })
@@ -3353,20 +3404,20 @@ const MyAccount = () => {
             if (salesRankingView === 'month') {
                 const reportPeriodKey = reportData.period?.period_key
                 if (reportPeriodKey === selectedRankingMonth) {
-                    return reportData.orders ?? []
+                    return dedupeReportSalesOrders(reportData.orders ?? [])
                 }
                 return []
             }
-            return reportData.orders ?? []
+            return dedupeReportSalesOrders(reportData.orders ?? [])
         }
         const report = effectiveReportData
         if (salesRankingView === 'month') {
             if (report?.period?.period_key === selectedRankingMonth) {
-                return report.orders ?? []
+                return dedupeReportSalesOrders(report.orders ?? [])
             }
             return []
         }
-        return report?.orders ?? []
+        return dedupeReportSalesOrders(report?.orders ?? [])
     }, [effectiveReportData, selectedRankingMonth, salesRankingView])
     const traceabilityReportSource = React.useMemo(() => {
         const salesData = (effectiveReportData?.sales ?? {}) as Record<string, unknown>
