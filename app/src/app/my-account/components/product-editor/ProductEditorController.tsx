@@ -1658,6 +1658,22 @@ export default function ProductEditorModal({
         })
     }, [])
 
+    const moveImageEntry = React.useCallback((kind: 'thumb' | 'gallery', index: number, direction: -1 | 1) => {
+        const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
+        setForm((prev: any) => {
+            const next = [...(prev[key] || [])]
+            const targetIndex = index + direction
+            if (index < 0 || targetIndex < 0 || index >= next.length || targetIndex >= next.length) {
+                return prev
+            }
+
+            const current = next[index]
+            next[index] = next[targetIndex]
+            next[targetIndex] = current
+            return { ...prev, [key]: next }
+        })
+    }, [])
+
     const setImageAltText = React.useCallback((kind: 'thumb' | 'gallery', index: number, altText: string) => {
         const key = kind === 'thumb' ? 'thumbImages' : 'galleryImages'
         setForm((prev: any) => {
@@ -3794,18 +3810,47 @@ export default function ProductEditorModal({
                                 <div>
                                     <div className="text-sm font-semibold mb-3">Miniaturas (listado)</div>
                                     <div className="space-y-3">
-                                        {(form.thumbImages || []).map((img: any, idx: number) => {
-                                            const key = `thumb-${idx}`
-                                            return (
-                                                <div key={key} className="p-3 rounded-xl border border-line bg-white">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                                        <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                            {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Miniatura ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('thumb', idx, e.target.files?.[0])} disabled={saving} />
-                                                            <input
-                                                                type="text"
+                                            {(form.thumbImages || []).map((img: any, idx: number) => {
+                                                const key = `thumb-${idx}`
+                                                const totalImages = (form.thumbImages || []).length
+                                                return (
+                                                    <div key={key} className="p-3 rounded-xl border border-line bg-white">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                                            <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
+                                                                {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Miniatura ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
+                                                            </div>
+                                                            <div className="flex sm:flex-col items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    className="h-8 w-8 rounded-full border border-line bg-white text-secondary flex items-center justify-center transition-colors hover:border-black hover:text-black disabled:opacity-40 disabled:hover:border-line disabled:hover:text-secondary"
+                                                                    onClick={() => moveImageEntry('thumb', idx, -1)}
+                                                                    disabled={saving || idx === 0}
+                                                                    aria-label={`Subir miniatura ${idx + 1}`}
+                                                                    title="Subir"
+                                                                >
+                                                                    <Icon.CaretUp size={16} />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="h-8 w-8 rounded-full border border-line bg-white text-secondary flex items-center justify-center transition-colors hover:border-black hover:text-black disabled:opacity-40 disabled:hover:border-line disabled:hover:text-secondary"
+                                                                    onClick={() => moveImageEntry('thumb', idx, 1)}
+                                                                    disabled={saving || idx >= totalImages - 1}
+                                                                    aria-label={`Bajar miniatura ${idx + 1}`}
+                                                                    title="Bajar"
+                                                                >
+                                                                    <Icon.CaretDown size={16} />
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                                    <span className="text-[11px] font-semibold uppercase text-secondary">Posición {idx + 1}</span>
+                                                                    {idx === 0 && (
+                                                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Principal</span>
+                                                                    )}
+                                                                </div>
+                                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('thumb', idx, e.target.files?.[0])} disabled={saving} />
+                                                                <input
+                                                                    type="text"
                                                                 className="mt-2 border border-line rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-black"
                                                                 value={String(img.altText || '')}
                                                                 placeholder={seoAltValue || 'Alt de miniatura'}
@@ -3838,18 +3883,47 @@ export default function ProductEditorModal({
                                         disabled={saving}
                                     />
                                     <div className="space-y-3">
-                                        {(form.galleryImages || []).map((img: any, idx: number) => {
-                                            const key = `gallery-${idx}`
-                                            return (
-                                                <div key={key} className="p-3 rounded-xl border border-line bg-white">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                                        <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
-                                                            {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Imagen ficha ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('gallery', idx, e.target.files?.[0])} disabled={saving} />
-                                                            <input
-                                                                type="text"
+                                            {(form.galleryImages || []).map((img: any, idx: number) => {
+                                                const key = `gallery-${idx}`
+                                                const totalImages = (form.galleryImages || []).length
+                                                return (
+                                                    <div key={key} className="p-3 rounded-xl border border-line bg-white">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                                            <div className="w-16 h-16 rounded-lg bg-surface border border-line overflow-hidden flex items-center justify-center">
+                                                                {img.url ? <Image src={img.url} alt={String(img.altText || seoAltValue || `Imagen ficha ${idx + 1}`)} width={64} height={64} unoptimized className="w-full h-full object-cover" /> : <span className="text-[10px] text-secondary">Sin imagen</span>}
+                                                            </div>
+                                                            <div className="flex sm:flex-col items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    className="h-8 w-8 rounded-full border border-line bg-white text-secondary flex items-center justify-center transition-colors hover:border-black hover:text-black disabled:opacity-40 disabled:hover:border-line disabled:hover:text-secondary"
+                                                                    onClick={() => moveImageEntry('gallery', idx, -1)}
+                                                                    disabled={saving || idx === 0}
+                                                                    aria-label={`Subir imagen grande ${idx + 1}`}
+                                                                    title="Subir"
+                                                                >
+                                                                    <Icon.CaretUp size={16} />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="h-8 w-8 rounded-full border border-line bg-white text-secondary flex items-center justify-center transition-colors hover:border-black hover:text-black disabled:opacity-40 disabled:hover:border-line disabled:hover:text-secondary"
+                                                                    onClick={() => moveImageEntry('gallery', idx, 1)}
+                                                                    disabled={saving || idx >= totalImages - 1}
+                                                                    aria-label={`Bajar imagen grande ${idx + 1}`}
+                                                                    title="Bajar"
+                                                                >
+                                                                    <Icon.CaretDown size={16} />
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                                    <span className="text-[11px] font-semibold uppercase text-secondary">Posición {idx + 1}</span>
+                                                                    {idx === 0 && (
+                                                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Principal</span>
+                                                                    )}
+                                                                </div>
+                                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="border border-line rounded-lg px-3 py-2 w-full text-sm" onChange={(e) => handleImageFileChange('gallery', idx, e.target.files?.[0])} disabled={saving} />
+                                                                <input
+                                                                    type="text"
                                                                 className="mt-2 border border-line rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-black"
                                                                 value={String(img.altText || '')}
                                                                 placeholder={seoAltValue || 'Alt de imagen de ficha'}

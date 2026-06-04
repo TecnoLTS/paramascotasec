@@ -155,6 +155,7 @@ export interface ProductType {
         height?: number;
         kind?: string;
         altText?: string | null;
+        displayOrder?: number;
     }>,
     reviewSummary?: {
         count: number;

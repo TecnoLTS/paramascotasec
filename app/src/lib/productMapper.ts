@@ -113,7 +113,7 @@ type ProductWithRelations = {
   // relaciones
   images?: ({ url: string } | string)[]
   thumbImage?: ({ url: string } | string)[]
-  imageMeta?: { url?: string; kind?: string; width?: number | string | null; height?: number | string | null; altText?: string | null }[]
+  imageMeta?: { url?: string; kind?: string; width?: number | string | null; height?: number | string | null; altText?: string | null; displayOrder?: number | string | null }[]
   variations?: Variation[]
   business?: {
     cost?: number
@@ -384,6 +384,7 @@ export const mapProductToDto = (product: ProductWithRelations): ProductType => {
         width: item.width === null || item.width === undefined ? undefined : Number(item.width),
         height: item.height === null || item.height === undefined ? undefined : Number(item.height),
         altText: typeof item.altText === 'string' && item.altText.trim() ? item.altText.trim() : null,
+        displayOrder: item.displayOrder === null || item.displayOrder === undefined ? undefined : Number(item.displayOrder),
       })) ?? []
   const resolvedThumbs = thumbImages.length > 0 ? thumbImages : (thumbFromMeta.length > 0 ? thumbFromMeta : images)
   const galleryWithoutThumbs = images.filter((image) => !resolvedThumbs.includes(image))

@@ -195,6 +195,21 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 
 ## Historial de trabajo IA
 
+### 2026-06-03 - Orden Explicito de Imagenes de Producto
+
+Objetivo: permitir que el admin ordene las imagenes de productos desde `/my-account` y elija cual se ve primero en listados y ficha publica.
+
+Cambios:
+- Backend agrega `Image.display_order` mediante `db/migrations/024_add_image_display_order.sql`, alinea `bootstrap_schema.php` y ordena `images`, `thumbImage` e `imageMeta` por `display_order, id`.
+- `ProductRepository` y `scripts/import_provider_products.php` guardan `display_order` segun la posicion del arreglo recibido.
+- Frontend agrega controles subir/bajar y etiqueta `Principal` en miniaturas e imagenes grandes del editor de productos.
+
+Operacion y verificacion:
+- Migracion aplicada solo en development sobre `next-test-db`; 378 imagenes existentes recibieron orden inicial y no quedaron filas con `display_order` nulo.
+- Redeploy solo development: `./scripts/deploy-development.sh backend` y `./scripts/deploy-development.sh frontend`.
+- Pasaron `npm run typecheck`, `npm run lint`, sintaxis PHP de archivos tocados, `git diff --check`, `./scripts/check-paramascotas.sh` y `./scripts/check-container-connectivity.sh development`.
+- No se desplego production.
+
 ### 2026-06-03 - Restore Development desde Backup Production
 
 Objetivo: recuperar la visibilidad del catalogo en development despues de restaurar DB principal y Facturador desde backups cifrados de production.
