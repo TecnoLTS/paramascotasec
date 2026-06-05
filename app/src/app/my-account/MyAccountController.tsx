@@ -101,6 +101,9 @@ import {
     DEFAULT_STORE_PAUSE_MESSAGE,
     formatMonthKeyLabel,
     getCurrentMonthKey,
+    getEcuadorDateKey,
+    getEcuadorLastSevenDaysRange,
+    getEcuadorTodayKey,
     RETRYABLE_PANEL_ERROR_PATTERN,
     withTransientRetry,
 } from './utils'
@@ -672,6 +675,31 @@ const summarizeReportPeriod = (
     }
 }
 
+const emptyFinancialSummary = (scopeLabel: string): ReportFinancialSummary => ({
+    scopeLabel,
+    ordersCount: 0,
+    gross: 0,
+    net: 0,
+    vat: 0,
+    shipping: 0,
+    cost: 0,
+    grossProfit: 0,
+    periodExpenses: 0,
+    paidExpenses: 0,
+    pendingExpenses: 0,
+    overdueExpenses: 0,
+    financialAdjustments: 0,
+    netProfit: 0,
+    flowProfit: 0,
+    grossMargin: 0,
+    netMargin: 0,
+    flowMargin: 0,
+    roi: 0,
+    netRoi: 0,
+    flowRoi: 0,
+    averageOrderNet: 0,
+})
+
 const summarizeDashboardTrendRows = (
     rows: Array<{ total?: number; gross?: number; cost?: number }>,
     fullSummary: ReportFinancialSummary,
@@ -683,7 +711,7 @@ const summarizeDashboardTrendRows = (
     const gross = sourceRows.reduce((sum, row) => sum + toFinancialNumber(row.gross), 0)
     const net = sourceRows.reduce((sum, row) => sum + toFinancialNumber(row.total), 0)
     const cost = sourceRows.reduce((sum, row) => sum + toFinancialNumber(row.cost), 0)
-    if (gross === 0 && net === 0 && cost === 0) return null
+    if (gross === 0 && net === 0 && cost === 0) return emptyFinancialSummary(scopeLabel)
 
     const grossProfit = gross - cost
     const ratio = fullSummary.gross > 0 ? Math.min(1, Math.max(0, gross / fullSummary.gross)) : 0
@@ -957,13 +985,7 @@ const MyAccount = () => {
     const [trendMetric, setTrendMetric] = useState<'gross' | 'profit'>('gross')
     const [salesRankingView, setSalesRankingView] = useState<SalesReportView>('month')
     const [salesRankingMonth, setSalesRankingMonth] = useState<string>(getCurrentMonthKey())
-    const [salesRankingDate, setSalesRankingDate] = useState<string>(() => {
-        const today = new Date()
-        const yyyy = today.getFullYear()
-        const mm = String(today.getMonth() + 1).padStart(2, '0')
-        const dd = String(today.getDate()).padStart(2, '0')
-        return `${yyyy}-${mm}-${dd}`
-    })
+    const [salesRankingDate, setSalesRankingDate] = useState<string>(getEcuadorTodayKey)
     const [financialTrendMode, setFinancialTrendMode] = useState<FinancialTrendRangeMode>('monthly')
     const [financialTrendScope, setFinancialTrendScope] = useState<FinancialTrendSummaryScope>('selected')
     const [selectedFinancialPeriod, setSelectedFinancialPeriod] = useState('')
@@ -3243,8 +3265,6 @@ const MyAccount = () => {
     const vatMultiplier = 1 + vatRateValue / 100
     const vatCreditCurrentDisplayRate = Number(dashboardStats?.tax?.credit_current_rate ?? vatCreditCurrentRate ?? 60)
     const vatCreditCarryforwardDisplayRate = Number(dashboardStats?.tax?.credit_carryforward_rate ?? vatCreditCarryforwardRate ?? 40)
-    const salesProgressPercentage = Number(dashboardStats?.totalSales?.progress?.percentage ?? 0)
-    const salesTrendIsPositive = salesProgressPercentage >= 0
     const productSalesRanking = dashboardStats?.businessMetrics?.productSalesRanking
     React.useEffect(() => {
         rankingCacheRef.current = {}
@@ -3258,7 +3278,12 @@ const MyAccount = () => {
         const period = report?.period
         if (!period) return false
         if (salesRankingView === 'month') return period.period_key === selectedRankingMonth
-        if (salesRankingView === 'week') return String(period.period_key || '').startsWith('week:')
+        if (salesRankingView === 'week') {
+            const week = getEcuadorLastSevenDaysRange()
+            return String(period.period_key || '').startsWith('week:')
+                && period.start_date === week.start
+                && period.end_date === week.end
+        }
         if (salesRankingView === 'daily') return period.start_date === salesRankingDate && period.end_date === salesRankingDate
         return period.start_date === '2000-01-01'
     }, [salesRankingDate, salesRankingView, selectedRankingMonth])
@@ -3282,8 +3307,9 @@ const MyAccount = () => {
         const reportProducts = activePeriodReport?.products ?? []
         const reportPeriodKey = activePeriodReport?.period?.period_key
 
-        const canUseReportProducts = resolvedView !== 'month' || reportPeriodKey === selectedRankingMonth
-        if (canUseReportProducts && reportProducts.length > 0) {
+        const canUseReportProducts = Boolean(activePeriodReport?.period)
+            && (resolvedView !== 'month' || reportPeriodKey === selectedRankingMonth)
+        if (canUseReportProducts) {
             return reportProducts.map((item) => ({
                 product_id: item.product_id || '',
                 product_name: item.product_name || '',
@@ -3328,7 +3354,7 @@ const MyAccount = () => {
             }))
         }
 
-        if (salesRankingView === 'week') return []
+        if (salesRankingView === 'daily' || salesRankingView === 'week') return []
         return buildSalesRankingRows(productSalesRanking, resolvedView)
     }, [activePeriodReport, productSalesRanking, salesRankingView, selectedRankingMonth])
     const reportSalesUnitsSold = React.useMemo(
@@ -3339,17 +3365,13 @@ const MyAccount = () => {
         if (trendRange !== 'week') return Math.round(reportSalesUnitsSold)
         const orders = activePeriodReport?.orders
         if (!orders || orders.length === 0) return Math.round(reportSalesUnitsSold)
-        const now = new Date()
-        const weekStart = new Date(now)
-        weekStart.setDate(weekStart.getDate() - 6)
-        const weekStartStr = weekStart.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
-        const weekUnits = orders.reduce((sum, o) => {
-            if (!o.created_at) return sum
-            const created = new Date(o.created_at + (o.created_at.includes('Z') || o.created_at.includes('+') ? '' : 'Z'))
-            const orderDateStr = created.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
-            return orderDateStr >= weekStartStr ? sum + (Number(o.units_count) || 0) : sum
+        const week = getEcuadorLastSevenDaysRange()
+        const weekUnits = orders.reduce((sum, order) => {
+            if (!order.created_at) return sum
+            const orderDateStr = getEcuadorDateKey(order.created_at)
+            return orderDateStr >= week.start && orderDateStr <= week.end ? sum + (Number(order.units_count) || 0) : sum
         }, 0)
-        return weekUnits > 0 ? Math.round(weekUnits) : Math.round(reportSalesUnitsSold)
+        return Math.round(weekUnits)
     }, [activePeriodReport, trendRange, reportSalesUnitsSold])
     const reportSalesCategories = React.useMemo(() => {
         const reportCategories = activePeriodReport?.categories ?? []
@@ -3541,9 +3563,7 @@ const MyAccount = () => {
         }
         if (salesRankingView === 'daily') {
             if (reportPeriod) return `${reportPeriod.start_date} → ${reportPeriod.end_date}`
-            if (productSalesRanking?.rangePeriod) {
-                return `${productSalesRanking.rangePeriod.start || '-'} → ${productSalesRanking.rangePeriod.end || '-'}`
-            }
+            return '-'
         }
         if (reportPeriod && reportPeriod.period_key === selectedRankingMonth) {
             return `${reportPeriod.start_date} → ${reportPeriod.end_date}`
@@ -3561,30 +3581,29 @@ const MyAccount = () => {
     }, [reportSalesRankingRows, salesRankingRows, selectedProductProcurementDetail])
     const monthlySalesRankingTotals = productSalesRanking?.monthlyTotals
     const historicalSalesRankingTotals = productSalesRanking?.historicalTotals
-    const dailySalesRankingTotals = productSalesRanking?.rangeTotals
     const reportOrdersData = activePeriodReport?.orders
-    const totalUnitsSold = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.units_count) || 0), 0) : 0
-    const totalCost = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.cost) || 0), 0) : 0
-    const totalProfit = reportOrdersData ? reportOrdersData.reduce((sum, o) => sum + (Number(o.profit) || 0), 0) : 0
+    const totalUnitsSold = reportOrdersData ? reportOrdersData.reduce((sum, order) => sum + (Number(order.units_count) || 0), 0) : 0
+    const totalCost = reportOrdersData ? reportOrdersData.reduce((sum, order) => sum + (Number(order.cost) || 0), 0) : 0
+    const totalProfit = reportOrdersData ? reportOrdersData.reduce((sum, order) => sum + (Number(order.profit) || 0), 0) : 0
     const fallbackTotals = { units_sold: totalUnitsSold, net_revenue: Number((activePeriodReport?.sales as any)?.net ?? 0), cost: totalCost, profit: totalProfit }
-    const salesRankingTotals = salesRankingView === 'daily'
-        ? (dailySalesRankingTotals || fallbackTotals)
-        : salesRankingView === 'week'
-            ? fallbackTotals
-            : salesRankingView === 'month'
-                ? monthlySalesRankingTotals
-                : (historicalSalesRankingTotals || fallbackTotals)
+    const salesRankingTotals = activePeriodReport?.period
+        ? fallbackTotals
+        : salesRankingView === 'month'
+            ? monthlySalesRankingTotals
+            : salesRankingView === 'historical'
+                ? (historicalSalesRankingTotals || fallbackTotals)
+                : fallbackTotals
+    const salesRankingUnitsSold = activePeriodReport?.period
+        ? totalUnitsSold
+        : Number(salesRankingTotals?.units_sold ?? 0)
     const monthlySalesFinancial = productSalesRanking?.monthlyFinancial
     const historicalSalesFinancial = productSalesRanking?.historicalFinancial
-    const dailySalesFinancial = productSalesRanking?.rangeFinancial
     const reportSalesData = activePeriodReport?.sales
-    const rawFinancial = reportSalesData || (salesRankingView === 'daily'
-        ? dailySalesFinancial
-        : salesRankingView === 'week'
-            ? null
-            : salesRankingView === 'month'
-                ? monthlySalesFinancial
-                : historicalSalesFinancial)
+    const rawFinancial = reportSalesData || (salesRankingView === 'month'
+        ? monthlySalesFinancial
+        : salesRankingView === 'historical'
+            ? historicalSalesFinancial
+            : null)
     const salesRankingFinancial: {orders_count:number;gross:number;net:number;vat:number;shipping:number;cost:number;profit:number;margin:number} | null = rawFinancial ? {
         orders_count: (rawFinancial as any).orders_count ?? (rawFinancial as any).total ?? 0,
         gross: (rawFinancial as any).gross ?? (rawFinancial as any).total ?? 0,
@@ -3674,19 +3693,16 @@ const MyAccount = () => {
         ) {
             setSalesRankingMonth(selectedFinancialPeriod)
             setSalesRankingView('month')
+            setTrendRange('month')
         }
     }, [activeTab, financialTrendMode, financialTrendScope, salesRankingMonth, selectedFinancialPeriod])
     React.useEffect(() => {
         if (salesRankingView === 'daily') {
-            const today = new Date()
-            const yyyy = today.getFullYear()
-            const mm = String(today.getMonth() + 1).padStart(2, '0')
-            const dd = String(today.getDate()).padStart(2, '0')
-            setSalesRankingDate(`${yyyy}-${mm}-${dd}`)
+            setSalesRankingDate(getEcuadorTodayKey())
         } else if (salesRankingDate) {
             setSalesRankingDate('')
         }
-    }, [salesRankingView])
+    }, [salesRankingDate, salesRankingView])
 
     const selectReportMonth = React.useCallback((month?: string) => {
         const nextMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))
@@ -3697,7 +3713,30 @@ const MyAccount = () => {
         setFinancialTrendMode('monthly')
         setFinancialTrendScope('selected')
         setSalesRankingView('month')
+        setTrendRange('month')
     }, [])
+    const selectSalesReportView = React.useCallback((view: SalesReportView) => {
+        setSalesRankingView(view)
+        if (view === 'daily') {
+            setTrendRange('day')
+            return
+        }
+        if (view === 'week') {
+            setTrendRange('week')
+            return
+        }
+        if (view === 'historical') {
+            setTrendRange('all')
+            setFinancialTrendMode('monthly')
+            setFinancialTrendScope('total')
+            return
+        }
+
+        setTrendRange('month')
+        setFinancialTrendMode('monthly')
+        setFinancialTrendScope('selected')
+        setSelectedFinancialPeriod(salesRankingMonth || getCurrentMonthKey())
+    }, [salesRankingMonth])
     const selectedFinancialTrendRow = financialTrendRows.find((row) => row.period === selectedFinancialPeriod)
         ?? financialTrendRows.find(hasFinancialTrendActivity)
         ?? financialTrendRows[financialTrendRows.length - 1]
@@ -3720,38 +3759,69 @@ const MyAccount = () => {
         }
         return summarizeReportFinancialRows(reportFinancialRows, salesSummary, profitStats, reportFinancialScopeLabel)
     }, [financialTrendMode, financialTrendScope, effectiveReportData, profitStats, reportFinancialRows, reportFinancialScopeLabel, salesSummary, selectedFinancialTrendRow?.period])
+    const reportGeneralScopeLabel = React.useMemo(() => {
+        if (trendRange === 'day') {
+            const dayLabel = formatDateEcuador(getEcuadorTodayKey(), { day: '2-digit', month: 'short' })
+            return `Día actual (${dayLabel})`
+        }
+        if (trendRange === 'week') {
+            const week = getEcuadorLastSevenDaysRange()
+            const startLabel = formatDateEcuador(week.start, { day: '2-digit', month: 'short' })
+            const endLabel = formatDateEcuador(week.end, { day: '2-digit', month: 'short' })
+            return `Últimos 7 días (${startLabel} - ${endLabel})`
+        }
+        if (trendRange === 'all') return 'Todo el historial visible'
+        return `Mes seleccionado (${formatMonthKeyLabel(selectedRankingMonth)})`
+    }, [selectedRankingMonth, trendRange])
+    const activeReportFinancialSummary = React.useMemo(
+        () => summarizeReportPeriod(activePeriodReport as ReportPeriodSummary | null, reportGeneralScopeLabel),
+        [activePeriodReport, reportGeneralScopeLabel]
+    )
     const dayFinancialSummary = React.useMemo((): ReportFinancialSummary | null => {
         const perf = dashboardStats?.monthlyPerformance ?? []
-        const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
-        const todayRow = [...perf].reverse().find((row) => String(row.date || row.day || '').slice(0, 10) === todayKey) ?? perf[perf.length - 1]
+        const todayKey = getEcuadorTodayKey()
+        const todayRow = [...perf].reverse().find((row) => String(row.date || row.day || '').slice(0, 10) === todayKey)
         return summarizeDashboardTrendRows(todayRow ? [todayRow] : [], reportFinancialSummary, 'Día actual')
     }, [dashboardStats?.monthlyPerformance, reportFinancialSummary])
     const weekFinancialSummary = React.useMemo((): ReportFinancialSummary | null => {
         const perf = dashboardStats?.monthlyPerformance ?? []
-        const weekDays = perf.slice(-7)
-        return summarizeDashboardTrendRows(weekDays, reportFinancialSummary, 'Semana actual')
+        const week = getEcuadorLastSevenDaysRange()
+        const weekDays = perf.filter((row) => {
+            const dateKey = String(row.date || row.day || '').slice(0, 10)
+            return dateKey >= week.start && dateKey <= week.end
+        })
+        return summarizeDashboardTrendRows(weekDays, reportFinancialSummary, 'Últimos 7 días')
     }, [dashboardStats?.monthlyPerformance, reportFinancialSummary])
     const monthFinancialSummary = React.useMemo((): ReportFinancialSummary | null => {
         const trend = dashboardStats?.salesTrend30Days ?? []
-        const now = new Date()
-        const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-        const monthDays = trend.filter(d => (d.day || '') >= firstDayStr)
-        return summarizeDashboardTrendRows(monthDays, reportFinancialSummary, 'Mes actual')
-    }, [dashboardStats?.salesTrend30Days, reportFinancialSummary])
-    const generalFinancialSummary = (
+        const firstDayStr = `${selectedRankingMonth}-01`
+        const [year, month] = selectedRankingMonth.split('-').map((part) => Number(part))
+        const nextMonthStart = Number.isFinite(year) && Number.isFinite(month)
+            ? new Date(Date.UTC(year, month, 1, 12, 0, 0)).toISOString().slice(0, 10)
+            : ''
+        const monthDays = trend.filter((row) => {
+            const day = row.day || ''
+            return day >= firstDayStr && (!nextMonthStart || day < nextMonthStart)
+        })
+        return summarizeDashboardTrendRows(monthDays, reportFinancialSummary, 'Mes seleccionado')
+    }, [dashboardStats?.salesTrend30Days, reportFinancialSummary, selectedRankingMonth])
+    const dashboardGeneralFinancialSummary = (
         trendRange === 'day'
             ? dayFinancialSummary
             : trendRange === 'week'
                 ? weekFinancialSummary
                 : trendRange === 'month'
                     ? monthFinancialSummary
-                    : reportFinancialSummary
-    ) ?? reportFinancialSummary
+                    : null
+    )
+    const generalFinancialSummary = activeReportFinancialSummary
+        ?? dashboardGeneralFinancialSummary
+        ?? emptyFinancialSummary(reportGeneralScopeLabel)
     const inventoryIntelligence = inventoryIntelligenceState ?? dashboardStats?.businessMetrics?.inventoryIntelligence ?? null
     const productRankingDecisionRows = React.useMemo<ProductRankingDecisionRow[]>(() => {
-        const sourceRows = reportSalesRankingRows.length > 0 ? reportSalesRankingRows : salesRankingRows
+        const sourceRows = activePeriodReport?.period ? reportSalesRankingRows : salesRankingRows
         return buildProductRankingDecisionRows(sourceRows, inventoryIntelligence)
-    }, [inventoryIntelligence, reportSalesRankingRows, salesRankingRows])
+    }, [activePeriodReport?.period, inventoryIntelligence, reportSalesRankingRows, salesRankingRows])
     const productRankingActionItems = React.useMemo<ProductRankingActionItem[]>(
         () => buildProductRankingActionItems(productRankingDecisionRows, inventoryIntelligence),
         [inventoryIntelligence, productRankingDecisionRows]
@@ -3964,32 +4034,8 @@ const MyAccount = () => {
     const balanceFlowRoi = balanceSummary.flowRoi
     const balanceOrdersCount = balanceSummary.ordersCount
     const balanceAverageOrderNet = balanceSummary.averageOrderNet || Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0)
-    const reportGeneralScopeLabel = React.useMemo(() => {
-        const now = new Date()
-        if (trendRange === 'day') {
-            const dayLabel = formatDateEcuador(now.toISOString(), { day: '2-digit', month: 'short' })
-            return `Día actual (${dayLabel})`
-        }
-        if (trendRange === 'week') {
-            const weekStart = new Date(now)
-            weekStart.setDate(weekStart.getDate() - 6)
-            const startLabel = formatDateEcuador(weekStart.toISOString(), { day: '2-digit', month: 'short' })
-            const endLabel = formatDateEcuador(now.toISOString(), { day: '2-digit', month: 'short' })
-            return `Semana actual (${startLabel} - ${endLabel})`
-        }
-        if (trendRange === 'all') return 'Todo el historial visible'
-        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-        return `Mes actual (${monthNames[now.getMonth()]} ${now.getFullYear()})`
-    }, [trendRange])
     const reportOrdersCount = generalFinancialSummary.ordersCount
     const reportAverageOrderNet = generalFinancialSummary.averageOrderNet || Number(dashboardStats?.businessMetrics?.averageOrderValue ?? 0)
-    const generalSalesProportion = React.useMemo(() => {
-        if ((trendRange === 'day' || trendRange === 'week') && reportFinancialSummary.gross > 0) {
-            const scopedGross = trendRange === 'day' ? (dayFinancialSummary?.gross ?? 0) : (weekFinancialSummary?.gross ?? 0)
-            return scopedGross > 0 ? Math.min(scopedGross / reportFinancialSummary.gross, 1) : 1
-        }
-        return 1
-    }, [dayFinancialSummary, trendRange, weekFinancialSummary, reportFinancialSummary])
     const productWeightedMargin = Number(dashboardStats?.productAnalysis?.weightedMargin ?? dashboardStats?.productAnalysis?.averageMargin ?? 0)
     const productMarginSampleCount = Number(dashboardStats?.productAnalysis?.pricedCostedProducts ?? 0)
     const productMissingCostCount = Number(dashboardStats?.productAnalysis?.missingCostCount ?? 0)
@@ -4098,8 +4144,8 @@ const MyAccount = () => {
                 selectedRankingMonthLabel,
                 salesRankingView,
                 dashboardStats,
-                financialScopeLabel: reportFinancialScopeLabel,
-                financialSummary: reportFinancialSummary,
+                financialScopeLabel: adminReportSection === 'general' ? reportGeneralScopeLabel : reportFinancialScopeLabel,
+                financialSummary: adminReportSection === 'general' ? generalFinancialSummary : reportFinancialSummary,
                 taxPolicy: {
                     creditCurrentRate: vatCreditCurrentDisplayRate,
                     creditCarryforwardRate: vatCreditCarryforwardDisplayRate,
@@ -4134,8 +4180,10 @@ const MyAccount = () => {
         reportFinancialScopeLabel,
         reportFinancialSummary,
         filteredReportSalesOrders,
+        generalFinancialSummary,
         reportSalesCategories,
         reportSalesRankingRows,
+        reportGeneralScopeLabel,
         salesRankingView,
         salesTrendRows,
         selectedRankingMonth,
@@ -6195,7 +6243,7 @@ const MyAccount = () => {
                                                                 <button
                                                                     onClick={() => {
                                                                         setTrendRange('day')
-                                                                        setSalesRankingView('daily')
+                                                                        selectSalesReportView('daily')
                                                                     }}
                                                                     className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${trendRange === 'day' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
                                                                 >
@@ -6204,7 +6252,7 @@ const MyAccount = () => {
                                                                 <button
                                                                     onClick={() => {
                                                                         setTrendRange('week')
-                                                                        setSalesRankingView('week')
+                                                                        selectSalesReportView('week')
                                                                     }}
                                                                     className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${trendRange === 'week' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
                                                                 >
@@ -6222,9 +6270,7 @@ const MyAccount = () => {
                                                                 <button
                                                                     onClick={() => {
                                                                         setTrendRange('all')
-                                                                        setSalesRankingView('historical')
-                                                                        setFinancialTrendMode('monthly')
-                                                                        setFinancialTrendScope('total')
+                                                                        selectSalesReportView('historical')
                                                                     }}
                                                                     className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${trendRange === 'all' ? 'bg-black text-white shadow-sm' : 'text-secondary hover:text-black'}`}
                                                                 >
@@ -6277,10 +6323,8 @@ const MyAccount = () => {
                                                          >
                                                              <div className="text-[10px] uppercase font-bold text-secondary mb-1">Ventas netas</div>
                                                              <div className="text-xl font-bold">{formatMoney(reportBalanceNet)}</div>
-                                                             <div className={`text-[11px] font-semibold flex items-center gap-1 ${salesTrendIsPositive ? 'text-success' : 'text-red'}`}>
-                                                                 {salesTrendIsPositive ? <Icon.TrendUp weight="bold" size={12} /> : <Icon.TrendDown weight="bold" size={12} />}
-                                                                 {salesTrendIsPositive ? '+' : ''}{salesProgressPercentage.toFixed(1)}%
-                                                                  <span className="text-secondary/50 font-normal ml-auto">{reportGeneralScopeLabel}</span>
+                                                             <div className="text-[11px] text-secondary mt-0.5">
+                                                                  {reportGeneralScopeLabel}
                                                              </div>
                                                          </button>
                                                          <button
@@ -6298,8 +6342,8 @@ const MyAccount = () => {
                                                               onClick={() => openAdminReportSection('sales')}
                                                           >
                                                                <div className="text-[10px] uppercase font-bold text-secondary mb-1">Unidades vendidas</div>
-                                                               <div className="text-xl font-bold">{(trendRange === 'week' ? reportWeekUnitCount : Math.round(reportSalesUnitsSold)).toLocaleString('es-EC')}</div>
-                                                                <div className="text-[11px] text-secondary mt-0.5">{trendRange === 'week' ? reportGeneralScopeLabel : reportSalesPeriodLabel} · Ticket prom. {formatMoney(reportAverageOrderNet)}</div>
+                                                               <div className="text-xl font-bold">{(trendRange === 'week' ? reportWeekUnitCount : Math.round(salesRankingUnitsSold)).toLocaleString('es-EC')}</div>
+                                                                <div className="text-[11px] text-secondary mt-0.5">{reportGeneralScopeLabel} · Ticket prom. {formatMoney(reportAverageOrderNet)}</div>
                                                           </button>
                                                     </div>
 
@@ -6308,7 +6352,7 @@ const MyAccount = () => {
                                                             <div>
                                                                  <div className="text-sm font-bold">Tendencia de ventas</div>
                                                                  <p className="text-xs text-secondary mt-1">
-                                                                     Evolución diaria de {trendMetric === 'gross' ? 'ventas totales' : 'utilidad neta'} · {trendRange === 'day' ? 'Hoy' : trendRange === 'week' ? 'Últimos 7 días' : trendRange === 'month' ? 'Mes actual' : 'Todo histórico'}
+                                                                     Evolución diaria de {trendMetric === 'gross' ? 'ventas totales' : 'utilidad neta'} · {trendRange === 'day' ? 'Hoy' : trendRange === 'week' ? 'Últimos 7 días' : trendRange === 'month' ? 'Mes seleccionado' : 'Todo histórico'}
                                                                  </p>
                                                             </div>
                                                             <div className="flex items-center gap-2">
@@ -6334,11 +6378,22 @@ const MyAccount = () => {
                                                                      trendMetric === 'profit'
                                                                          ? Number(item.gross) - Number(item.cost)
                                                                          : Number(item.gross) || 0
-                                                                 const now = new Date()
-                                                                 const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-                                                                 const monthData = (dashboardStats.salesTrend30Days || []).filter(d => (d.day || '') >= firstDayStr)
-                                                                 const weekData = (dashboardStats.monthlyPerformance || []).slice(-7)
-                                                                 const dayData = weekData.slice(-1)
+                                                                 const todayKey = getEcuadorTodayKey()
+                                                                 const week = getEcuadorLastSevenDaysRange(todayKey)
+                                                                 const firstDayStr = `${selectedRankingMonth}-01`
+                                                                 const [selectedYear, selectedMonth] = selectedRankingMonth.split('-').map((part) => Number(part))
+                                                                 const nextMonthStart = Number.isFinite(selectedYear) && Number.isFinite(selectedMonth)
+                                                                     ? new Date(Date.UTC(selectedYear, selectedMonth, 1, 12, 0, 0)).toISOString().slice(0, 10)
+                                                                     : ''
+                                                                 const monthData = (dashboardStats.salesTrend30Days || []).filter((item) => {
+                                                                     const day = item.day || ''
+                                                                     return day >= firstDayStr && (!nextMonthStart || day < nextMonthStart)
+                                                                 })
+                                                                 const weekData = (dashboardStats.monthlyPerformance || []).filter((item) => {
+                                                                     const dateKey = String(item.date || item.day || '').slice(0, 10)
+                                                                     return dateKey >= week.start && dateKey <= week.end
+                                                                 })
+                                                                 const dayData = weekData.filter((item) => String(item.date || item.day || '').slice(0, 10) === todayKey)
                                                                  const displayData = trendRange === 'day' ? dayData : trendRange === 'week' ? weekData : monthData
                                                                  const weekAdjusted = weekData.map(adjust)
                                                                  const weekMax = Math.max(...weekAdjusted, 1)
@@ -6358,7 +6413,8 @@ const MyAccount = () => {
                                                                             const value = adjust(item)
                                                                             const pct = (value / weekMax) * 100
                                                                             const label = formatDashboardTrendLabel(item, { weekday: 'short' })
-                                                                            const isToday = trendRange === 'day' || i === displayData.length - 1
+                                                                            const itemDateKey = String(item.date || item.day || '').slice(0, 10)
+                                                                            const isToday = trendRange === 'day' || itemDateKey === todayKey
                                                                             return (
                                                                                 <div key={i} className="flex flex-col items-center gap-1 flex-1 max-w-[48px] group cursor-pointer" title={`${label}: ${formatMoney(value)}`}>
                                                                                     <span className={`text-[10px] font-bold leading-tight ${value > 0 ? (isToday ? 'text-black' : 'text-black') : 'text-secondary/40'}`}>{formatMoney(value)}</span>
@@ -6480,17 +6536,17 @@ const MyAccount = () => {
                                                                 <button type="button" className="text-[11px] font-bold underline" onClick={() => navigateToPanelTab('admin-orders')}>ver todo</button>
                                                             </div>
                                                             <div className="divide-y divide-line">
-                                                                {(dashboardStats?.businessMetrics?.recentOrders || []).slice(0, 4).map((order, i) => (
-                                                                    <div key={i} className="flex items-center justify-between py-2 cursor-pointer hover:bg-surface -mx-2 px-2 rounded-lg transition-colors" onClick={() => handleViewOrder(order.id)}>
+                                                                {reportSalesOrders.slice(0, 4).map((order) => (
+                                                                    <div key={order.id} className="flex items-center justify-between py-2 cursor-pointer hover:bg-surface -mx-2 px-2 rounded-lg transition-colors" onClick={() => handleViewOrder(order.id)}>
                                                                         <div className="min-w-0 flex-1">
                                                                             <div className="text-xs font-bold truncate">#{order.id.split('-').pop()}</div>
                                                                             <div className="text-[10px] text-secondary truncate">{order.user_name || 'Anónimo'} · {formatDateTimeEcuador(order.created_at, { hour: '2-digit', minute: '2-digit' })}</div>
                                                                         </div>
-                                                                        <div className="text-xs font-bold flex-shrink-0 ml-2">{formatMoney(order.total)}</div>
+                                                                        <div className="text-xs font-bold flex-shrink-0 ml-2">{formatMoney(order.gross)}</div>
                                                                     </div>
                                                                 ))}
-                                                                {(!dashboardStats?.businessMetrics?.recentOrders || dashboardStats.businessMetrics.recentOrders.length === 0) && (
-                                                                    <div className="py-6 text-center text-xs text-secondary">Sin ventas recientes.</div>
+                                                                {reportSalesOrders.length === 0 && (
+                                                                    <div className="py-6 text-center text-xs text-secondary">Sin ventas en este período.</div>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -6575,30 +6631,30 @@ const MyAccount = () => {
                                                                 </label>
                                                             )}
                                                             <div className="flex bg-surface p-1 rounded-lg border border-line w-fit">
-                                                                    <button
+                                                                        <button
                                                                         type="button"
-                                                                        onClick={() => setSalesRankingView('daily')}
+                                                                        onClick={() => selectSalesReportView('daily')}
                                                                         className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'daily' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
                                                                     >
                                                                         Día
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setSalesRankingView('week')}
+                                                                        onClick={() => selectSalesReportView('week')}
                                                                         className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'week' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
                                                                     >
                                                                         Semana
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setSalesRankingView('month')}
+                                                                        onClick={() => selectSalesReportView('month')}
                                                                         className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'month' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
                                                                     >
                                                                         Mes
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setSalesRankingView('historical')}
+                                                                        onClick={() => selectSalesReportView('historical')}
                                                                         className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${salesRankingView === 'historical' ? 'bg-black text-white shadow-md' : 'text-secondary hover:text-black'}`}
                                                                     >
                                                                         Todo
@@ -6614,7 +6670,7 @@ const MyAccount = () => {
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Unidades vendidas</div>
-                                                                <div className="text-lg font-bold">{Number(totalUnitsSold ?? salesRankingTotals?.units_sold ?? 0).toLocaleString('es-EC')}</div>
+                                                                <div className="text-lg font-bold">{Number(salesRankingUnitsSold).toLocaleString('es-EC')}</div>
                                                             </div>
                                                             <div className="p-3 rounded-lg border border-line bg-surface">
                                                                 <div className="text-[10px] uppercase font-bold text-secondary">Ventas brutas</div>
@@ -7512,7 +7568,7 @@ const MyAccount = () => {
                                                     salesRankingView={salesRankingView}
                                                     selectedRankingMonthLabel={selectedRankingMonthLabel}
                                                     selectReportMonth={selectReportMonth}
-                                                    setSalesRankingView={setSalesRankingView}
+                                                    setSalesRankingView={selectSalesReportView}
                                                     summary={traceabilitySummary}
                                                     onViewOrder={handleViewOrder}
                                                     onOpenProduct={openAdminProductByReportId}
@@ -7535,7 +7591,7 @@ const MyAccount = () => {
                                                     detailLoading={productPurchaseReportDetailLoading}
                                                     detailError={productPurchaseReportDetailError}
                                                     selectReportMonth={selectReportMonth}
-                                                    setSalesRankingView={setSalesRankingView}
+                                                    setSalesRankingView={selectSalesReportView}
                                                     onSelectProduct={handleSelectProductPurchaseReport}
                                                     onRetryLoadSelectedProduct={handleRetryProductPurchaseReportDetail}
                                                     onOpenPurchaseInvoice={handleOpenPurchaseInvoice}
@@ -7560,8 +7616,8 @@ const MyAccount = () => {
                                             salesRankingView={salesRankingView}
                                             selectReportMonth={selectReportMonth}
                                             selectedRankingMonthLabel={selectedRankingMonthLabel}
-                                            setSalesRankingView={setSalesRankingView}
-                                            totalUnitsSold={totalUnitsSold}
+                                            setSalesRankingView={selectSalesReportView}
+                                            totalUnitsSold={salesRankingUnitsSold}
                                             onExportRanking={handleExportSalesRankingReport}
                                             onOpenProduct={openAdminProductByReportId}
                                             onRestockProduct={restockAdminProductByReportId}

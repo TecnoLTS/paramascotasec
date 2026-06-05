@@ -586,7 +586,7 @@ const buildSalesWorksheets = (context: ExportContext): WorksheetDefinition[] => 
   const rankingRows = context.rankingDecisionRows?.length ? context.rankingDecisionRows : salesRankingRows
   const periodReport = dashboardStats?.businessMetrics?.report
   const resolvedView = salesRankingView === 'daily' || salesRankingView === 'week' ? 'range' : salesRankingView
-  const financial = resolvedView === 'month' && periodReport
+  const financial = periodReport
     ? {
         orders_count: periodReport.sales.orders_count,
         gross: periodReport.sales.total,

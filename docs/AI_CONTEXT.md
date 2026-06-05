@@ -195,6 +195,31 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 
 ## Historial de trabajo IA
 
+### 2026-06-05 - Correccion Filtros Reporte de Ventas
+
+Objetivo: corregir en `/my-account`, dentro del reporte general/de ventas, los filtros `Dia`, `Semana`, `Mes` y `Todo`, dejando `Semana` como ventana movil de los ultimos 7 dias y evitando que el reporte general muestre unidades de otro rango.
+
+Causa:
+- `/api/admin/report?scope=week` fallaba con 500 porque `FinancialPeriodRepository::buildSnapshot()` pasaba un `period_key` tipo `week:2026-05-30:2026-06-05` a `adjustmentSummary()`, que solo acepta periodos financieros mensuales `YYYY-MM`.
+- La vista semanal podia mezclar datos precargados de dashboard; cuando un periodo real venia vacio, el frontend podia caer a totales/listas de otro rango.
+- En Reporte general, el filtro `Dia` podia mostrar 109 unidades porque `reportSalesRankingRows` y las tarjetas financieras reutilizaban el acumulado precargado de ranking/rango mientras el reporte diario canonico aun no estaba activo o venia sin ventas.
+
+Cambios:
+- `FinancialPeriodRepository` agrega resumen de ajustes financieros por rango de fechas y `buildSnapshot()` lo usa para reportes diarios, semanales, historicos y mensuales.
+- `OrderRepository` resuelve `scope=week` como ultimos 7 dias en `America/Guayaquil` (fecha ancla incluida + 6 dias previos); `Día`, `Mes` y `Todo` usan limites inclusivo/exclusivo consistentes.
+- La serie semanal del dashboard, el filtro de pedidos admin y el movimiento de producto `period=week` usan la misma ventana movil de ultimos 7 dias.
+- Frontend centraliza claves de fecha Ecuador, evita interpretar `YYYY-MM-DD` como UTC, cachea el reporte semanal por rango de ultimos 7 dias y usa el reporte canonico aun cuando el periodo no tenga ventas.
+- Reporte general sincroniza sus botones `Dia/Semana/Mes/Todo` con la fuente canonica de ventas, no usa el ultimo dia con datos como fallback para `Dia`, muestra ventas recientes del periodo activo y exporta el resumen financiero del filtro visible.
+- La exportacion del reporte de ventas usa `businessMetrics.report` para `Dia`, `Semana`, `Mes` y `Todo`; ya no toma `rangeFinancial` para los cortes diarios/semanales cuando existe reporte canonico.
+- Las operaciones mensuales existentes de ajustes, cierre y preview de periodos financieros siguen validando y usando `period_key` mensual.
+
+Operacion y verificacion:
+- Se redeplego Backend y Frontend development con `./scripts/deploy-development.sh backend` y `./scripts/deploy-development.sh frontend`; el ultimo ajuste de Reporte general requirio redeploy solo de Frontend. No se desplego production.
+- Pruebas por Gateway con JWT admin temporal: `Dia` 2026-06-05 devuelve 0 pedidos/0 unidades sin fallback; `Semana` devuelve `2026-05-30 -> 2026-06-05`, 14 pedidos, 38 unidades y ventas netas USD 154.10; `Mes` junio devuelve 11 pedidos, 20 unidades y ventas netas USD 130.59; `Todo` historico devuelve 101 pedidos, 217 unidades y ventas netas USD 947.23.
+- La carga base del dashboard entrega 7 puntos `2026-05-30 -> 2026-06-05`; `GET /api/products/{id}/movement?period=week` devuelve `Últimos 7 días` con el mismo rango.
+- Pasaron `php -l` de repositorios tocados, `npm run typecheck`, `npm run lint`, `git diff --check`, `./scripts/check-container-connectivity.sh development` y `./scripts/check-paramascotas.sh`.
+- No se emitieron comprobantes SRI.
+
 ### 2026-06-03 - Orden Explicito de Imagenes de Producto
 
 Objetivo: permitir que el admin ordene las imagenes de productos desde `/my-account` y elija cual se ve primero en listados y ficha publica.

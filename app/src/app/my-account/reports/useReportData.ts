@@ -3,6 +3,7 @@
 import React from 'react'
 import { requestApi } from '@/lib/apiClient'
 import type { DashboardStats, SalesReportView } from '../types'
+import { getEcuadorLastSevenDaysRange } from '../utils'
 
 type AccountUser = {
   id: string
@@ -99,22 +100,27 @@ export function useReportData({
     if (activeTab !== 'reports' && activeTab !== 'sales-ranking') return
 
     reportAbortRef.current?.abort()
+    if (salesRankingView === 'daily' && !salesRankingDate) {
+      return
+    }
+
     const controller = new AbortController()
     reportAbortRef.current = controller
 
     let cancelled = false
 
+    const lastSevenDays = getEcuadorLastSevenDaysRange()
     const cacheKey = salesRankingView === 'historical'
       ? 'historical'
       : salesRankingView === 'week'
-        ? 'week'
+        ? `week:${lastSevenDays.start}:${lastSevenDays.end}`
       : salesRankingView === 'daily' && salesRankingDate
         ? `daily:${salesRankingDate}`
         : `month:${salesRankingMonth}`
     const query = salesRankingView === 'historical'
       ? '?scope=historical'
       : salesRankingView === 'week'
-        ? '?scope=week'
+        ? `?scope=week&date=${encodeURIComponent(lastSevenDays.end)}`
       : salesRankingView === 'daily' && salesRankingDate
         ? `?date=${encodeURIComponent(salesRankingDate)}`
         : `?period=${encodeURIComponent(salesRankingMonth)}`

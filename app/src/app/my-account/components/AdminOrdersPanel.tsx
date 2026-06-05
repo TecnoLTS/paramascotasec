@@ -3,6 +3,7 @@
 import React from 'react'
 
 import type { Order } from '../types'
+import { getEcuadorDateKey, getEcuadorLastSevenDaysRange, getEcuadorTodayKey } from '../utils'
 
 type AdminOrdersPanelProps = {
     activeOrders: string | undefined;
@@ -32,23 +33,15 @@ const ORDER_DATE_FILTERS: Array<{ id: OrderDateRange; label: string }> = [
     { id: 'all', label: 'Todo' },
 ]
 
-const getEcuadorDateKey = (value: string | number | Date) => {
-    const date = value instanceof Date ? value : new Date(value)
-    if (!Number.isFinite(date.getTime())) return ''
-    return date.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' })
-}
-
 const isOrderInDateRange = (order: Order, range: OrderDateRange) => {
     if (range === 'all') return true
     const orderDate = getEcuadorDateKey(order.created_at)
     if (!orderDate) return false
-    const now = new Date()
-    const today = getEcuadorDateKey(now)
+    const today = getEcuadorTodayKey()
     if (range === 'day') return orderDate === today
     if (range === 'week') {
-        const start = new Date(now)
-        start.setDate(start.getDate() - 6)
-        return orderDate >= getEcuadorDateKey(start) && orderDate <= today
+        const week = getEcuadorLastSevenDaysRange(today)
+        return orderDate >= week.start && orderDate <= week.end
     }
     const monthKey = today.slice(0, 7)
     return orderDate.slice(0, 7) === monthKey
