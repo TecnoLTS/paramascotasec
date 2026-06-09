@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
+import { getConfiguredCookieDomains } from '@/lib/cookieDomains'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,14 +57,10 @@ const appendLogoutCookies = (headers: Headers) => {
   headers.append('Set-Cookie', buildExpiredCookie(authCookie, { httpOnly: true }))
   headers.append('Set-Cookie', buildExpiredCookie(csrfCookie))
 
-  // Also clear explicit domain cookies (covers older deployments / www variants).
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: 'paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: 'paramascotasec.com' }))
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: '.paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: '.paramascotasec.com' }))
-
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: 'www.paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: 'www.paramascotasec.com' }))
+  for (const domain of getConfiguredCookieDomains()) {
+    headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain, httpOnly: true }))
+    headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain }))
+  }
 }
 
 export const POST = async (req: NextRequest) => {

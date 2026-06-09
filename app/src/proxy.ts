@@ -2,9 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const PANEL_IP_MODE = (process.env.PANEL_IP_MODE || 'off').trim().toLowerCase()
 const PANEL_IP_ALLOWLIST = (process.env.PANEL_IP_ALLOWLIST || '').trim()
-const CSP_REPORT_URI = '/api/security/csp-report'
+const cleanSegment = (value: string, fallback: string) => (value || fallback).trim().replace(/^\/+|\/+$/g, '') || fallback
+const configuredPublicApiBasePath = (
+  process.env.NEXT_PUBLIC_API_BASE_PATH ||
+  `/${cleanSegment(process.env.NEXT_PUBLIC_TENANT_SLUG || '', 'paramascotasec')}/${cleanSegment(process.env.NEXT_PUBLIC_API_SERVICE_SEGMENT || '', 'api')}`
+)
+const PUBLIC_API_BASE_PATH = (configuredPublicApiBasePath.startsWith('/') ? configuredPublicApiBasePath : `/${configuredPublicApiBasePath}`).replace(/\/$/, '')
+const CSP_REPORT_URI = `${PUBLIC_API_BASE_PATH}/security/csp-report`
 const PRIVATE_IPV4_RULES = ['127.0.0.1/32', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
-const CANONICAL_HOST = 'paramascotasec.com'
+const CANONICAL_HOST = (process.env.NEXT_PUBLIC_SITE_DOMAIN || process.env.PRIMARY_SITE_DOMAIN || 'paramascotasec.com').trim().toLowerCase()
+const CANONICAL_ALIASES = new Set(
+  [
+    `www.${CANONICAL_HOST}`,
+    ...(process.env.NEXT_PUBLIC_SITE_ALIASES || process.env.PRIMARY_SITE_ALIASES || '').split(','),
+  ]
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean)
+)
 const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`
 const ADMIN_PANEL_TABS = new Set([
   'alerts',
@@ -164,9 +178,9 @@ const buildCanonicalHostRedirect = (req: NextRequest) => {
   const host = getForwardedHost(req)
   const proto = getForwardedProto(req)
   const isPrimaryHost = host === CANONICAL_HOST
-  const isWwwHost = host === `www.${CANONICAL_HOST}`
+  const isAliasHost = CANONICAL_ALIASES.has(host)
 
-  if (!isPrimaryHost && !isWwwHost) return null
+  if (!isPrimaryHost && !isAliasHost) return null
   if (isPrimaryHost && proto === 'https') return null
 
   return NextResponse.redirect(`${CANONICAL_ORIGIN}${req.nextUrl.pathname}${req.nextUrl.search}`, 301)

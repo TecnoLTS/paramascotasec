@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { resolveRequestProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
+import { getConfiguredCookieDomains } from '@/lib/cookieDomains'
 
 const getBackendBase = () => {
   return (process.env.BACKEND_URL_INTERNAL || 'http://paramascotasec-backend-web:8080/api').replace(/\/$/, '')
@@ -26,12 +27,10 @@ const appendLogoutCookies = (headers: Headers) => {
 
   headers.append('Set-Cookie', buildExpiredCookie(authCookie, { httpOnly: true }))
   headers.append('Set-Cookie', buildExpiredCookie(csrfCookie))
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: 'paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: 'paramascotasec.com' }))
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: '.paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: '.paramascotasec.com' }))
-  headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain: 'www.paramascotasec.com', httpOnly: true }))
-  headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain: 'www.paramascotasec.com' }))
+  for (const domain of getConfiguredCookieDomains()) {
+    headers.append('Set-Cookie', buildExpiredCookie(authCookie, { domain, httpOnly: true }))
+    headers.append('Set-Cookie', buildExpiredCookie(csrfCookie, { domain }))
+  }
 }
 
 const buildTargetUrl = (req: NextRequest) => {

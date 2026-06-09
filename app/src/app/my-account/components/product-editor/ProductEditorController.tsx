@@ -5,6 +5,7 @@ import Image from '@/components/Common/AppImage'
 import * as Icon from "@phosphor-icons/react/dist/ssr"
 
 import { requestApi } from '@/lib/apiClient'
+import { toPublicApiUrl } from '@/lib/publicApiPath'
 import { updateProductReferenceData, type PricingCalc, type PricingMargins } from '@/lib/api/settings'
 import { normalizeMeasurementLabel } from '@/lib/measurementLabel'
 import {
@@ -444,12 +445,7 @@ const uploadImage = async (file: File, kind: 'thumb' | 'gallery', metadata: Uplo
         }
     })
 
-    const url =
-        typeof window !== 'undefined'
-            ? `${window.location.origin}/api/uploads/images`
-            : '/api/uploads/images'
-
-    const res = await requestApi<{ url: string; width?: number; height?: number; kind: string; altText?: string }>(url, {
+    const res = await requestApi<{ url: string; width?: number; height?: number; kind: string; altText?: string }>(toPublicApiUrl('/api/uploads/images'), {
         method: 'POST',
         body: formData,
         timeoutMs: 60000,

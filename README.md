@@ -62,7 +62,7 @@ Para Search Console, Merchant Center y Business Profile revisa `SEO-GOOGLE-SETUP
 
 ## 🚚 5. Migrar el sistema de un servidor a otro
 
-Antes de mover este frontend a otro servidor, confirma que el cambio incluya toda la arquitectura relacionada. Este contenedor no debe exponerse directamente a Internet; debe quedar detras de `nginx-gateway` en la red Docker `edge`.
+Antes de mover este frontend a otro servidor, confirma que el cambio incluya toda la arquitectura relacionada. Este contenedor no debe exponerse directamente a Internet; debe quedar detras de `apisix-gateway` por el Gateway del workspace.
 
 ### Archivos y secretos
 
@@ -70,16 +70,16 @@ Antes de mover este frontend a otro servidor, confirma que el cambio incluya tod
 * Copia `entorno/.env` y `entorno/servidor.env` del servidor origen o crea uno nuevo desde `templates/entorno/.env.example`.
 * No copies `entorno/.secrets/` como artefacto versionado. El deploy lo regenera desde `INTERNAL_PROXY_TOKEN` en `entorno/.env`.
 * Verifica que `INTERNAL_PROXY_TOKEN` coincida con el backend si ambos validan el mismo token interno.
-* Verifica `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_BACKEND_URL`, `BACKEND_URL_INTERNAL` y la llave publica de Google Maps.
+* Verifica `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_TENANT_SLUG`, `NEXT_PUBLIC_API_SERVICE_SEGMENT`, `BACKEND_URL_INTERNAL` y la llave publica de Google Maps.
 * Restringe `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` por HTTP referrer en Google Cloud.
 
 ### Red y gateway
 
 * Debe existir la red Docker externa `edge`. Los scripts la crean si falta.
-* `nginx-gateway` debe estar conectado a `edge`.
+* `apisix-gateway` debe estar conectado a `edge` y a `paramascotasec-web-internal`.
 * El gateway debe apuntar al alias interno `paramascotasec-frontend:3000`.
 * El frontend debe verse en `docker ps` como `3000/tcp`, sin publish tipo `127.0.0.1:3000->3000` ni `0.0.0.0:3000->3000`.
-* Los unicos puertos publicos esperados para la web son `80` y `443` en `nginx-gateway`.
+* Los unicos puertos publicos esperados para la web son `80` y `443` en `apisix-gateway`.
 
 ### Volumen de uploads
 
@@ -114,7 +114,7 @@ cd /home/admincenter/contenedores
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-docker exec nginx-gateway sh -lc 'wget -q -O - http://paramascotasec-frontend:3000/healthz'
+docker exec apisix-gateway sh -lc 'curl -fsS http://paramascotasec-frontend:3000/healthz'
 cd /home/admincenter/contenedores/paramascotasec && ./scripts/check-api-routes.sh
 curl -k -I https://paramascotasec.com/
 ```
@@ -123,7 +123,7 @@ Resultado esperado:
 
 * `paramascotasec-app` healthy.
 * `paramascotasec-app` solo muestra `3000/tcp`.
-* `nginx-gateway` publica `0.0.0.0:80` y `0.0.0.0:443`.
+* `apisix-gateway` publica `0.0.0.0:80` y `0.0.0.0:443` en produccion.
 * La prueba interna desde gateway responde `ok`.
 * `https://paramascotasec.com/` responde `200`, no `502`.
 
@@ -136,4 +136,4 @@ getent hosts paramascotasec.com
 curl -4 -fsS https://ifconfig.me && echo
 ```
 
-Si el dominio apunta a otro host, puedes tener el nuevo servidor sano y seguir viendo `502` desde el navegador. En ese caso, actualiza DNS, proxy externo o balanceador para que `paramascotasec.com` llegue al servidor donde corre `nginx-gateway`.
+Si el dominio apunta a otro host, puedes tener el nuevo servidor sano y seguir viendo `502` desde el navegador. En ese caso, actualiza DNS, proxy externo o balanceador para que `paramascotasec.com` llegue al servidor donde corre `apisix-gateway`.

@@ -134,14 +134,48 @@ PY
 
 configure_frontend_public_urls() {
   local env_file="$1"
-  local base_url
+  local base_url tenant_slug api_segment api_base_path site_domain site_aliases local_ips gateway_env gateway_scheme
 
+  gateway_env="${APP_DIR}/../Gateway/entorno/.env"
+  site_domain="$(normalize_env_value "$(read_env_value "${env_file}" "SITE_DOMAIN" || true)")"
+  site_domain="${site_domain:-paramascotasec.com}"
+  site_aliases="$(normalize_env_value "$(read_env_value "${env_file}" "SITE_ALIASES" || true)")"
+  site_aliases="${site_aliases:-$(normalize_env_value "$(read_env_value "${env_file}" "SITE_WWW_DOMAIN" || true)")}"
+  site_aliases="${site_aliases:-www.${site_domain}}"
+  local_ips="$(normalize_env_value "$(read_env_value "${env_file}" "SITE_LOCAL_IPS" || true)")"
+  if [[ -f "${gateway_env}" ]]; then
+    site_domain="$(normalize_env_value "$(read_env_value "${gateway_env}" "PRIMARY_SITE_DOMAIN" || true)")"
+    site_domain="${site_domain:-paramascotasec.com}"
+    site_aliases="$(normalize_env_value "$(read_env_value "${gateway_env}" "PRIMARY_SITE_ALIASES" || true)")"
+    site_aliases="${site_aliases:-www.${site_domain}}"
+    local_ips="$(normalize_env_value "$(read_env_value "${gateway_env}" "PRIMARY_SITE_LOCAL_IPS" || true)")"
+    gateway_scheme="$(normalize_env_value "$(read_env_value "${gateway_env}" "PUBLIC_SCHEME" || true)")"
+  fi
   base_url="$(read_env_value "${env_file}" "NEXT_PUBLIC_BASE_URL" || true)"
   base_url="$(normalize_env_value "${base_url}")"
-  base_url="${base_url:-https://paramascotasec.com}"
+  base_url="${base_url:-${gateway_scheme:-https}://${site_domain}}"
+  tenant_slug="$(normalize_env_value "$(read_env_value "${env_file}" "NEXT_PUBLIC_TENANT_SLUG" || true)")"
+  tenant_slug="${tenant_slug:-paramascotasec}"
+  api_segment="$(normalize_env_value "$(read_env_value "${env_file}" "NEXT_PUBLIC_API_SERVICE_SEGMENT" || true)")"
+  api_segment="${api_segment:-api}"
+  if [[ -f "${gateway_env}" ]]; then
+    tenant_slug="$(normalize_env_value "$(read_env_value "${gateway_env}" "PUBLIC_TENANT_SLUG" || true)")"
+    tenant_slug="${tenant_slug:-paramascotasec}"
+    api_segment="$(normalize_env_value "$(read_env_value "${gateway_env}" "PUBLIC_API_SERVICE_SEGMENT" || true)")"
+    api_segment="${api_segment:-api}"
+    base_url="${gateway_scheme:-https}://${site_domain}"
+  fi
+  api_base_path="/${tenant_slug#/}/${api_segment#/}"
+  api_base_path="${api_base_path%/}"
 
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_SITE_DOMAIN" "${site_domain}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_SITE_ALIASES" "${site_aliases}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_SITE_LOCAL_IPS" "${local_ips}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_TENANT_SLUG" "${tenant_slug}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_API_SERVICE_SEGMENT" "${api_segment}"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_API_BASE_PATH" "${api_base_path}"
   upsert_env_value "${env_file}" "NEXT_PUBLIC_BASE_URL" "${base_url%/}"
-  upsert_env_value "${env_file}" "NEXT_PUBLIC_BACKEND_URL" "${base_url%/}/api"
+  upsert_env_value "${env_file}" "NEXT_PUBLIC_BACKEND_URL" "${base_url%/}${api_base_path}"
   upsert_env_value "${env_file}" "BACKEND_URL_INTERNAL" "http://paramascotasec-backend-web:8080/api"
 }
 

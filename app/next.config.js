@@ -1,12 +1,17 @@
 /** @type {import('next').NextConfig} */
 const imageOptimizationDisabled = process.env.NEXT_IMAGE_UNOPTIMIZED === '1'
+const splitCsv = (value) => (value || '').split(',').map((item) => item.trim()).filter(Boolean)
+const primarySiteDomain = process.env.NEXT_PUBLIC_SITE_DOMAIN || process.env.SITE_DOMAIN || 'paramascotasec.com'
+const publicSiteHosts = Array.from(new Set([
+    primarySiteDomain,
+    ...splitCsv(process.env.NEXT_PUBLIC_SITE_ALIASES || process.env.SITE_ALIASES || `www.${primarySiteDomain}`),
+]))
+const localSiteHosts = splitCsv(process.env.NEXT_PUBLIC_SITE_LOCAL_IPS || process.env.PRIMARY_SITE_LOCAL_IPS)
 const allowedDevOrigins = process.env.NODE_ENV === 'production'
-    ? ['paramascotasec.com', 'www.paramascotasec.com']
+    ? publicSiteHosts
     : [
-        'paramascotasec.com',
-        'www.paramascotasec.com',
-        '192.168.100.229',
-        '80.241.213.31',
+        ...publicSiteHosts,
+        ...localSiteHosts,
         'localhost',
         '127.0.0.1',
     ]
@@ -62,14 +67,10 @@ const nextConfig = {
                     hostname: 'localhost',
                     port: '8080',
                 }]),
-            {
+            ...publicSiteHosts.map((hostname) => ({
                 protocol: 'https',
-                hostname: 'paramascotasec.com',
-            },
-            {
-                protocol: 'https',
-                hostname: 'www.paramascotasec.com',
-            },
+                hostname,
+            })),
         ],
     },
     async headers() {

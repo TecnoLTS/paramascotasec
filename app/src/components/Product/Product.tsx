@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import Image from '@/components/Common/AppImage'
+import { isPublicUploadUrl } from '@/lib/publicUploads'
 import { ProductType } from '@/type/ProductType'
 import { Eye, ShoppingBagOpen } from "@phosphor-icons/react/dist/ssr";
 import { useCart } from '@/context/CartContext'
@@ -139,10 +140,7 @@ const Product: React.FC<ProductProps> = ({ data, type, style = '', showQuickView
             : []
     const primaryImage = thumbImages[0] || fullImages[0] || '/images/product/1.webp'
     const primaryImageAlt = getProductImageAlt(selectedVariant as ProductType, primaryImage, 'producto')
-    const isDirectUploadImage = (src: string) =>
-        src.startsWith('/uploads/') ||
-        src.startsWith('https://paramascotasec.com/uploads/') ||
-        src.startsWith('https://www.paramascotasec.com/uploads/')
+    const isDirectUploadImage = (src: string) => isPublicUploadUrl(src)
     const shouldBypassOptimizer = (src: string) =>
         src.startsWith('data:') || src.startsWith('blob:') || isDirectUploadImage(src)
     const resolveFallbackImage = (src: string) => src || '/images/product/1.webp'

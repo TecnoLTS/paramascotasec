@@ -1,12 +1,10 @@
 import NextImage, { type ImageProps } from 'next/image'
 import { versionLocalImagePath } from '@/lib/staticAsset'
+import { isPublicUploadUrl } from '@/lib/publicUploads'
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
-const shouldAlwaysBypassOptimizer = (src: string) =>
-  src.startsWith('/uploads/') ||
-  src.startsWith('https://paramascotasec.com/uploads/') ||
-  src.startsWith('https://www.paramascotasec.com/uploads/')
+const shouldAlwaysBypassOptimizer = (src: string) => isPublicUploadUrl(src)
 
 const shouldBypassOptimizerInDevelopment = (src: string) => {
   if (!isDevelopment) return false

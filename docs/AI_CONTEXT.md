@@ -5,7 +5,7 @@ Fuente canonica de contexto IA para `/home/admincenter/contenedores`.
 
 ## Proposito del proyecto
 
-ParamascotasEC es un workspace integrado para e-commerce de mascotas en Ecuador. Incluye frontend Next.js, backend PHP, base PostgreSQL, microservicio de facturacion electronica SRI y gateway Nginx/Certbot.
+ParamascotasEC es un workspace integrado para e-commerce de mascotas en Ecuador. Incluye frontend Next.js, backend PHP, base PostgreSQL, microservicio de facturacion electronica SRI y gateway APISIX/etcd con Certbot oficial.
 
 El objetivo operativo es mantener un entorno desplegable por scripts, con reglas de negocio server-side, seguridad admin estricta y contexto suficiente para que una IA o un desarrollador pueda continuar trabajo sin redescubrir decisiones recientes.
 
@@ -56,16 +56,17 @@ RUN_DB_MIGRATIONS=1 ./scripts/deploy-development.sh facturador
 
 Servicios validos para wrappers individuales: `facturador`, `db`, `backend`, `frontend`, `gateway`.
 Orden del despliegue completo: Facturador -> DB -> Backend -> Frontend -> Gateway.
-Development usa `.env.development`; production usa `.env`.
+Los scripts materializan el modo activo en `entorno/.env` por componente; `development` y `production` se despliegan solo por los wrappers de deploy.
 PostgreSQL major actual: 18. La DB principal usa `postgres18_data` y conserva `postgres16_data` para rollback; Facturador usa el volumen Docker `postgres18-data` y conserva `postgres-data` para rollback.
 
 ## Red
 
 El workspace usa redes Docker segmentadas, creadas por los scripts. `edge` queda para entrada del Gateway; las comunicaciones internas usan redes `internal` y los contenedores con salida externa tienen redes de egreso dedicadas.
 
-- `paramascotasec-web-internal`: Gateway, Frontend y Backend Web.
+- `apisix-gateway-internal`: APISIX, etcd y webroot ACME interno.
+- `paramascotasec-web-internal`: APISIX Gateway, Frontend y Backend Web.
 - `paramascotasec-db-internal`: Backend App y DB principal.
-- `paramascotasec-services-internal`: Gateway, Backend App y Facturador Nginx (`facturador`).
+- `paramascotasec-services-internal`: APISIX Gateway, Backend App y Facturador Nginx (`facturador`).
 - Redes de egreso no publicadas: Backend App para SMTP; Facturador service/worker para SRI y SMTP.
 - En desarrollo, los puertos locales de diagnostico del Facturador se publican mediante sidecars (`billing-nginx-local`, `billing-postgres-local`) en `127.0.0.1`; los servicios reales y DBs permanecen en redes internas.
 - Mantener el aislamiento de redes tambien en development: no conectar contenedores internos a `bridge`/egreso temporal como solucion normal. Si una tarea exige egreso para instalar dependencias o diagnosticar, preferir los scripts/imagenes/caches previstos; cualquier excepcion debe ser explicita, temporal, documentada y revertida antes de cerrar.
@@ -85,7 +86,7 @@ El workspace usa redes Docker segmentadas, creadas por los scripts. `edge` queda
 | Backend | PHP 8.5 MVC propio + PostgreSQL | `paramascotasec-backend-app`, `paramascotasec-backend-web` |
 | Database | PostgreSQL 18 | `next-test-db` |
 | Facturador | PHP 8.5 + PostgreSQL 18 | `billing-service`, `billing-recovery-worker`, `billing-postgres`, `billing-nginx`; dev agrega `billing-nginx-local`, `billing-postgres-local` |
-| Gateway | Nginx stable 1.30 + Certbot | `nginx-gateway`, `certbot` |
+| Gateway | APISIX 3.16 + etcd 3.5 + Certbot oficial | `apisix-gateway`, `apisix-etcd`, `apisix-acme-webroot`, `certbot` |
 
 ## Frontend `paramascotasec/app`
 
@@ -120,16 +121,21 @@ npm run test         # lint + typecheck
 - Worker: `php bin/process_pending_invoices.php --limit=50 --min-age-seconds=3600`, ejecutado en loop por `billing-recovery-worker`.
 - DB propia: `billing-postgres`, puerto interno 5432; en desarrollo `billing-postgres-local` publica `127.0.0.1:5434` solo para diagnostico.
 - HTTP local de facturador `127.0.0.1:8084` existe solo en desarrollo via `billing-nginx-local` para diagnostico.
-- Acceso publico del facturador, cuando aplique, entra por Gateway bajo `/facturador/api/...` y reescribe a las rutas internas `/api/...`; paneles/admin no se publican por Gateway.
+- Acceso publico del facturador, cuando aplique, entra por Gateway bajo `/${PUBLIC_TENANT_SLUG}/${PUBLIC_BILLING_SERVICE_SEGMENT}/health` y `/${PUBLIC_TENANT_SLUG}/${PUBLIC_BILLING_SERVICE_SEGMENT}/${PUBLIC_BILLING_ENV_SEGMENT}/v1/*`; APISIX reescribe a `/health` y `/api/{test|production}/v1/*`. Paneles/admin no se publican por Gateway.
 - SRI por entorno: desarrollo usa `pruebas` (`celcer.sri.gob.ec`) y produccion usa `produccion` (`cel.sri.gob.ec`).
 - El correo del facturador puede venir de la configuracion de sucursal en DB; `billing-service` y `billing-recovery-worker` requieren egreso SMTP cuando haya sucursales con mail activo.
 - Rutas por entorno: `FACTURADOR_API_INVOICES_PATH=/api/test/v1/invoices` en dev y `/api/production/v1/invoices` en prod.
 
 ## Gateway
 
-- Fragil para SSL y perfiles: nunca levantar manualmente con `docker compose up`.
+- Fragil para SSL, perfiles y reglas dinamicas: nunca levantar manualmente con `docker compose up`.
 - Usar `./scripts/deploy-development.sh gateway` o `./scripts/deploy-production.sh gateway` desde la raiz del workspace.
-- Dominios publicados: solo `paramascotasec.com` y `www.paramascotasec.com`; no usar subdominio `api` ni dominios de terceros.
+- APISIX se configura desde `Gateway/entorno/.env`; no hardcodear dominio, tenant, base path ni upstream en rutas.
+- Contrato publico: web `https://${PRIMARY_SITE_DOMAIN}/`; backend `https://${PRIMARY_SITE_DOMAIN}/${PUBLIC_TENANT_SLUG}/${PUBLIC_API_SERVICE_SEGMENT}/*`; facturacion `https://${PRIMARY_SITE_DOMAIN}/${PUBLIC_TENANT_SLUG}/${PUBLIC_BILLING_SERVICE_SEGMENT}/${PUBLIC_BILLING_ENV_SEGMENT}/v1/*`.
+- Variables clave: `PRIMARY_SITE_DOMAIN`, `PRIMARY_SITE_ALIASES`, `PRIMARY_SITE_PUBLIC_IP`, `PRIMARY_SITE_LOCAL_IPS`, `PUBLIC_TENANT_SLUG`, `PUBLIC_API_SERVICE_SEGMENT`, `PUBLIC_BILLING_SERVICE_SEGMENT`, `PUBLIC_BILLING_ENV_SEGMENT`, `FRONTEND_UPSTREAM`, `BACKEND_UPSTREAM`, `FACTURADOR_UPSTREAM`.
+- Rutas legacy publicas `/api/*`, `/facturador/*` y `/uploads-api/*` quedan bloqueadas por APISIX.
+- `sync-apisix.sh` aplica upstreams/services/routes/ssl por Admin API y limpia solo objetos con marca managed.
+- Dashboard local de APISIX: `http://${APISIX_ADMIN_BIND_IP}:${APISIX_ADMIN_PORT}/ui/` (development actual: `127.0.0.1:9180`).
 - En desarrollo `GATEWAY_BIND_IP` debe apuntar a localhost/LAN; en produccion publica solo `80/443`.
 - `certbot` corre solo en produccion via perfil `certbot`.
 - Renovacion manual:
@@ -147,7 +153,7 @@ scripts/check-container-connectivity.sh development
 scripts/check-container-connectivity.sh production
 ```
 
-`check-container-connectivity.sh` tambien valida que `/api/products` devuelva productos publicos. Un deploy dev/prod debe fallar si el catalogo publico queda vacio; en development solo se permite sembrar datasets demo con `SEED_DEVELOPMENT_CATALOG=1`, no por defecto. `check-container-connectivity.sh production` valida el runtime de produccion; no correrlo esperando exito mientras el workspace esta desplegado en development. Para cambios acotados, correr tambien checks del componente afectado cuando aplique.
+`check-container-connectivity.sh` tambien valida que `/${PUBLIC_TENANT_SLUG}/${PUBLIC_API_SERVICE_SEGMENT}/products` devuelva productos publicos y que las rutas legacy `/api/*`, `/facturador/*` y `/uploads-api/*` respondan 404. Un deploy dev/prod debe fallar si el catalogo publico queda vacio; en development solo se permite sembrar datasets demo con `SEED_DEVELOPMENT_CATALOG=1`, no por defecto. `check-container-connectivity.sh production` valida el runtime de produccion; no correrlo esperando exito mientras el workspace esta desplegado en development. Para cambios acotados, correr tambien checks del componente afectado cuando aplique.
 
 ## Reglas de negocio criticas
 
@@ -157,7 +163,7 @@ scripts/check-container-connectivity.sh production
 - Descuentos: server-side; tipos porcentaje o fijo; soportan `min_subtotal`, `max_discount`, `max_uses`.
 - Consumidor final: `9999999999999` solo se permite hasta USD 50.00 oficiales. Ventas mayores deben tener cedula o RUC valido del cliente; backend y Facturador bloquean el caso antes de emitir.
 - Inventario FIFO: `inventory_lots` rastrea lotes de compra; ordenes consumen lotes antiguos primero; costos se restauran al cancelar.
-- Sitio unico: solo `paramascotasec.com` y `www.paramascotasec.com`; `DEFAULT_TENANT=paramascotasec`; dominios ajenos deben quedar rechazados por el Gateway.
+- Sitio publico: dominio principal, alias y tenant salen de `.env` del Gateway; en development actual son `paramascotasec.com`, `www.paramascotasec.com` y `paramascotasec`. Dominios ajenos deben quedar rechazados o redirigidos por APISIX segun reglas.
 
 ## Seguridad
 
@@ -194,6 +200,38 @@ Usar estas operaciones solo cuando el usuario las pida explicitamente o cuando e
 - Guia SEO/Google: `paramascotasec/SEO-GOOGLE-SETUP.md`.
 
 ## Historial de trabajo IA
+
+### 2026-06-09 - Perimetro APISIX Dinamico por .env
+
+Objetivo: sustituir el perimetro Nginx por APISIX y dejar dominio, tenant, prefijos publicos y upstreams configurables desde `.env`, manteniendo ParamascotasEC solo como configuracion development actual.
+
+Cambios:
+- Gateway migra a `apache/apisix:3.16.0-debian` + `quay.io/coreos/etcd:v3.5.31` + `certbot/certbot:v5.6.0`, con webroot ACME interno y Admin API local.
+- `Gateway/scripts/sync-apisix.sh` valida `Gateway/entorno/.env`, aplica upstreams/services/routes/ssl por Admin API y limpia solo objetos marcados como managed.
+- Rutas publicas quedan tenantizadas: web `/`, backend `/${PUBLIC_TENANT_SLUG}/${PUBLIC_API_SERVICE_SEGMENT}/*` y facturacion `/${PUBLIC_TENANT_SLUG}/${PUBLIC_BILLING_SERVICE_SEGMENT}/${PUBLIC_BILLING_ENV_SEGMENT}/v1/*`.
+- APISIX bloquea rutas legacy `/api/*`, `/facturador/*` y `/uploads-api/*`; alias del sitio redirigen al dominio principal y HTTP redirige a HTTPS salvo ACME.
+- Frontend y backend leen dominio, alias, tenant y base API desde env; el frontend traduce sus llamadas publicas al prefijo tenantizado y conserva rutas internas `/api/...` solo como contrato intra-app.
+- Checks de workspace se ajustan a APISIX, rutas tenantizadas, Admin API local y `entorno/.env`.
+
+Operacion y verificacion:
+- Se desplego solo development por scripts: backend, frontend y gateway. No se desplego production.
+- No se ejecutaron migraciones, no se limpiaron datos y no se emitieron comprobantes SRI.
+- Validado: `https://paramascotasec.com/`, `/paramascotasec/api/health`, `/paramascotasec/api/products`, `/paramascotasec/facturacion/health`, alias `www` con 301 y rutas legacy con 404.
+- Pasaron `npm run typecheck`, `npm run lint`, sintaxis PHP/config/scripts, `docker compose --env-file Gateway/entorno/.env config`, `./scripts/check-container-connectivity.sh development`, `./scripts/check-env-secrets.sh development`, `./scripts/check-env-secrets.sh all`, `./scripts/check-paramascotas.sh` y `paramascotasec/scripts/check-api-routes.sh`.
+- Quedan advertencias operativas preexistentes: sucursales Facturador development con API test sin `.p12` y datos/keys historicos de tenants no principales; no se modificaron por ser limpieza de datos separada.
+
+### 2026-06-09 - Erradicacion de Identificadores Legacy en Preflight
+
+Objetivo: eliminar nombres legacy del propio sistema de verificacion single-site sin perder la proteccion contra reintroducciones de tenants/dominios no permitidos.
+
+Cambios:
+- `scripts/check-env-secrets.sh` reemplaza la lista negra textual de identificadores antiguos por controles positivos: `server_name` del Gateway solo permite `paramascotasec.com` y `www.paramascotasec.com`; upstreams solo permiten los servicios internos esperados; backend config solo declara `paramascotasec`; frontend solo conserva el directorio de tenant `paramascotasec.com`.
+- `AGENTS.md` y `paramascotasec/docs/AI_CONTEXT.md` neutralizan menciones historicas explicitas a nombres legacy, conservando el contexto como "legacy no permitido".
+
+Operacion y verificacion:
+- No se desplego ningun servicio y no se tocaron `.env`, bases de datos, certificados ni secretos.
+- `bash -n scripts/check-env-secrets.sh` paso.
+- `rg` confirma que el workspace ya no contiene los identificadores legacy consultados fuera de historial Git.
 
 ### 2026-06-08 - Gestion de Recurrencias y Arriendo Junio
 
@@ -494,7 +532,7 @@ Causa:
 Cambios:
 - Se respaldo el data dir parcial en `paramascotasec-DB/postgres18_development_data.before-full-restore-20260531-125837`.
 - Se copio `paramascotasec-DB/postgres18_data` hacia `postgres18_development_data` y se levanto la DB con `paramascotasec-DB/scripts/deploy-development.sh`.
-- Se limpio solo el alcance single-site dentro de la copia de development: se elimino la DB `tecnolts` y el registro `Tenant` no principal, dejando solo `paramascotasec`.
+- Se limpio solo el alcance single-site dentro de la copia de development: se elimino la DB legacy no principal y el registro `Tenant` no principal, dejando solo `paramascotasec`.
 - Se corrigieron 31 referencias de imagen antiguas `.jpg` en la tabla `Image` para apuntar a sus archivos `.webp` existentes.
 - `scripts/deploy-workspace.sh` ya no siembra catalogo demo por defecto; si el catalogo publico esta vacio, falla. Solo permite reimportar datasets demo con `SEED_DEVELOPMENT_CATALOG=1`.
 
@@ -540,7 +578,7 @@ Objetivo: dejar el workspace limitado a `paramascotasec.com` / `www.paramascotas
 Cambios:
 - Gateway queda sin bloques/upstreams de dominios anteriores; `CERTBOT_DOMAINS` dev/prod solo incluye `paramascotasec.com,www.paramascotasec.com`.
 - Backend `config/tenants.php` y migracion `006_add_tenants.sql` quedan solo con `paramascotasec`; scripts auxiliares de tenants ya no crean DBs no usadas.
-- Frontend deja de permitir `api.paramascotasec.com`; las APIs e imagenes de uploads quedan bajo el mismo sitio (`/api`, `paramascotasec.com`, `www.paramascotasec.com`).
+- Frontend deja de permitir el subdominio API dedicado; las APIs e imagenes de uploads quedan bajo el mismo sitio (`/api`, `paramascotasec.com`, `www.paramascotasec.com`).
 - DB dev principal queda solo con base `paramascotasec` y `Tenant=paramascotasec`; se elimino la DB dev auxiliar vacia no usada.
 - Facturador conserva solo cliente/sucursal principal activa; clientes/sucursales no principales quedaron inactivos, sin SMTP/certificados/logos y con API keys historicas revocadas para evitar egresos o accesos accidentales.
 - `scripts/check-env-secrets.sh` ahora valida alcance single-site, tenant unico, ausencia de egresos/certificados en sucursales no principales y ausencia de API keys vigentes no principales.
@@ -549,7 +587,7 @@ Verificacion:
 - `./deploy-development.sh` completo paso y luego se redeplego frontend dev para recargar `next.config.js`.
 - `./scripts/check-container-connectivity.sh development` paso completo: puertos cerrados, redes internas, backend/facturador/DB/SMTP/SRI pruebas y rutas criticas OK.
 - `./scripts/check-env-secrets.sh all` paso con 0 fallos y 0 advertencias para dev/prod.
-- Gateway dev: `https://paramascotasec.com/` 200, `https://www.paramascotasec.com/` 301, `/healthz` 200, `/api/health` 200, `/facturador/health` 200; `tecnolts.com` queda cerrado (`000`/empty reply).
+- Gateway dev: `https://paramascotasec.com/` 200, `https://www.paramascotasec.com/` 301, `/healthz` 200, `/api/health` 200, `/facturador/health` 200; un dominio legacy no permitido queda cerrado (`000`/empty reply).
 - Certificado publico productivo validado contra Let's Encrypt E8, SAN `paramascotasec.com,www.paramascotasec.com`, vigente del 2026-04-21 al 2026-07-20.
 
 ### 2026-05-31 - Auditoria de .env, Secretos y Preflight Produccion

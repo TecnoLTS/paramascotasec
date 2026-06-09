@@ -1,6 +1,7 @@
 import { getConfiguredTenantProto, resolveTenantHost } from '@/lib/requestHost'
 import { attachInternalProxyToken } from '@/lib/internalProxy'
 import { clearStoredSession } from '@/lib/authSession'
+import { toPublicApiUrl } from '@/lib/publicApiPath'
 
 const getCsrfCookieName = () => {
   const fromEnv = process.env.NEXT_PUBLIC_AUTH_CSRF_COOKIE_NAME
@@ -74,8 +75,7 @@ const resolveUrl = (path: string) => {
     return `${internalUrl.replace(/\/$/, '')}${normalizedPath.replace('/api', '')}`
   }
 
-  // En el navegador usamos el mismo origen y dejamos que Next.js proxee internamente
-  return normalizedPath
+  return toPublicApiUrl(normalizedPath)
 }
 
 const authFreePaths = new Set([
@@ -168,7 +168,7 @@ const refreshBrowserCsrfToken = async () => {
     return browserCsrfRefreshPromise
   }
 
-  browserCsrfRefreshPromise = fetch('/api/auth/session', {
+  browserCsrfRefreshPromise = fetch(resolveUrl('/api/auth/session'), {
     method: 'GET',
     credentials: 'include',
     cache: 'no-store',

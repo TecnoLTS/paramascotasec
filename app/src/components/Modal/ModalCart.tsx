@@ -14,6 +14,7 @@ import { countdownTime } from '@/store/countdownTime'
 import CountdownTimeType from '@/type/CountdownType';
 import { getPublicStoreStatus } from '@/lib/api/settings'
 import { getProductVariantLabel } from '@/lib/catalog'
+import { toPublicApiUrl } from '@/lib/publicApiPath'
 
 const Icon = {
     Handbag,
@@ -53,7 +54,7 @@ const ModalCart = ({
     const fetchSuggestedProducts = async (signal: AbortSignal): Promise<ProductType[]> => {
         for (const url of SUGGESTIONS_ENDPOINTS) {
             try {
-                const res = await fetch(url, {
+                const res = await fetch(url.startsWith('/api/') ? toPublicApiUrl(url) : url, {
                     cache: 'no-store',
                     signal,
                 })

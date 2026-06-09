@@ -32,7 +32,12 @@ const normalizeHost = (host?: string | null) => {
 
 export const getTenantIdFromHost = (host?: string | null): TenantId => {
   const normalized = normalizeHost(host)
-  if (normalized === 'paramascotasec.com') return 'paramascotasec'
+  const configured = normalizeHost(process.env.NEXT_PUBLIC_SITE_DOMAIN || siteConfig.domain)
+  const aliases = (process.env.NEXT_PUBLIC_SITE_ALIASES || '')
+    .split(',')
+    .map((item) => normalizeHost(item))
+    .filter(Boolean)
+  if (normalized && (normalized === configured || aliases.includes(normalized))) return 'paramascotasec'
   return defaultTenantId
 }
 

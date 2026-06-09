@@ -4,6 +4,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import MenuOne from '@/components/Header/Menu/MenuPet'
 import Footer from '@/components/Footer/Footer'
+import { toPublicApiUrl } from '@/lib/publicApiPath'
 import {
     Archive,
     ArrowDownLeft,
@@ -1344,7 +1345,7 @@ const MyAccount = () => {
             showNotification('La factura no tiene clave de acceso válida.', 'error')
             return
         }
-        const openedWindow = window.open(`/api/admin/billing/rides/${encodeURIComponent(normalized)}/pdf`, '_blank')
+        const openedWindow = window.open(toPublicApiUrl(`/api/admin/billing/rides/${encodeURIComponent(normalized)}/pdf`), '_blank')
         if (!openedWindow) {
             showNotification('Tu navegador bloqueó la apertura del PDF.', 'error')
         }
@@ -1676,7 +1677,7 @@ const MyAccount = () => {
         let printWindow: Window | null = null
 
         try {
-            const res = await fetch(`/api/orders/${orderId}/invoice`, {
+            const res = await fetch(toPublicApiUrl(`/api/orders/${orderId}/invoice`), {
                 credentials: 'include'
             })
             if (!res.ok) {

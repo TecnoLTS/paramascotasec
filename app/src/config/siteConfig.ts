@@ -77,6 +77,11 @@ export type SiteConfig = {
 
 export const defaultSiteId: SiteId = 'paramascotasec'
 const SHOP_DEPARTMENT_CATEGORY_IDS = ['ropa', 'alimento', 'salud', 'accesorios'] as const
+const siteDomain = process.env.NEXT_PUBLIC_SITE_DOMAIN?.trim() || 'paramascotasec.com'
+const siteBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL?.trim() || `https://${siteDomain}`).replace(/\/$/, '')
+const publicTenantSlug = process.env.NEXT_PUBLIC_TENANT_SLUG?.trim() || 'paramascotasec'
+const publicApiSegment = process.env.NEXT_PUBLIC_API_SERVICE_SEGMENT?.trim() || 'api'
+const siteApiBaseUrl = (process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || `${siteBaseUrl}/${publicTenantSlug}/${publicApiSegment}`).replace(/\/$/, '')
 
 // Punto principal para editar datos globales del sitio.
 // Si quieres tocar logo, textos, menu, contacto o enlaces, empieza aqui.
@@ -84,9 +89,9 @@ export const siteConfig: SiteConfig = {
   id: 'paramascotasec',
   name: 'ParaMascotasEC',
   shortName: 'ParaMascotasEC',
-  domain: 'paramascotasec.com',
-  baseUrl: 'https://paramascotasec.com',
-  apiBaseUrl: 'https://paramascotasec.com/api',
+  domain: siteDomain,
+  baseUrl: siteBaseUrl,
+  apiBaseUrl: siteApiBaseUrl,
   description:
     'ParaMascotasEC es una tienda de mascotas online en Ecuador con alimento para perros y gatos, comida húmeda, snacks, ropa, juguetes, accesorios y cuidado.',
   logo: {
@@ -95,7 +100,7 @@ export const siteConfig: SiteConfig = {
     mobileSrc: '/images/brand/LogoVerde150.png',
   },
   contact: {
-    email: 'info@paramascotasec.com',
+    email: process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || 'info@paramascotasec.com',
     whatsappNumber: '593978913529',
     whatsappLabel: '+593 (097) 891-35-29',
   },

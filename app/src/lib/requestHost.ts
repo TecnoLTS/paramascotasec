@@ -1,5 +1,11 @@
 const readConfiguredBase = () => process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL
 
+const csvHosts = (value?: string | null) =>
+  (value || '')
+    .split(',')
+    .map((item) => normalizeHost(item))
+    .filter(Boolean)
+
 const INTERNAL_HOST_PATTERNS = [
   /^next-test-app$/i,
   /^app-dev$/i,
@@ -15,8 +21,30 @@ const isInternalHost = (host: string) => {
   return INTERNAL_HOST_PATTERNS.some((pattern) => pattern.test(host))
 }
 
-const isAllowedPublicHost = (host: string) =>
-  host === 'paramascotasec.com' || host === 'www.paramascotasec.com'
+const configuredPublicHosts = () => {
+  const hosts = new Set<string>()
+  for (const host of [
+    process.env.NEXT_PUBLIC_SITE_DOMAIN,
+    process.env.PRIMARY_SITE_DOMAIN,
+    ...csvHosts(process.env.NEXT_PUBLIC_SITE_ALIASES),
+    ...csvHosts(process.env.PRIMARY_SITE_ALIASES),
+  ]) {
+    const normalized = normalizeHost(host)
+    if (normalized) hosts.add(normalized)
+  }
+
+  const configuredHost = getConfiguredTenantHost()
+  if (configuredHost) hosts.add(configuredHost)
+
+  if (hosts.size === 0) {
+    hosts.add('paramascotasec.com')
+    hosts.add('www.paramascotasec.com')
+  }
+
+  return hosts
+}
+
+const isAllowedPublicHost = (host: string) => configuredPublicHosts().has(host)
 
 export const getConfiguredTenantHost = () => {
   const base = readConfiguredBase()
