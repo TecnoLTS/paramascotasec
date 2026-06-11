@@ -29,8 +29,8 @@ El despliegue de development usa `FRONTEND_DEV_RUNTIME=stable`: compila temporal
 ## 📌 3. Datos Relevantes y Contexto a Tomar en Cuenta
 
 *   **Configuracion Local:**
-    El servicio usa solo `entorno/.env` y `entorno/servidor.env`. Si falta el archivo real, el deploy crea una copia desde `templates/entorno/` y aborta para que completes secretos.
-    `templates/entorno/.env.example` y `templates/entorno/servidor.env.example` son las plantillas versionadas; `entorno/.secrets/` guarda secretos runtime generados por el deploy.
+    El servicio usa solo `entorno/.env`. Si falta el archivo real, el deploy crea una copia desde `templates/entorno/` y aborta para que completes secretos.
+    `templates/entorno/.env.example` es la plantilla versionada; `entorno/.secrets/` guarda secretos runtime generados por el deploy.
 
 *   **Red Docker Oculta (API Backend):**
     Aún cuando el panel interactúa vía web pública, existe una variable **super clave** e invisible al usuario donde Next extrae información directamente de la red sin cifrar cruzando internamente su propio ruteo: `BACKEND_URL_INTERNAL=http://paramascotasec-backend-web:8080/api`.
@@ -67,7 +67,7 @@ Antes de mover este frontend a otro servidor, confirma que el cambio incluya tod
 ### Archivos y secretos
 
 * Copia el codigo actualizado de `paramascotasec`.
-* Copia `entorno/.env` y `entorno/servidor.env` del servidor origen o crea uno nuevo desde `templates/entorno/.env.example`.
+* Copia `entorno/.env` del servidor origen o crea uno nuevo desde `templates/entorno/.env.example`.
 * No copies `entorno/.secrets/` como artefacto versionado. El deploy lo regenera desde `INTERNAL_PROXY_TOKEN` en `entorno/.env`.
 * Verifica que `INTERNAL_PROXY_TOKEN` coincida con el backend si ambos validan el mismo token interno.
 * Verifica `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_TENANT_SLUG`, `NEXT_PUBLIC_API_SERVICE_SEGMENT`, `BACKEND_URL_INTERNAL` y la llave publica de Google Maps.
